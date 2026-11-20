@@ -1,5 +1,5 @@
 -- LicitaPlena — PUBLICAÇÃO COMPLETA DO BANCO (gerado em 20/11/2026 a partir dos arquivos do repositório)
--- Ordem: 01-aplicar.sql + 23 arquivos novos. Todos idempotentes: se algo parar no meio, corrija e rode o arquivo inteiro de novo.
+-- Ordem: 01-aplicar.sql + 35 arquivos novos. Todos idempotentes: se algo parar no meio, corrija e rode o arquivo inteiro de novo.
 -- Ensaio: docs/qa/integracao-20261118/testar-dezembro.cjs (2 rodadas, 02-verificar 81/81). Depois de rodar, confira com 02-verificar.sql.
 -- ANTES: backup do banco (Supabase → Database → Backups).
 
@@ -2745,6 +2745,44 @@ select public.pregoes_gravados_recalcular(id_compra) from public.pregoes_gravado
 commit;
 
 
+-- ========== extensao_diagnosticos.sql ==========
+-- ============================================================================
+-- LicitaPlena — diagnósticos enviados pela extensão ("Enviar diagnóstico", extensao-leitura/diagnostico.mjs).
+--
+-- Rode no Supabase: SQL Editor -> New query -> Run. Idempotente.
+-- Quando um fluxo da extensão não reconhece a página do portal, o usuário pode mandar só a ESTRUTURA da página
+-- (tags, classes, ids, data-test, rótulos de campo) para a equipe ajustar os seletores. Sem valores digitados,
+-- sem texto corrido, sem CPF (netlify/functions/extensao-diagnostico.js filtra antes; o CHECK abaixo é a 2ª trava).
+--   Leitura e escrita: só service_role (a equipe lê pelo SQL Editor). Nenhuma policy para authenticated/anon.
+--   Retenção: 90 dias (apague com o delete do fim do arquivo quando quiser limpar).
+-- ============================================================================
+begin;
+set local lock_timeout = '5s';
+
+create table if not exists public.extensao_diagnosticos (
+  id bigint generated always as identity primary key,
+  enviado_por uuid references auth.users(id) on delete set null,
+  enviado_em timestamptz not null default now(),
+  fluxo text not null check (fluxo in ('gravar', 'preencher', 'acompanhar')),
+  motivo text check (char_length(motivo) <= 40),
+  versao_extensao text check (versao_extensao ~ '^[0-9]{1,3}(\.[0-9]{1,3}){0,3}$'),
+  host text not null check (host in ('cnetmobile.estaleiro.serpro.gov.br', 'comprasnet.gov.br', 'www.comprasnet.gov.br')),
+  caminho text not null check (char_length(caminho) <= 300),
+  estrutura jsonb not null check (jsonb_typeof(estrutura) = 'object' and pg_column_size(estrutura) <= 1500000),
+  -- Mesma forma de CPF de _cpf.js: nada parecido com CPF entra, nem dentro do JSON.
+  check (estrutura::text !~ '\y[0-9]{3}[. ]?[0-9]{3}[. ]?[0-9]{3}[- /]?[0-9]{2}\y')
+);
+create index if not exists extensao_diagnosticos_enviado_em on public.extensao_diagnosticos (enviado_em desc);
+
+alter table public.extensao_diagnosticos enable row level security;
+revoke all on public.extensao_diagnosticos from anon, authenticated;
+
+commit;
+
+-- Limpeza manual (retenção de 90 dias):
+-- delete from public.extensao_diagnosticos where enviado_em < now() - interval '90 days';
+
+
 -- ========== prospeccao.sql ==========
 -- ============================================================================
 -- LicitaPlena — Prospecção (o que o órgão vai comprar antes do edital).
@@ -3130,6 +3168,53 @@ notify pgrst, 'reload schema';
 commit;
 
 
+-- ========== operacao_execucao_fases.sql ==========
+-- Execução do contrato em fases (Potencial → Empenhado → Entregue → Faturado → Recebido), aba "Empenhos e execução"
+-- de processos.html. Guarda só o que a PESSOA lança quando a fonte oficial não trouxe: entrega, nota fiscal e recebimento.
+-- Empenho manual continua em operacao_empenhos; contrato manual em operacao_contratos; o oficial em operacao_contratos_publicos.
+-- A conta das fases (maior valor entre oficial e lançado, em centavos) fica em contrato-publico.js (fasesExecucao).
+-- Idempotente (pode rodar mais de uma vez no SQL Editor do Supabase), transação única, não apaga dados.
+-- Rodar depois do 01-aplicar.sql (que já traz operacao_acompanhamento.sql e seguranca_operacao.sql).
+begin;
+do $$ begin
+ if to_regprocedure('public.pode_acessar_processo_operacao(uuid,uuid)') is null
+  or to_regprocedure('public.pode_escrever_processo_operacao(uuid,uuid)') is null
+  or to_regclass('public.operacao_processos_id_org_idx') is null then
+  raise exception 'Aplique antes 01-aplicar.sql (operacao_acompanhamento.sql e seguranca_operacao.sql)';
+ end if;
+end $$;
+
+create table if not exists public.operacao_execucao_eventos (
+  id uuid primary key default gen_random_uuid(),
+  organizacao_id uuid not null,
+  processo_id uuid not null,
+  tipo text not null check (tipo in ('entrega', 'nota', 'recebimento')),
+  ocorrido_em date not null,
+  valor numeric(15,2) not null check (valor > 0),
+  referencia text check (length(referencia) <= 100), -- número da nota fiscal, do termo de recebimento ou do empenho
+  observacoes text check (length(observacoes) <= 2000),
+  criado_em timestamptz not null default now(),
+  foreign key (processo_id, organizacao_id) references public.operacao_processos(id, organizacao_id) on delete cascade
+);
+create index if not exists operacao_execucao_eventos_processo_idx on public.operacao_execucao_eventos (processo_id, ocorrido_em);
+
+-- Mesma regra das outras tabelas do processo (seguranca_operacao.sql): lê quem acessa a empresa; escreve gestor/operador.
+alter table public.operacao_execucao_eventos enable row level security;
+revoke all on public.operacao_execucao_eventos from public, anon;
+grant select, insert, update, delete on public.operacao_execucao_eventos to authenticated;
+grant all on public.operacao_execucao_eventos to service_role;
+drop policy if exists operacao_execucao_eventos_da_empresa on public.operacao_execucao_eventos;
+drop policy if exists operacao_execucao_eventos_da_empresa_escrita on public.operacao_execucao_eventos;
+create policy operacao_execucao_eventos_da_empresa on public.operacao_execucao_eventos for select to authenticated
+  using (public.pode_acessar_processo_operacao(organizacao_id, processo_id));
+create policy operacao_execucao_eventos_da_empresa_escrita on public.operacao_execucao_eventos for all to authenticated
+  using (public.pode_escrever_processo_operacao(organizacao_id, processo_id))
+  with check (public.pode_escrever_processo_operacao(organizacao_id, processo_id));
+
+notify pgrst, 'reload schema';
+commit;
+
+
 -- ========== painel_dashboard_rapido.sql ==========
 -- Painel: "Visão geral do mercado" rápida e RPCs do dashboard fechadas para anon.
 -- Idempotente: seguro rodar mais de uma vez no SQL Editor do Supabase.
@@ -3357,42 +3442,54 @@ notify pgrst, 'reload schema';
 commit;
 
 
--- ========== extensao_diagnosticos.sql ==========
--- ============================================================================
--- LicitaPlena — diagnósticos enviados pela extensão ("Enviar diagnóstico", extensao-leitura/diagnostico.mjs).
---
--- Rode no Supabase: SQL Editor -> New query -> Run. Idempotente.
--- Quando um fluxo da extensão não reconhece a página do portal, o usuário pode mandar só a ESTRUTURA da página
--- (tags, classes, ids, data-test, rótulos de campo) para a equipe ajustar os seletores. Sem valores digitados,
--- sem texto corrido, sem CPF (netlify/functions/extensao-diagnostico.js filtra antes; o CHECK abaixo é a 2ª trava).
---   Leitura e escrita: só service_role (a equipe lê pelo SQL Editor). Nenhuma policy para authenticated/anon.
---   Retenção: 90 dias (apague com o delete do fim do arquivo quando quiser limpar).
--- ============================================================================
+-- ========== analise_cnpj_v3.sql ==========
+-- Análise por CNPJ, parte 3 (tela "Analisar concorrente"): marcas, motivos literais e relatório exportável.
+-- Idempotente, transação única; rodar DEPOIS de historico_licitacoes.sql, analise_cnpj.sql e analise_cnpj_v2.sql.
+-- Não apaga dados. Acrescenta:
+--   historico_participacoes.marca_consultada_em  quando o robô (scripts/analise_cnpj.js, etapa "marcas e motivos")
+--      já procurou a marca desta linha: Pesquisa de Preços do Compras.gov (por CATMAT + id da compra, a fonte não
+--      filtra por fornecedor) ou, em pregão até 2023, as páginas públicas sem captcha do ComprasNet antigo
+--      (FornecedorResultadoDecreto/termojulg, que trazem também o motivo literal de item cancelado/fracassado).
+--      Linha consultada sem marca achada não é procurada de novo (o cache é a própria tabela historico_*).
+--   analise_cnpj_detalhes(cnpj)   RPC de leitura (security invoker: vale a RLS de quem chama), só das linhas em que
+--      existe algum detalhe: motivo do item (termo de adjudicação), recurso, marca declarada, fabricante e modelo.
+--      A tela junta com analise_cnpj_participacoes por (id_compra, numero_item); a RPC antiga não muda de formato.
+--   índice de pecas_juridicas por empresa_cnpj (se pecas_juridicas.sql já foi aplicado): a tela lê os recursos e
+--      intenções de recurso da empresa com a decisão do pregoeiro (texto literal publicado no ComprasNet).
+-- Dado público: qualquer cliente aprovado lê (cliente_aprovado()); só service_role (robô) escreve.
 begin;
-set local lock_timeout = '5s';
+do $$ begin
+ if to_regclass('public.historico_cnpj_consultas') is null or to_regclass('public.empresas_cadastro') is null then
+  raise exception 'Aplique antes historico_licitacoes.sql, analise_cnpj.sql e analise_cnpj_v2.sql';
+ end if;
+end $$;
 
-create table if not exists public.extensao_diagnosticos (
-  id bigint generated always as identity primary key,
-  enviado_por uuid references auth.users(id) on delete set null,
-  enviado_em timestamptz not null default now(),
-  fluxo text not null check (fluxo in ('gravar', 'preencher', 'acompanhar')),
-  motivo text check (char_length(motivo) <= 40),
-  versao_extensao text check (versao_extensao ~ '^[0-9]{1,3}(\.[0-9]{1,3}){0,3}$'),
-  host text not null check (host in ('cnetmobile.estaleiro.serpro.gov.br', 'comprasnet.gov.br', 'www.comprasnet.gov.br')),
-  caminho text not null check (char_length(caminho) <= 300),
-  estrutura jsonb not null check (jsonb_typeof(estrutura) = 'object' and pg_column_size(estrutura) <= 1500000),
-  -- Mesma forma de CPF de _cpf.js: nada parecido com CPF entra, nem dentro do JSON.
-  check (estrutura::text !~ '\y[0-9]{3}[. ]?[0-9]{3}[. ]?[0-9]{3}[- /]?[0-9]{2}\y')
-);
-create index if not exists extensao_diagnosticos_enviado_em on public.extensao_diagnosticos (enviado_em desc);
+alter table public.historico_participacoes add column if not exists marca_consultada_em timestamptz;
+create index if not exists historico_participacoes_marca_pendente_idx on public.historico_participacoes (fornecedor_ni)
+  where fornecedor_ni is not null and marca_consultada_em is null;
 
-alter table public.extensao_diagnosticos enable row level security;
-revoke all on public.extensao_diagnosticos from anon, authenticated;
+do $$ begin
+ if to_regclass('public.pecas_juridicas') is not null then
+  create index if not exists pecas_juridicas_empresa_idx on public.pecas_juridicas (empresa_cnpj, data desc) where empresa_cnpj is not null;
+ end if;
+end $$;
 
+create or replace function public.analise_cnpj_detalhes(p_cnpj text)
+returns table (id_compra text, numero_item integer, motivo_situacao text, tem_recurso boolean,
+  marca_declarada text, fabricante text, modelo text)
+language sql stable security invoker set search_path = public as $$
+  select p.id_compra, p.numero_item, i.motivo_situacao, i.tem_recurso, p.marca_declarada, p.fabricante, p.modelo
+    from public.historico_participacoes p
+    join public.historico_itens i on i.id_compra = p.id_compra and i.numero_item = p.numero_item
+   where p_cnpj ~ '^\d{14}$' and p.fornecedor_ni = p_cnpj
+     and (i.motivo_situacao is not null or i.tem_recurso or p.marca_declarada is not null or p.fabricante is not null or p.modelo is not null)
+   order by p.id_compra, p.numero_item
+$$;
+revoke all on function public.analise_cnpj_detalhes(text) from public, anon;
+grant execute on function public.analise_cnpj_detalhes(text) to authenticated, service_role;
+
+notify pgrst, 'reload schema';
 commit;
-
--- Limpeza manual (retenção de 90 dias):
--- delete from public.extensao_diagnosticos where enviado_em < now() - interval '90 days';
 
 
 -- ========== decisao_oportunidade.sql ==========
@@ -3685,5 +3782,1538 @@ revoke all on function public.incrementar_uso_ip(text, text) from public, anon, 
 grant execute on function public.incrementar_uso_ip(text, text) to service_role;
 
 notify pgrst, 'reload schema';
+commit;
+
+
+-- ========== operacao_monitor_edital.sql ==========
+-- "Mudou algo no edital?": monitor por processo (robô scripts/monitor_processos.js, a cada hora).
+-- Idempotente, transação única; rodar no SQL Editor depois de operacao_esteira.sql (usa as mesmas funções e o
+-- mesmo índice de chave composta). Não apaga dados; só cria tabelas, índices e políticas.
+--   operacao_monitor_processos  uma linha por processo acompanhado: situação atual, datas, "verificado em" e o
+--                               retrato usado na comparação (o que o robô viu na última vez).
+--   operacao_monitor_mudancas   histórico do que mudou, em linguagem simples. Uma linha por mudança; a chave
+--                               (processo_id, chave) torna a gravação idempotente (rodar de novo não duplica).
+-- Leitura: quem acessa a empresa (pode_acessar_empresa_operacao). Escrita: só service_role (o robô e o envio
+-- de e-mail em scripts/lembretes_licitacoes.py). Nunca toca operacao_processos (atualizado_em é controle de
+-- concorrência do kit).
+begin;
+do $$ begin
+ if to_regprocedure('public.pode_acessar_empresa_operacao(uuid,uuid)') is null
+  or to_regclass('public.operacao_processos_id_empresa_org_idx') is null then
+  raise exception 'Aplique antes 01-aplicar.sql e operacao_esteira.sql';
+ end if;
+end $$;
+
+create table if not exists public.operacao_monitor_processos (
+  processo_id uuid primary key,
+  organizacao_id uuid not null,
+  empresa_id uuid not null,
+  numero_controle_pncp text check (numero_controle_pncp ~ '^[0-9]{14}-[0-9]-[0-9]{6}/[0-9]{4}$'),
+  id_compra text check (id_compra ~ '^[0-9]{17}$'),
+  situacao text check (length(situacao) <= 120),
+  abertura_propostas timestamptz,
+  encerramento_propostas timestamptz,
+  retrato jsonb not null default '{}'::jsonb check (jsonb_typeof(retrato) = 'object'),
+  verificado_em timestamptz,
+  proximo_em timestamptz not null default now(),
+  erro text check (length(erro) <= 300),
+  criado_em timestamptz not null default now(),
+  foreign key (processo_id, empresa_id, organizacao_id)
+    references public.operacao_processos(id, empresa_id, organizacao_id) on delete cascade
+);
+create index if not exists operacao_monitor_processos_fila_idx on public.operacao_monitor_processos (proximo_em);
+
+create table if not exists public.operacao_monitor_mudancas (
+  id uuid primary key default gen_random_uuid(),
+  organizacao_id uuid not null,
+  empresa_id uuid not null,
+  processo_id uuid not null,
+  chave text not null check (length(chave) between 1 and 200),
+  tipo text not null check (tipo in ('situacao', 'data', 'arquivo_novo', 'arquivo_retificado', 'arquivo_removido',
+    'aviso', 'esclarecimento', 'impugnacao', 'retificacao', 'item_alterado', 'item_cancelado', 'resultado', 'chat', 'outro')),
+  resumo text not null check (length(resumo) between 1 and 600),
+  detalhe jsonb not null default '{}'::jsonb check (jsonb_typeof(detalhe) = 'object'),
+  fonte text not null check (fonte in ('pncp', 'comprasgov', 'extensao')),
+  ocorrido_em timestamptz,
+  detectado_em timestamptz not null default now(),
+  -- false = já existia quando o monitor começou (entra no histórico, sem alerta nem e-mail).
+  alerta boolean not null default true,
+  -- Reserva do e-mail (PATCH condicional avisado_em=is.null): só uma rodada envia.
+  avisado_em timestamptz,
+  unique (processo_id, chave),
+  foreign key (processo_id, empresa_id, organizacao_id)
+    references public.operacao_processos(id, empresa_id, organizacao_id) on delete cascade
+);
+create index if not exists operacao_monitor_mudancas_processo_idx on public.operacao_monitor_mudancas (processo_id, detectado_em desc);
+create index if not exists operacao_monitor_mudancas_aviso_idx on public.operacao_monitor_mudancas (detectado_em) where alerta and avisado_em is null;
+
+alter table public.operacao_monitor_processos enable row level security;
+alter table public.operacao_monitor_mudancas enable row level security;
+revoke all on public.operacao_monitor_processos, public.operacao_monitor_mudancas from public, anon, authenticated;
+grant select on public.operacao_monitor_processos, public.operacao_monitor_mudancas to authenticated;
+grant all on public.operacao_monitor_processos, public.operacao_monitor_mudancas to service_role;
+drop policy if exists operacao_monitor_processos_leitura on public.operacao_monitor_processos;
+create policy operacao_monitor_processos_leitura on public.operacao_monitor_processos for select to authenticated
+  using (public.pode_acessar_empresa_operacao(organizacao_id, empresa_id));
+drop policy if exists operacao_monitor_mudancas_leitura on public.operacao_monitor_mudancas;
+create policy operacao_monitor_mudancas_leitura on public.operacao_monitor_mudancas for select to authenticated
+  using (public.pode_acessar_empresa_operacao(organizacao_id, empresa_id));
+commit;
+
+
+-- ========== boletim_por_empresa.sql ==========
+-- Boletim e jornais por empresa (CNPJ): cada empresa da organização tem o seu filtro do Boletim, e os
+-- filtros salvos (jornais) podem pertencer a uma empresa. Aditivo e idempotente; rodar DEPOIS de
+-- filtros_salvos.sql e seguranca_aprovacao_20261119.sql. Não apaga clientes.boletim_filtro: o filtro antigo
+-- da conta vira o da empresa ativa no primeiro acesso ao painel (painel.html, carregarFiltroBoletimConta),
+-- e o robô de e-mail continua usando o cadastro antigo para quem ainda não tem filtro por empresa.
+-- Teste: testar_boletim_por_empresa.sql.
+begin;
+set local lock_timeout = '5s';
+set local statement_timeout = '30s';
+do $$ begin
+  if to_regprocedure('public.pode_acessar_empresa_operacao(uuid,uuid)') is null or to_regclass('public.filtros_salvos') is null then
+    raise exception 'Aplique antes seguranca_aprovacao_20261119.sql e filtros_salvos.sql';
+  end if;
+end $$;
+
+create table if not exists public.boletim_filtros_empresa (
+  empresa_id uuid primary key references public.operacao_empresas(id) on delete cascade,
+  organizacao_id uuid not null,
+  -- Quem salvou por último recebe o e-mail do Boletim desta empresa (scripts/boletim_editais.py).
+  cliente_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  filtro jsonb not null,
+  atualizado_em timestamptz not null default now()
+);
+-- Mesmo formato de clientes.boletim_filtro (ufs + palavrasRaw obrigatórios).
+alter table public.boletim_filtros_empresa drop constraint if exists boletim_filtros_empresa_filtro_valido;
+alter table public.boletim_filtros_empresa add constraint boletim_filtros_empresa_filtro_valido check (
+  jsonb_typeof(filtro) = 'object' and filtro ?& array['ufs', 'palavrasRaw'] and jsonb_typeof(filtro->'ufs') = 'array'
+  and jsonb_typeof(filtro->'palavrasRaw') = 'string' and jsonb_array_length(filtro->'ufs') <= 27
+  and length(btrim(filtro->>'palavrasRaw')) between 1 and 1000 and octet_length(filtro::text) <= 4000);
+create index if not exists boletim_filtros_empresa_org_idx on public.boletim_filtros_empresa (organizacao_id);
+
+-- A empresa precisa ser da organização informada (a policy confere o par organização + empresa).
+create or replace function public.boletim_filtro_empresa_coerente() returns trigger
+language plpgsql security invoker set search_path = '' as $$
+begin
+  if not exists (select 1 from public.operacao_empresas e where e.id = new.empresa_id and e.organizacao_id = new.organizacao_id) then
+    raise exception 'Empresa não pertence à organização.' using errcode = 'check_violation';
+  end if;
+  new.atualizado_em := now();
+  new.cliente_id := coalesce(auth.uid(), new.cliente_id);
+  return new;
+end $$;
+drop trigger if exists boletim_filtros_empresa_coerente on public.boletim_filtros_empresa;
+create trigger boletim_filtros_empresa_coerente before insert or update on public.boletim_filtros_empresa
+  for each row execute function public.boletim_filtro_empresa_coerente();
+
+alter table public.boletim_filtros_empresa enable row level security;
+drop policy if exists boletim_filtros_empresa_leitura on public.boletim_filtros_empresa;
+create policy boletim_filtros_empresa_leitura on public.boletim_filtros_empresa for select to authenticated
+  using (public.pode_acessar_empresa_operacao(organizacao_id, empresa_id));
+drop policy if exists boletim_filtros_empresa_escrita on public.boletim_filtros_empresa;
+create policy boletim_filtros_empresa_escrita on public.boletim_filtros_empresa for all to authenticated
+  using (public.pode_acessar_empresa_operacao(organizacao_id, empresa_id))
+  with check (public.pode_acessar_empresa_operacao(organizacao_id, empresa_id));
+revoke all on public.boletim_filtros_empresa from public, anon;
+grant select, insert, update, delete on public.boletim_filtros_empresa to authenticated;
+grant all on public.boletim_filtros_empresa to service_role;
+
+-- Jornais (filtros salvos) por empresa: empresa_id opcional; sem empresa = filtro da conta (vale para todas).
+alter table public.filtros_salvos add column if not exists empresa_id uuid references public.operacao_empresas(id) on delete cascade;
+drop index if exists public.filtros_salvos_nome_unico;
+create unique index if not exists filtros_salvos_nome_empresa_unico
+  on public.filtros_salvos (cliente_id, coalesce(empresa_id, '00000000-0000-0000-0000-000000000000'::uuid), lower(btrim(nome)));
+drop policy if exists filtros_salvos_proprios on public.filtros_salvos;
+create policy filtros_salvos_proprios on public.filtros_salvos for all to authenticated
+  using (cliente_id = auth.uid() and public.cliente_aprovado())
+  with check (cliente_id = auth.uid() and public.cliente_aprovado() and (empresa_id is null or exists (
+    select 1 from public.operacao_empresas e where e.id = empresa_id and public.pode_acessar_empresa_operacao(e.organizacao_id, e.id))));
+notify pgrst, 'reload schema';
+commit;
+
+
+-- ========== operacao_funil_checklist.sql ==========
+-- Funil: checklist padrão por etapa, marcações por processo e favoritas (modelo Siga Pregão, item 15 da análise).
+-- Idempotente; rodar no SQL Editor depois de operacao_licitacoes.sql, seguranca_operacao.sql e operacao_funil_etapas.sql.
+-- Só acrescenta colunas: nenhuma tabela nova. A RLS que já existe vale para elas:
+--  * operacao_funil_etapas.tarefas: escrita só por pode_escrever_org_operacao (mesma regra de renomear etapa);
+--  * operacao_processos.checklist_funil / favorito: escrita por pode_escrever_empresa_operacao, leitura por pode_acessar_empresa_operacao.
+-- Não tocam atualizado_em (controle de concorrência do kit e do checklist do edital) nem disparam a esteira (gatilho só em "update of status").
+begin;
+do $$ begin
+ if to_regclass('public.operacao_funil_etapas') is null or to_regclass('public.operacao_processos') is null then
+  raise exception 'Aplique antes operacao_licitacoes.sql e operacao_funil_etapas.sql';
+ end if;
+end $$;
+
+-- Nulo = a empresa não mexeu: o painel usa as tarefas padrão do estágio. Lista de {id, titulo, link?, esteira?}, até 30.
+alter table public.operacao_funil_etapas add column if not exists tarefas jsonb;
+alter table public.operacao_funil_etapas drop constraint if exists operacao_funil_etapas_tarefas_validas;
+alter table public.operacao_funil_etapas add constraint operacao_funil_etapas_tarefas_validas
+  check (tarefas is null or (jsonb_typeof(tarefas) = 'array' and jsonb_array_length(tarefas) <= 30 and pg_column_size(tarefas) <= 16384));
+
+-- Tarefa marcada: {id_da_tarefa: data em que marcou}.
+alter table public.operacao_processos add column if not exists checklist_funil jsonb not null default '{}'::jsonb;
+alter table public.operacao_processos drop constraint if exists operacao_processos_checklist_funil_valido;
+alter table public.operacao_processos add constraint operacao_processos_checklist_funil_valido
+  check (jsonb_typeof(checklist_funil) = 'object' and pg_column_size(checklist_funil) <= 16384);
+alter table public.operacao_processos add column if not exists favorito boolean not null default false;
+
+notify pgrst, 'reload schema';
+commit;
+
+
+-- ========== planos_e_recursos.sql ==========
+-- LicitaPlena: planos com regras automáticas (Grátis, Teste, Empresa, Assessoria, Dono), assinaturas,
+-- pagamentos (preparado, sem integração) e funções do painel de administração.
+-- Arquitetura: _historico/arquitetura-planos-admin-20261119.md. Teste: supabase/testar_planos.sql.
+-- Idempotente: seguro rodar mais de uma vez no SQL Editor. Não apaga dados; não mexe em empresas, processos,
+-- documentos nem membros. Rodar DEPOIS de seguranca_aprovacao_20261119.sql. Se limite_cnpjs_operacao.sql ou
+-- acesso_empresa_convites.sql forem rodados de novo, rode este outra vez em seguida (ele redefine o trigger de CNPJs
+-- e limite_cnpjs_operacao()).
+begin;
+
+-- ---------------------------------------------------------------------------------------------------------------
+-- 1) Catálogo: planos, recursos e a tabela única plano x recurso. Leitura pública (é a página de preços);
+--    escrita só pelas funções do admin (owner com 2 fatores) ou pelo SQL Editor.
+-- ---------------------------------------------------------------------------------------------------------------
+create table if not exists public.planos (
+  codigo text primary key check (codigo ~ '^[a-z_]{2,30}$'),
+  nome text not null check (length(nome) between 2 and 60),
+  descricao text not null default '',
+  max_cnpjs integer check (max_cnpjs is null or max_cnpjs >= 1),       -- vazio = sem limite
+  max_usuarios integer check (max_usuarios is null or max_usuarios >= 1),
+  max_processos integer check (max_processos is null or max_processos >= 0), -- processos não arquivados
+  preco_mensal_centavos integer check (preco_mensal_centavos is null or preco_mensal_centavos >= 0),
+  preco_anual_centavos integer check (preco_anual_centavos is null or preco_anual_centavos >= 0),
+  dias_teste integer check (dias_teste is null or dias_teste between 1 and 90),
+  escolhivel_no_cadastro boolean not null default false,
+  ordem integer not null default 0,
+  ativo boolean not null default true,
+  atualizado_em timestamptz not null default now()
+);
+create table if not exists public.recursos_plano (
+  codigo text primary key check (codigo ~ '^[a-z_]{2,30}$'),
+  nome text not null,
+  funcoes text[] not null default '{}'  -- nomes usados em uso_diario.funcao pelas rotas /api (verificarLimiteDiario)
+);
+create table if not exists public.plano_recursos (
+  plano text not null references public.planos(codigo) on update cascade on delete cascade,
+  recurso text not null references public.recursos_plano(codigo) on update cascade on delete cascade,
+  permitido boolean not null default true,
+  limite_diario integer check (limite_diario is null or limite_diario >= 0), -- vazio = limite padrão da rota
+  primary key (plano, recurso)
+);
+alter table public.planos enable row level security;
+alter table public.recursos_plano enable row level security;
+alter table public.plano_recursos enable row level security;
+revoke all on public.planos, public.recursos_plano, public.plano_recursos from anon, authenticated;
+grant select on public.planos, public.recursos_plano, public.plano_recursos to anon, authenticated;
+drop policy if exists planos_select_publico on public.planos;
+create policy planos_select_publico on public.planos for select to anon, authenticated using (ativo);
+drop policy if exists recursos_plano_select_publico on public.recursos_plano;
+create policy recursos_plano_select_publico on public.recursos_plano for select to anon, authenticated using (true);
+drop policy if exists plano_recursos_select_publico on public.plano_recursos;
+create policy plano_recursos_select_publico on public.plano_recursos for select to anon, authenticated using (true);
+
+-- Valores iniciais da proposta (pente-fino-cobranca-concorrentes-20261119.md, 4.1 e 4.2). "do nothing": o que o dono
+-- editar depois não volta ao padrão quando este arquivo roda de novo.
+insert into public.planos (codigo, nome, descricao, max_cnpjs, max_usuarios, max_processos, preco_mensal_centavos, preco_anual_centavos, dias_teste, escolhivel_no_cadastro, ordem) values
+  ('gratis', 'Grátis', 'Busca e boletim de 1 CNPJ, 3 processos no CRM, sem proposta nem análise por CNPJ.', 1, 1, 3, 0, null, null, false, 1),
+  ('teste', 'Teste grátis', '14 dias sem cartão. Vale o menor limite entre o plano escolhido e esta linha.', 3, 5, null, 0, null, 14, false, 2),
+  ('empresa', 'Empresa', 'Para a empresa que licita: 1 CNPJ e 3 usuários.', 1, 3, null, 14900, 149000, null, true, 3),
+  ('assessoria', 'Assessoria', 'Para assessorias e consultores: até 10 CNPJs e 5 usuários.', 10, 5, null, 29900, 299000, null, true, 4),
+  ('dono', 'Dono (ilimitado)', 'Conta do proprietário do LicitaPlena.', null, null, null, null, null, null, false, 9)
+on conflict (codigo) do nothing;
+insert into public.recursos_plano (codigo, nome, funcoes) values
+  ('ia', 'Inteligência artificial (resumo, busca e fornecedor com IA)', array['ia-edital', 'monte-busca-ia', 'fornecedor-ia']),
+  ('analise_cnpj', 'Análise por CNPJ (concorrente)', array['analise-cnpj', 'analise-cnpj-buscar', 'analise-cnpj-cadastro']),
+  ('proposta', 'Proposta e declarações', array['kit-documentos']),
+  ('robo_lances', 'Extensão do Compras.gov e robô de lances', array['pregao-gravado', 'pregao-gravado-leitura', 'proposta-lote']),
+  ('licitacao_anterior', 'Licitação anterior do órgão', array['licitacao-anterior', 'licitacao-anterior-orgaos'])
+on conflict (codigo) do nothing;
+insert into public.plano_recursos (plano, recurso, permitido, limite_diario) values
+  ('gratis', 'ia', true, 3), ('gratis', 'analise_cnpj', false, null), ('gratis', 'proposta', false, null),
+  ('gratis', 'robo_lances', false, null), ('gratis', 'licitacao_anterior', true, 2),
+  ('teste', 'ia', true, 15), ('teste', 'analise_cnpj', true, 3), ('teste', 'proposta', true, null),
+  ('teste', 'robo_lances', true, null), ('teste', 'licitacao_anterior', true, null),
+  ('empresa', 'ia', true, null), ('empresa', 'analise_cnpj', true, null), ('empresa', 'proposta', true, null),
+  ('empresa', 'robo_lances', true, null), ('empresa', 'licitacao_anterior', true, null),
+  ('assessoria', 'ia', true, null), ('assessoria', 'analise_cnpj', true, null), ('assessoria', 'proposta', true, null),
+  ('assessoria', 'robo_lances', true, null), ('assessoria', 'licitacao_anterior', true, null),
+  ('dono', 'ia', true, null), ('dono', 'analise_cnpj', true, null), ('dono', 'proposta', true, null),
+  ('dono', 'robo_lances', true, null), ('dono', 'licitacao_anterior', true, null)
+on conflict (plano, recurso) do nothing;
+
+-- ---------------------------------------------------------------------------------------------------------------
+-- 2) Assinatura (uma por titular = dono da organização), pagamentos e histórico. O titular só LÊ o que é dele;
+--    ninguém grava pelo navegador. Colaborador convidado herda o plano do titular da organização.
+-- ---------------------------------------------------------------------------------------------------------------
+create table if not exists public.assinaturas (
+  usuario_id uuid primary key references public.clientes(id) on delete cascade,
+  plano text not null references public.planos(codigo) on update cascade,
+  situacao text not null default 'teste' check (situacao in ('teste', 'ativa', 'vencida', 'suspensa', 'cancelada')),
+  teste_ate timestamptz,
+  ciclo text check (ciclo in ('mensal', 'anual')),
+  valor_centavos integer check (valor_centavos is null or valor_centavos >= 0),
+  vence_em date,
+  max_cnpjs integer check (max_cnpjs is null or max_cnpjs >= 1),        -- ajuste do dono; vazio = o do plano
+  max_usuarios integer check (max_usuarios is null or max_usuarios >= 1),
+  max_processos integer check (max_processos is null or max_processos >= 0),
+  plano_solicitado text references public.planos(codigo) on update cascade,
+  plano_solicitado_em timestamptz,
+  -- Pontos de ligação do pagamento (Asaas ou Inter PJ), ainda sem uso.
+  gateway text check (gateway in ('pix_manual', 'asaas', 'inter')),
+  gateway_cliente_id text,
+  gateway_assinatura_id text,
+  observacoes text check (length(observacoes) <= 2000),
+  criado_em timestamptz not null default now(),
+  atualizado_em timestamptz not null default now(),
+  atualizado_por text
+);
+create table if not exists public.pagamentos (
+  id uuid primary key default gen_random_uuid(),
+  usuario_id uuid references public.clientes(id) on delete set null,   -- registro fiscal fica mesmo se a conta sair
+  cliente_email text,
+  plano text references public.planos(codigo) on update cascade,
+  ciclo text check (ciclo in ('mensal', 'anual')),
+  valor_centavos integer not null check (valor_centavos > 0),
+  situacao text not null default 'pendente' check (situacao in ('pendente', 'pago', 'cancelado', 'estornado', 'vencido')),
+  metodo text not null default 'pix' check (metodo in ('pix', 'boleto', 'cartao', 'manual')),
+  vencimento date,
+  pago_em timestamptz,
+  periodo_inicio date,
+  periodo_fim date,
+  referencia text check (length(referencia) <= 200),
+  gateway text check (gateway in ('pix_manual', 'asaas', 'inter')),
+  gateway_cobranca_id text unique,  -- o webhook acha o pagamento por aqui; único = entrega repetida não duplica
+  observacoes text check (length(observacoes) <= 2000),
+  criado_em timestamptz not null default now(),
+  criado_por text
+);
+create index if not exists pagamentos_usuario_idx on public.pagamentos (usuario_id, criado_em desc);
+create table if not exists public.assinaturas_historico (
+  id bigint generated always as identity primary key,
+  usuario_id uuid not null,
+  acao text not null,
+  antes jsonb,
+  depois jsonb,
+  feito_por text,
+  feito_em timestamptz not null default now()
+);
+create index if not exists assinaturas_historico_usuario_idx on public.assinaturas_historico (usuario_id, feito_em desc);
+alter table public.assinaturas enable row level security;
+alter table public.pagamentos enable row level security;
+alter table public.assinaturas_historico enable row level security;
+revoke all on public.assinaturas, public.pagamentos, public.assinaturas_historico from anon, authenticated;
+grant select on public.assinaturas, public.pagamentos to authenticated;
+drop policy if exists assinaturas_select_proprio on public.assinaturas;
+create policy assinaturas_select_proprio on public.assinaturas for select to authenticated using (usuario_id = (select auth.uid()));
+drop policy if exists pagamentos_select_proprio on public.pagamentos;
+create policy pagamentos_select_proprio on public.pagamentos for select to authenticated using (usuario_id = (select auth.uid()));
+-- assinaturas_historico: sem policy = só funções security definer e service_role.
+
+-- ---------------------------------------------------------------------------------------------------------------
+-- 3) O cálculo do plano: uma função só, usada por triggers, RLS, rotas /api e telas.
+-- ---------------------------------------------------------------------------------------------------------------
+-- Owner administrativo com 2 fatores na sessão (aal2 vem do JWT; mesmo dado que auth.jwt() lê).
+create or replace function public.admin_planos_autorizado() returns boolean
+language sql stable security definer set search_path = public as $$
+  select auth.uid() is not null and public.eh_owner_admin_operacao(auth.uid())
+    and coalesce(nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'aal', '') = 'aal2';
+$$;
+
+create or replace function public.titular_do_usuario(p_usuario uuid) returns uuid
+language sql stable security definer set search_path = public as $$
+  select coalesce(
+    (select o.owner_id from public.operacao_organizacoes o where o.owner_id = p_usuario limit 1),
+    (select o.owner_id from public.operacao_membros m join public.operacao_organizacoes o on o.id = m.organizacao_id
+      where m.usuario_id = p_usuario order by m.criado_em limit 1),
+    p_usuario);
+$$;
+
+create or replace function public.plano_efetivo_titular(p_titular uuid) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  a public.assinaturas%rowtype; p public.planos%rowtype; t public.planos%rowtype;
+  v_tem boolean := false; v_contratado text; v_efetivo text; v_teste boolean := false; v_situacao text;
+  v_max_c integer; v_max_u integer; v_max_p integer; v_rec jsonb;
+begin
+  if p_titular is not null and public.eh_owner_admin_operacao(p_titular) then
+    v_contratado := 'dono'; v_efetivo := 'dono'; v_situacao := 'ativa';
+  else
+    select * into a from public.assinaturas where usuario_id = p_titular;
+    v_tem := found;
+    if not v_tem then
+      -- Dono de organização sem linha em clientes (caso legado): regras do teste, como a cota antiga de 3 CNPJs.
+      v_contratado := 'teste'; v_efetivo := 'teste'; v_situacao := 'sem_assinatura';
+    else
+      v_contratado := a.plano; v_situacao := a.situacao;
+      -- Vencimento com 5 dias de tolerância; teste vencido, vencida, suspensa e cancelada caem para o Grátis.
+      v_efetivo := case
+        when a.situacao = 'ativa' and (a.vence_em is null or a.vence_em + 5 >= current_date) then a.plano
+        when a.situacao = 'teste' and (a.teste_ate is null or a.teste_ate > now()) then a.plano
+        else 'gratis' end;
+      v_teste := a.situacao = 'teste' and v_efetivo = a.plano;
+    end if;
+  end if;
+  select * into p from public.planos where codigo = v_efetivo;
+  if not found then v_efetivo := 'gratis'; v_teste := false; select * into p from public.planos where codigo = 'gratis'; end if;
+  v_max_c := p.max_cnpjs; v_max_u := p.max_usuarios; v_max_p := p.max_processos;
+  if v_teste then
+    -- least() ignora vazio (sem limite): vale o menor entre o plano escolhido e a linha Teste.
+    select * into t from public.planos where codigo = 'teste';
+    v_max_c := least(v_max_c, t.max_cnpjs); v_max_u := least(v_max_u, t.max_usuarios); v_max_p := least(v_max_p, t.max_processos);
+  end if;
+  if v_tem and v_efetivo = a.plano then
+    v_max_c := coalesce(a.max_cnpjs, v_max_c); v_max_u := coalesce(a.max_usuarios, v_max_u); v_max_p := coalesce(a.max_processos, v_max_p);
+  end if;
+  select coalesce(jsonb_object_agg(r.codigo, jsonb_build_object(
+      'nome', r.nome,
+      'permitido', v_efetivo = 'dono' or (coalesce(pr.permitido, false) and (not v_teste or coalesce(tr.permitido, false))),
+      'limite_diario', case when v_teste then least(pr.limite_diario, tr.limite_diario) else pr.limite_diario end)), '{}'::jsonb)
+    into v_rec
+    from public.recursos_plano r
+    left join public.plano_recursos pr on pr.plano = v_efetivo and pr.recurso = r.codigo
+    left join public.plano_recursos tr on tr.plano = 'teste' and tr.recurso = r.codigo;
+  return jsonb_build_object('plano', v_efetivo, 'nome', p.nome, 'plano_contratado', v_contratado,
+    'nome_contratado', (select nome from public.planos where codigo = v_contratado),
+    'situacao', v_situacao, 'em_teste', v_teste, 'teste_ate', a.teste_ate, 'vence_em', a.vence_em,
+    'plano_solicitado', a.plano_solicitado,
+    'max_cnpjs', v_max_c, 'max_usuarios', v_max_u, 'max_processos', v_max_p, 'recursos', v_rec);
+end $$;
+
+-- Interna: a organização pode usar o recurso, ou cabe mais um CNPJ / usuário / processo?
+create or replace function public.pode_organizacao(p_org uuid, p_o_que text) returns boolean
+language plpgsql stable security definer set search_path = public as $$
+declare v jsonb; n integer; v_lim integer;
+begin
+  v := public.plano_efetivo_titular((select owner_id from public.operacao_organizacoes where id = p_org));
+  if p_o_que in ('novo_cnpj', 'novo_usuario', 'novo_processo') then
+    v_lim := (v ->> case p_o_que when 'novo_cnpj' then 'max_cnpjs' when 'novo_usuario' then 'max_usuarios' else 'max_processos' end)::integer;
+    if v_lim is null then return true; end if;
+    if p_o_que = 'novo_cnpj' then
+      select count(*) into n from public.operacao_empresas where organizacao_id = p_org and ativo;
+    elsif p_o_que = 'novo_usuario' then
+      select count(distinct usuario_id) into n from public.operacao_membros where organizacao_id = p_org;
+    else
+      select count(*) into n from public.operacao_processos where organizacao_id = p_org and status <> 'arquivado';
+    end if;
+    return n < v_lim;
+  end if;
+  return coalesce((v -> 'recursos' -> p_o_que ->> 'permitido')::boolean, false);
+end $$;
+
+-- Para RLS e telas: só responde a quem tem vínculo com a organização (não revela o plano de outra).
+create or replace function public.organizacao_pode(p_org uuid, p_o_que text) returns boolean
+language sql stable security definer set search_path = public as $$
+  select public.tem_vinculo_operacao(p_org) and public.pode_organizacao(p_org, p_o_que);
+$$;
+
+revoke all on function public.admin_planos_autorizado(), public.titular_do_usuario(uuid), public.plano_efetivo_titular(uuid),
+  public.pode_organizacao(uuid, text), public.organizacao_pode(uuid, text) from public, anon, authenticated;
+grant execute on function public.admin_planos_autorizado(), public.organizacao_pode(uuid, text) to authenticated;
+grant execute on function public.titular_do_usuario(uuid), public.plano_efetivo_titular(uuid), public.pode_organizacao(uuid, text) to service_role;
+
+-- O que a pessoa logada pode usar, com o uso de agora (telas: painel, operacao, sistema).
+create or replace function public.meu_plano() returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare v_usuario uuid := auth.uid(); v_tit uuid; v jsonb; v_org uuid;
+begin
+  if v_usuario is null then raise exception 'Sessão inválida' using errcode = '42501'; end if;
+  v_tit := public.titular_do_usuario(v_usuario);
+  v := public.plano_efetivo_titular(v_tit);
+  select id into v_org from public.operacao_organizacoes where owner_id = v_tit order by criado_em limit 1;
+  return v || jsonb_build_object('eh_titular', v_tit = v_usuario,
+    'uso', jsonb_build_object(
+      'cnpjs', (select count(*) from public.operacao_empresas where organizacao_id = v_org and ativo),
+      'usuarios', (select count(distinct usuario_id) from public.operacao_membros where organizacao_id = v_org),
+      'processos', (select count(*) from public.operacao_processos where organizacao_id = v_org and status <> 'arquivado'),
+      'hoje', (select coalesce(jsonb_object_agg(r.codigo, (select coalesce(sum(u.contagem), 0) from public.uso_diario u
+          where u.usuario_id = v_usuario and u.dia = current_date and u.funcao = any (r.funcoes))), '{}'::jsonb) from public.recursos_plano r)),
+    'planos_disponiveis', (select coalesce(jsonb_agg(jsonb_build_object('codigo', codigo, 'nome', nome, 'max_cnpjs', max_cnpjs,
+        'preco_mensal_centavos', preco_mensal_centavos, 'preco_anual_centavos', preco_anual_centavos) order by ordem), '[]'::jsonb)
+      from public.planos where ativo and escolhivel_no_cadastro));
+end $$;
+revoke all on function public.meu_plano() from public, anon;
+grant execute on function public.meu_plano() to authenticated;
+
+-- Pedido de plano (no fim do teste ou para mudar): só registra; quem muda é o admin.
+create or replace function public.solicitar_plano(p_plano text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare v_usuario uuid := auth.uid(); a public.assinaturas%rowtype;
+begin
+  if v_usuario is null then raise exception 'Sessão inválida' using errcode = '42501'; end if;
+  if public.titular_do_usuario(v_usuario) <> v_usuario then raise exception 'Só o titular da conta pode pedir mudança de plano' using errcode = '42501'; end if;
+  if not exists (select 1 from public.planos where codigo = p_plano and ativo and escolhivel_no_cadastro) then raise exception 'Plano indisponível'; end if;
+  update public.assinaturas set plano_solicitado = p_plano, plano_solicitado_em = now(), atualizado_em = now()
+    where usuario_id = v_usuario returning * into a;
+  if not found then raise exception 'Assinatura não encontrada'; end if;
+  insert into public.assinaturas_historico (usuario_id, acao, depois, feito_por) values (v_usuario, 'plano_solicitado', jsonb_build_object('plano', p_plano), 'cliente');
+  return jsonb_build_object('plano_solicitado', a.plano_solicitado, 'plano_solicitado_em', a.plano_solicitado_em);
+end $$;
+revoke all on function public.solicitar_plano(text) from public, anon;
+grant execute on function public.solicitar_plano(text) to authenticated;
+
+-- Rotas /api (verificarLimiteDiario, só chave de serviço): o plano inclui o recurso da rota? Limite do plano ou da rota.
+create or replace function public.consumir_uso_plano(p_usuario_id uuid, p_funcao text, p_limite_padrao integer) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare v jsonb; v_rec text; v_r jsonb; v_lim integer := p_limite_padrao; n integer;
+begin
+  if p_usuario_id is null or p_funcao is null then raise exception 'Parâmetros inválidos'; end if;
+  v := public.plano_efetivo_titular(public.titular_do_usuario(p_usuario_id));
+  select codigo into v_rec from public.recursos_plano where p_funcao = any (funcoes) order by codigo limit 1;
+  if v_rec is not null then
+    v_r := v -> 'recursos' -> v_rec;
+    if not coalesce((v_r ->> 'permitido')::boolean, false) then
+      return jsonb_build_object('permitido', false, 'motivo', 'plano', 'recurso', v_rec, 'nome_recurso', v_r ->> 'nome', 'plano', v ->> 'nome');
+    end if;
+    v_lim := coalesce((v_r ->> 'limite_diario')::integer, p_limite_padrao);
+  end if;
+  n := public.incrementar_uso(p_usuario_id, p_funcao);
+  -- Limite do plano vale para o recurso inteiro (ex.: Grátis = 3 de IA/dia somando resumo, pergunta, fornecedor e chat),
+  -- igual ao "hoje" de meu_plano. Sem limite no plano, cada rota segue com o próprio padrão.
+  if v_rec is not null and (v_r ->> 'limite_diario') is not null then
+    select coalesce(sum(u.contagem), 0)::integer into n from public.uso_diario u
+      where u.usuario_id = p_usuario_id and u.dia = current_date and u.funcao = any (select unnest(r.funcoes) from public.recursos_plano r where r.codigo = v_rec);
+  end if;
+  return jsonb_build_object('permitido', v_lim is null or n <= v_lim, 'contagem', n, 'limite', v_lim, 'recurso', v_rec, 'plano', v ->> 'nome');
+end $$;
+revoke all on function public.consumir_uso_plano(uuid, text, integer) from public, anon, authenticated;
+grant execute on function public.consumir_uso_plano(uuid, text, integer) to service_role;
+
+-- A tela "Minhas empresas" já chama esta função: agora devolve o limite do plano (vazio = sem limite).
+create or replace function public.limite_cnpjs_operacao() returns integer
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if auth.uid() is null then raise exception 'Sessão inválida'; end if;
+  return (public.plano_efetivo_titular(public.titular_do_usuario(auth.uid())) ->> 'max_cnpjs')::integer;
+end $$;
+revoke all on function public.limite_cnpjs_operacao() from public, anon;
+grant execute on function public.limite_cnpjs_operacao() to authenticated;
+
+-- ---------------------------------------------------------------------------------------------------------------
+-- 4) Garantias no banco: CNPJs, usuários e processos (vale para tela, /api e SQL).
+-- ---------------------------------------------------------------------------------------------------------------
+create or replace function public.verificar_limite_cnpjs_operacao() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare v_owner uuid; v jsonb;
+begin
+  if not new.ativo then return new; end if;
+  if tg_op = 'UPDATE' then
+    if old.ativo and old.organizacao_id = new.organizacao_id then return new; end if;
+  end if;
+  -- O bloqueio na organização serializa dois cadastros simultâneos.
+  select owner_id into v_owner from public.operacao_organizacoes where id = new.organizacao_id for update;
+  if v_owner is null then raise exception 'Organização não encontrada'; end if;
+  if not public.pode_organizacao(new.organizacao_id, 'novo_cnpj') then
+    v := public.plano_efetivo_titular(v_owner);
+    raise exception 'Limite de % CNPJs ativos atingido para esta conta', v ->> 'max_cnpjs'
+      using errcode = 'P0001', hint = 'Plano ' || (v ->> 'nome') || '. Para mais empresas, peça a mudança de plano.';
+  end if;
+  return new;
+end $$;
+drop trigger if exists operacao_empresas_limite_cnpjs on public.operacao_empresas;
+create trigger operacao_empresas_limite_cnpjs before insert or update of ativo, organizacao_id on public.operacao_empresas
+  for each row execute function public.verificar_limite_cnpjs_operacao();
+
+create or replace function public.verificar_limite_usuarios_operacao() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare v jsonb;
+begin
+  perform 1 from public.operacao_organizacoes where id = new.organizacao_id for update;
+  if exists (select 1 from public.operacao_membros where organizacao_id = new.organizacao_id and usuario_id = new.usuario_id) then return new; end if;
+  if not public.pode_organizacao(new.organizacao_id, 'novo_usuario') then
+    v := public.plano_efetivo_titular((select owner_id from public.operacao_organizacoes where id = new.organizacao_id));
+    raise exception 'Limite de % usuários atingido para esta conta', v ->> 'max_usuarios'
+      using errcode = 'P0001', hint = 'Plano ' || (v ->> 'nome') || '.';
+  end if;
+  return new;
+end $$;
+drop trigger if exists operacao_membros_limite_usuarios on public.operacao_membros;
+create trigger operacao_membros_limite_usuarios before insert on public.operacao_membros
+  for each row execute function public.verificar_limite_usuarios_operacao();
+
+create or replace function public.verificar_limite_processos_operacao() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare v jsonb;
+begin
+  if new.status = 'arquivado' then return new; end if;
+  if tg_op = 'UPDATE' and old.status <> 'arquivado' then return new; end if;
+  perform 1 from public.operacao_organizacoes where id = new.organizacao_id for update;
+  if not public.pode_organizacao(new.organizacao_id, 'novo_processo') then
+    v := public.plano_efetivo_titular((select owner_id from public.operacao_organizacoes where id = new.organizacao_id));
+    raise exception 'Limite de % processos ativos atingido para esta conta', v ->> 'max_processos'
+      using errcode = 'P0001', hint = 'Plano ' || (v ->> 'nome') || '. Arquive um processo ou peça a mudança de plano.';
+  end if;
+  return new;
+end $$;
+drop trigger if exists operacao_processos_limite_plano on public.operacao_processos;
+create trigger operacao_processos_limite_plano before insert or update of status on public.operacao_processos
+  for each row execute function public.verificar_limite_processos_operacao();
+
+-- RLS: o navegador grava processos direto (Funil). Policy restritiva = a mesma regra antes de chegar ao trigger.
+drop policy if exists operacao_processos_plano_permite on public.operacao_processos;
+create policy operacao_processos_plano_permite on public.operacao_processos as restrictive for insert to authenticated
+  with check (public.organizacao_pode(organizacao_id, 'novo_processo'));
+
+-- Proposta e declarações: a rota kit-documentos confere o recurso "proposta" por consumir_uso_plano. Sem trigger nem
+-- policy em operacao_kit_documentos: o gate do kit (02-verificar) exige a tabela exatamente como kit_documentos.sql deixa.
+drop trigger if exists operacao_kit_documentos_plano on public.operacao_kit_documentos;
+drop function if exists public.verificar_plano_kit_documentos();
+
+-- ---------------------------------------------------------------------------------------------------------------
+-- 5) Cadastro -> teste. A assinatura nasce com o cadastro; o prazo do teste começa na aprovação.
+-- ---------------------------------------------------------------------------------------------------------------
+create or replace function public.criar_assinatura_do_cliente() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare v_pedido text; v_plano text; v_dias integer;
+begin
+  -- to_jsonb: lê o metadado do cadastro sem depender da coluna existir (ensaio sem Auth real).
+  select to_jsonb(u) -> 'raw_user_meta_data' ->> 'plano_desejado' into v_pedido from auth.users u where u.id = new.id;
+  v_plano := case
+    when lower(coalesce(new.plano, '')) in ('gratis', 'empresa', 'assessoria') then lower(new.plano)
+    when exists (select 1 from public.planos where codigo = v_pedido and ativo and escolhivel_no_cadastro) then v_pedido
+    else 'assessoria' end; -- sem escolha: teste com até 3 CNPJs, como a cota antiga
+  select dias_teste into v_dias from public.planos where codigo = 'teste';
+  insert into public.assinaturas (usuario_id, plano, situacao, teste_ate, atualizado_por)
+    values (new.id, v_plano, 'teste', case when new.status = 'aprovado' then now() + make_interval(days => coalesce(v_dias, 14)) end, 'cadastro')
+    on conflict (usuario_id) do nothing;
+  update public.clientes set plano = v_plano where id = new.id and plano is distinct from v_plano;
+  return new;
+end $$;
+drop trigger if exists clientes_criar_assinatura on public.clientes;
+create trigger clientes_criar_assinatura after insert on public.clientes
+  for each row execute function public.criar_assinatura_do_cliente();
+
+create or replace function public.iniciar_teste_na_aprovacao() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare v_dias integer;
+begin
+  if new.status = 'aprovado' and old.status is distinct from 'aprovado' then
+    select dias_teste into v_dias from public.planos where codigo = 'teste';
+    update public.assinaturas set teste_ate = now() + make_interval(days => coalesce(v_dias, 14)), atualizado_em = now()
+      where usuario_id = new.id and situacao = 'teste' and teste_ate is null;
+  end if;
+  return new;
+end $$;
+drop trigger if exists clientes_iniciar_teste on public.clientes;
+create trigger clientes_iniciar_teste after update of status on public.clientes
+  for each row execute function public.iniciar_teste_na_aprovacao();
+
+revoke all on function public.verificar_limite_usuarios_operacao(), public.verificar_limite_processos_operacao(),
+  public.criar_assinatura_do_cliente(), public.iniciar_teste_na_aprovacao() from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------------------------------------------
+-- 6) Migração das contas existentes (só quem ainda não tem assinatura; nada é apagado).
+-- ---------------------------------------------------------------------------------------------------------------
+with base as (
+  select c.id, c.status, c.plano as plano_antigo, l.limite, public.eh_owner_admin_operacao(c.id) as owner,
+    (select count(*) from public.operacao_organizacoes o join public.operacao_empresas e on e.organizacao_id = o.id and e.ativo where o.owner_id = c.id)::int as ativos,
+    (select count(distinct m.usuario_id) from public.operacao_organizacoes o join public.operacao_membros m on m.organizacao_id = o.id where o.owner_id = c.id)::int as usuarios
+  from public.clientes c left join public.operacao_limites_cnpj l on l.usuario_id = c.id
+  where not exists (select 1 from public.assinaturas a where a.usuario_id = c.id)
+), escolha as (
+  select b.*, case
+    when b.owner then 'dono'
+    when lower(trim(coalesce(b.plano_antigo, ''))) in ('gratis', 'empresa', 'assessoria') then lower(trim(b.plano_antigo))
+    when b.limite = 1 then 'empresa'
+    when b.limite is not null then 'assessoria'
+    when b.ativos > 1 then 'assessoria'
+    else 'empresa' end as plano
+  from base b
+)
+insert into public.assinaturas (usuario_id, plano, situacao, max_cnpjs, max_usuarios, observacoes, atualizado_por)
+select e.id, e.plano, case when e.status = 'aprovado' or e.owner then 'ativa' else 'teste' end,
+  case when e.plano <> 'dono' and (e.ativos > coalesce(p.max_cnpjs, e.ativos) or (e.plano = 'assessoria' and e.limite > 1))
+    then greatest(e.ativos, coalesce(e.limite, 0)) end,
+  case when e.plano <> 'dono' and e.usuarios > coalesce(p.max_usuarios, e.usuarios) then e.usuarios end,
+  'Migração de 19/11/2026. Plano anterior: ' || coalesce(nullif(e.plano_antigo, ''), 'vazio') || coalesce('; cota de CNPJs anterior: ' || e.limite, ''),
+  'migracao'
+from escolha e join public.planos p on p.codigo = e.plano
+on conflict (usuario_id) do nothing;
+update public.clientes c set plano = a.plano from public.assinaturas a where a.usuario_id = c.id and c.plano is distinct from a.plano;
+
+-- ---------------------------------------------------------------------------------------------------------------
+-- 7) Pagamento confirmado: ponto ÚNICO de ligação com o gateway (admin hoje; webhook do Asaas/Inter depois).
+--    Idempotente: pagar de novo o mesmo registro não estende o prazo duas vezes.
+-- ---------------------------------------------------------------------------------------------------------------
+create or replace function public.aplicar_pagamento_confirmado(p_pagamento uuid, p_feito_por text default 'servidor') returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare g public.pagamentos%rowtype; a public.assinaturas%rowtype; v_inicio date; v_fim date;
+begin
+  select * into g from public.pagamentos where id = p_pagamento for update;
+  if not found then raise exception 'Pagamento não encontrado'; end if;
+  if g.situacao = 'pago' then return jsonb_build_object('ja_aplicado', true, 'pagamento', g.id); end if;
+  if g.situacao <> 'pendente' then raise exception 'Pagamento % não pode ser confirmado', g.situacao; end if;
+  if g.usuario_id is null or g.plano is null or g.ciclo is null then raise exception 'Pagamento sem conta, plano ou ciclo'; end if;
+  select * into a from public.assinaturas where usuario_id = g.usuario_id for update;
+  if not found then raise exception 'Assinatura não encontrada'; end if;
+  v_inicio := greatest(current_date, coalesce(case when a.situacao = 'ativa' then a.vence_em end, current_date));
+  v_fim := (v_inicio + case g.ciclo when 'anual' then interval '1 year' else interval '1 month' end)::date;
+  update public.pagamentos set situacao = 'pago', pago_em = coalesce(pago_em, now()), periodo_inicio = v_inicio, periodo_fim = v_fim where id = g.id;
+  update public.assinaturas set plano = g.plano, situacao = 'ativa', ciclo = g.ciclo, valor_centavos = g.valor_centavos,
+    vence_em = v_fim, plano_solicitado = null, atualizado_em = now(), atualizado_por = p_feito_por where usuario_id = g.usuario_id;
+  update public.clientes set plano = g.plano where id = g.usuario_id and plano is distinct from g.plano;
+  insert into public.assinaturas_historico (usuario_id, acao, antes, depois, feito_por)
+    values (g.usuario_id, 'pagamento_confirmado', to_jsonb(a), jsonb_build_object('pagamento', g.id, 'plano', g.plano, 'vence_em', v_fim), p_feito_por);
+  return jsonb_build_object('ja_aplicado', false, 'pagamento', g.id, 'vence_em', v_fim);
+end $$;
+revoke all on function public.aplicar_pagamento_confirmado(uuid, text) from public, anon, authenticated;
+grant execute on function public.aplicar_pagamento_confirmado(uuid, text) to service_role;
+
+-- ---------------------------------------------------------------------------------------------------------------
+-- 8) Painel de administração. Listar/aprovar: quem aprova cadastros. Plano, limites e financeiro: owner com 2 fatores.
+-- ---------------------------------------------------------------------------------------------------------------
+create or replace function public.admin_email_atual() returns text
+language sql stable security definer set search_path = public as $$ select email from auth.users where id = auth.uid() $$;
+
+create or replace function public.admin_listar_contas() returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.pode_aprovar_cadastros() then raise exception 'Acesso restrito à administração' using errcode = '42501'; end if;
+  return (select coalesce(jsonb_agg(x order by x ->> 'criado_em' desc), '[]'::jsonb) from (
+    select (to_jsonb(c) - 'boletim_filtro') || jsonb_build_object(
+      'assinatura', to_jsonb(a),
+      'titular_id', t.tit, 'titular_nome', case when t.tit <> c.id then (select coalesce(nullif(nome, ''), email) from public.clientes where id = t.tit) end,
+      'efetivo', public.plano_efetivo_titular(t.tit) - 'recursos',
+      'cnpjs_ativos', (select count(*) from public.operacao_organizacoes o join public.operacao_empresas e on e.organizacao_id = o.id and e.ativo where o.owner_id = c.id),
+      'usuarios', (select count(distinct m.usuario_id) from public.operacao_organizacoes o join public.operacao_membros m on m.organizacao_id = o.id where o.owner_id = c.id),
+      'processos_ativos', (select count(*) from public.operacao_organizacoes o join public.operacao_processos p on p.organizacao_id = o.id and p.status <> 'arquivado' where o.owner_id = c.id),
+      'uso_hoje', (select coalesce(sum(u.contagem), 0) from public.uso_diario u where u.usuario_id = c.id and u.dia = current_date),
+      'uso_30d', (select coalesce(sum(u.contagem), 0) from public.uso_diario u where u.usuario_id = c.id and u.dia > current_date - 30)) as x
+    from public.clientes c
+    left join public.assinaturas a on a.usuario_id = c.id
+    cross join lateral (select public.titular_do_usuario(c.id) as tit) t) s);
+end $$;
+
+create or replace function public.admin_empresas_da_conta(p_usuario uuid) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.pode_aprovar_cadastros() then raise exception 'Acesso restrito à administração' using errcode = '42501'; end if;
+  return jsonb_build_object(
+    'empresas', (select coalesce(jsonb_agg(jsonb_build_object('id', e.id, 'razao_social', e.razao_social, 'cnpj', e.cnpj, 'ativo', e.ativo, 'criado_em', e.criado_em) order by e.ativo desc, e.razao_social), '[]'::jsonb)
+      from public.operacao_organizacoes o join public.operacao_empresas e on e.organizacao_id = o.id where o.owner_id = p_usuario),
+    'membros', (select coalesce(jsonb_agg(jsonb_build_object('nome', c.nome, 'email', coalesce(c.email, u.email), 'papel', m.papel,
+        'empresa', (select razao_social from public.operacao_empresas where id = m.empresa_id)) order by m.criado_em), '[]'::jsonb)
+      from public.operacao_organizacoes o join public.operacao_membros m on m.organizacao_id = o.id
+      left join public.clientes c on c.id = m.usuario_id left join auth.users u on u.id = m.usuario_id where o.owner_id = p_usuario));
+end $$;
+
+-- Aprovar, reprovar, voltar para pendente, suspender (= login bloqueado + assinatura suspensa) e reativar.
+create or replace function public.admin_definir_status_cliente(p_usuario uuid, p_status text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare c public.clientes%rowtype; v_status text;
+begin
+  if not public.pode_aprovar_cadastros() then raise exception 'Acesso restrito à administração' using errcode = '42501'; end if;
+  if p_status not in ('pendente', 'aprovado', 'rejeitado', 'suspenso', 'reativar') then raise exception 'Situação inválida'; end if;
+  if p_status in ('suspenso', 'reativar') and not public.admin_planos_autorizado() then
+    raise exception 'Suspender e reativar exigem o proprietário com 2 fatores' using errcode = '42501';
+  end if;
+  if public.eh_owner_admin_operacao(p_usuario) and p_status <> 'aprovado' and p_status <> 'reativar' then raise exception 'A conta do proprietário não pode ser bloqueada'; end if;
+  v_status := case p_status when 'suspenso' then 'rejeitado' when 'reativar' then 'aprovado' else p_status end;
+  update public.clientes set status = v_status,
+    aprovado_em = case when v_status = 'aprovado' then coalesce(aprovado_em, now()) end,
+    aprovado_por = case when v_status = 'aprovado' then coalesce(aprovado_por, public.admin_email_atual()) end
+    where id = p_usuario returning * into c;
+  if not found then raise exception 'Cliente não encontrado'; end if;
+  if p_status = 'suspenso' then
+    update public.assinaturas set situacao = 'suspensa', atualizado_em = now(), atualizado_por = public.admin_email_atual() where usuario_id = p_usuario;
+  elsif p_status = 'reativar' then
+    update public.assinaturas set situacao = 'ativa', atualizado_em = now(), atualizado_por = public.admin_email_atual() where usuario_id = p_usuario and situacao = 'suspensa';
+  end if;
+  insert into public.assinaturas_historico (usuario_id, acao, depois, feito_por)
+    values (p_usuario, 'status_' || p_status, jsonb_build_object('status', c.status), public.admin_email_atual());
+  return jsonb_build_object('status', c.status);
+end $$;
+
+-- Plano e limites de uma conta. p_dados: plano, situacao, teste_ate, vence_em, ciclo, valor_centavos, max_cnpjs,
+-- max_usuarios, max_processos, observacoes. Chave ausente = mantém; null = limpa (ajuste volta ao do plano).
+create or replace function public.admin_definir_assinatura(p_usuario uuid, p_dados jsonb) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare a public.assinaturas%rowtype; n public.assinaturas%rowtype; v jsonb; v_uso jsonb;
+begin
+  if not public.admin_planos_autorizado() then raise exception 'Mudar plano exige o proprietário com 2 fatores' using errcode = '42501'; end if;
+  if jsonb_typeof(p_dados) is distinct from 'object' then raise exception 'Dados inválidos'; end if;
+  if (select count(*) from jsonb_object_keys(p_dados) k where k not in ('plano', 'situacao', 'teste_ate', 'vence_em', 'ciclo',
+      'valor_centavos', 'max_cnpjs', 'max_usuarios', 'max_processos', 'observacoes')) > 0 then raise exception 'Campo não permitido'; end if;
+  select * into a from public.assinaturas where usuario_id = p_usuario for update;
+  if not found then raise exception 'Assinatura não encontrada'; end if;
+  n := a;
+  if p_dados ? 'plano' then n.plano := p_dados ->> 'plano'; end if;
+  if p_dados ? 'situacao' then n.situacao := p_dados ->> 'situacao'; end if;
+  if p_dados ? 'teste_ate' then n.teste_ate := (p_dados ->> 'teste_ate')::timestamptz; end if;
+  if p_dados ? 'vence_em' then n.vence_em := (p_dados ->> 'vence_em')::date; end if;
+  if p_dados ? 'ciclo' then n.ciclo := nullif(p_dados ->> 'ciclo', ''); end if;
+  if p_dados ? 'valor_centavos' then n.valor_centavos := (p_dados ->> 'valor_centavos')::integer; end if;
+  if p_dados ? 'max_cnpjs' then n.max_cnpjs := (p_dados ->> 'max_cnpjs')::integer; end if;
+  if p_dados ? 'max_usuarios' then n.max_usuarios := (p_dados ->> 'max_usuarios')::integer; end if;
+  if p_dados ? 'max_processos' then n.max_processos := (p_dados ->> 'max_processos')::integer; end if;
+  if p_dados ? 'observacoes' then n.observacoes := p_dados ->> 'observacoes'; end if;
+  if not exists (select 1 from public.planos where codigo = n.plano) then raise exception 'Plano inexistente'; end if;
+  if n.plano = 'dono' and not public.eh_owner_admin_operacao(p_usuario) then raise exception 'O plano Dono é só do proprietário'; end if;
+  if n.plano = 'teste' then raise exception 'Teste é uma situação, não um plano: escolha o plano e a situação "teste"'; end if;
+  if n.plano is distinct from a.plano then n.plano_solicitado := null; end if;
+  update public.assinaturas set plano = n.plano, situacao = n.situacao, teste_ate = n.teste_ate, vence_em = n.vence_em, ciclo = n.ciclo,
+    valor_centavos = n.valor_centavos, max_cnpjs = n.max_cnpjs, max_usuarios = n.max_usuarios, max_processos = n.max_processos,
+    observacoes = n.observacoes, plano_solicitado = n.plano_solicitado, atualizado_em = now(), atualizado_por = public.admin_email_atual()
+    where usuario_id = p_usuario;
+  -- Não rebaixa abaixo do que a conta já usa (o dono desativa empresas ou usuários antes).
+  v := public.plano_efetivo_titular(p_usuario);
+  select jsonb_build_object(
+    'cnpjs', (select count(*) from public.operacao_organizacoes o join public.operacao_empresas e on e.organizacao_id = o.id and e.ativo where o.owner_id = p_usuario),
+    'usuarios', (select count(distinct m.usuario_id) from public.operacao_organizacoes o join public.operacao_membros m on m.organizacao_id = o.id where o.owner_id = p_usuario))
+    into v_uso;
+  if (v ->> 'plano') = n.plano and (v ->> 'max_cnpjs') is not null and (v_uso ->> 'cnpjs')::int > (v ->> 'max_cnpjs')::int then
+    raise exception 'A conta tem % CNPJs ativos e o plano permite %. Desative empresas antes ou ajuste o limite.', v_uso ->> 'cnpjs', v ->> 'max_cnpjs';
+  end if;
+  if (v ->> 'plano') = n.plano and (v ->> 'max_usuarios') is not null and (v_uso ->> 'usuarios')::int > (v ->> 'max_usuarios')::int then
+    raise exception 'A conta tem % usuários e o plano permite %. Revogue acessos antes ou ajuste o limite.', v_uso ->> 'usuarios', v ->> 'max_usuarios';
+  end if;
+  update public.clientes set plano = n.plano where id = p_usuario and plano is distinct from n.plano;
+  insert into public.assinaturas_historico (usuario_id, acao, antes, depois, feito_por)
+    values (p_usuario, 'assinatura_alterada', to_jsonb(a), (select to_jsonb(x) from public.assinaturas x where x.usuario_id = p_usuario), public.admin_email_atual());
+  return v;
+end $$;
+
+create or replace function public.admin_salvar_plano(p_codigo text, p_dados jsonb) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not public.admin_planos_autorizado() then raise exception 'Exige o proprietário com 2 fatores' using errcode = '42501'; end if;
+  if jsonb_typeof(p_dados) is distinct from 'object' or (select count(*) from jsonb_object_keys(p_dados) k where k not in
+    ('nome', 'descricao', 'max_cnpjs', 'max_usuarios', 'max_processos', 'preco_mensal_centavos', 'preco_anual_centavos', 'dias_teste', 'escolhivel_no_cadastro', 'ativo')) > 0
+    then raise exception 'Campo não permitido'; end if;
+  update public.planos set
+    nome = case when p_dados ? 'nome' then p_dados ->> 'nome' else nome end,
+    descricao = case when p_dados ? 'descricao' then coalesce(p_dados ->> 'descricao', '') else descricao end,
+    max_cnpjs = case when p_dados ? 'max_cnpjs' then (p_dados ->> 'max_cnpjs')::integer else max_cnpjs end,
+    max_usuarios = case when p_dados ? 'max_usuarios' then (p_dados ->> 'max_usuarios')::integer else max_usuarios end,
+    max_processos = case when p_dados ? 'max_processos' then (p_dados ->> 'max_processos')::integer else max_processos end,
+    preco_mensal_centavos = case when p_dados ? 'preco_mensal_centavos' then (p_dados ->> 'preco_mensal_centavos')::integer else preco_mensal_centavos end,
+    preco_anual_centavos = case when p_dados ? 'preco_anual_centavos' then (p_dados ->> 'preco_anual_centavos')::integer else preco_anual_centavos end,
+    dias_teste = case when p_dados ? 'dias_teste' then (p_dados ->> 'dias_teste')::integer else dias_teste end,
+    escolhivel_no_cadastro = case when p_dados ? 'escolhivel_no_cadastro' then (p_dados ->> 'escolhivel_no_cadastro')::boolean else escolhivel_no_cadastro end,
+    ativo = case when p_dados ? 'ativo' then (p_dados ->> 'ativo')::boolean else ativo end,
+    atualizado_em = now()
+  where codigo = p_codigo;
+  if not found then raise exception 'Plano inexistente'; end if;
+  insert into public.assinaturas_historico (usuario_id, acao, depois, feito_por) values (auth.uid(), 'plano_editado:' || p_codigo, p_dados, public.admin_email_atual());
+end $$;
+
+create or replace function public.admin_salvar_plano_recurso(p_plano text, p_recurso text, p_permitido boolean, p_limite integer) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not public.admin_planos_autorizado() then raise exception 'Exige o proprietário com 2 fatores' using errcode = '42501'; end if;
+  insert into public.plano_recursos (plano, recurso, permitido, limite_diario) values (p_plano, p_recurso, coalesce(p_permitido, false), p_limite)
+    on conflict (plano, recurso) do update set permitido = excluded.permitido, limite_diario = excluded.limite_diario;
+  insert into public.assinaturas_historico (usuario_id, acao, depois, feito_por)
+    values (auth.uid(), 'recurso_editado:' || p_plano, jsonb_build_object('recurso', p_recurso, 'permitido', p_permitido, 'limite_diario', p_limite), public.admin_email_atual());
+end $$;
+
+create or replace function public.admin_uso(p_dias integer default 30) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.pode_aprovar_cadastros() then raise exception 'Acesso restrito à administração' using errcode = '42501'; end if;
+  return (select coalesce(jsonb_agg(x order by (x ->> 'total')::int desc), '[]'::jsonb) from (
+    select jsonb_build_object('usuario_id', u.usuario_id, 'nome', coalesce(c.nome, c.email), 'email', c.email,
+      'recurso', coalesce((select r.codigo from public.recursos_plano r where u.funcao = any (r.funcoes) order by r.codigo limit 1), 'outros'),
+      'funcao', u.funcao, 'total', sum(u.contagem), 'hoje', sum(u.contagem) filter (where u.dia = current_date)) as x
+    from public.uso_diario u left join public.clientes c on c.id = u.usuario_id
+    where u.dia > current_date - least(greatest(coalesce(p_dias, 30), 1), 366)
+    group by u.usuario_id, c.nome, c.email, u.funcao) s);
+end $$;
+
+create or replace function public.admin_resumo() returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.pode_aprovar_cadastros() then raise exception 'Acesso restrito à administração' using errcode = '42501'; end if;
+  return jsonb_build_object(
+    'pendentes', (select count(*) from public.clientes where status = 'pendente'),
+    'em_teste', (select count(*) from public.assinaturas a join public.clientes c on c.id = a.usuario_id where c.status = 'aprovado' and a.situacao = 'teste' and (a.teste_ate is null or a.teste_ate > now())),
+    'ativas', (select count(*) from public.assinaturas a join public.clientes c on c.id = a.usuario_id where c.status = 'aprovado' and a.situacao = 'ativa' and (a.vence_em is null or a.vence_em + 5 >= current_date)),
+    'suspensas', (select count(*) from public.assinaturas where situacao = 'suspensa'),
+    'por_plano', (select coalesce(jsonb_object_agg(plano, n), '{}'::jsonb) from (select plano, count(*) n from public.assinaturas group by plano) s),
+    'avisos', (select coalesce(jsonb_agg(x order by x ->> 'quando'), '[]'::jsonb) from (
+      select jsonb_build_object('tipo', 'teste_vencendo', 'usuario_id', c.id, 'nome', coalesce(c.nome, c.email), 'quando', a.teste_ate) x
+        from public.assinaturas a join public.clientes c on c.id = a.usuario_id
+        where a.situacao = 'teste' and a.teste_ate between now() and now() + interval '3 days'
+      union all
+      select jsonb_build_object('tipo', 'teste_vencido', 'usuario_id', c.id, 'nome', coalesce(c.nome, c.email), 'quando', a.teste_ate)
+        from public.assinaturas a join public.clientes c on c.id = a.usuario_id
+        where a.situacao = 'teste' and a.teste_ate < now() and a.teste_ate > now() - interval '30 days'
+      union all
+      select jsonb_build_object('tipo', 'vencida', 'usuario_id', c.id, 'nome', coalesce(c.nome, c.email), 'quando', a.vence_em)
+        from public.assinaturas a join public.clientes c on c.id = a.usuario_id where a.situacao = 'ativa' and a.vence_em < current_date
+      union all
+      select jsonb_build_object('tipo', 'plano_solicitado', 'usuario_id', c.id, 'nome', coalesce(c.nome, c.email), 'quando', a.plano_solicitado_em, 'plano', a.plano_solicitado)
+        from public.assinaturas a join public.clientes c on c.id = a.usuario_id where a.plano_solicitado is not null
+      union all
+      select jsonb_build_object('tipo', 'pendente', 'usuario_id', c.id, 'nome', coalesce(c.nome, c.email), 'quando', c.criado_em)
+        from public.clientes c where c.status = 'pendente' and c.criado_em < now() - interval '24 hours'
+      union all
+      select jsonb_build_object('tipo', 'pagamento_pendente', 'usuario_id', g.usuario_id, 'nome', coalesce(g.cliente_email, ''), 'quando', g.vencimento)
+        from public.pagamentos g where g.situacao = 'pendente') s));
+end $$;
+
+-- Financeiro (preparado, sem gateway). Registrar cobrança manual; se já recebida, confirma na mesma chamada.
+create or replace function public.admin_registrar_pagamento(p_usuario uuid, p_dados jsonb) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare g uuid; v_plano text; v_ciclo text; v_valor integer;
+begin
+  if not public.admin_planos_autorizado() then raise exception 'Financeiro exige o proprietário com 2 fatores' using errcode = '42501'; end if;
+  v_plano := coalesce(p_dados ->> 'plano', (select plano from public.assinaturas where usuario_id = p_usuario));
+  v_ciclo := coalesce(p_dados ->> 'ciclo', 'mensal');
+  v_valor := coalesce((p_dados ->> 'valor_centavos')::integer,
+    (select case v_ciclo when 'anual' then preco_anual_centavos else preco_mensal_centavos end from public.planos where codigo = v_plano));
+  if v_valor is null or v_valor <= 0 then raise exception 'Informe o valor'; end if;
+  insert into public.pagamentos (usuario_id, cliente_email, plano, ciclo, valor_centavos, metodo, vencimento, referencia, gateway, observacoes, criado_por)
+    values (p_usuario, (select email from public.clientes where id = p_usuario), v_plano, v_ciclo, v_valor,
+      coalesce(p_dados ->> 'metodo', 'pix'), coalesce((p_dados ->> 'vencimento')::date, current_date), p_dados ->> 'referencia', 'pix_manual',
+      p_dados ->> 'observacoes', public.admin_email_atual())
+    returning id into g;
+  if coalesce((p_dados ->> 'pago')::boolean, false) then
+    return public.aplicar_pagamento_confirmado(g, public.admin_email_atual());
+  end if;
+  return jsonb_build_object('pagamento', g);
+end $$;
+
+create or replace function public.admin_atualizar_pagamento(p_pagamento uuid, p_situacao text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  if not public.admin_planos_autorizado() then raise exception 'Financeiro exige o proprietário com 2 fatores' using errcode = '42501'; end if;
+  if p_situacao = 'pago' then return public.aplicar_pagamento_confirmado(p_pagamento, public.admin_email_atual()); end if;
+  if p_situacao not in ('cancelado', 'estornado', 'vencido') then raise exception 'Situação inválida'; end if;
+  update public.pagamentos set situacao = p_situacao where id = p_pagamento and situacao in ('pendente', 'pago');
+  if not found then raise exception 'Pagamento não encontrado ou já encerrado'; end if;
+  insert into public.assinaturas_historico (usuario_id, acao, depois, feito_por)
+    select usuario_id, 'pagamento_' || p_situacao, jsonb_build_object('pagamento', id), public.admin_email_atual() from public.pagamentos where id = p_pagamento;
+  return jsonb_build_object('pagamento', p_pagamento, 'situacao', p_situacao);
+end $$;
+
+create or replace function public.admin_listar_pagamentos(p_usuario uuid default null) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.admin_planos_autorizado() then raise exception 'Financeiro exige o proprietário com 2 fatores' using errcode = '42501'; end if;
+  return (select coalesce(jsonb_agg(to_jsonb(g) || jsonb_build_object('nome', c.nome) order by g.criado_em desc), '[]'::jsonb)
+    from public.pagamentos g left join public.clientes c on c.id = g.usuario_id where p_usuario is null or g.usuario_id = p_usuario);
+end $$;
+
+create or replace function public.admin_historico_assinatura(p_usuario uuid) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.pode_aprovar_cadastros() then raise exception 'Acesso restrito à administração' using errcode = '42501'; end if;
+  return (select coalesce(jsonb_agg(jsonb_build_object('acao', acao, 'depois', depois, 'feito_por', feito_por, 'feito_em', feito_em) order by feito_em desc), '[]'::jsonb)
+    from (select * from public.assinaturas_historico where usuario_id = p_usuario order by feito_em desc limit 100) h);
+end $$;
+
+revoke all on function public.admin_email_atual(), public.admin_listar_contas(), public.admin_empresas_da_conta(uuid),
+  public.admin_definir_status_cliente(uuid, text), public.admin_definir_assinatura(uuid, jsonb), public.admin_salvar_plano(text, jsonb),
+  public.admin_salvar_plano_recurso(text, text, boolean, integer), public.admin_uso(integer), public.admin_resumo(),
+  public.admin_registrar_pagamento(uuid, jsonb), public.admin_atualizar_pagamento(uuid, text), public.admin_listar_pagamentos(uuid),
+  public.admin_historico_assinatura(uuid) from public, anon;
+revoke all on function public.admin_email_atual() from authenticated;
+grant execute on function public.admin_listar_contas(), public.admin_empresas_da_conta(uuid),
+  public.admin_definir_status_cliente(uuid, text), public.admin_definir_assinatura(uuid, jsonb), public.admin_salvar_plano(text, jsonb),
+  public.admin_salvar_plano_recurso(text, text, boolean, integer), public.admin_uso(integer), public.admin_resumo(),
+  public.admin_registrar_pagamento(uuid, jsonb), public.admin_atualizar_pagamento(uuid, text), public.admin_listar_pagamentos(uuid),
+  public.admin_historico_assinatura(uuid) to authenticated;
+
+notify pgrst, 'reload schema';
+commit;
+
+
+-- ========== pecas_juridicas.sql ==========
+-- ============================================================================
+-- LicitaPlena — Banco de peças reais (Jurídico & Dúvidas): esclarecimentos, impugnações, intenções de recurso,
+-- recursos e contrarrazões publicados no ComprasNet antigo (com a resposta/decisão do pregoeiro) e, da Lei 14.133,
+-- os que os órgãos anexam às contratações no PNCP.
+--
+-- Rode no Supabase: SQL Editor -> New query -> Run. Idempotente, transação única;
+-- só cria objetos novos (não altera nem apaga dados de outras tabelas).
+-- Escrita: só os robôs scripts/coletar_pecas_juridicas.js e scripts/coletar_pecas_pncp.js (service_role). Leitura: cliente aprovado (cliente_aprovado()),
+-- pela aba "Banco de peças reais" do painel. anon não lê.
+-- LGPD: o robô apaga CPF, e-mail, telefone, RG, OAB e nomes de pessoas antes de gravar; o CHECK abaixo recusa CPF
+-- (mesma regra de netlify/functions/_cpf.js). Ficam empresa, CNPJ e órgão (dado público de pessoa jurídica).
+-- ============================================================================
+begin;
+
+create table if not exists public.pecas_juridicas (
+  id text primary key check (id ~ '^(cn|pncp)-[0-9A-Za-z-]{3,120}$'),
+  tipo text not null check (tipo in ('esclarecimento', 'impugnacao', 'intencao_recurso', 'recurso', 'contrarrazao')),
+  pregao text check (pregao is null or pregao ~ '^[0-9]{1,6}/[0-9]{4}$'),
+  uasg text check (uasg is null or uasg ~ '^[0-9]{5,6}$'),
+  orgao text check (orgao is null or length(orgao) <= 300),
+  prgcod text check (prgcod is null or prgcod ~ '^[0-9]{3,12}$'),
+  item integer check (item is null or item between 0 and 100000),
+  data date,
+  empresa_cnpj text check (empresa_cnpj is null or empresa_cnpj ~ '^[0-9]{14}$'),
+  empresa_nome text check (empresa_nome is null or (length(empresa_nome) <= 300 and empresa_nome !~ '\y[0-9]{3}[. ]?[0-9]{3}[. ]?[0-9]{3}[- /]?[0-9]{2}\y')),
+  texto text not null check (length(texto) between 1 and 60000 and texto !~ '\y[0-9]{3}[. ]?[0-9]{3}[. ]?[0-9]{3}[- /]?[0-9]{2}\y'),
+  resposta text check (resposta is null or (length(resposta) <= 60000 and resposta !~ '\y[0-9]{3}[. ]?[0-9]{3}[. ]?[0-9]{3}[- /]?[0-9]{2}\y')),
+  -- Cabeçalho da decisão no portal ("NÃO PROCEDE", "PROCEDE"...), quando há.
+  resultado text check (resultado is null or length(resultado) <= 200),
+  lei text check (lei is null or lei in ('14133', '10520', '8666', '13303')),
+  url text check (url is null or url ~ '^https://(www\.comprasnet\.gov\.br|pncp\.gov\.br)/'),
+  -- Texto minúsculo e sem acento (peça + resposta + órgão + empresa), montado pelo robô para o ILIKE da busca.
+  busca text not null default '' check (length(busca) <= 20000),
+  coletado_em timestamptz not null default now()
+);
+-- shortcut: ILIKE por palavra em busca, filtrado por tipo e ordenado por data, com limite de 30 linhas na tela. Com
+-- dezenas de milhares de peças e lentidão, criar extensão pg_trgm e índice gin (busca gin_trgm_ops).
+-- Peças da Lei 14.133 anexadas no PNCP (scripts/coletar_pecas_pncp.js): id "pncp-..." e link para pncp.gov.br. Em banco
+-- que já tinha a tabela, troca os dois CHECKs antigos (só ComprasNet) pelos novos.
+alter table public.pecas_juridicas drop constraint if exists pecas_juridicas_id_check;
+alter table public.pecas_juridicas add constraint pecas_juridicas_id_check check (id ~ '^(cn|pncp)-[0-9A-Za-z-]{3,120}$');
+alter table public.pecas_juridicas drop constraint if exists pecas_juridicas_url_check;
+alter table public.pecas_juridicas add constraint pecas_juridicas_url_check check (url is null or url ~ '^https://(www\.comprasnet\.gov\.br|pncp\.gov\.br)/');
+create index if not exists pecas_juridicas_tipo_data_idx on public.pecas_juridicas (tipo, data desc);
+
+alter table public.pecas_juridicas enable row level security;
+revoke all on public.pecas_juridicas from anon, authenticated;
+grant select on public.pecas_juridicas to authenticated;
+revoke truncate on public.pecas_juridicas from service_role;
+grant select, insert, update, delete on public.pecas_juridicas to service_role;
+
+-- Mesmo corpo de prospeccao.sql, historico_licitacoes.sql e sinapi.sql: este arquivo roda sozinho.
+create or replace function public.cliente_aprovado() returns boolean
+language sql stable security definer set search_path = '' as $$
+  select exists (select 1 from public.clientes c where c.id = (select auth.uid()) and c.status = 'aprovado')
+$$;
+revoke all on function public.cliente_aprovado() from public, anon;
+grant execute on function public.cliente_aprovado() to authenticated, service_role;
+
+drop policy if exists pecas_juridicas_select_aprovado on public.pecas_juridicas;
+create policy pecas_juridicas_select_aprovado on public.pecas_juridicas
+  for select to authenticated using (public.cliente_aprovado());
+-- Sem policy de escrita: só service_role (bypassrls) grava.
+
+commit;
+
+
+-- ========== avisos_celular.sql ==========
+-- LicitaPlena — Aviso no celular (Web Push). Seguro rodar mais de uma vez (idempotente). Rodar no SQL Editor do Supabase.
+--
+-- avisos_celular_inscricoes: um aparelho/navegador inscrito por linha (endpoint do serviço de push + chaves públicas
+--   do aparelho). Grava só pela rota /api/avisos-celular (chave de serviço, endpoint validado contra a lista de
+--   serviços de push conhecidos); o próprio usuário lê e apaga as suas. Ninguém lê a de outro.
+-- avisos_celular_preferencias: que tipos de aviso a conta quer (sem linha = todos ligados). Grava pela rota.
+-- avisos_celular_enviados: o que o robô (scripts/avisos_celular.js) já mandou para quem. A chave primária é a
+--   reserva: duas rodadas ao mesmo tempo não mandam o mesmo aviso duas vezes. Só a chave de serviço acessa.
+
+create table if not exists public.avisos_celular_inscricoes (
+  id uuid primary key default gen_random_uuid(),
+  usuario_id uuid not null references auth.users(id) on delete cascade,
+  endpoint text not null unique check (endpoint like 'https://%' and length(endpoint) <= 1000),
+  p256dh text not null check (p256dh ~ '^[A-Za-z0-9_-]{86,88}$'),
+  auth text not null check (auth ~ '^[A-Za-z0-9_-]{22,24}$'),
+  aparelho text check (length(aparelho) <= 120),
+  criado_em timestamptz not null default now()
+);
+create index if not exists avisos_celular_inscricoes_usuario_idx on public.avisos_celular_inscricoes (usuario_id);
+alter table public.avisos_celular_inscricoes enable row level security;
+drop policy if exists avisos_celular_inscricoes_select_proprio on public.avisos_celular_inscricoes;
+create policy avisos_celular_inscricoes_select_proprio on public.avisos_celular_inscricoes for select to authenticated using (auth.uid() = usuario_id);
+drop policy if exists avisos_celular_inscricoes_delete_proprio on public.avisos_celular_inscricoes;
+create policy avisos_celular_inscricoes_delete_proprio on public.avisos_celular_inscricoes for delete to authenticated using (auth.uid() = usuario_id);
+revoke insert, update on public.avisos_celular_inscricoes from anon, authenticated;
+
+create table if not exists public.avisos_celular_preferencias (
+  usuario_id uuid primary key references auth.users(id) on delete cascade,
+  edital boolean not null default true,
+  prazo boolean not null default true,
+  pregoeiro boolean not null default true,
+  certidao boolean not null default true,
+  atualizado_em timestamptz not null default now()
+);
+-- Oportunidade nova do boletim (scripts/avisos_celular.js lê logs_boletim). Banco que já tinha a tabela ganha a coluna.
+alter table public.avisos_celular_preferencias add column if not exists boletim boolean not null default true;
+alter table public.avisos_celular_preferencias enable row level security;
+drop policy if exists avisos_celular_preferencias_select_proprio on public.avisos_celular_preferencias;
+create policy avisos_celular_preferencias_select_proprio on public.avisos_celular_preferencias for select to authenticated using (auth.uid() = usuario_id);
+revoke insert, update, delete on public.avisos_celular_preferencias from anon, authenticated;
+
+create table if not exists public.avisos_celular_enviados (
+  usuario_id uuid not null references auth.users(id) on delete cascade,
+  chave text not null check (length(chave) <= 200),
+  enviado_em timestamptz not null default now(),
+  primary key (usuario_id, chave)
+);
+create index if not exists avisos_celular_enviados_data_idx on public.avisos_celular_enviados (enviado_em);
+alter table public.avisos_celular_enviados enable row level security;
+-- Sem policy: anon/authenticated não leem nem gravam; só service_role (que ignora RLS).
+revoke all on public.avisos_celular_enviados from anon, authenticated;
+
+
+-- ========== ia_conversas.sql ==========
+-- LicitaPlena — Histórico do chat com IA (botão "IA · BETA", netlify/functions/chat-ia.js). Seguro rodar mais de uma vez
+-- (idempotente). Rodar no SQL Editor do Supabase DEPOIS de seguranca_aprovacao_20261119.sql e planos_e_recursos.sql.
+-- Teste: testar_ia_conversas.sql.
+--
+-- ia_conversas: uma linha por pergunta/resposta, só quando o usuário liga "Salvar histórico" no chat (padrão: desligado).
+--   A rota grava com o TOKEN DO USUÁRIO (sem chave de serviço): a policy de insert exige dono = auth.uid() e, se houver
+--   empresa, que ele tenha acesso a ela. Cada um lê e apaga só o seu; ninguém edita. CPF é recusado pelo CHECK (a rota
+--   já troca CPF por ***.***.***-** antes de gravar; mesma regra de _cpf.js).
+-- Também inclui a função "chat-ia" no recurso "ia" do plano (mesma cota diária por plano das outras ferramentas de IA).
+begin;
+set local lock_timeout = '5s';
+set local statement_timeout = '30s';
+do $$ begin
+  if to_regprocedure('public.pode_acessar_empresa_operacao(uuid,uuid)') is null then
+    raise exception 'Aplique antes seguranca_aprovacao_20261119.sql';
+  end if;
+end $$;
+
+create table if not exists public.ia_conversas (
+  id uuid primary key default gen_random_uuid(),
+  usuario_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  conversa_id uuid not null,
+  empresa_id uuid references public.operacao_empresas(id) on delete set null,
+  pergunta text not null check (length(pergunta) between 1 and 1000),
+  resposta text not null check (length(resposta) between 1 and 4000),
+  fontes jsonb not null default '[]'::jsonb check (jsonb_typeof(fontes) = 'array' and octet_length(fontes::text) <= 6000),
+  criado_em timestamptz not null default now()
+);
+alter table public.ia_conversas drop constraint if exists ia_conversas_sem_cpf;
+alter table public.ia_conversas add constraint ia_conversas_sem_cpf check (
+  pergunta !~ '\y[0-9]{3}[. ]?[0-9]{3}[. ]?[0-9]{3}[- /]?[0-9]{2}\y' and resposta !~ '\y[0-9]{3}[. ]?[0-9]{3}[. ]?[0-9]{3}[- /]?[0-9]{2}\y');
+create index if not exists ia_conversas_usuario_data_idx on public.ia_conversas (usuario_id, criado_em desc);
+create index if not exists ia_conversas_empresa_idx on public.ia_conversas (empresa_id) where empresa_id is not null;
+
+alter table public.ia_conversas enable row level security;
+revoke all on public.ia_conversas from anon;
+revoke update on public.ia_conversas from authenticated;
+grant select, insert, delete on public.ia_conversas to authenticated;
+drop policy if exists ia_conversas_select_proprio on public.ia_conversas;
+create policy ia_conversas_select_proprio on public.ia_conversas for select to authenticated using (auth.uid() = usuario_id);
+drop policy if exists ia_conversas_insert_proprio on public.ia_conversas;
+create policy ia_conversas_insert_proprio on public.ia_conversas for insert to authenticated with check (
+  auth.uid() = usuario_id and (empresa_id is null or exists (
+    select 1 from public.operacao_empresas e where e.id = empresa_id and public.pode_acessar_empresa_operacao(e.organizacao_id, e.id))));
+drop policy if exists ia_conversas_delete_proprio on public.ia_conversas;
+create policy ia_conversas_delete_proprio on public.ia_conversas for delete to authenticated using (auth.uid() = usuario_id);
+
+-- Cota pelo plano: "chat-ia" entra no recurso "ia" (sem a tabela de planos, a rota usa o contador antigo).
+do $$ begin
+  if to_regclass('public.recursos_plano') is not null then
+    update public.recursos_plano set funcoes = array_append(funcoes, 'chat-ia') where codigo = 'ia' and not ('chat-ia' = any (funcoes));
+  end if;
+end $$;
+commit;
+
+
+-- ========== pagometro.sql ==========
+-- ============================================================================
+-- LicitaPlena — Pagômetro (BETA): "este ente costuma pagar em dia?".
+--
+-- Rode no Supabase: SQL Editor -> New query -> Run. Idempotente, transação única;
+-- só cria objetos novos (não altera nem apaga dados de outras tabelas).
+-- Escrita: só a função /api/pagometro (netlify/functions/pagometro.js, service_role), cache por ente.
+-- Leitura: cliente aprovado (cliente_aprovado()). anon não lê.
+--
+-- Dado público: o RREO Anexo 7 (Restos a Pagar) que o próprio município/estado declara ao Tesouro (SICONFI).
+-- Uma linha por ente; a função refaz a coleta quando a linha tem mais de 15 dias. Sem dado pessoal.
+-- Metodologia: _historico/pagometro-metodologia-20261120.md. Teste: supabase/testar_pagometro.sql.
+-- ============================================================================
+begin;
+
+create table if not exists public.pagometro_entes (
+  -- Código IBGE: 7 dígitos = município, 2 dígitos = estado ou DF.
+  id_ente text primary key check (id_ente ~ '^([0-9]{2}|[0-9]{7})$'),
+  esfera text not null check (esfera in ('M', 'E')),
+  nome text check (nome is null or length(nome) <= 300),
+  uf text check (uf is null or uf ~ '^[A-Z]{2}$'),
+  exercicio integer check (exercicio is null or exercicio between 2015 and 2100),
+  semaforo text not null check (semaforo in ('verde', 'amarelo', 'vermelho', 'sem_dados')),
+  -- devido, pago, cancelado, antigos (R$) e as taxas taxaPago, taxaCancelado, taxaAntigo (0 a 1).
+  indicadores jsonb not null default '{}' check (jsonb_typeof(indicadores) = 'object'),
+  fonte text not null check (fonte like 'https://apidatalake.tesouro.gov.br/%' and length(fonte) <= 500),
+  coletado_em timestamptz not null default now(),
+  check ((esfera = 'M') = (length(id_ente) = 7)),
+  check (semaforo = 'sem_dados' or exercicio is not null)
+);
+
+alter table public.pagometro_entes enable row level security;
+revoke all on public.pagometro_entes from anon, authenticated;
+grant select on public.pagometro_entes to authenticated;
+revoke delete, truncate on public.pagometro_entes from service_role;
+grant select, insert, update on public.pagometro_entes to service_role;
+
+-- Mesmo corpo de sinapi.sql, prospeccao.sql e historico_licitacoes.sql: este arquivo roda sozinho.
+create or replace function public.cliente_aprovado() returns boolean
+language sql stable security definer set search_path = '' as $$
+  select exists (select 1 from public.clientes c where c.id = (select auth.uid()) and c.status = 'aprovado')
+$$;
+revoke all on function public.cliente_aprovado() from public, anon;
+grant execute on function public.cliente_aprovado() to authenticated, service_role;
+
+drop policy if exists pagometro_entes_select_aprovado on public.pagometro_entes;
+create policy pagometro_entes_select_aprovado on public.pagometro_entes
+  for select to authenticated using (public.cliente_aprovado());
+-- Sem policy de escrita: só service_role (bypassrls) grava. Sem delete: a linha é sobrescrita pelo upsert.
+
+-- Prazo médio de pagamento em dias (24 e 36 meses): fila que a função abre e o robô
+-- scripts/coletar_pagometro_prazos.js completa. chave "F:<UG>" (federal, Portal da Transparência) ou
+-- "M:<IBGE>" (município de SP, TCE-SP). Dias nulos = amostra pequena ou sem dado; nunca estimado.
+create table if not exists public.pagometro_prazos (
+  chave text primary key check (chave ~ '^(F:[0-9]{6}|M:[0-9]{7})$'),
+  fonte text not null check (fonte in ('transparencia', 'tce-sp')),
+  situacao text not null check (situacao in ('pendente', 'pronto', 'falhou')),
+  nome text check (nome is null or length(nome) <= 300),
+  dias_24m integer check (dias_24m is null or dias_24m between 0 and 3650),
+  amostra_24m integer not null default 0 check (amostra_24m >= 0),
+  dias_36m integer check (dias_36m is null or dias_36m between 0 and 3650),
+  amostra_36m integer not null default 0 check (amostra_36m >= 0),
+  erro text check (erro is null or length(erro) <= 300),
+  pedido_em timestamptz not null default now(),
+  coletado_em timestamptz
+);
+create index if not exists pagometro_prazos_fila_idx on public.pagometro_prazos (pedido_em) where situacao = 'pendente';
+
+alter table public.pagometro_prazos enable row level security;
+revoke all on public.pagometro_prazos from anon, authenticated;
+grant select on public.pagometro_prazos to authenticated;
+revoke delete, truncate on public.pagometro_prazos from service_role;
+grant select, insert, update on public.pagometro_prazos to service_role;
+
+drop policy if exists pagometro_prazos_select_aprovado on public.pagometro_prazos;
+create policy pagometro_prazos_select_aprovado on public.pagometro_prazos
+  for select to authenticated using (public.cliente_aprovado());
+-- Sem policy de escrita: só service_role (função e robô) grava.
+
+commit;
+
+
+-- ========== funil_v3.sql ==========
+-- Funil v3 (mapa do Siga Pregão, lista "FALTA" itens 1, 5, 6 e 9). Idempotente, transação única; não apaga dados.
+-- Rodar no SQL Editor DEPOIS de operacao_acompanhamento.sql, operacao_funil_checklist.sql, operacao_monitor_edital.sql,
+-- boletim_por_empresa.sql e seguranca_aprovacao_20261119.sql. Teste: testar_funil_v3.sql.
+--  1. Tarefas avançadas no card: operacao_processos.tarefas_card = {secoes:[{id,nome,tarefas:[...]}], datas:{ata,aviso_recurso}}.
+--     Cada tarefa: id, titulo, quando (data e hora, vai para a agenda), responsavel, exige (documento|resposta),
+--     auto (prazo da Lei 14.133 calculado no navegador a partir das datas do processo), feita_em, resposta, anexo_id.
+--     Nulo = modelo padrão (mesma convenção do checklist). A tarefa que exige prova só fecha com ela: o CHECK confere a
+--     resposta escrita e o gatilho confere que o anexo existe em operacao_anexos_processo do MESMO processo.
+--     Modelos de tarefas da empresa: operacao_funil_modelos_tarefas; o escolhido em operacao_funil_preferencias vale
+--     para toda licitação que entra no Funil (gatilho de INSERT).
+--  5. Prospecta: prospecta_sugerir() (só service_role, chamado por scripts/boletim_editais.py) põe no Funil as melhores do
+--     boletim, sem duplicar (índice único da origem), com o limite diário e a nota mínima que a empresa ligou.
+--  6. Metas e nicho por empresa: operacao_funil_preferencias.meta / nichos / oportunidades_dia.
+--  9. Monitor por item: operacao_processos.monitor_itens (até 10). A citação do CNPJ no chat é feita pelo robô
+--     scripts/monitor_processos.js com o CNPJ que a empresa já tem cadastrado: nada pessoal novo é guardado.
+-- Nunca guarda CPF: resposta, título e responsável recusam número no formato de CPF (mesma regra do chat gravado).
+begin;
+set local lock_timeout = '5s';
+do $$ begin
+ if to_regclass('public.operacao_anexos_processo') is null or to_regclass('public.operacao_monitor_processos') is null
+  or to_regclass('public.boletim_filtros_empresa') is null
+  or to_regprocedure('public.pode_escrever_empresa_operacao(uuid,uuid)') is null then
+  raise exception 'Aplique antes operacao_acompanhamento.sql, operacao_monitor_edital.sql, boletim_por_empresa.sql e seguranca_aprovacao_20261119.sql';
+ end if;
+end $$;
+
+-- ---------- 1. Tarefas do card ----------
+create or replace function public.funil_secoes_validas(p jsonb) returns boolean
+language plpgsql immutable set search_path = '' as $$
+declare s jsonb; t jsonb; n int := 0;
+begin
+  if p is null or jsonb_typeof(p) <> 'array' or jsonb_array_length(p) > 12 or octet_length(p::text) > 60000 then return false; end if;
+  for s in select value from jsonb_array_elements(p) loop
+    if jsonb_typeof(s) <> 'object' or coalesce(s->>'id', '') !~ '^[a-z0-9-]{1,40}$'
+      or length(btrim(coalesce(s->>'nome', ''))) not between 1 and 80 or jsonb_typeof(s->'tarefas') is distinct from 'array' then
+      return false;
+    end if;
+    for t in select value from jsonb_array_elements(s->'tarefas') loop
+      n := n + 1;
+      if n > 60 or jsonb_typeof(t) <> 'object' or coalesce(t->>'id', '') !~ '^[a-z0-9-]{1,40}$'
+        or length(btrim(coalesce(t->>'titulo', ''))) not between 1 and 160
+        or coalesce(t->>'exige', 'nada') not in ('nada', 'documento', 'resposta')
+        or coalesce(t->>'auto', 'nada') not in ('nada', 'esclarecimento', 'impugnacao', 'disputa', 'recurso', 'contrarrazao')
+        or (t ? 'quando' and coalesce(t->>'quando', '') !~ '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$')
+        or (t ? 'feita_em' and coalesce(t->>'feita_em', '') !~ '^\d{4}-\d{2}-\d{2}T')
+        or (t ? 'anexo_id' and coalesce(t->>'anexo_id', '') !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
+        or length(coalesce(t->>'responsavel', '')) > 80 or length(coalesce(t->>'resposta', '')) > 2000
+        or concat_ws(' ', t->>'titulo', t->>'responsavel', t->>'resposta') ~ '\y[0-9]{3}[. ]?[0-9]{3}[. ]?[0-9]{3}[- /]?[0-9]{2}\y'
+        -- Pergunta só fecha com resposta escrita.
+        or (t->>'exige' = 'resposta' and t ? 'feita_em' and length(btrim(coalesce(t->>'resposta', ''))) = 0)
+      then return false; end if;
+    end loop;
+  end loop;
+  return true;
+end $$;
+
+create or replace function public.funil_tarefas_card_valido(p jsonb) returns boolean
+language sql immutable set search_path = '' as $$
+  select p is null or (jsonb_typeof(p) = 'object' and (p - array['secoes', 'datas']) = '{}'::jsonb
+    and public.funil_secoes_validas(coalesce(p->'secoes', '[]'::jsonb))
+    and (not p ? 'datas' or (jsonb_typeof(p->'datas') = 'object' and ((p->'datas') - array['ata', 'aviso_recurso']) = '{}'::jsonb
+      and coalesce(p->'datas'->>'ata', '2000-01-01') ~ '^\d{4}-\d{2}-\d{2}$'
+      and coalesce(p->'datas'->>'aviso_recurso', '2000-01-01') ~ '^\d{4}-\d{2}-\d{2}$')))
+$$;
+
+alter table public.operacao_processos add column if not exists tarefas_card jsonb;
+alter table public.operacao_processos drop constraint if exists operacao_processos_tarefas_card_valido;
+alter table public.operacao_processos add constraint operacao_processos_tarefas_card_valido check (public.funil_tarefas_card_valido(tarefas_card));
+
+-- 9. Itens que o monitor acompanha (aviso só desses itens quando a lista não está vazia).
+alter table public.operacao_processos add column if not exists monitor_itens integer[] not null default '{}';
+alter table public.operacao_processos drop constraint if exists operacao_processos_monitor_itens_validos;
+alter table public.operacao_processos add constraint operacao_processos_monitor_itens_validos
+  check (cardinality(monitor_itens) <= 10 and 0 < all(monitor_itens) and 100000 > all(monitor_itens));
+
+-- 5. Sugestão do Prospecta: nota (selo "Sugerida") e quando entrou (limite diário). Aceitar = nota nula; dispensar = arquivar.
+alter table public.operacao_processos add column if not exists sugerida_nota smallint;
+alter table public.operacao_processos add column if not exists sugerida_em timestamptz;
+alter table public.operacao_processos drop constraint if exists operacao_processos_sugerida_nota_valida;
+alter table public.operacao_processos add constraint operacao_processos_sugerida_nota_valida check (sugerida_nota between 0 and 100);
+
+-- Modelos de tarefas da empresa (sem marcação, resposta nem anexo: só a estrutura).
+create table if not exists public.operacao_funil_modelos_tarefas (
+  id uuid primary key default gen_random_uuid(),
+  organizacao_id uuid not null,
+  empresa_id uuid not null references public.operacao_empresas(id) on delete cascade,
+  nome text not null check (length(btrim(nome)) between 1 and 60),
+  secoes jsonb not null,
+  criado_em timestamptz not null default now()
+);
+alter table public.operacao_funil_modelos_tarefas drop constraint if exists operacao_funil_modelos_tarefas_secoes_validas;
+alter table public.operacao_funil_modelos_tarefas add constraint operacao_funil_modelos_tarefas_secoes_validas check (
+  public.funil_secoes_validas(secoes)
+  and not jsonb_path_exists(secoes, '$[*].tarefas[*] ? (exists(@.feita_em) || exists(@.resposta) || exists(@.anexo_id))'));
+create unique index if not exists operacao_funil_modelos_tarefas_nome_idx on public.operacao_funil_modelos_tarefas (empresa_id, lower(btrim(nome)));
+
+-- ---------- 5 e 6. Preferências da empresa: modelo ao adicionar, Prospecta, meta e nichos ----------
+create table if not exists public.operacao_funil_preferencias (
+  empresa_id uuid primary key references public.operacao_empresas(id) on delete cascade,
+  organizacao_id uuid not null,
+  modelo_tarefas text not null default 'padrao'
+    check (modelo_tarefas in ('padrao', 'nenhum') or modelo_tarefas ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'),
+  prospecta_ativo boolean not null default false,
+  prospecta_limite smallint not null default 3 check (prospecta_limite between 1 and 10),
+  prospecta_nota_minima smallint not null default 60 check (prospecta_nota_minima between 0 and 100),
+  meta jsonb not null default '{}'::jsonb check (jsonb_typeof(meta) = 'object' and octet_length(meta::text) <= 4000),
+  nichos jsonb not null default '[]'::jsonb check (jsonb_typeof(nichos) = 'array' and jsonb_array_length(nichos) <= 20 and octet_length(nichos::text) <= 16000),
+  oportunidades_dia smallint not null default 10 check (oportunidades_dia between 0 and 200),
+  atualizado_em timestamptz not null default now()
+);
+
+-- Organização + empresa coerentes (a policy confere o par).
+create or replace function public.funil_empresa_coerente() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if not exists (select 1 from public.operacao_empresas e where e.id = new.empresa_id and e.organizacao_id = new.organizacao_id) then
+    raise exception 'Empresa não pertence à organização.' using errcode = 'check_violation';
+  end if;
+  if tg_table_name = 'operacao_funil_preferencias' then new.atualizado_em := now(); end if;
+  return new;
+end $$;
+drop trigger if exists operacao_funil_preferencias_coerente on public.operacao_funil_preferencias;
+create trigger operacao_funil_preferencias_coerente before insert or update on public.operacao_funil_preferencias
+  for each row execute function public.funil_empresa_coerente();
+drop trigger if exists operacao_funil_modelos_tarefas_coerente on public.operacao_funil_modelos_tarefas;
+create trigger operacao_funil_modelos_tarefas_coerente before insert or update on public.operacao_funil_modelos_tarefas
+  for each row execute function public.funil_empresa_coerente();
+
+-- Licitação nova no Funil recebe o modelo escolhido pela empresa ("nenhum" = lista vazia; "padrao" = nulo).
+create or replace function public.funil_aplicar_modelo_tarefas() returns trigger
+language plpgsql security definer set search_path = '' as $$
+declare v_pref text; v_secoes jsonb;
+begin
+  if new.tarefas_card is not null then return new; end if;
+  select f.modelo_tarefas into v_pref from public.operacao_funil_preferencias f
+    where f.empresa_id = new.empresa_id and f.organizacao_id = new.organizacao_id;
+  if v_pref = 'nenhum' then
+    new.tarefas_card := '{"secoes": []}'::jsonb;
+  elsif v_pref ~ '^[0-9a-f-]{36}$' then
+    select m.secoes into v_secoes from public.operacao_funil_modelos_tarefas m where m.id = v_pref::uuid and m.empresa_id = new.empresa_id;
+    if v_secoes is not null then new.tarefas_card := jsonb_build_object('secoes', v_secoes); end if;
+  end if;
+  return new;
+end $$;
+-- Tarefa que exige documento só fecha com anexo do mesmo processo (o anexo passa pela RLS de operacao_anexos_processo).
+create or replace function public.funil_tarefas_card_prova() returns trigger
+language plpgsql security definer set search_path = '' as $$
+declare t jsonb;
+begin
+  if new.tarefas_card is null then return new; end if;
+  for t in select x.value from jsonb_array_elements(coalesce(new.tarefas_card->'secoes', '[]'::jsonb)) s,
+      jsonb_array_elements(s.value->'tarefas') x loop
+    if t->>'exige' = 'documento' and t ? 'feita_em' and not exists (select 1 from public.operacao_anexos_processo a
+        where a.id = (t->>'anexo_id')::uuid and a.processo_id = new.id and a.organizacao_id = new.organizacao_id) then
+      raise exception 'A tarefa "%" só fecha com o documento anexado.', left(t->>'titulo', 80) using errcode = 'check_violation';
+    end if;
+  end loop;
+  return new;
+end $$;
+-- Gatilhos BEFORE rodam em ordem alfabética: primeiro o modelo, depois a prova.
+drop trigger if exists funil_a_modelo_tarefas on public.operacao_processos;
+create trigger funil_a_modelo_tarefas before insert on public.operacao_processos
+  for each row execute function public.funil_aplicar_modelo_tarefas();
+drop trigger if exists funil_b_prova_tarefas on public.operacao_processos;
+create trigger funil_b_prova_tarefas before insert or update of tarefas_card on public.operacao_processos
+  for each row execute function public.funil_tarefas_card_prova();
+
+alter table public.operacao_funil_preferencias enable row level security;
+alter table public.operacao_funil_modelos_tarefas enable row level security;
+revoke all on public.operacao_funil_preferencias, public.operacao_funil_modelos_tarefas from public, anon, authenticated;
+grant select, insert, update, delete on public.operacao_funil_preferencias, public.operacao_funil_modelos_tarefas to authenticated;
+grant all on public.operacao_funil_preferencias, public.operacao_funil_modelos_tarefas to service_role;
+drop policy if exists operacao_funil_preferencias_leitura on public.operacao_funil_preferencias;
+create policy operacao_funil_preferencias_leitura on public.operacao_funil_preferencias for select to authenticated
+  using (public.pode_acessar_empresa_operacao(organizacao_id, empresa_id));
+drop policy if exists operacao_funil_preferencias_escrita on public.operacao_funil_preferencias;
+create policy operacao_funil_preferencias_escrita on public.operacao_funil_preferencias for insert to authenticated
+  with check (public.pode_escrever_empresa_operacao(organizacao_id, empresa_id));
+drop policy if exists operacao_funil_preferencias_alteracao on public.operacao_funil_preferencias;
+create policy operacao_funil_preferencias_alteracao on public.operacao_funil_preferencias for update to authenticated
+  using (public.pode_escrever_empresa_operacao(organizacao_id, empresa_id))
+  with check (public.pode_escrever_empresa_operacao(organizacao_id, empresa_id));
+drop policy if exists operacao_funil_preferencias_exclusao on public.operacao_funil_preferencias;
+create policy operacao_funil_preferencias_exclusao on public.operacao_funil_preferencias for delete to authenticated
+  using (public.pode_escrever_empresa_operacao(organizacao_id, empresa_id));
+drop policy if exists operacao_funil_modelos_tarefas_leitura on public.operacao_funil_modelos_tarefas;
+create policy operacao_funil_modelos_tarefas_leitura on public.operacao_funil_modelos_tarefas for select to authenticated
+  using (public.pode_acessar_empresa_operacao(organizacao_id, empresa_id));
+drop policy if exists operacao_funil_modelos_tarefas_escrita on public.operacao_funil_modelos_tarefas;
+create policy operacao_funil_modelos_tarefas_escrita on public.operacao_funil_modelos_tarefas for insert to authenticated
+  with check (public.pode_escrever_empresa_operacao(organizacao_id, empresa_id));
+drop policy if exists operacao_funil_modelos_tarefas_alteracao on public.operacao_funil_modelos_tarefas;
+create policy operacao_funil_modelos_tarefas_alteracao on public.operacao_funil_modelos_tarefas for update to authenticated
+  using (public.pode_escrever_empresa_operacao(organizacao_id, empresa_id))
+  with check (public.pode_escrever_empresa_operacao(organizacao_id, empresa_id));
+drop policy if exists operacao_funil_modelos_tarefas_exclusao on public.operacao_funil_modelos_tarefas;
+create policy operacao_funil_modelos_tarefas_exclusao on public.operacao_funil_modelos_tarefas for delete to authenticated
+  using (public.pode_escrever_empresa_operacao(organizacao_id, empresa_id));
+
+-- ---------- 5. Prospecta: o robô do boletim põe as melhores no Funil ----------
+-- p_itens: [{numero_controle, objeto, orgao, modalidade, link, valor, publicacao (AAAA-MM-DD),
+--            encerramento (AAAA-MM-DDTHH:MM:SS, Brasília), nota}] já ordenados da melhor para a pior.
+-- Só entra quem tem nota >= mínima, até o limite do dia, na primeira etapa (triagem), sem duplicar. Devolve quantas entraram.
+create or replace function public.prospecta_sugerir(p_empresa uuid, p_itens jsonb) returns integer
+language plpgsql security definer set search_path = '' as $$
+declare
+  f public.operacao_funil_preferencias; it jsonb; v_id uuid; v_ja int; n int := 0; v_nota int; v_dono uuid;
+  v_hoje timestamptz := (date_trunc('day', now() at time zone 'America/Sao_Paulo')) at time zone 'America/Sao_Paulo';
+begin
+  if p_itens is null or jsonb_typeof(p_itens) <> 'array' or jsonb_array_length(p_itens) > 200 then raise exception 'Lista inválida'; end if;
+  select * into f from public.operacao_funil_preferencias where empresa_id = p_empresa;
+  if f.empresa_id is null or not f.prospecta_ativo then return 0; end if;
+  if not exists (select 1 from public.operacao_empresas e where e.id = p_empresa and e.organizacao_id = f.organizacao_id and e.ativo) then return 0; end if;
+  select b.cliente_id into v_dono from public.boletim_filtros_empresa b where b.empresa_id = p_empresa;
+  select count(*) into v_ja from public.operacao_processos p where p.empresa_id = p_empresa and p.sugerida_em >= v_hoje;
+  for it in select value from jsonb_array_elements(p_itens) loop
+    exit when v_ja + n >= f.prospecta_limite;
+    v_nota := case when coalesce(it->>'nota', '') ~ '^\d{1,3}$' then (it->>'nota')::int end;
+    continue when v_nota is null or v_nota > 100 or v_nota < f.prospecta_nota_minima
+      or coalesce(it->>'numero_controle', '') !~ '^\d{14}-\d-\d{6}/\d{4}$';
+    v_id := null;
+    insert into public.operacao_processos (organizacao_id, empresa_id, origem_externa_id, objeto, orgao, modalidade, url_origem,
+      valor_estimado, data_publicacao, status, criado_por, sugerida_nota, sugerida_em)
+    values (f.organizacao_id, p_empresa, it->>'numero_controle',
+      left(coalesce(nullif(btrim(it->>'objeto'), ''), 'Licitação sugerida pelo Prospecta'), 1000),
+      left(nullif(btrim(it->>'orgao'), ''), 300), left(nullif(btrim(it->>'modalidade'), ''), 120),
+      case when it->>'link' ~ '^https://\S+$' and length(it->>'link') <= 500 then it->>'link' end,
+      case when coalesce(it->>'valor', '') ~ '^\d{1,13}(\.\d{1,2})?$' then (it->>'valor')::numeric end,
+      case when coalesce(it->>'publicacao', '') ~ '^\d{4}-\d{2}-\d{2}$' then (it->>'publicacao')::date end,
+      'triagem', v_dono, v_nota, now())
+    on conflict (organizacao_id, empresa_id, origem_externa_id) where origem_externa_id is not null do nothing
+    returning id into v_id;
+    continue when v_id is null;
+    n := n + 1;
+    if coalesce(it->>'encerramento', '') ~ '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$' then
+      insert into public.operacao_prazos_processo (organizacao_id, processo_id, categoria, titulo, vencimento)
+      values (f.organizacao_id, v_id, 'proposta', 'Prazo de propostas (Boletim)', (left(it->>'encerramento', 16) || ':00-03')::timestamptz);
+    end if;
+  end loop;
+  return n;
+end $$;
+revoke all on function public.prospecta_sugerir(uuid, jsonb) from public, anon, authenticated;
+grant execute on function public.prospecta_sugerir(uuid, jsonb) to service_role;
+revoke all on function public.funil_aplicar_modelo_tarefas(), public.funil_tarefas_card_prova(), public.funil_empresa_coerente() from public, anon, authenticated;
+
+notify pgrst, 'reload schema';
+commit;
+
+
+-- ========== documentos_pastas.sql ==========
+-- LicitaPlena — Pastas dos documentos da empresa e documentos escolhidos no processo (card do funil/processo).
+-- Seguro rodar mais de uma vez (idempotente). Rodar no SQL Editor do Supabase, DEPOIS de seguranca_aprovacao_20261119.sql.
+--
+-- operacao_documento_pastas: em que pasta (texto livre, ex.: "Habilitação jurídica", "Fiscal") fica cada documento de
+--   operacao_documentos. Tabela à parte de propósito: mudar a pasta NÃO é "alterar o documento" (um update em
+--   operacao_documentos dispara invalidar_identificacao_empresa e derrubaria a identificação confirmada).
+-- operacao_processo_documentos: documentos já salvos que a pessoa escolheu para um processo (sem novo upload).
+-- Nas duas, organização e empresa vêm do próprio documento (trigger); o processo precisa ser da mesma empresa.
+-- RLS: mesma regra dos documentos (pode_acessar_empresa_operacao). anon não lê nem grava.
+-- Teste: testar_documentos_pastas.sql.
+begin;
+do $$ begin
+  if to_regprocedure('public.pode_acessar_empresa_operacao(uuid,uuid)') is null then
+    raise exception 'Aplique antes seguranca_aprovacao_20261119.sql';
+  end if;
+end $$;
+
+create table if not exists public.operacao_documento_pastas (
+  documento_id uuid primary key references public.operacao_documentos(id) on delete cascade,
+  organizacao_id uuid not null,
+  empresa_id uuid not null,
+  pasta text not null check (length(btrim(pasta)) between 1 and 60 and pasta !~ '[/\\<>]'),
+  atualizado_em timestamptz not null default now()
+);
+create index if not exists operacao_documento_pastas_empresa_idx on public.operacao_documento_pastas (empresa_id);
+
+create table if not exists public.operacao_processo_documentos (
+  processo_id uuid not null references public.operacao_processos(id) on delete cascade,
+  documento_id uuid not null references public.operacao_documentos(id) on delete cascade,
+  organizacao_id uuid not null,
+  empresa_id uuid not null,
+  criado_por uuid default auth.uid() references auth.users(id) on delete set null,
+  criado_em timestamptz not null default now(),
+  primary key (processo_id, documento_id)
+);
+create index if not exists operacao_processo_documentos_documento_idx on public.operacao_processo_documentos (documento_id);
+
+-- security invoker: o documento é lido com a RLS de quem grava; documento que a pessoa não vê não entra.
+create or replace function public.operacao_documento_vinculo_coerente() returns trigger
+language plpgsql security invoker set search_path = '' as $$
+declare v_org uuid; v_emp uuid;
+begin
+  select d.organizacao_id, d.empresa_id into v_org, v_emp from public.operacao_documentos d where d.id = new.documento_id;
+  if v_org is null then raise exception 'Documento indisponível.' using errcode = 'check_violation'; end if;
+  new.organizacao_id := v_org;
+  new.empresa_id := v_emp;
+  if TG_TABLE_NAME = 'operacao_processo_documentos' then
+    if not exists (select 1 from public.operacao_processos p where p.id = new.processo_id and p.empresa_id = v_emp and p.organizacao_id = v_org) then
+      raise exception 'O documento é de outra empresa, não deste processo.' using errcode = 'check_violation';
+    end if;
+  else
+    new.pasta := btrim(new.pasta);
+    new.atualizado_em := now();
+  end if;
+  return new;
+end $$;
+revoke all on function public.operacao_documento_vinculo_coerente() from public, anon;
+
+drop trigger if exists operacao_documento_pastas_coerente on public.operacao_documento_pastas;
+create trigger operacao_documento_pastas_coerente before insert or update on public.operacao_documento_pastas
+  for each row execute function public.operacao_documento_vinculo_coerente();
+drop trigger if exists operacao_processo_documentos_coerente on public.operacao_processo_documentos;
+create trigger operacao_processo_documentos_coerente before insert or update on public.operacao_processo_documentos
+  for each row execute function public.operacao_documento_vinculo_coerente();
+
+alter table public.operacao_documento_pastas enable row level security;
+alter table public.operacao_processo_documentos enable row level security;
+revoke all on public.operacao_documento_pastas, public.operacao_processo_documentos from anon;
+grant select, insert, update, delete on public.operacao_documento_pastas, public.operacao_processo_documentos to authenticated;
+
+drop policy if exists operacao_documento_pastas_da_empresa on public.operacao_documento_pastas;
+create policy operacao_documento_pastas_da_empresa on public.operacao_documento_pastas
+  for all to authenticated using (public.pode_acessar_empresa_operacao(organizacao_id, empresa_id))
+  with check (public.pode_acessar_empresa_operacao(organizacao_id, empresa_id));
+drop policy if exists operacao_processo_documentos_da_empresa on public.operacao_processo_documentos;
+create policy operacao_processo_documentos_da_empresa on public.operacao_processo_documentos
+  for all to authenticated using (public.pode_acessar_empresa_operacao(organizacao_id, empresa_id))
+  with check (public.pode_acessar_empresa_operacao(organizacao_id, empresa_id));
+
 commit;
 
