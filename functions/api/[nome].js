@@ -68,6 +68,8 @@ import * as avisosCelular from "../../netlify/functions/avisos-celular.js";
 import * as pagometro from "../../netlify/functions/pagometro.js";
 // Chat com IA (botão "IA · BETA"): logado e aprovado, cota do recurso ia do plano; até ~15 subrequisições.
 import * as chatIa from "../../netlify/functions/chat-ia.js";
+// Situação no SICAF (Minhas empresas e documentos): logado e aprovado; 1 chamada aos dados abertos do Compras.gov.
+import * as situacaoSicaf from "../../netlify/functions/situacao-sicaf.js";
 
 const ROTAS = {
   "vinculo-compra-portal": vinculoCompraPortal,
@@ -90,6 +92,7 @@ const ROTAS = {
   "avisos-celular": avisosCelular,
   pagometro: pagometro,
   "chat-ia": chatIa,
+  "situacao-sicaf": situacaoSicaf,
   "conferir-cbs-ibs": conferirCbsIbs,
   "decisao-oportunidade": m17,
   "empresa-identificacao": m16,

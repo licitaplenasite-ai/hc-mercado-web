@@ -71,6 +71,49 @@ async function main() {
       await p.waitForFunction(() => !/CRF 2026-E2E/.test(document.querySelector('#lista-documentos').innerText), null, { timeout: 15000 });
       exigir((await banco(`operacao_documentos?id=eq.${ok[0]}&select=id`)).length === 0, 'ainda no banco');
     });
+    // Quadro estilo SICAF. Chamadas externas com dublê: a API do SICAF (rota /api) e o site oficial do TST.
+    const secao = (tipo) => p.locator(`.secao-sicaf[data-secao="${tipo}"]`);
+    await passo('quadro SICAF mostra as seções com situação e botões', p, async () => {
+      exigir(await p.locator('.secao-sicaf').count() === 8, 'seções: ' + await p.locator('.secao-sicaf').count());
+      for (const t of ['Certidão Federal', 'FGTS', 'CNDT']) exigir(await secao(t).locator('[data-emitir]').count() === 1 && await secao(t).locator('[data-carregar]').count() === 1, 'botões de ' + t);
+      exigir(await secao('Certidão Estadual').locator('[data-emitir]').count() === 0, 'estadual não tem emissão assistida');
+      exigir(/Não enviada/.test(await secao('CNDT').locator('.tag').innerText()), 'CNDT deveria estar não enviada');
+      await p.locator('#secoes-sicaf').screenshot({ path: path.join(PRINTS, '3-quadro-sicaf.png') });
+    });
+    await passo('SICAF atualizado automaticamente grava situação, fonte e data', p, async () => {
+      await p.route('**/api/situacao-sicaf**', r => r.fulfill({ json: { cnpj: '11222333000181', encontrado: true, ativo: true, habilitadoLicitar: true, razaoSocial: 'PAPELARIA AURORA TESTE LTDA', fonte: 'https://dadosabertos.compras.gov.br/modulo-fornecedor/1_consultarFornecedor', consultadoEm: new Date().toISOString() } }));
+      await secao('SICAF').locator('[data-sicaf-auto]').click();
+      await secao('SICAF').locator('.tag', { hasText: 'Ativo e habilitado a licitar' }).waitFor({ timeout: 15000 });
+      exigir(/Consultado em .*Compras\.gov\.br/.test(await secao('SICAF').innerText()), 'sem data/fonte na seção');
+      const [reg] = await banco('operacao_documentos?tipo=eq.SICAF&orgao_emissor=eq.Compras.gov.br (dados abertos)&select=titulo,emissao,observacoes');
+      exigir(reg?.titulo === 'Ativo e habilitado a licitar' && /dadosabertos/.test(reg.observacoes) && reg.emissao, 'registro SICAF: ' + JSON.stringify(reg));
+      await p.locator('#secoes-sicaf').screenshot({ path: path.join(PRINTS, '4-sicaf-automatico.png') });
+    });
+    await passo('Emitir no site oficial abre o TST e mostra o CNPJ', p, async () => {
+      await p.context().route('https://cndt-certidao.tst.jus.br/**', r => r.fulfill({ contentType: 'text/html', body: '<p>site oficial (dublê)</p>' }));
+      const [nova] = await Promise.all([p.context().waitForEvent('page', { timeout: 10000 }), secao('CNDT').locator('[data-emitir]').click()]);
+      exigir(/cndt-certidao\.tst\.jus\.br\/gerarCertidao/.test(nova.url()), 'site aberto: ' + nova.url());
+      await nova.close();
+      await p.waitForSelector('#aviso:has-text("11222333000181")', { timeout: 8000 });
+      await p.screenshot({ path: path.join(PRINTS, '5-emitir-site-oficial.png') });
+    });
+    await passo('Carregar PDF da seção Trabalhista já escolhe o tipo e vira Válida', p, async () => {
+      await secao('CNDT').locator('[data-carregar]').click();
+      exigir(await p.inputValue('#doc-tipo') === 'CNDT', 'tipo não veio da seção');
+      exigir(/180 dias/.test(await p.innerText('#doc-dica')), 'sem dica de validade');
+      await p.fill('#form-documento [name=titulo]', 'CNDT-E2E');
+      await p.fill('#form-documento [name=vencimento]', new Date(Date.now() + 170 * 864e5).toISOString().slice(0, 10));
+      await p.setInputFiles('#form-documento [name=arquivo]', { name: 'cndt.pdf', mimeType: 'application/pdf', buffer: PDF });
+      await p.screenshot({ path: path.join(PRINTS, '6-carregar-pdf-secao.png') });
+      await p.click('#btn-salvar-documento');
+      await secao('CNDT').locator('.tag', { hasText: 'Válida' }).waitFor({ timeout: 15000 });
+      const [reg] = await banco('operacao_documentos?titulo=eq.CNDT-E2E&select=id,tipo,orgao_emissor,arquivo_caminho');
+      exigir(reg?.tipo === 'CNDT' && reg.orgao_emissor === 'Tribunal Superior do Trabalho' && reg.arquivo_caminho, 'registro: ' + JSON.stringify(reg));
+      await p.locator('#secoes-sicaf').screenshot({ path: path.join(PRINTS, '7-quadro-depois.png') });
+      p.once('dialog', d => d.accept());
+      await linha(p, 'CNDT-E2E').locator('.btn-excluir').click();
+      await p.waitForFunction(() => !/CNDT-E2E/.test(document.querySelector('#lista-documentos').innerText), null, { timeout: 15000 });
+    });
   } finally {
     await navegador.close();
   }
