@@ -173,7 +173,7 @@ be.salvar_historico = lambda h: None
 be.registrar_log_boletim = lambda *a, **k: None
 be.hoje_e_feriado_nacional = lambda: None
 enviados = []
-be.enviar_email = lambda email, nome, eds, prefixo="": enviados.append({"para": email, "assunto": prefixo, "n": len(eds)})
+be.enviar_email = lambda email, nome, eds, prefixo="", *_resto, **_kw: enviados.append({"para": email, "assunto": prefixo, "n": len(eds)})
 be.main()
 print("ENVIADOS=" + json.dumps(enviados, ensure_ascii=False))
 `;
