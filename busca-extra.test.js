@@ -98,3 +98,24 @@ test("item da busca do PNCP vira cartão com número e UASG", () => {
   assert.equal(B.mesmoNumero(e, "158465", "90012/2026"), true);
   assert.equal(e.objeto, "Café");
 });
+
+test("modo de disputa: aberto, aberto e fechado (nas duas ordens), dispensa com disputa", () => {
+  const lista = [ed("a", { modoDisputaNome: "Aberto" }), ed("b", { modoDisputaNome: "Aberto-Fechado" }), ed("c", { modoDisputaNome: "Fechado-Aberto" }),
+    ed("d", { modoDisputaNome: "Dispensa Com Disputa" }), ed("e", { modoDisputaNome: null })];
+  assert.deepEqual(B.filtrarExtra(lista, { modoDisputa: "aberto" }).map((r) => r.objeto), ["a"]);
+  assert.deepEqual(B.filtrarExtra(lista, { modoDisputa: "aberto-fechado" }).map((r) => r.objeto), ["b", "c"]);
+  assert.deepEqual(B.filtrarExtra(lista, { modoDisputa: "dispensa-com-disputa" }).map((r) => r.objeto), ["d"]);
+  assert.equal(B.modoDisputaDe(ed("x", { modoDisputaNome: "Não se aplica" })), "nao-se-aplica");
+});
+
+test("itens: produto ou serviço e faixa de valor unitário estimado", () => {
+  const itens = [{ materialOuServico: "Material", valorUnitarioEstimado: 12.5 }, { materialOuServico: "Serviço", valorUnitarioEstimado: 3000 }, { materialOuServico: "Material", valorUnitarioEstimado: null }];
+  assert.equal(B.itensConferem(itens, { tipoItem: "servico" }), true);
+  assert.equal(B.itensConferem([itens[0]], { tipoItem: "servico" }), false);
+  assert.equal(B.itensConferem(itens, { itemMin: "10", itemMax: "12.50" }), true);
+  assert.equal(B.itensConferem(itens, { tipoItem: "material", itemMin: "100" }), false, "material de R$ 12,50 fica abaixo; o sigiloso não conta");
+  assert.equal(B.itensConferem([], {}), false);
+  assert.equal(B.temFiltroDeItem({ tipoItem: "" }), false);
+  assert.deepEqual(B.partesControle("12345678000190-1-000123/2026"), { cnpj: "12345678000190", sequencial: 123, ano: 2026 });
+  assert.equal(B.partesControle("lixo"), null);
+});

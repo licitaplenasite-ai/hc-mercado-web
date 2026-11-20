@@ -1,10 +1,12 @@
-name: Banco de peças jurídicas (ComprasNet antigo)
+name: Banco de peças jurídicas (ComprasNet antigo e PNCP)
 
 # Robô do banco de peças reais (scripts/coletar_pecas_juridicas.js): lê páginas públicas e sem captcha do ComprasNet
 # antigo (esclarecimentos, impugnações, recursos, contrarrazões e decisões) e grava a tabela pecas_juridicas.
 # Ritmo baixo de propósito (pausa de 2 s entre páginas, teto de 300 páginas por execução): 1x por dia às 07:30 UTC
 # (04:30 de Brasília, fora do horário comercial do portal). Anda para trás no tempo, uma UF/semana por vez (cursor em
 # dados_robo). Não escreve no repositório: só no Supabase. Precisa de supabase/pecas_juridicas.sql aplicado antes.
+# Segundo passo (scripts/coletar_pecas_pncp.js): peças da Lei 14.133 que os órgãos anexam às contratações no PNCP
+# (API pública, sem captcha; pausa de 1,2 s, teto de 500 pedidos), um dia por vez para a frente, cursor em dados_robo.
 concurrency:
   group: pecas-juridicas
   cancel-in-progress: false
@@ -25,7 +27,7 @@ permissions:
 jobs:
   coletar:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -38,3 +40,9 @@ jobs:
           ORCAMENTO_PAGINAS: ${{ github.event.inputs.orcamento_paginas || '300' }}
           LIMITE_MINUTOS: "12"
         run: node scripts/coletar_pecas_juridicas.js
+      - name: Coletar peças da Lei 14.133 (PNCP)
+        if: always()
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          LIMITE_MINUTOS: "8"
+        run: node scripts/coletar_pecas_pncp.js

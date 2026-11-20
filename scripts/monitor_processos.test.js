@@ -111,3 +111,28 @@ test("leitor espera a pausa entre requisições e trata 404 como vazio", async (
   assert.equal(await leitor.json("https://pncp.gov.br/b"), null);
   assert.deepEqual(esperas, [1500]);
 });
+
+test("chat: citação do CNPJ da empresa vira aviso próprio (destinatário ou texto, com ou sem pontuação)", () => {
+  const CNPJ = "11222333000181";
+  const msgs = [
+    { chave: "1".repeat(32), numero_item: 2, texto: "Senhor fornecedor, envie a proposta ajustada", fornecedor_chave: CNPJ },
+    { chave: "2".repeat(32), numero_item: 0, texto: "Convoco a empresa 11.222.333/0001-81 para o anexo" },
+    { chave: "3".repeat(32), numero_item: 0, texto: "Convoco a empresa 99.888.777/0001-66" },
+  ];
+  const r = m.mudancasDoChat(msgs, CNPJ);
+  assert.deepEqual(r.map((x) => Boolean(x.detalhe.cita_cnpj)), [true, true, false]);
+  assert.match(r[0].resumo, /citou a sua empresa \(CNPJ 11\.222\.333\/0001-81\) no chat \(item 2\)/);
+  assert.equal(m.mudancasDoChat(msgs, null).some((x) => x.detalhe.cita_cnpj), false);
+  assert.equal(m.citaCnpj({ texto: "x" }, "123"), false);
+});
+
+test("alerta: itens escolhidos filtram, citação sempre avisa, primeira verificação não avisa", () => {
+  assert.equal(m.comAlerta({ tipo: "chat", detalhe: { item: 5 } }, false, [1, 3]), false);
+  assert.equal(m.comAlerta({ tipo: "chat", detalhe: { item: 3 } }, false, [1, 3]), true);
+  assert.equal(m.comAlerta({ tipo: "chat", detalhe: { item: null } }, false, [1, 3]), true); // mensagem geral
+  assert.equal(m.comAlerta({ tipo: "item_alterado", detalhe: { itens: [4, 7] } }, false, [7]), true);
+  assert.equal(m.comAlerta({ tipo: "item_alterado", detalhe: { itens: [4] } }, false, []), true);
+  assert.equal(m.comAlerta({ tipo: "chat", detalhe: { item: 5, cita_cnpj: true } }, true, [1]), true);
+  assert.equal(m.comAlerta({ tipo: "situacao", detalhe: {} }, true, []), false);
+  assert.equal(m.comAlerta({ tipo: "outro", detalhe: {} }, false, []), false);
+});

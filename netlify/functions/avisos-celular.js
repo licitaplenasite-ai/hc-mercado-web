@@ -2,7 +2,7 @@
 //   GET                                                   -> {ok, chavePublica, preferencias}
 //   POST {acao:"inscrever", inscricao:{endpoint, keys:{p256dh, auth}}, aparelho?} -> {ok}
 //   POST {acao:"cancelar", endpoint}                      -> {ok}
-//   POST {acao:"preferencias", preferencias:{edital, prazo, pregoeiro, certidao}} -> {ok, preferencias}
+//   POST {acao:"preferencias", preferencias:{edital, prazo, pregoeiro, certidao, boletim?}} -> {ok, preferencias}
 // Login e cadastro aprovado obrigatórios. O envio é do robô (scripts/avisos_celular.js), não daqui: a chave
 // privada VAPID fica só no GitHub; o site só conhece a pública (VAPID_CHAVE_PUBLICA).
 // O endpoint vira destino de POST do robô: só serviços de push conhecidos (sem isso, qualquer URL viraria SSRF
@@ -12,7 +12,9 @@ const { cabecalhosPadrao, exigirUsuarioAprovado, verificarLimiteDiario } = requi
 const SUPABASE_URL = "https://lsqjamqvmrcyrvowndiu.supabase.co";
 const LIMITE_DIARIO = 60;
 const MAX_INSCRICOES = 10; // aparelhos por conta; o mais antigo sai quando passa
-const TIPOS = ["edital", "prazo", "pregoeiro", "certidao"];
+const TIPOS = ["edital", "prazo", "pregoeiro", "certidao", "boletim"];
+// "boletim" chegou depois: tela antiga que não manda o campo continua valendo (fica ligado).
+const OPCIONAIS = new Set(["boletim"]);
 // Chrome/Edge Android (FCM), Firefox (Mozilla), Safari/iPhone (Apple), Edge Windows (WNS).
 const HOSTS_PUSH = [/^fcm\.googleapis\.com$/, /^updates\.push\.services\.mozilla\.com$/, /^web\.push\.apple\.com$/, /^[a-z0-9-]+\.notify\.windows\.com$/];
 
@@ -31,6 +33,7 @@ function validarPreferencias(p) {
   if (!p || typeof p !== "object" || Array.isArray(p)) return null;
   const saida = {};
   for (const t of TIPOS) {
+    if (p[t] === undefined && OPCIONAIS.has(t)) { saida[t] = true; continue; }
     if (typeof p[t] !== "boolean") return null;
     saida[t] = p[t];
   }

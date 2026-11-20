@@ -46,6 +46,8 @@
     anterior: cliente && globalThis.LicitaLicitacaoAnterior ? { montar: (o) => globalThis.LicitaLicitacaoAnterior.montar({ ...o, cliente }) } : null,
     // "Mudou algo no edital?" (monitor-processo-ui.js): mesma sessão (RLS).
     monitor: cliente && globalThis.LicitaMonitorProcesso ? { montar: (o) => globalThis.LicitaMonitorProcesso.montar({ ...o, cliente }) } : null,
+    // Documentos já salvos escolhidos para o processo, .zip e resumo de 1 página (processo-documentos-ui.js): mesma sessão (RLS).
+    documentos: cliente && globalThis.LicitaProcessoDocumentos ? { montar: (o) => globalThis.LicitaProcessoDocumentos.montar({ ...o, cliente }) } : null,
     // Robô de lances (modo assistido): configuração e registro no localStorage deste navegador.
     robo: globalThis.LicitaRoboLancesUI ? { montar: (o) => globalThis.LicitaRoboLancesUI.montar({ ...o, storage }) } : null,
     confirmar: (mensagem) => globalThis.confirm(mensagem),

@@ -1,0 +1,13 @@
+/* "Documentos deste processo" (processo-documentos-ui.js) no processo do sistema.html. Só tokens do DS. Aguarda aprovação. */
+#processo-documentos{margin-top:var(--space-16);max-width:720px;min-width:0}
+#processo-documentos:empty{display:none}
+#processo-documentos .lp-proc-docs{margin:var(--space-8) 0;padding-left:var(--space-16);font:var(--text-body);color:var(--text-primary)}
+#processo-documentos .lp-proc-docs li{margin:var(--space-4) 0;overflow-wrap:anywhere}
+#processo-documentos details summary{min-height:44px;display:flex;align-items:center;cursor:pointer;color:var(--action-text);font:var(--text-body)}
+#processo-documentos fieldset{border:1px solid var(--border-default);border-radius:var(--radius-control);margin:0 0 var(--space-8);padding:var(--space-8) var(--space-12)}
+#processo-documentos legend{font-weight:600;padding:0 var(--space-4)}
+#processo-documentos label{min-height:32px;font:var(--text-body)}
+#processo-documentos .lp-proc-docs-acoes{display:flex;gap:var(--space-12);flex-wrap:wrap;align-items:center;margin-top:var(--space-8)}
+.lp-proc-doc-vencido{color:var(--error-text)}
+.lp-proc-doc-proximo{color:var(--attention-text)}
+.lp-proc-doc-valido{color:var(--success-text)}

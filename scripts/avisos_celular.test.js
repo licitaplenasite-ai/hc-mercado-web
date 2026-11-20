@@ -55,7 +55,10 @@ test("rota: só aceita endpoint de serviço de push conhecido (sem SSRF) e chave
   }
   assert.equal(validarInscricao({ endpoint: "https://fcm.googleapis.com/x", keys: { ...keys, auth: "a b" } }), null);
   assert.equal(validarInscricao(null), null);
-  assert.deepEqual(validarPreferencias({ edital: true, prazo: false, pregoeiro: true, certidao: false, extra: 1 }), { edital: true, prazo: false, pregoeiro: true, certidao: false });
+  // Tela antiga sem "boletim": fica ligado; com o campo, vale o que veio.
+  assert.deepEqual(validarPreferencias({ edital: true, prazo: false, pregoeiro: true, certidao: false, extra: 1 }), { edital: true, prazo: false, pregoeiro: true, certidao: false, boletim: true });
+  assert.equal(validarPreferencias({ edital: true, prazo: true, pregoeiro: true, certidao: true, boletim: false }).boletim, false);
+  assert.equal(validarPreferencias({ edital: true, prazo: true, pregoeiro: true, certidao: true, boletim: "nao" }), null);
   assert.equal(validarPreferencias({ edital: "sim", prazo: true, pregoeiro: true, certidao: true }), null);
   assert.equal(validarPreferencias({ edital: true }), null);
 });
@@ -96,4 +99,18 @@ test("preferências: tipo desligado não envia; sem preferência gravada envia t
   const avisos = [{ usuario: "u1", tipo: "certidao" }, { usuario: "u1", tipo: "edital" }, { usuario: "u2", tipo: "certidao" }];
   const r = av.filtrarPorPreferencia(avisos, [{ usuario_id: "u1", edital: true, prazo: true, pregoeiro: true, certidao: false }]);
   assert.deepEqual(r, [{ usuario: "u1", tipo: "edital" }, { usuario: "u2", tipo: "certidao" }]);
+});
+
+test("boletim: um aviso por rodada com oportunidade; sem oportunidade ou sem cliente não avisa", () => {
+  const avisos = av.avisosDeBoletim([
+    { cliente_id: "u1", quantidade_editais: 3, executado_em: "2026-11-20T10:05:00Z" },
+    { cliente_id: "u1", quantidade_editais: 1, executado_em: "2026-11-20T16:05:00Z" },
+    { cliente_id: "u2", quantidade_editais: 0, executado_em: "2026-11-20T10:05:00Z" },
+    { cliente_id: null, quantidade_editais: 5, executado_em: "2026-11-20T10:05:00Z" },
+  ]);
+  assert.deepEqual(avisos.map((a) => [a.usuario, a.tipo, a.chave]), [["u1", "boletim", "bol:2026-11-20T10:05:00Z"], ["u1", "boletim", "bol:2026-11-20T16:05:00Z"]]);
+  assert.match(avisos[0].corpo, /3 licitações no seu filtro/);
+  assert.match(avisos[1].corpo, /1 licitação no seu filtro/);
+  assert.match(avisos[0].url, /painel\.html#boletim$/);
+  assert.deepEqual(av.filtrarPorPreferencia(avisos, [{ usuario_id: "u1", boletim: false }]), []);
 });

@@ -3,7 +3,9 @@
 // cliente (em vez de abrir a página do PNCP e o cliente ter que procurar o botão de baixar
 // lá dentro). Usado pelo botão "📥 Baixar Edital" nos cards do Boletim.
 //
-// Uso: GET /.netlify/functions/pncp-baixar?cnpj=...&ano=...&sequencial=...&documento=...&nome=...
+// Uso: GET /.netlify/functions/pncp-baixar?cnpj=...&ano=...&sequencial=...&documento=...&nome=...[&ver=1]
+// ver=1 (visualizador-pdf-ui.js, "Ler aqui"): se o arquivo for PDF, devolve inline para abrir dentro da tela do
+// LicitaPlena (iframe do mesmo site). Nada fica guardado no servidor: o arquivo só passa pela função.
 const { limitarPorIp } = require("./_auth");
 const BASE_URL = "https://pncp.gov.br/pncp-api/v1/orgaos";
 
@@ -78,12 +80,17 @@ exports.handler = async (event) => {
       }
     }
 
+    // Só PDF abre na tela; o resto continua baixando. frame-ancestors 'self': só o próprio site emoldura.
+    const verNaTela = q.ver === "1" && extensaoCorreta === ".pdf";
     return {
       statusCode: 200,
-      headers: {
-        "Content-Type": tipo,
-        "Content-Disposition": `attachment; filename="${nomeFinal}"`,
-      },
+      headers: verNaTela
+        ? { "Content-Type": "application/pdf", "Content-Disposition": `inline; filename="${nomeFinal}"`, "X-Content-Type-Options": "nosniff",
+          "X-Frame-Options": "SAMEORIGIN", "Content-Security-Policy": "frame-ancestors 'self'", "Cache-Control": "private, max-age=600" }
+        : {
+          "Content-Type": tipo,
+          "Content-Disposition": `attachment; filename="${nomeFinal}"`,
+        },
       body: buffer.toString("base64"),
       isBase64Encoded: true,
     };

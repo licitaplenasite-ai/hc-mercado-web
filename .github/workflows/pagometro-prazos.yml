@@ -1,0 +1,36 @@
+name: Pagômetro - prazo médio de pagamento
+
+# Completa a fila pagometro_prazos (scripts/coletar_pagometro_prazos.js): prazo em dias entre a liquidação e o
+# pagamento, média de 24 e 36 meses. Municípios de SP pelo TCE-SP (sem chave); órgão federal pelo Portal da
+# Transparência (TRANSPARENCIA_TOKEN; sem ele as linhas federais ficam pendentes). A cada 3 horas, de 7h às 22h
+# de Brasília (10-01 UTC). Não escreve no repositório: só no Supabase.
+concurrency:
+  group: pagometro-prazos
+  cancel-in-progress: false
+
+on:
+  schedule:
+    - cron: "15 10-23/3 * * *"
+    - cron: "15 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  coletar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "20"
+      - run: npm ci
+      - name: Calcular prazos pendentes
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TRANSPARENCIA_TOKEN: ${{ secrets.TRANSPARENCIA_TOKEN }}
+          LOTE_PAGOMETRO: "5"
+          LIMITE_MINUTOS: "20"
+        run: node scripts/coletar_pagometro_prazos.js

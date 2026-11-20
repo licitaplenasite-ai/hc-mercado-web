@@ -76,3 +76,41 @@ def test_boletim_por_empresa_e_jornal_viram_emails_separados(monkeypatch):
     be.main()
     # Boletim antigo da conta some (a conta já usa filtro por empresa); um e-mail por empresa e um pelo jornal.
     assert enviados == [("[HCM] ", 1), ("[RYMO] ", 1), ("[HCM · Sulfite] ", 1)]
+
+
+# ---- Prospecta (funil_v3.sql) ----
+def test_nota_oportunidade_palavras_valor_e_prazo():
+    tz = be.timezone(be.timedelta(hours=-3))
+    agora = be.datetime(2026, 11, 20, 8, tzinfo=tz)
+    e = _edital(1, "Papel sulfite A4 e papel toalha", valorTotalEstimado=20000, dataEncerramentoProposta="2026-11-30T09:00:00")
+    assert be.nota_oportunidade(e, ["papel", "sulfite"], 10000, agora) == 50 + 25 + 15
+    assert be.nota_oportunidade(e, ["papel", "sulfite", "toalha"], 10000, agora) == 100
+    # Abaixo do valor mínimo da meta e com 2 dias de prazo: só as palavras.
+    curto = _edital(2, "Papel", valorTotalEstimado=500, dataEncerramentoProposta="2026-11-22T09:00:00")
+    assert be.nota_oportunidade(curto, ["papel"], 10000, agora) == 40
+    assert be.nota_oportunidade(_edital(3, "Cadeira"), ["papel"], 0, agora) == 0
+
+
+def test_prospecta_manda_lista_ordenada_so_da_empresa_ligada(monkeypatch):
+    respostas = {
+        "clientes?status=eq.aprovado&select=id,nome,empresa,email,segmento,estados_interesse": [],
+        "boletim_filtros_empresa": [
+            {"empresa_id": "e1", "cliente_id": "c1", "filtro": {"ufs": ["AM"], "palavrasRaw": "papel, sulfite"}, "operacao_empresas": {"razao_social": "HCM", "ativo": True}},
+            {"empresa_id": "e2", "cliente_id": "c1", "filtro": {"ufs": ["AM"], "palavrasRaw": "papel"}, "operacao_empresas": {"razao_social": "RYMO", "ativo": True}},
+        ],
+        "clientes?status=eq.aprovado&select=id,nome,empresa,email&": [{"id": "c1", "email": "dono@example.invalid", "nome": "Dono"}],
+        "operacao_funil_preferencias": [{"empresa_id": "e1", "meta": {"valor_minimo": 1000}}],
+    }
+    monkeypatch.setattr(be, "_get_json", lambda caminho: next(v for k, v in respostas.items() if caminho.startswith(k)))
+    monkeypatch.setattr(be, "carregar_clientes_aprovados", lambda: [])
+    monkeypatch.setattr(be, "hoje_e_feriado_nacional", lambda: None)
+    monkeypatch.setattr(be, "carregar_historico", lambda: {})
+    monkeypatch.setattr(be, "salvar_historico", lambda h: None)
+    monkeypatch.setattr(be, "registrar_log_boletim", lambda *a, **k: None)
+    monkeypatch.setattr(be, "e_rodada_dos_jornais", lambda *a: False)
+    monkeypatch.setattr(be, "enviar_email", lambda *a, **k: None)
+    monkeypatch.setattr(be, "buscar_pool_por_uf", lambda ufs: {"AM": [_edital(1, "Papel toalha"), _edital(2, "Papel sulfite", valorTotalEstimado=5000)]})
+    chamadas = []
+    monkeypatch.setattr(be, "sugerir_no_funil", lambda empresa, itens: chamadas.append((empresa, [i["numero_controle"][-11:-5] for i in itens])) or len(itens))
+    be.main()
+    assert chamadas == [("e1", ["000002", "000001"])]

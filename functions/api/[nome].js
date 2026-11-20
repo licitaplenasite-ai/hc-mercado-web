@@ -64,6 +64,10 @@ import * as conferirCbsIbs from "../../netlify/functions/conferir-cbs-ibs.js";
 import * as fornecedorIa from "../../netlify/functions/fornecedor-ia.js";
 // Aviso no celular (Web Push): inscrição do aparelho e preferências (logado; 1-3 subrequisições, 60/dia).
 import * as avisosCelular from "../../netlify/functions/avisos-celular.js";
+// Pagômetro (resumo do edital): logado e aprovado, cache de 15 dias por ente; até 2 chamadas ao SICONFI (Tesouro).
+import * as pagometro from "../../netlify/functions/pagometro.js";
+// Chat com IA (botão "IA · BETA"): logado e aprovado, cota do recurso ia do plano; até ~15 subrequisições.
+import * as chatIa from "../../netlify/functions/chat-ia.js";
 
 const ROTAS = {
   "vinculo-compra-portal": vinculoCompraPortal,
@@ -84,6 +88,8 @@ const ROTAS = {
   "monte-busca-ia": monteBuscaIa,
   "fornecedor-ia": fornecedorIa,
   "avisos-celular": avisosCelular,
+  pagometro: pagometro,
+  "chat-ia": chatIa,
   "conferir-cbs-ibs": conferirCbsIbs,
   "decisao-oportunidade": m17,
   "empresa-identificacao": m16,

@@ -55,6 +55,47 @@
   }
   $("op-sem-disputa").addEventListener("change", () => $("op-buscar").click());
 
+  // --- Produto ou serviço e valor do item: lê os itens no PNCP (/api/pncp-itens) das primeiras licitações ---
+  // shortcut: confere só as 40 primeiras da lista (4 por vez, cache na sessão); o resto fica de fora e a tela avisa.
+  const MAX_CONFERIR = 40;
+  const cacheItens = new Map();
+  async function itensDe(r) {
+    const k = r.numeroControlePNCP, partes = BX.partesControle(k);
+    if (!partes) return null;
+    if (cacheItens.has(k)) return cacheItens.get(k);
+    let salvo = null;
+    try { salvo = JSON.parse(window.sessionStorage.getItem(`lp-itens-${k}`) || "null"); } catch { /* sem storage */ }
+    if (salvo) { cacheItens.set(k, salvo); return salvo; }
+    const resp = await fetch(`/api/pncp-itens?${new URLSearchParams({ cnpj: partes.cnpj, ano: String(partes.ano), sequencial: String(partes.sequencial) })}`);
+    const j = resp.ok ? await resp.json().catch(() => null) : null;
+    if (!j || j.erro || !Array.isArray(j.itens)) return null;
+    const enxuto = j.itens.map((i) => ({ materialOuServico: i.materialOuServico, valorUnitarioEstimado: i.valorUnitarioEstimado }));
+    cacheItens.set(k, enxuto);
+    try { window.sessionStorage.setItem(`lp-itens-${k}`, JSON.stringify(enxuto)); } catch { /* cheio: só a memória */ }
+    return enxuto;
+  }
+  async function filtrarPorItens(resultados, f) {
+    const nota = $("op-itens-nota");
+    if (!BX.temFiltroDeItem(f)) { if (nota) nota.hidden = true; return resultados; }
+    const lote = resultados.slice(0, MAX_CONFERIR), ok = new Array(lote.length).fill(false);
+    let falhas = 0, proximo = 0;
+    const trabalhar = async () => {
+      while (proximo < lote.length) {
+        const i = proximo++;
+        try { const itens = await itensDe(lote[i]); if (itens) ok[i] = BX.itensConferem(itens, f); else falhas += 1; } catch { falhas += 1; }
+      }
+    };
+    await Promise.all([1, 2, 3, 4].map(trabalhar));
+    const saida = lote.filter((_, i) => ok[i]);
+    if (nota) {
+      nota.hidden = false;
+      nota.textContent = `Filtro por item: conferimos os itens das ${lote.length} primeiras licitações da lista no PNCP; ${saida.length} têm item que confere.` +
+        (resultados.length > lote.length ? ` As outras ${resultados.length - lote.length} ficaram de fora: refine as palavras para conferir menos.` : "") +
+        (falhas ? ` ${falhas} não responderam e ficaram de fora.` : "");
+    }
+    return saida;
+  }
+
   // --- "Já tenho o número" (UASG + pregão) ---
   $("op-numero-form").addEventListener("submit", async (ev) => {
     ev.preventDefault();
@@ -131,5 +172,5 @@
     .then(({ count, error }) => { if (!error && typeof count === "number") $("dash-faixa-publicadas").textContent = count.toLocaleString("pt-BR"); })
     .catch(() => { /* faixa fica com "–" */ });
 
-  window.BuscaExtraUI = { filtrarSemDisputa };
+  window.BuscaExtraUI = { filtrarSemDisputa, filtrarPorItens };
 })();

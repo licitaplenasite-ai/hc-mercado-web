@@ -42,8 +42,10 @@
 <script src="busca-avancada.js"></script>
 <script src="mercado-comprasgov.js"></script>
 <script src="item-mercado-ui.js"></script>
+<script src="pagometro-ui.js"></script>
 <script src="portal-origem.js"></script>
 <script src="busca-extra.js"></script>
+<script src="baixa-concorrencia.js"></script>
 <script src="busca-extra-ui.js" defer></script>
 <script>
   // Guarda de acesso: só entra quem tiver login aprovado. Roda antes do resto da página carregar.
@@ -1532,6 +1534,8 @@
 <script src="monitor-processo-ui.js" defer></script>
 <script src="fornecedor-ia-ui.js" defer></script>
 <script src="ajuda-ui.js" defer></script>
+<script src="visualizador-pdf-ui.js" defer></script>
+<script src="chat-ia-ui.js" defer></script>
 <script src="avisos-celular.js" defer></script>
 </head>
 <body>
@@ -1694,6 +1698,7 @@
   <a href="bdi.html" title="Calculadora de BDI"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-coins'></use></svg></span><span class="nav-label">Calculadora de BDI</span></a>
   <a href="sinapi.html" title="Preços SINAPI"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-buildings'></use></svg></span><span class="nav-label">Preços SINAPI</span></a>
   <button data-alvo="kanban" title="Funil"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-folders'></use></svg></span><span class="nav-label">Funil</span></button>
+  <a href="quadros.html" title="Quadros"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-folders'></use></svg></span><span class="nav-label">Quadros</span></a>
   <a href="processos.html" title="Processos"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-folder-open'></use></svg></span><span class="nav-label">Processos</span></a>
   <a href="operacao.html" class="nav-externo" title="Minhas empresas e documentos (abre outra página)"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-files'></use></svg></span><span class="nav-label">Minhas empresas e documentos</span><svg class='icone-ph nav-externo-ico' aria-hidden="true"><use href='#ph-arrow-square-out'></use></svg></a>
   <a href="extensao.html" title="Extensão"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-puzzle-piece'></use></svg></span><span class="nav-label">Extensão</span></a>
@@ -2061,6 +2066,22 @@
           <label for="op-portal">Portal da disputa</label>
           <select id="op-portal"><option value="">Todos</option></select>
         </div>
+        <div class="campo">
+          <label for="op-modo-disputa">Modo de disputa</label>
+          <select id="op-modo-disputa"><option value="">Todos</option><option value="aberto">Aberto</option><option value="aberto-fechado">Aberto e fechado</option><option value="fechado">Fechado</option><option value="dispensa-com-disputa">Dispensa com disputa</option></select>
+        </div>
+        <div class="campo">
+          <label for="op-tipo-item">Produto ou serviço</label>
+          <select id="op-tipo-item"><option value="">Os dois</option><option value="material">Produto (material)</option><option value="servico">Serviço</option></select>
+        </div>
+        <div class="campo">
+          <label for="op-item-min">Valor do item mínimo (R$)</label>
+          <input id="op-item-min" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Valor unitário estimado">
+        </div>
+        <div class="campo">
+          <label for="op-item-max">Valor do item máximo (R$)</label>
+          <input id="op-item-max" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Valor unitário estimado">
+        </div>
         <div class="campo" style="flex:2">
           <label for="op-limitar">Precisa ter também (todas as palavras)</label>
           <input id="op-limitar" maxlength="600" placeholder="Ex: sulfite, A4">
@@ -2071,9 +2092,10 @@
           <label id="op-sem-disputa-rotulo" hidden><input type="checkbox" id="op-sem-disputa"> Só órgãos com itens desertos, fracassados ou com lance acima do estimado</label>
         </div>
       </div>
+      <p class="dica-clique" id="op-itens-nota" style="margin:8px 2px 0;" role="status" hidden></p>
       <p class="dica-clique" style="margin:8px 2px 0;">Palavras-chave: cada termo entre vírgulas é procurado como frase exata (ex.: "papel sulfite"); basta um deles aparecer. Use "Precisa ter também" para exigir todos e "Não quero ver" para excluir. ME/EPP e SRP são lidos do texto do objeto e do cadastro do PNCP; o filtro de órgãos sem disputa só aparece quando já temos o histórico de pregões anteriores desse órgão.</p>
       <p class="dica-clique" style="margin:8px 2px 0;">Deixe as duas datas em branco pra buscar em todo o histórico coletado. Preencha pra buscar num período específico (ex: últimos 30 ou 60 dias) — inclui licitações já encerradas nesse período, não só as que ainda estão com prazo aberto.</p>
-      <p class="dica-clique" style="margin:8px 2px 0;">Esfera: quando o dado direto do PNCP não está disponível (licitações ainda não recapturadas pelo robô), classificamos pelo nome do órgão — pode ficar "Não classificado" em casos raros. Valor e código dependem de dados que só a busca já coletada pelo robô traz completos; licitações vindas só da busca ao vivo podem não ter esses campos ainda.</p>
+      <p class="dica-clique" style="margin:8px 2px 0;">Esfera: quando o dado direto do PNCP não está disponível (licitações ainda não recapturadas pelo robô), classificamos pelo nome do órgão — pode ficar "Não classificado" em casos raros. Valor, código e modo de disputa dependem de dados que só a busca já coletada pelo robô traz completos; licitações vindas só da busca ao vivo podem não ter esses campos ainda (com o filtro de modo de disputa, elas ficam de fora). Produto ou serviço e valor do item são conferidos nos itens do PNCP das 40 primeiras licitações da lista.</p>
     </details>
     <details class="painel-filtros-avancados" id="op-orgaos" style="margin:8px 2px 0;">
       <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--azul-texto,#1c63c7);"><svg class='icone-ph'><use href='#ph-map-pin'></use></svg> Órgãos compradores (por estado e portal, com CAPAG)</summary>
@@ -2169,6 +2191,7 @@
     <div class="dg-subaba-painel" data-subaba-painel="baixa-concorrencia">
       <div class="conteudo-mercado">
         <div class="dg-topo-acoes"><span></span><button class="btn-imprimir btn-imprimir-generico" title="Gerar PDF/impressão desta tela"><svg class='icone-ph'><use href='#ph-printer'></use></svg> Imprimir / Gerar PDF</button></div>
+        <div id="dg-bc-licitantes" class="bc-licitantes"></div>
         <div id="dg-baixa-concorrencia-resultado"></div>
         <div id="dg-baixa-concorrencia-detalhe"></div>
       </div>
@@ -2499,6 +2522,8 @@
   <section id="kanban">
     <link rel="stylesheet" href="funil-checklist.css">
     <script src="funil-checklist-ui.js"></script>
+    <link rel="stylesheet" href="funil-v3.css"><link rel="stylesheet" href="agenda-ics.css">
+    <script src="agenda-ics.js"></script><script src="funil-tarefas-ui.js"></script><script src="funil-metas-ui.js"></script>
     <div class="boletim-cabecalho">
       <div>
         <h2 style="margin:0;"><svg class='icone-ph'><use href='#ph-folders'></use></svg> Funil</h2>
@@ -2515,12 +2540,15 @@
     </div>
     <!-- Escondido até as etapas carregarem do banco; sem a tabela, o Funil fica nas 4 colunas padrão. -->
     <button type="button" class="btn-imprimir" id="kanban-etapas" aria-haspopup="dialog" hidden><svg class='icone-ph'><use href='#ph-gear'></use></svg> Etapas</button>
+    <button type="button" class="btn-imprimir" id="funil-metas" aria-haspopup="dialog">Metas e automação</button>
     </div>
     <div id="funil-filtros" class="funil-filtros"></div>
     <div id="kanban-quadro" class="kanban-quadro"></div>
     <div id="funil-lista" hidden></div>
     <div id="funil-arquivados" hidden></div>
     <dialog id="funil-checklist-dialogo" class="etapas-dialogo funil-checklist-dialogo" aria-labelledby="funil-checklist-titulo"></dialog>
+    <dialog id="funil-tarefas-dialogo" class="etapas-dialogo funil-tarefas-dialogo" aria-labelledby="funil-tarefas-titulo"></dialog>
+    <dialog id="funil-metas-dialogo" class="etapas-dialogo funil-metas-dialogo" aria-labelledby="funil-metas-titulo"></dialog>
     <dialog id="etapas-dialogo" class="etapas-dialogo" aria-labelledby="etapas-titulo">
       <div class="etapas-dialogo-topo">
         <h3 id="etapas-titulo">Etapas do Funil</h3>
@@ -2612,6 +2640,7 @@
     <p class="modal-ia-objeto" id="modal-ia-objeto" hidden></p>
     <div class="modal-ia-cartoes-topo" id="modal-ia-cartoes-topo" style="display:none;"></div>
     <div class="modal-ia-conversa" id="modal-ia-conversa"></div>
+    <div id="modal-ia-pagometro"></div>
     <div id="modal-ia-defesa"></div>
 
     <details class="secao-ia" id="modal-ia-secao-consideracoes" data-resumo-secao="Análise e Considerações do Licitante" open>
@@ -3594,6 +3623,17 @@
     if (iaEstruturaAtual) renderizarEstruturaIA(iaEstruturaAtual);
   }
 
+  // Pagômetro (pagometro-ui.js): um quadro novo por abertura; resposta de um edital anterior cai num nó já fora da tela.
+  async function carregarPagometroNoResumo(edital, geracao) {
+    baseCapagPromise ||= fetch("data/capag-municipios.json").then((r) => r.ok ? r.json() : null).catch(() => null);
+    const base = await baseCapagPromise;
+    if (geracao !== iaGeracaoModal || !window.LicitaPagometro) return;
+    const alvo = document.createElement("div");
+    document.getElementById("modal-ia-pagometro")?.replaceChildren(alvo);
+    void window.LicitaPagometro.montar({ alvo, edital, baseCapag: base,
+      requisitar: async (url) => fetch(url, { headers: { Authorization: `Bearer ${await obterTokenSessao()}` } }) });
+  }
+
   // Pega o token da sessão logada pra mandar no cabeçalho Authorization das Netlify Functions
   // que agora exigem login (ia-edital, sancoes, despesas-fornecedor — ver netlify/functions/_auth.js).
   async function obterTokenSessao() {
@@ -3844,6 +3884,11 @@
     return `/api/pncp-baixar?cnpj=${partes.cnpj}&ano=${partes.ano}&sequencial=${partes.sequencial}&documento=${doc.sequencialDocumento}&nome=${nome}`;
   }
 
+  function botaoLerAqui(partes, doc) {
+    if (!window.LicitaVisualizadorPdf || window.LicitaVisualizadorPdf.pareceNaoPdf(doc.titulo)) return "";
+    return `<button type="button" class="lp-ler-aqui" data-ler-pdf="${escapeHtml(montarUrlBaixarDoc(partes, doc))}" data-titulo="${escapeHtml(doc.titulo || doc.tipoDocumentoNome || "Documento")}">Ler aqui</button>`;
+  }
+
   function abrirModalArquivos(partes, lista) {
     const alvo = document.getElementById("modal-arquivos-lista");
     alvo.innerHTML = "";
@@ -3854,7 +3899,13 @@
       linha.rel = "noopener";
       linha.style.cssText = "display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;background:var(--fundo-fraco);border:1px solid var(--borda);border-radius:8px;color:var(--texto);text-decoration:none;font-size:13px;";
       linha.innerHTML = `<span>${escapeHtml(doc.titulo || doc.tipoDocumentoNome || "Documento")}<br><span style="color:var(--texto-fraco);font-size:11.5px;">${escapeHtml(doc.tipoDocumentoNome || "")}</span></span><span><svg class='icone-ph'><use href='#ph-download-simple'></use></svg> Baixar</span>`;
-      alvo.appendChild(linha);
+      linha.style.flex = "1";
+      // "Ler aqui" (visualizador-pdf-ui.js): abre o PDF dentro da tela, ao lado do Baixar.
+      const caixa = document.createElement("div");
+      caixa.style.cssText = "display:flex;gap:8px;align-items:stretch;";
+      caixa.appendChild(linha);
+      caixa.insertAdjacentHTML("beforeend", botaoLerAqui(partes, doc));
+      alvo.appendChild(caixa);
     });
     document.getElementById("modal-arquivos-fundo").classList.add("aberto");
   }
@@ -3912,11 +3963,11 @@
     const chavesOrdenadas = [...grupos.keys()].sort((a, b) => ordem.indexOf(a) - ordem.indexOf(b));
     return chavesOrdenadas.map((chave) => {
       const grupo = grupos.get(chave);
-      const linhas = grupo.docs.map((doc) => `
-        <a href="${montarUrlBaixarDoc(partes, doc)}" target="_blank" rel="noopener" class="arquivo-linha">
+      const linhas = grupo.docs.map((doc) => `<div style="display:flex;gap:8px;align-items:stretch;">
+        <a href="${montarUrlBaixarDoc(partes, doc)}" target="_blank" rel="noopener" class="arquivo-linha" style="flex:1">
           <span>${escapeHtml(doc.titulo || doc.tipoDocumentoNome || "Documento")}${doc.dataPublicacaoPncp ? `<br><span class="arquivo-linha-data">Publicado em ${escapeHtml(formatarPrazoPropostas(doc.dataPublicacaoPncp))}</span>` : ""}</span>
           <span><svg class='icone-ph'><use href='#ph-download-simple'></use></svg> Baixar</span>
-        </a>`).join("");
+        </a>${botaoLerAqui(partes, doc)}</div>`).join("");
       return `<div class="arquivos-categoria">
         <p class="arquivos-categoria-titulo">${grupo.rotulo} <span class="arquivos-categoria-contagem">${grupo.docs.length}</span></p>
         <div class="arquivos-categoria-lista">${linhas}</div>
@@ -4259,6 +4310,8 @@
     iaTextoEdital = null;
     iaEstruturaAtual = null;
     iaCapagAtual = { disponivel: false, motivo: "Consultando a CAPAG do ente responsável..." };
+    const quadroPagometro = document.getElementById("modal-ia-pagometro");
+    if (quadroPagometro) quadroPagometro.innerHTML = "";
     iaItensPncpAtual = null;
     iaItensPncpCarregando = null;
     document.getElementById("modal-ia-objeto").textContent = edital.objeto || "";
@@ -4335,6 +4388,7 @@
       // A ficha e o dossiê em cache não precisam aguardar a disponibilidade do PNCP.
       void carregarCapagNoResumo(edital, geracaoCapag);
       void detalhePncp.then(() => carregarCapagNoResumo(edital, geracaoCapag), () => carregarCapagNoResumo(edital, geracaoCapag));
+      void detalhePncp.then(() => carregarPagometroNoResumo(edital, geracaoCapag), () => carregarPagometroNoResumo(edital, geracaoCapag));
       const resumoLocal = lerCacheLocalResumo(edital);
       if (resumoLocal) {
         if (!resumoLocal.estrutura) {
@@ -5107,6 +5161,8 @@
       // Checklist e favorita moram em operacao_processos (operacao_funil_checklist.sql); aqui só o retrato.
       checklistFunil: "checklistFunil" in edital ? edital.checklistFunil : (mapa[id]?.checklistFunil || {}),
       favorito: "favorito" in edital ? Boolean(edital.favorito) : Boolean(mapa[id]?.favorito),
+      // Funil v3 (funil_v3.sql): tarefas do cartão, selo do Prospecta, itens do monitor e data do resultado.
+      ...Object.fromEntries(["tarefasCard", "sugeridaNota", "monitorItens", "dataResultado"].map((k) => [k, k in edital ? edital[k] : (mapa[id]?.[k] ?? null)])),
     };
     salvarMapa("kanban-editais", mapa, empresaId);
   }
@@ -5397,7 +5453,10 @@
         valorTotalEstimado: processo.valor_estimado ?? null,
         etapaId: processo.etapa_id ?? null, statusProcesso: processo.status || null,
         checklistFunil: processo.checklist_funil && typeof processo.checklist_funil === "object" ? processo.checklist_funil : {},
-        favorito: Boolean(processo.favorito)
+        favorito: Boolean(processo.favorito),
+        // Funil v3 (funil_v3.sql): tarefas do cartão, selo do Prospecta e itens do monitor. Ausentes = SQL ainda não aplicado.
+        tarefasCard: processo.tarefas_card ?? null, sugeridaNota: processo.sugerida_nota ?? null,
+        monitorItens: Array.isArray(processo.monitor_itens) ? processo.monitor_itens : [], dataResultado: processo.data_resultado || null
       };
     }
     const idsProcesso = processos.filter(p => status[p.origem_externa_id]).map(p => p.id);
@@ -5673,6 +5732,7 @@
         <p class="kanban-card-meta"><svg class='icone-ph'><use href='#ph-map-pin'></use></svg> ${escapeHtml([edital.municipio, edital.uf].filter(Boolean).join(" / ") || "Não informado")}</p>
         ${prazoHtml}${seloHtml}
         ${LicitaFunil.htmlContador(id, contagemChecklistFunil(id, edital))}
+        ${htmlTarefasCardFunil(id, edital, valorStatus)}
         ${PortalOrigem.htmlPortal(edital)}
         <select class="kanban-card-mover" data-id="${escapeHtml(id)}" title="Mover para outra coluna">${opcoesMoverHtml}</select>
         <textarea class="kanban-card-anotacao" data-id="${escapeHtml(id)}" placeholder="Anotações (ex: liguei dia X, aguardando retorno...)" rows="2">${escapeHtml(anotacaoAtual || "")}</textarea>
@@ -5813,6 +5873,111 @@
       },
     });
   }
+  // ---- Funil v3: tarefas do cartão, monitor por item, Prospecta e metas (funil-tarefas-ui.js, funil-metas-ui.js, funil_v3.sql) ----
+  const SEM_FUNIL_V3 = "O banco ainda não tem as tarefas avançadas do Funil. Peça ao suporte para rodar supabase/funil_v3.sql.";
+  function datasTarefasCard(edital) { return { abertura: edital.dataSessao || edital.encerramento || null, ata: edital.dataResultado || null }; }
+  function htmlTarefasCardFunil(id, edital, valorStatus) {
+    const c = LicitaFunilTarefas.contar(edital.tarefasCard, LicitaFunilTarefas.datasDoCard(edital.tarefasCard, datasTarefasCard(edital)));
+    // Atraso só importa enquanto a licitação está em jogo; em Ganhei/Perdi o selo seria ruído.
+    // A coluna pode ser uma etapa personalizada (id): o que vale é o estágio do processo.
+    const estagio = edital.statusProcesso || dadosStatusOperacional(valorStatus)?.estagio || "triagem";
+    const emJogo = !["homologado", "contratado", "perdido", "arquivado"].includes(estagio);
+    return LicitaFunilTarefas.htmlCard(id, emJogo ? c : { ...c, atrasadas: 0 }, estagio === "triagem" ? edital.sugeridaNota : null);
+  }
+  // Grava colunas do processo (RLS: pode_escrever_empresa_operacao) e o retrato local. Erro do banco vira texto simples.
+  async function salvarProcessoFunilV3(id, campos, retrato) {
+    const empresaId = empresaOperacionalId;
+    const edital = lerMapa("kanban-editais", empresaId)[id];
+    if (!edital?.processoId || !empresaAcompanhamentoPronta) throw new Error("Aguarde o Funil carregar e tente de novo.");
+    const { organizacaoId } = await empresaOperacionalParaDossie(empresaId);
+    const { data, error } = await window.__sbClient.from("operacao_processos").update(campos)
+      .eq("id", edital.processoId).eq("organizacao_id", organizacaoId).eq("empresa_id", empresaId).select("id");
+    if (error) throw new Error(erroColunaFunil(error) ? SEM_FUNIL_V3 : error.code === "23514" ? (error.message || "O banco recusou: confira a tarefa.") : "O banco não aceitou a mudança. Confira a conexão e tente de novo.");
+    if (!data?.length) throw new Error("Seu acesso não permite mudar esta licitação. Peça a um administrador da conta.");
+    const atual = lerMapa("kanban-editais", empresaId)[id];
+    if (atual) salvarSnapshotKanban(id, { ...atual, ...retrato }, empresaId);
+    return { organizacaoId, processoId: edital.processoId, empresaId };
+  }
+  async function modelosTarefasFunil(empresaId) {
+    const { data, error } = await window.__sbClient.from("operacao_funil_modelos_tarefas").select("id,nome,secoes").eq("empresa_id", empresaId).order("nome");
+    return error ? [] : data || [];
+  }
+  async function abrirTarefasFunil(id) {
+    const edital = lerMapa("kanban-editais")[id];
+    if (!edital) return;
+    const empresaId = empresaOperacionalId;
+    const modelos = await modelosTarefasFunil(empresaId);
+    LicitaFunilTarefas.abrirTarefas(document.getElementById("funil-tarefas-dialogo"), {
+      titulo: edital.objeto || "Licitação sem título", card: edital.tarefasCard, processo: datasTarefasCard(edital), modelos,
+      monitorItens: edital.monitorItens || [], empresaId, processoId: edital.processoId,
+      salvar: async (card) => { await salvarProcessoFunilV3(id, { tarefas_card: card }, { tarefasCard: card }); renderizarKanban(); },
+      salvarItens: async (itens) => { await salvarProcessoFunilV3(id, { monitor_itens: itens }, { monitorItens: itens }); },
+      // Mesmo bucket privado e mesma tabela dos anexos do processo (caminho org/empresa/processo/...).
+      anexar: async (arquivo, tarefa) => {
+        const { organizacaoId } = await empresaOperacionalParaDossie(empresaId);
+        const nome = arquivo.name.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9._-]+/g, "-").slice(-80);
+        const caminho = `${organizacaoId}/${empresaId}/${edital.processoId}/tarefas/${Date.now()}-${nome}`;
+        const sb = window.__sbClient;
+        const { error: erroEnvio } = await sb.storage.from("operacao-documentos").upload(caminho, arquivo, { upsert: false, contentType: arquivo.type || undefined });
+        if (erroEnvio) throw new Error("Não foi possível enviar o documento. Tente de novo.");
+        const { data, error } = await sb.from("operacao_anexos_processo").insert({ organizacao_id: organizacaoId, processo_id: edital.processoId, tipo: "outro",
+          titulo: `Tarefa: ${tarefa.titulo}`.slice(0, 180), arquivo_caminho: caminho, arquivo_nome: arquivo.name.slice(0, 200) }).select("id").single();
+        if (error) { await sb.storage.from("operacao-documentos").remove([caminho]); throw new Error("O documento subiu, mas não foi ligado ao processo. Tente de novo."); }
+        return data.id;
+      },
+      salvarModelo: async (nome, secoes) => {
+        const { organizacaoId } = await empresaOperacionalParaDossie(empresaId);
+        const { data, error } = await window.__sbClient.from("operacao_funil_modelos_tarefas")
+          .insert({ organizacao_id: organizacaoId, empresa_id: empresaId, nome, secoes }).select("id,nome,secoes").single();
+        if (error) throw new Error(error.code === "23505" ? "Já existe um modelo com esse nome." : erroColunaFunil(error) || error.code === "42P01" ? SEM_FUNIL_V3 : "Não foi possível salvar o modelo.");
+        return data;
+      },
+    });
+  }
+  // Sugestão do Prospecta: "Manter" tira o selo; "Dispensar" arquiva (o índice único impede que volte amanhã).
+  async function responderSugestaoFunil(id, manter, botao) {
+    botao.disabled = true;
+    try {
+      if (manter) await salvarProcessoFunilV3(id, { sugerida_nota: null }, { sugeridaNota: null });
+      else await salvarStatusAcompanhamento(id, null, null);
+      renderizarKanban();
+    } catch (erro) {
+      botao.disabled = false;
+      avisarSincronizacaoOperacional("Não foi possível responder à sugestão: " + erro.message, true);
+    }
+  }
+  async function abrirMetasFunil() {
+    const empresaId = empresaOperacionalId;
+    if (!empresaId || !empresaAcompanhamentoPronta) { avisarSincronizacaoOperacional("Escolha a empresa e aguarde o Funil carregar.", true); return; }
+    const sb = window.__sbClient;
+    const { organizacaoId, empresa } = await empresaOperacionalParaDossie(empresaId);
+    const [pref, procs, modelos] = await Promise.all([
+      sb.from("operacao_funil_preferencias").select("*").eq("empresa_id", empresaId).maybeSingle(),
+      sb.from("operacao_processos").select("status,etapa_id,criado_em").eq("organizacao_id", organizacaoId).eq("empresa_id", empresaId).limit(5000),
+      modelosTarefasFunil(empresaId),
+    ]);
+    if (pref.error) { avisarSincronizacaoOperacional(erroColunaFunil(pref.error) || pref.error.code === "42P01" ? SEM_FUNIL_V3 : "Não foi possível abrir as metas.", true); return; }
+    LicitaFunilMetas.abrirMetas(document.getElementById("funil-metas-dialogo"), {
+      empresaNome: empresa.razao_social, preferencias: pref.data, etapas: etapasChecklistFunil(), processos: procs.data || [], modelos,
+      salvar: async (campos) => {
+        const { data, error } = await sb.from("operacao_funil_preferencias")
+          .upsert({ empresa_id: empresaId, organizacao_id: organizacaoId, ...campos }, { onConflict: "empresa_id" }).select("*").single();
+        if (error) throw new Error(error.code === "42501" ? "Seu acesso não permite mudar as metas desta empresa." : "O banco não aceitou. Confira os números e tente de novo.");
+        return data;
+      },
+      // Nicho: volume do último ano na Inteligência de Mercado + participantes e marcas do histórico de pregões.
+      buscarNicho: async (termo) => {
+        const [mercado, hist] = await Promise.all([
+          sb.rpc("resumo_inteligencia_mercado", { p_termos: [termo], p_dias: 365, p_uf: null }),
+          sb.from("historico_itens").select("numero_item,historico_participacoes(fornecedor_chave,marca,marca_declarada)").ilike("descricao", `%${termo.replace(/[%_]/g, "")}%`).limit(200),
+        ]);
+        if (mercado.error && hist.error) throw new Error("A Inteligência de Mercado não respondeu. Preencha à mão.");
+        const r = LicitaFunilMetas.resumoNicho(hist.data || []);
+        return { ...r, volume_anual: Math.round(Number(mercado.data?.[0]?.valor_nacional) || 0) };
+      },
+    });
+  }
+  document.getElementById("funil-metas").addEventListener("click", () => { void abrirMetasFunil().catch((e) => avisarSincronizacaoOperacional("Não foi possível abrir as metas: " + e.message, true)); });
   async function restaurarArquivadoFunil(processoId, botao) {
     const p = arquivadosFunil.find((x) => x.id === processoId);
     if (!p) return;
@@ -5850,8 +6015,10 @@
     renderizarKanban();
   });
   document.getElementById("kanban").addEventListener("click", async (ev) => {
-    const b = ev.target.closest("[data-funil-favorito],[data-funil-checklist],[data-funil-restaurar]");
+    const b = ev.target.closest("[data-funil-favorito],[data-funil-checklist],[data-funil-restaurar],[data-funil-tarefas],[data-funil-aceitar],[data-funil-dispensar]");
     if (!b) return;
+    if (b.dataset.funilTarefas) { await abrirTarefasFunil(b.dataset.funilTarefas); return; }
+    if (b.dataset.funilAceitar || b.dataset.funilDispensar) { await responderSugestaoFunil(b.dataset.funilAceitar || b.dataset.funilDispensar, Boolean(b.dataset.funilAceitar), b); return; }
     if (b.dataset.funilChecklist) { abrirChecklistFunil(b.dataset.funilChecklist); return; }
     if (b.dataset.funilRestaurar) { await restaurarArquivadoFunil(b.dataset.funilRestaurar, b); return; }
     const id = b.dataset.funilFavorito;
@@ -8014,7 +8181,8 @@
   // Busca v2 (busca-extra.js): campos que entram no filtro salvo e na busca.
   function filtroExtraDaTela() {
     return { limitar: $op("op-limitar").value.trim(), modalidade: $op("op-modalidade").value, portal: $op("op-portal").value,
-      periodoPor: $op("op-periodo-por").value, mePp: $op("op-me-epp").checked, excluirSrp: $op("op-excluir-srp").checked };
+      periodoPor: $op("op-periodo-por").value, mePp: $op("op-me-epp").checked, excluirSrp: $op("op-excluir-srp").checked,
+      modoDisputa: $op("op-modo-disputa").value, tipoItem: $op("op-tipo-item").value, itemMin: $op("op-item-min").value, itemMax: $op("op-item-max").value };
   }
 
   let filtrosSalvos = [];
@@ -8368,6 +8536,8 @@
       resultados = window.BuscaExtra.filtrarExtra(resultados, extra);
       // "Sem ninguém participando": só aparece quando há histórico de pregões anteriores dos órgãos da lista.
       if (window.BuscaExtraUI) resultados = await window.BuscaExtraUI.filtrarSemDisputa(resultados);
+      // Produto/serviço e valor do item: só com um desses filtros preenchido (lê os itens no PNCP, com teto e cache).
+      if (window.BuscaExtraUI) resultados = await window.BuscaExtraUI.filtrarPorItens(resultados, extra);
 
       if (seq !== opBuscaSeq) return;
       if (anterior && falhaConexao) {
@@ -9031,6 +9201,13 @@
     if (!d || !d.mercado || !Array.isArray(d.mercado.atas)) {
       alvo.innerHTML = '<div class="aviso">Gere um diagnóstico na aba <strong>Visão Geral</strong> primeiro (mesmo segmento/UF/período) — esta aba reaproveita os mesmos dados, sem nova consulta.</div>';
       return;
+    }
+    // Abas Desertos / 1 / 2 / 3 licitantes (baixa-concorrencia.js): histórico de pregões; só relê quando as palavras mudam.
+    const bcLicitantes = document.getElementById("dg-bc-licitantes");
+    const chaveBc = (d.palavras || []).join("|");
+    if (bcLicitantes && window.BaixaConcorrencia && bcLicitantes.dataset.palavras !== chaveBc) {
+      bcLicitantes.dataset.palavras = chaveBc;
+      window.BaixaConcorrencia.montar({ alvo: bcLicitantes, cliente: window.__sbClient, palavras: d.palavras || [] });
     }
     const linhas = calcularBaixaConcorrencia(d.mercado.atas);
     if (linhas.length === 0) {

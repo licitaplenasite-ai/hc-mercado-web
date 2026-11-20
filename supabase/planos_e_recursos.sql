@@ -305,6 +305,12 @@ begin
     v_lim := coalesce((v_r ->> 'limite_diario')::integer, p_limite_padrao);
   end if;
   n := public.incrementar_uso(p_usuario_id, p_funcao);
+  -- Limite do plano vale para o recurso inteiro (ex.: Grátis = 3 de IA/dia somando resumo, pergunta, fornecedor e chat),
+  -- igual ao "hoje" de meu_plano. Sem limite no plano, cada rota segue com o próprio padrão.
+  if v_rec is not null and (v_r ->> 'limite_diario') is not null then
+    select coalesce(sum(u.contagem), 0)::integer into n from public.uso_diario u
+      where u.usuario_id = p_usuario_id and u.dia = current_date and u.funcao = any (select unnest(r.funcoes) from public.recursos_plano r where r.codigo = v_rec);
+  end if;
   return jsonb_build_object('permitido', v_lim is null or n <= v_lim, 'contagem', n, 'limite', v_lim, 'recurso', v_rec, 'plano', v ->> 'nome');
 end $$;
 revoke all on function public.consumir_uso_plano(uuid, text, integer) from public, anon, authenticated;

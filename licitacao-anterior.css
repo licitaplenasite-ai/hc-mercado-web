@@ -77,3 +77,12 @@
 .la-atualizado { font-size: .82rem; color: var(--ok, #2e7d32); animation: la-some 8s forwards; }
 @keyframes la-some { 0%, 75% { opacity: 1; } 100% { opacity: 0; visibility: hidden; } }
 @media (prefers-reduced-motion: reduce) { .la-atualizado { animation: none; } }
+/* Histórico mais rico (20/11/2026, aguarda aprovação): filtros, classificação, botão G e WhatsApp. */
+.la-filtros { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: end; margin: 8px 0 12px; }
+.la-check { display: inline-flex; gap: 6px; align-items: center; min-height: 40px; font-size: .9rem; }
+.la-resultado { display: inline-block; padding: 0 6px; border-radius: 4px; font-size: .78rem; font-weight: 600; border: 1px solid currentColor; }
+.la-res-vencedora { color: var(--ok, #2e7d32); }
+.la-res-desclassificada, .la-res-inabilitada { color: var(--erro, #b3261e); }
+.la-google { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; min-height: 24px; padding: 0 6px; border: 1px solid var(--borda, #c9ced6); border-radius: 4px; font-weight: 700; text-decoration: none; }
+.la-zap { font-size: .85rem; }
+.la-lances, .la-fab { color: var(--texto-suave, var(--texto-secundario, #5b6472)); }

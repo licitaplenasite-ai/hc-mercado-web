@@ -38,6 +38,9 @@ reset role;
 do $$ begin
  if (select count(*) from public.avisos_celular_inscricoes where endpoint like '%qa-b')<>1 then raise exception 'Usuário apagou inscrição de outro'; end if;
  if exists (select 1 from public.avisos_celular_inscricoes where endpoint like '%qa-a') then raise exception 'Usuário não apagou a própria'; end if;
+ -- Aviso do boletim: coluna nova nasce ligada (preferência gravada antes dela continua recebendo).
+ insert into public.avisos_celular_preferencias(usuario_id) values ('f9000000-0000-4000-8000-000000000001');
+ if not (select boletim from public.avisos_celular_preferencias where usuario_id='f9000000-0000-4000-8000-000000000001') then raise exception 'boletim nasceu desligado'; end if;
 end $$;
 select 'testar_avisos_celular: ok';
 rollback;

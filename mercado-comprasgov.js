@@ -144,6 +144,15 @@
     const t = Number.isInteger(q) ? BigInt(c) * BigInt(q) : BigInt(Math.round(c * q));
     return t <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(t) : null;
   }
+  // Participação no mercado (market share) das compras filtradas: % do nº de compras e % do valor (total = unitário ×
+  // quantidade, em centavos BigInt). Compra sem total não entra no valor; sem nenhum total o % do valor fica null.
+  function fatiaDoMercado(doGrupo, base) {
+    const soma = (lista) => lista.reduce((t, i) => { const c = totalCentavos(i); return c === null ? t : t + BigInt(c); }, 0n);
+    const pct = (parte, todo) => (todo > 0n ? Number((parte * 2000n + todo) / (2n * todo)) / 10 : null);
+    const valorTotal = soma(base || []);
+    return { compras: pct(BigInt((doGrupo || []).length), BigInt((base || []).length)), valor: pct(soma(doGrupo || []), valorTotal) };
+  }
+  const pctTexto = (v) => (v === null || v === undefined ? '—' : `${String(v).replace('.', ',')}%`);
   const ESFERAS = { F: 'Federal', E: 'Estadual', M: 'Municipal', D: 'Distrital' };
   // Célula de texto que começa com = + - @ vira texto no Excel (injeção de fórmula).
   const celulaSegura = (v) => { const t = v === null || v === undefined ? '' : String(v); return /^[=+\-@\t\r]/.test(t) ? `'${t}` : t; };
@@ -236,12 +245,14 @@
       const mostrar = estado.todasMarcas ? marcas : [...marcas.filter((m) => m.chave !== SEM_MARCA).slice(0, MARCAS_INICIAIS), ...marcas.filter((m) => m.chave === SEM_MARCA)];
       estado.marcas = marcas;
       const modelos = resumoModelos(base), vencedores = resumoFornecedores(base);
+      const fatias = new Map(marcas.map((m) => [m.chave, fatiaDoMercado(filtrar(base, { marca: m.chave }), base)]));
       const linhas = mostrar.map((m) => {
         const mods = modelos.filter((x) => x.chave.startsWith(`${m.chave}|`)).slice(0, 3).map((x) => x.itens[0].modelo);
         const venc = resumoFornecedores(filtrar(base, { marca: m.chave })).slice(0, 2).map((v) => `${v.nome} (${v.quantidade})`);
         return h('tr', { classe: m.chave === estado.filtro.marca ? 'ativa' : null },
           td('Marca', h('button', { type: 'button', classe: 'mercado-marca-nome', 'data-mercado-marca': m.chave, 'aria-pressed': String(m.chave === estado.filtro.marca), texto: m.nome })),
           td('Compras', String(m.quantidade)),
+          td('% do mercado', `${pctTexto(fatias.get(m.chave).compras)} das compras · ${pctTexto(fatias.get(m.chave).valor)} do valor`),
           td('Mediana', h('strong', { texto: brl(m.resumo.mediana) }), m.unidade ? ` / ${m.unidade}` : ''),
           td('Faixa', m.resumo.quantidade > 1 ? `${brl(m.resumo.minimo)} – ${brl(m.resumo.maximo)}` : '—'),
           td('Último preço', ultimoTexto(m.representante)),
@@ -250,18 +261,25 @@
           typeof aoUsar !== 'function' ? null : td('', m.chave !== SEM_MARCA ? h('button', { type: 'button', classe: 'btn', 'data-mercado-marca-usar': String(marcas.indexOf(m)), texto: rotuloUsar }) : null));
       });
       const escondidas = marcas.length - mostrar.length;
-      const blocos = [h('h3', { classe: 'mercado-subtitulo', texto: 'Marcas que ganharam' }),
-        h('p', { classe: 'nota', texto: 'Ordenado pelo número de compras ganhas. Clique na marca para ver só as compras dela.' }),
-        tabela('', ['Marca', 'Compras', 'Mediana', 'Faixa (mín–máx)', 'Último preço', 'Modelos', 'Quem ganhou (vitórias)', ...(typeof aoUsar === 'function' ? [''] : [])], linhas),
+      // Chave Tabela/Gráfico: o gráfico mostra a participação de cada marca/empresa em barras (top 10).
+      const chave = h('button', { type: 'button', classe: 'btn mercado-chave-grafico', 'data-mercado-grafico': '1', 'aria-pressed': String(Boolean(estado.grafico)), texto: estado.grafico ? 'Ver tabela' : 'Ver gráfico' });
+      const barras = (lista) => h('div', { classe: 'mercado-barras', role: 'list' }, ...lista.slice(0, 10).map(({ nome, fatia }) => h('div', { classe: 'mercado-barra', role: 'listitem' },
+        h('span', { classe: 'mercado-barra-nome', texto: nome }),
+        h('span', { classe: 'mercado-barra-trilho', 'aria-hidden': 'true' }, h('span', { classe: 'mercado-barra-cheia', style: `width:${Math.max(0, Math.min(100, fatia.compras || 0))}%` })),
+        h('span', { classe: 'mercado-barra-valor', texto: `${pctTexto(fatia.compras)} das compras · ${pctTexto(fatia.valor)} do valor` }))));
+      const blocos = [h('div', { classe: 'mercado-lista-topo' }, h('h3', { classe: 'mercado-subtitulo', texto: 'Marcas que ganharam' }), chave),
+        h('p', { classe: 'nota', texto: 'Ordenado pelo número de compras ganhas. Clique na marca para ver só as compras dela. % do mercado: fatia das compras filtradas e do valor total delas.' }),
+        estado.grafico ? barras(marcas.map((m) => ({ nome: m.nome, fatia: fatias.get(m.chave) }))) : tabela('', ['Marca', 'Compras', '% do mercado', 'Mediana', 'Faixa (mín–máx)', 'Último preço', 'Modelos', 'Quem ganhou (vitórias)', ...(typeof aoUsar === 'function' ? [''] : [])], linhas),
         escondidas > 0 || estado.todasMarcas ? h('button', { type: 'button', classe: 'btn', 'data-mercado-todas': '1', texto: estado.todasMarcas ? 'Mostrar só as principais' : `Ver todas as marcas (+${escondidas})` }) : null];
       if (modelos.length) blocos.push(h('h3', { classe: 'mercado-subtitulo', texto: 'Modelos mais vendidos' }),
         tabela('', ['Marca e modelo', 'Compras', 'Mediana', 'Último preço'], modelos.slice(0, 10).map((x) => h('tr', {},
           td('Marca e modelo', h('strong', { texto: x.nome })), td('Compras', String(x.quantidade)),
           td('Mediana', `${brl(x.resumo.mediana)}${x.unidade ? ` / ${x.unidade}` : ''}`), td('Último preço', ultimoTexto(x.ultimo))))));
+      const fatiaVenc = (v) => fatiaDoMercado(v.itens, base);
       if (vencedores.length) blocos.push(h('h3', { classe: 'mercado-subtitulo', texto: 'Empresas vencedoras' }),
-        tabela('', ['Empresa', 'Vitórias', 'Marcas', 'Mediana', 'Última vitória'], vencedores.slice(0, 10).map((v) => h('tr', {},
+        estado.grafico ? barras(vencedores.map((v) => ({ nome: v.nome, fatia: fatiaVenc(v) }))) : tabela('', ['Empresa', 'Vitórias', '% do mercado', 'Marcas', 'Mediana', 'Última vitória'], vencedores.slice(0, 10).map((v) => h('tr', {},
           td('Empresa', h('strong', { texto: v.nome }), v.ultimo.documentoFornecedor ? h('span', { classe: 'mercado-desc', texto: cnpj(v.ultimo.documentoFornecedor) }) : null),
-          td('Vitórias', String(v.quantidade)), td('Marcas', v.marcas.join('; ') || '—'),
+          td('Vitórias', String(v.quantidade)), td('% do mercado', `${pctTexto(fatiaVenc(v).compras)} das compras · ${pctTexto(fatiaVenc(v).valor)} do valor`), td('Marcas', v.marcas.join('; ') || '—'),
           td('Mediana', `${brl(v.resumo.mediana)}${v.unidade ? ` / ${v.unidade}` : ''}`),
           td('Última vitória', `${dataBr(v.ultimo.dataResultado)} · ${v.ultimo.orgao || ''}${v.ultimo.uf ? `/${v.ultimo.uf}` : ''}`)))));
       return blocos.filter(Boolean);
@@ -426,6 +444,7 @@
       const filtro = ev.target?.closest?.('[data-mercado-marca]');
       if (filtro) { estado.filtro.marca = estado.filtro.marca === filtro.dataset.mercadoMarca ? '' : filtro.dataset.mercadoMarca; desenhar(); return; }
       if (ev.target?.closest?.('[data-mercado-todas]')) { estado.todasMarcas = !estado.todasMarcas; desenhar(); return; }
+      if (ev.target?.closest?.('[data-mercado-grafico]')) { estado.grafico = !estado.grafico; desenhar(); return; }
       const usar = ev.target?.closest?.('[data-mercado-marca-usar]');
       const m = usar && estado.marcas?.[Number(usar.dataset.mercadoMarcaUsar)];
       // Linha da marca: a referência é a mediana da marca na unidade dela; modelo fica de fora (a marca vende vários).
@@ -435,7 +454,7 @@
   }
 
   const api = { termoDoItem, mensagemBusca, resumoPrecos, marcasDe, filtrar, porEspecificacao, foraDaCurva, resumoMarcas, SEM_MARCA, produtoParaCatalogo, brl, montar,
-    marcaModelo, filtrarCompras, resumoModelos, resumoFornecedores, totalCentavos, linhasPlanilha, reais, dataBr, cnpj };
+    marcaModelo, filtrarCompras, fatiaDoMercado, resumoModelos, resumoFornecedores, totalCentavos, linhasPlanilha, reais, dataBr, cnpj };
   global.MercadoComprasGov = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(globalThis);

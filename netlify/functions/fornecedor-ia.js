@@ -5,7 +5,8 @@
 //   - candidatos: empresas que JÁ ASSINARAM contrato com o governo para objeto parecido (tabela contratos, PNCP,
 //     lida com o token do próprio usuário; a RLS é a barreira);
 //   - contato e cidade: cadastro público da Receita (BrasilAPI) só das 3 empresas mostradas; MEI não tem contato
-//     exibido (o telefone/e-mail da Receita costuma ser o da pessoa); site não existe nessa base, então fica "não localizado";
+//     exibido (o telefone/e-mail da Receita costuma ser o da pessoa); a Receita não tem site: quando o e-mail é de domínio
+//     próprio (não Gmail/Hotmail...), o domínio vira "site provável" e a tela diz de onde veio; senão "não localizado";
 //   - IA (cadeia grátis que o projeto já tem: Groq -> Gemini -> OpenRouter -> Cloudflare): só dá a aderência (%) e o
 //     "por quê" a partir dos dados acima. Sem IA ou com resposta inválida, aderência e motivo saem dos próprios dados.
 // Custo: 1 leitura no Supabase + até 3 na BrasilAPI + 1 chamada de IA por pergunta; 20 perguntas por usuário/dia.
@@ -130,12 +131,21 @@ async function lerContratos(fetchFn, termos, authorization) {
   return linhas;
 }
 
-// site: null sempre. A base pública da Receita não tem site, e o conector nunca deduz um.
+// Domínio do e-mail da Receita como site provável; e-mail gratuito ou de provedor não diz nada sobre a empresa, e
+// muita empresa cadastra o e-mail do contador (domínio com "contab", "contador", "escritorio"): esses ficam de fora.
+const WEBMAIL = /^(gmail|googlemail|hotmail|outlook|live|msn|yahoo|ymail|bol|uol|terra|ig|globo|globomail|icloud|me|aol|zipmail|r7|oi|proton|protonmail|gmx|yandex|mail|email|hotmart)\./;
+function siteDoEmail(email) {
+  const dominio = String(email || "").split("@")[1] || "";
+  if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(dominio) || WEBMAIL.test(dominio) || /contab|contador|escritorio|assessoria/.test(dominio) || /\.(gov|jus|mp|leg|mil)\.br$/.test(dominio)) return null;
+  return `https://${dominio}`;
+}
+
+// site: só o provável, pelo domínio do e-mail (siteDoEmail); a IA nunca informa site.
 function montarFornecedor(c, cad, ia, termos) {
   return {
     cnpj: c.cnpj, nome: c.nome || "Nome não informado", contratos: c.contratos, valorTotal: Math.round(c.valorTotal * 100) / 100, ufsAtuacao: c.ufs,
     exemplos: c.exemplos, aderencia: ia ? ia.aderencia : aderenciaPorDados(c, termos), porque: ia ? ia.porque : motivoPorDados(c), analisePor: ia ? "ia" : "dados",
-    contato: { telefone: cad?.telefone || null, email: cad?.email || null, site: null, mei: Boolean(cad?.mei) },
+    contato: { telefone: cad?.telefone || null, email: cad?.email || null, site: siteDoEmail(cad?.email), mei: Boolean(cad?.mei) },
     municipio: cad?.municipio || null, uf: cad?.uf || null, situacao: cad?.situacao || null,
   };
 }
@@ -189,3 +199,4 @@ exports.handler = async (event, deps = {}) => {
 exports.termosDaDescricao = termosDaDescricao;
 exports.agruparCandidatos = agruparCandidatos;
 exports.lerAvaliacaoIA = lerAvaliacaoIA;
+exports.siteDoEmail = siteDoEmail;

@@ -1,0 +1,64 @@
+/* Funil v3: tarefas avançadas no cartão (funil-tarefas-ui.js) e "Metas e automação" (funil-metas-ui.js).
+   Só tokens do Design System (ds-tokens.css); claro e escuro vêm deles. Reaproveita .funil-* de funil-checklist.css. Visual novo (20/11/2026): aguarda aprovação. */
+.ft-botao { margin-right: var(--space-4); }
+.ft-selo { display: inline-block; margin-top: 8px; padding: 2px 8px; border-radius: 999px; font: var(--text-label); }
+.ft-selo-atrasada { background: var(--error-bg); color: var(--error-text); border: 1px solid var(--error-border); }
+.ft-selo-sugerida { background: var(--info-bg); color: var(--info-text); border: 1px solid var(--info-border); }
+.ft-sugerida { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); }
+.ft-sugerida .funil-link { margin-top: 8px; }
+
+.funil-tarefas-dialogo, .funil-metas-dialogo { overflow-y: auto; }
+.funil-tarefas-dialogo .funil-topo-acoes, .funil-metas-dialogo .funil-topo-acoes { display: flex; gap: var(--space-8); justify-content: flex-end; }
+.ft-alerta { margin: var(--space-8) 0; padding: 6px 10px; border-radius: var(--radius-control); background: var(--error-bg); color: var(--error-text); font: var(--text-body); }
+.ft-datas { display: flex; flex-wrap: wrap; align-items: end; gap: var(--space-12); margin: var(--space-8) 0 var(--space-4); font: var(--text-body); }
+.ft-datas label, .ft-edicao label, .ft-prova label, .ft-acoes label, .fm-form label { display: grid; gap: var(--space-4); font: var(--text-label); color: var(--text-secondary); min-width: 0; }
+.ft-datas input, .ft-edicao input, .ft-edicao select, .ft-prova textarea, .ft-prova input, .ft-acoes input, .ft-acoes select,
+.ft-secao-nome, .fm-form input, .fm-form select {
+  min-height: 36px; box-sizing: border-box; max-width: 100%; padding: 6px 10px; border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control); background: var(--surface-default); color: var(--text-primary); font: var(--text-body);
+}
+.ft-ajuda { margin: 0 0 var(--space-8); }
+.ft-secao { margin-top: var(--space-16); padding: var(--space-12); border: 1px solid var(--border-default); border-radius: var(--radius-card); background: var(--surface-default); }
+.ft-secao-topo { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); margin-bottom: var(--space-8); }
+.ft-secao-nome { flex: 1 1 200px; font-weight: 600; }
+.ft-tarefas { list-style: none; margin: var(--space-8) 0 0; padding: 0; display: grid; gap: var(--space-4); }
+.ft-tarefa { padding: 6px 0; border-bottom: 1px solid var(--border-default); font: var(--text-body); }
+.ft-linha { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-8); }
+.ft-marcar { display: flex; align-items: flex-start; gap: var(--space-8); flex: 1 1 220px; cursor: pointer; }
+.ft-marcar input { flex: 0 0 auto; width: 18px; height: 18px; margin-top: 2px; accent-color: var(--action-strong); }
+.ft-tarefa.feita .ft-marcar span { color: var(--text-secondary); text-decoration: line-through; }
+.ft-menu { display: inline-flex; gap: var(--space-8); }
+.ft-chips { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); margin: 4px 0 0 26px; }
+.ft-chip { padding: 1px 8px; border-radius: 999px; background: var(--surface-sunken); color: var(--text-secondary); font: var(--text-label); }
+.ft-chip-atrasada { background: var(--error-bg); color: var(--error-text); }
+.ft-resposta { margin: 4px 0 0 26px; color: var(--text-secondary); font: var(--text-label); white-space: pre-wrap; overflow-wrap: anywhere; }
+.ft-prova, .ft-edicao { display: grid; gap: var(--space-8); margin: var(--space-8) 0 0 26px; padding: var(--space-8); border-radius: var(--radius-control); background: var(--surface-sunken); }
+.ft-edicao { grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); }
+.ft-prova textarea { width: 100%; resize: vertical; }
+.ft-acoes { display: flex; flex-wrap: wrap; align-items: end; gap: var(--space-8); grid-column: 1 / -1; margin-top: var(--space-8); }
+.ft-nova { display: flex; flex-wrap: wrap; gap: var(--space-8); align-items: center; margin-top: var(--space-8); }
+.ft-nova input { flex: 1 1 200px; min-height: 36px; padding: 6px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface-default); color: var(--text-primary); font: var(--text-body); }
+.ft-nova-secao { margin-top: var(--space-16); }
+.ft-modelos, .ft-monitor { margin-top: var(--space-16); padding: var(--space-12); border: 1px dashed var(--border-strong); border-radius: var(--radius-card); }
+.ft-modelos summary { cursor: pointer; font-weight: 600; }
+.ft-monitor h4 { margin: 0 0 var(--space-4); }
+.ft-tarefa .agenda-add { margin-left: var(--space-4); }
+
+.fm-corpo { margin-top: var(--space-12); }
+.fm-form { display: grid; gap: var(--space-12); grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); align-items: end; }
+.fm-form > button, .fm-resultado, .fm-previa, .fm-form > p { grid-column: 1 / -1; justify-self: start; }
+.fm-check { display: flex !important; align-items: center; gap: var(--space-8); grid-column: 1 / -1; color: var(--text-primary) !important; font: var(--text-body) !important; }
+.fm-numeros { display: grid; gap: var(--space-8); grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr)); margin: 0; }
+.fm-numeros div { padding: var(--space-8); border-radius: var(--radius-control); background: var(--surface-sunken); }
+.fm-numeros dt { font: var(--text-label); color: var(--text-secondary); }
+.fm-numeros dd { margin: 4px 0 0; font-weight: 700; color: var(--text-primary); }
+.fm-ok { color: var(--success-text); font: var(--text-body); }
+.fm-nichos { list-style: none; padding: 0; margin: var(--space-16) 0 0; display: grid; gap: var(--space-8); }
+.fm-nicho { padding: var(--space-12); border: 1px solid var(--border-default); border-radius: var(--radius-card); font: var(--text-body); }
+.fm-nicho ul { margin: var(--space-4) 0; padding-left: 18px; }
+.fm-passou { color: var(--success-text); }
+.fm-falhou { color: var(--text-secondary); }
+.fm-hoje { font: var(--text-body); }
+@media (max-width: 640px) {
+  .ft-chips, .ft-resposta, .ft-prova, .ft-edicao { margin-left: 0; }
+}

@@ -7,12 +7,13 @@
 //   prazo      lembretes (mesma conta do e-mail: dia do prazo - dias_antes, na hora_aviso) e
 //              operacao_prazos_processo abertos que vencem em PRAZO_HORAS                          -> dono do lembrete / quem cadastrou
 //   certidao   operacao_documentos que vencem em CERTIDAO_DIAS                                     -> gestores/operadores da organização
+//   boletim    logs_boletim "enviado" (scripts/boletim_editais.py) das últimas BOLETIM_MAX_HORAS    -> o cliente do boletim
 // Cada aviso é reservado em avisos_celular_enviados (chave primária usuario+chave) ANTES de enviar: rodadas
 // simultâneas dos dois workflows não repetem aviso. Envio falhou em todos os aparelhos: a reserva volta.
 // Inscrição que o serviço de push dá como morta (404/410) é apagada.
 // Env: SUPABASE_SERVICE_ROLE_KEY, VAPID_CHAVE_PUBLICA, VAPID_CHAVE_PRIVADA (obrigatórias; sem VAPID sai sem erro).
 //   VAPID_CONTATO (padrão mailto:licitaplena@licitaplena.com.br), SITE_URL (padrão https://licitaplena.com.br),
-//   AVISO_MUDANCA_MAX_HORAS (72), PRAZO_HORAS (24), CERTIDAO_DIAS (7).
+//   AVISO_MUDANCA_MAX_HORAS (72), PRAZO_HORAS (24), CERTIDAO_DIAS (7), BOLETIM_MAX_HORAS (12).
 //   AVISO_TESTE_USUARIO=<uuid>: só manda um aviso de teste aos aparelhos desse usuário (não reserva nada).
 const { restFetch } = require("./supabase_dados");
 const { enviarPush } = require("./web_push");
@@ -21,6 +22,7 @@ const SITE_URL = process.env.SITE_URL || "https://licitaplena.com.br";
 const MUDANCA_MAX_HORAS = Number(process.env.AVISO_MUDANCA_MAX_HORAS || 72);
 const PRAZO_HORAS = Number(process.env.PRAZO_HORAS || 24);
 const CERTIDAO_DIAS = Number(process.env.CERTIDAO_DIAS || 7);
+const BOLETIM_MAX_HORAS = Number(process.env.BOLETIM_MAX_HORAS || 12);
 const RETENCAO_ENVIADOS_DIAS = 60;
 const BRASILIA_MS = 3 * 3600 * 1000; // UTC-3, sem horário de verão
 const HORA = 3600 * 1000;
@@ -72,6 +74,15 @@ function avisosDeCertidoes(documentos, membros) {
       url: `${SITE_URL}/operacao.html` })));
 }
 
+// Boletim com oportunidade nova: o robô do e-mail grava uma linha "enviado" por cliente e rodada (3 por dia útil).
+function avisosDeBoletim(logs) {
+  return logs.filter((l) => l.cliente_id && Number(l.quantidade_editais) > 0 && l.executado_em).map((l) => {
+    const n = Number(l.quantidade_editais);
+    return { usuario: l.cliente_id, chave: `bol:${l.executado_em}`, tipo: "boletim", titulo: "Oportunidade nova no boletim", tag: "boletim",
+      corpo: `O boletim chegou com ${n} licitaç${n > 1 ? "ões" : "ão"} no seu filtro. Toque para ver.`, url: `${SITE_URL}/painel.html#boletim` };
+  });
+}
+
 function filtrarPorPreferencia(avisos, preferencias) {
   const prefs = new Map(preferencias.map((p) => [p.usuario_id, p]));
   return avisos.filter((a) => prefs.get(a.usuario)?.[a.tipo] !== false);
@@ -83,15 +94,18 @@ async function coletarAvisos(usuarios, agora) {
   const ate = new Date(agora + PRAZO_HORAS * HORA).toISOString();
   const hoje = new Date(agora - BRASILIA_MS).toISOString().slice(0, 10);
   const limiteDoc = new Date(agora - BRASILIA_MS + CERTIDAO_DIAS * 24 * HORA).toISOString().slice(0, 10);
-  const [mudancas, lembretes, prazos, membros] = await Promise.all([
+  const desdeBoletim = new Date(agora - BOLETIM_MAX_HORAS * HORA).toISOString();
+  const [mudancas, lembretes, prazos, membros, boletins] = await Promise.all([
     ler(`operacao_monitor_mudancas?alerta=eq.true&detectado_em=gte.${desde}&order=detectado_em.asc&limit=500&select=id,processo_id,empresa_id,tipo,resumo,operacao_processos!inner(objeto,criado_por)&operacao_processos.criado_por=in.${u}`),
     ler(`lembretes?cliente_id=in.${u}&data_final_proposta=gt.${new Date(agora).toISOString()}&select=id,cliente_id,objeto_resumo,data_final_proposta,dias_antes,hora_aviso`),
     ler(`operacao_prazos_processo?concluido_em=is.null&vencimento=gt.${new Date(agora).toISOString()}&vencimento=lte.${ate}&limit=500&select=id,processo_id,titulo,vencimento,operacao_processos!operacao_prazos_processo_processo_id_fkey!inner(objeto,empresa_id,criado_por)&operacao_processos.criado_por=in.${u}`),
     ler(`operacao_membros?usuario_id=in.${u}&papel=in.(gestor,operador)&select=organizacao_id,usuario_id,empresa_id`),
+    // Falha nesta fonte (tabela de log fora do ar) não derruba os outros avisos.
+    ler(`logs_boletim?status=eq.enviado&executado_em=gte.${desdeBoletim}&cliente_id=in.${u}&order=executado_em.asc&limit=500&select=cliente_id,quantidade_editais,executado_em`).catch(() => []),
   ]);
   const orgs = new Set(membros.map((m) => m.organizacao_id));
   const documentos = orgs.size ? await ler(`operacao_documentos?organizacao_id=in.${lista(orgs)}&vencimento=gte.${hoje}&vencimento=lte.${limiteDoc}&limit=500&select=id,organizacao_id,empresa_id,tipo,titulo,vencimento,operacao_empresas!operacao_documentos_empresa_id_fkey(razao_social)`) : [];
-  return [...avisosDeMudancas(mudancas), ...avisosDeLembretes(lembretes, agora), ...avisosDePrazosProcesso(prazos), ...avisosDeCertidoes(documentos, membros)];
+  return [...avisosDeMudancas(mudancas), ...avisosDeLembretes(lembretes, agora), ...avisosDePrazosProcesso(prazos), ...avisosDeCertidoes(documentos, membros), ...avisosDeBoletim(Array.isArray(boletins) ? boletins : [])];
 }
 
 // Reserva: só voltam as linhas que esta rodada inseriu (as já existentes são ignoradas pelo on_conflict).
@@ -136,7 +150,7 @@ async function main() {
   }
   if (!porUsuario.size) { console.log("Nenhum aparelho inscrito."); return; }
   const agora = Date.now();
-  const preferencias = await ler(`avisos_celular_preferencias?usuario_id=in.${lista(porUsuario.keys())}&select=usuario_id,edital,prazo,pregoeiro,certidao`);
+  const preferencias = await ler(`avisos_celular_preferencias?usuario_id=in.${lista(porUsuario.keys())}&select=usuario_id,edital,prazo,pregoeiro,certidao,boletim`);
   const avisos = filtrarPorPreferencia(await coletarAvisos(porUsuario.keys(), agora), preferencias);
   const ganhos = await reservar(avisos);
   let enviados = 0;
@@ -152,4 +166,4 @@ if (require.main === module) {
   main().catch((e) => { console.error(`ERRO nos avisos no celular: ${e.message}`); process.exitCode = 1; });
 }
 
-module.exports = { momentoDoLembrete, avisosDeMudancas, avisosDeLembretes, avisosDePrazosProcesso, avisosDeCertidoes, filtrarPorPreferencia };
+module.exports = { momentoDoLembrete, avisosDeMudancas, avisosDeLembretes, avisosDePrazosProcesso, avisosDeCertidoes, avisosDeBoletim, filtrarPorPreferencia };

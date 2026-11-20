@@ -1,6 +1,6 @@
 /* global document, window, navigator, location, localStorage, Notification, fetch, atob, SUPABASE_URL, SUPABASE_ANON_KEY -- script de navegador */
 // LicitaPlena no celular (item 29 da análise do Siga Pregão): instalável sem loja (PWA) e avisos no celular (Web Push)
-// de mudança no edital, prazo, mensagem do pregoeiro e certidão vencendo. Quem envia é o robô scripts/avisos_celular.js.
+// de mudança no edital, prazo, mensagem do pregoeiro, certidão vencendo e oportunidade nova do boletim. Quem envia é o robô scripts/avisos_celular.js.
 // Incluir com <script src="avisos-celular.js" defer></script> DEPOIS de ajuda-ui.js: o botão entra ao lado do "?".
 // Aqui: manifesto e ícones no <head>, registro do sw.js, botão discreto e a gaveta (instalar, ativar avisos, tipos).
 // iPhone: só avisa com o site adicionado à Tela de Início e aberto pelo ícone (iOS 16.4+); a gaveta explica.
@@ -8,7 +8,7 @@
   "use strict";
   if (window.LicitaPlenaCelular || !document.head) return;
 
-  const TIPOS = [["edital", "Mudança no edital"], ["prazo", "Prazo vencendo"], ["pregoeiro", "Mensagem do pregoeiro"], ["certidao", "Certidão vencendo"]];
+  const TIPOS = [["edital", "Mudança no edital"], ["prazo", "Prazo vencendo"], ["pregoeiro", "Mensagem do pregoeiro"], ["certidao", "Certidão vencendo"], ["boletim", "Oportunidade nova no boletim"]];
   const ehIphone = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   const instalado = () => window.matchMedia?.("(display-mode: standalone)").matches || navigator.standalone === true;
   const temPush = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;

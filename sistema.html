@@ -20,6 +20,7 @@
 <link rel="stylesheet" href="mercado-comprasgov.css">
 <link rel="stylesheet" href="robo-lances.css">
 <link rel="stylesheet" href="monitor-processo.css">
+<link rel="stylesheet" href="processo-documentos.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" crossorigin="anonymous"></script>
 <script src="supabase-config.js"></script>
 </head>
@@ -60,6 +61,7 @@
   <a href="bdi.html" title="Calculadora de BDI"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-coins"></use></svg></span><span class="nav-label">Calculadora de BDI</span></a>
   <a href="sinapi.html" title="Preços SINAPI"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-buildings"></use></svg></span><span class="nav-label">Preços SINAPI</span></a>
   <a href="painel.html#kanban" title="Funil"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-folders"></use></svg></span><span class="nav-label">Funil</span></a>
+  <a href="quadros.html" title="Quadros"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-folders"></use></svg></span><span class="nav-label">Quadros</span></a>
   <a href="processos.html" title="Processos"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-folder-open"></use></svg></span><span class="nav-label">Processos</span></a>
   <a href="operacao.html" title="Minhas empresas e documentos"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-files"></use></svg></span><span class="nav-label">Minhas empresas e documentos</span></a>
   <a href="extensao.html" title="Extensão"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-puzzle-piece"></use></svg></span><span class="nav-label">Extensão</span></a>
@@ -104,6 +106,7 @@
     <div id="identificacao" tabindex="-1"></div>
     <section id="checklist-esteira" class="app-cartao" aria-label="Checklist do edital" hidden></section>
     <section id="monitor-processo" class="app-cartao" aria-label="Mudou algo no edital?" hidden></section>
+    <section id="processo-documentos" class="app-cartao" aria-label="Documentos do processo" hidden></section>
     <section id="licitacao-anterior" class="app-cartao" aria-label="Licitação anterior" hidden></section>
     <section id="itens-processo" class="app-cartao itens-processo" aria-label="Itens do processo" hidden></section>
     <section id="robo-lances" class="app-cartao" aria-labelledby="robo-titulo" hidden></section>
@@ -131,6 +134,9 @@
 <script src="sancoes-ui.js"></script>
 <script src="licitacao-anterior-ui.js"></script>
 <script src="monitor-processo-ui.js"></script>
+<script src="zip-simples.js"></script>
+<script src="documentos-pastas-ui.js"></script>
+<script src="processo-documentos-ui.js"></script>
 <script src="motor-lances.js"></script>
 <script src="robo-lances.js"></script>
 <script src="robo-lances-ui.js"></script>
@@ -141,6 +147,7 @@
 <script src="app-comercial.js"></script>
 <script src="menu-lateral.js"></script>
 <script src="ajuda-ui.js" defer></script>
+<script src="chat-ia-ui.js" defer></script>
 <script src="avisos-celular.js" defer></script>
 </body>
 </html>

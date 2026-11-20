@@ -124,7 +124,7 @@
     try {
       const [pg, pr, ms] = await Promise.all([
         cliente.from('pregoes_gravados').select('id_compra,fonte,url,orgao,itens,fonte_sem_https,leituras_concordantes,gravado_em,atualizado_em').in('id_compra', alvos),
-        cliente.from('pregoes_gravados_propostas').select('id_compra,numero_item,fornecedor_chave,cnpj,nome,uf,situacao,marca,leituras_concordantes,gravado_em,atualizado_em').in('id_compra', alvos).limit(5000),
+        cliente.from('pregoes_gravados_propostas').select('id_compra,numero_item,fornecedor_chave,cnpj,nome,uf,situacao,marca,fabricante,modelo,lances,leituras_concordantes,gravado_em,atualizado_em').in('id_compra', alvos).limit(5000),
         cliente.from('pregoes_gravados_mensagens').select('id_compra,numero_item,fornecedor_chave,data_hora,autor,texto,tipo,motivo,leituras_concordantes,gravado_em').in('id_compra', alvos).in('tipo', TIPOS_MOTIVO).order('data_hora').limit(2000),
       ]);
       return { pregoes: pg.error ? [] : pg.data || [], propostas: pr.error ? [] : pr.data || [], mensagens: ms.error ? [] : ms.data || [] };
@@ -154,25 +154,61 @@
     const k = chaveItem(idCompra, v.item.numero_item);
     const mapa = new Map();
     const dono = (chave) => {
-      if (!mapa.has(chave)) mapa.set(chave, { chave, nome: null, ni: null, uf: null, porte: null, classificacao: null, valor_proposta: null, final: null, situacao: null, marcaLida: null, selo: null, motivos: [] });
+      if (!mapa.has(chave)) mapa.set(chave, { chave, nome: null, ni: null, uf: null, porte: null, classificacao: null, valor_proposta: null, final: null, situacao: null, marcaLida: null, fabricante: null, modelo: null, lances: null, selo: null, motivos: [] });
       return mapa.get(chave);
     };
     for (const p of v.participantes) {
       Object.assign(dono(p.fornecedor_chave), { nome: p.fornecedor_nome, ni: p.fornecedor_ni, uf: p.uf, porte: p.porte, classificacao: p.classificacao,
-        valor_proposta: p.valor_proposta, final: p.valor_negociado ?? p.valor_lance ?? p.valor_proposta });
+        valor_proposta: p.valor_proposta, final: p.valor_negociado ?? p.valor_lance ?? p.valor_proposta, fabricante: p.fabricante || null, modelo: p.modelo || null });
     }
     for (const g of (idx && idx.propostas.get(k)) || []) {
       const e = dono(g.fornecedor_chave);
       e.nome = e.nome || g.nome; e.ni = e.ni || g.cnpj || null; e.uf = e.uf || g.uf; e.situacao = g.situacao || e.situacao; e.marcaLida = g.marca || null; e.selo = seloGravado(g, semHttps);
+      e.fabricante = g.fabricante || e.fabricante; e.modelo = g.modelo || e.modelo;
+      // Nº de lances: os lances que a gravação leu na sala de disputa (lance excluído pelo pregoeiro não conta).
+      if (Array.isArray(g.lances) && g.lances.length) e.lances = g.lances.filter((l) => l && !l.excluido).length;
     }
     const doItem = [];
     for (const m of (idx && idx.mensagens.get(k)) || []) {
       const motivo = { tipo: m.tipo, texto: m.motivo || m.texto, quando: m.data_hora, selo: seloGravado(m, semHttps) };
       if (m.fornecedor_chave) dono(m.fornecedor_chave).motivos.push(motivo); else doItem.push(motivo);
     }
+    const vencedorChave = v.vencedor ? v.vencedor.fornecedor_chave : null;
+    for (const e of mapa.values()) e.resultado = resultadoDe(e, vencedorChave);
     const lista = [...mapa.values()].sort((a, b) => (a.classificacao ?? 1e9) - (b.classificacao ?? 1e9));
     const itemGravado = pg && pg.itens ? pg.itens[String(v.item.numero_item)] : null;
     return { lista, doItem, pregao: pg, itemLido: Boolean(itemGravado && itemGravado.propostas_lidas_em) || lista.some((e) => e.selo) || doItem.length > 0, temMotivo: lista.some((e) => e.motivos.length) || doItem.length > 0 };
+  }
+
+  // Classificação do participante: vencedora (o vencedor do item), inabilitada ou desclassificada (situação lida no
+  // pregão gravado ou motivo de recusa/desclassificação/inabilitação). Sem nada disso: null (a fonte não diz).
+  function resultadoDe(e, vencedorChave) {
+    const sit = semAcento(e.situacao);
+    const tipos = new Set(e.motivos.map((m) => m.tipo));
+    if (vencedorChave && e.chave === vencedorChave && !/inabilit|desclass|recus/.test(sit)) return 'vencedora';
+    if (/inabilit/.test(sit) || tipos.has('inabilitacao')) return 'inabilitada';
+    if (/desclass|recus/.test(sit) || tipos.has('desclassificacao') || tipos.has('recusa')) return 'desclassificada';
+    return /aceit|adjudic|homolog|vencedor/.test(sit) ? 'vencedora' : null;
+  }
+  const ROTULO_RESULTADO = { vencedora: 'Vencedora', desclassificada: 'Desclassificada', inabilitada: 'Inabilitada' };
+
+  // Filtros da tela: classificação (o item precisa ter um participante assim) e "só 1 ou 2 licitantes" (contagem
+  // de participantes conhecidos; item sem a lista de participantes não entra, a fonte não diz quantos foram).
+  function itemPassa(v, part, filtro = {}) {
+    if (filtro.poucos && !(part.lista.length >= 1 && part.lista.length <= 2)) return false;
+    return !filtro.classificacao || part.lista.some((e) => e.resultado === filtro.classificacao);
+  }
+
+  // Botão "G": busca a marca no Google para achar o fabricante; WhatsApp: link wa.me só com texto (nada de API).
+  const linkGoogle = (marca, descricao) => `https://www.google.com/search?q=${encodeURIComponent(`${marca} ${String(descricao || '').split(/[,;]/)[0].slice(0, 60)} fabricante`.replace(/\s+/g, ' ').trim())}`;
+  const linkWhatsApp = (texto) => `https://wa.me/?text=${encodeURIComponent(texto)}`;
+  // Sem nome nem CNPJ de fornecedor (pode ser pessoa física/MEI): item, órgão, marca, valor e link oficial.
+  function textoCompartilhar(compra, v) {
+    const endereco = linkOficial(compra.link_pncp) || linkOficial(compra.link_origem);
+    return [`Licitação anterior · ${compra.unidade_nome || compra.orgao_nome || 'Órgão'} · ${compra.modalidade || 'Contratação'} ${compra.numero || ''}`.trim(),
+      `Item ${v.item.numero_item}: ${String(v.item.descricao || '').slice(0, 120)}`,
+      v.ruim ? `Situação: ${v.item.situacao_item}` : `Marca vencedora: ${v.marca || 'não informada'} · homologado ${moeda(v.homologado)}`,
+      endereco, 'Visto no LicitaPlena'].filter(Boolean).join('\n');
   }
 
   // CNPJs da visão para o selo de sanção em lote (até 200, vencedores primeiro).
@@ -384,7 +420,7 @@
     return p;
   }
 
-  function desenharParticipantes(box, v, extras, idCompra) {
+  function desenharParticipantes(box, v, extras, idCompra, filtro = {}) {
     const part = participantesDoItem(v, extras && extras.gravado, idCompra);
     if (!part.lista.length && !part.doItem.length) return part;
     const det = el('details', 'la-participantes');
@@ -395,12 +431,16 @@
     for (const m of part.doItem) det.append(linhaMotivo(m));
     const ol = el('ol', 'la-lista');
     for (const p of part.lista) {
+      if (filtro.classificacao && p.resultado !== filtro.classificacao) continue;
       const li = el('li');
+      if (p.resultado) li.append(el('span', 'la-resultado la-res-' + p.resultado, ROTULO_RESULTADO[p.resultado]), ' ');
       const rotulo = p.classificacao ? `${p.classificacao}º` : p.selo ? 'lido do pregão gravado' : 'não classificado';
       li.append(`${rotulo} · ${[p.nome || 'Fornecedor', cnpjFormatado(p.ni), p.porte, p.uf].filter(Boolean).join(' · ')}` +
         (p.valor_proposta != null ? ` · proposta ${moeda(p.valor_proposta)} · final ${moeda(p.final)}` : ''));
       if (p.situacao) li.append(' · ', el('span', 'la-situacao-participante', `situação: ${p.situacao}`), ' ', p.selo ? seloLeitura(p.selo) : '');
-      if (p.marcaLida) li.append(' · marca lida: ', el('span', 'la-marca', p.marcaLida));
+      if (p.marcaLida) li.append(' · marca lida: ', el('span', 'la-marca', p.marcaLida), ' ', botaoGoogle(p.marcaLida, v.item.descricao));
+      if (p.fabricante || p.modelo) li.append(' · ', el('span', 'la-fab', [p.fabricante && `fabricante ${p.fabricante}`, p.modelo && `modelo ${p.modelo}`].filter(Boolean).join(' · ')));
+      if (p.lances != null) li.append(' · ', el('span', 'la-lances', `${p.lances} lance(s)`));
       for (const m of p.motivos) li.append(linhaMotivo(m));
       const sanc = p.ni ? seloSancao(extras, p.ni) : null;
       if (sanc) li.append(sanc);
@@ -411,7 +451,12 @@
     return part;
   }
 
-  function desenharItem(v, comEdital, extras, idCompra) {
+  function botaoGoogle(marca, descricao) {
+    const a = link(linkGoogle(marca, descricao), 'G');
+    a.className = 'la-link la-google'; a.title = `Pesquisar a marca ${marca} no Google`; a.setAttribute('aria-label', a.title);
+    return a;
+  }
+  function desenharItem(v, comEdital, extras, idCompra, compra = null, filtro = {}) {
     const box = el('div', 'la-item' + (v.ruim ? ' la-item-ruim' : ''));
     const topo = el('p', 'la-item-topo');
     topo.append(el('strong', null, `Item ${v.item.numero_item}`), ` ${String(v.item.descricao || '').slice(0, 140)}`);
@@ -432,6 +477,11 @@
     if (v.vencedor) {
       const venc = el('p', 'la-vencedor');
       venc.append(el('strong', null, 'Vencedor: '), fornecedorTexto(v.vencedor), ' · Marca: ', el('span', v.marca ? 'la-marca' : 'la-marca la-sem', v.marca || 'não informada'));
+      if (v.marca) venc.append(' ', botaoGoogle(v.marca, v.item.descricao));
+      // Fabricante e modelo: do ComprasNet antigo (linha do vencedor) ou do pregão gravado pela extensão.
+      const doVenc = participantesDoItem(v, extras && extras.gravado, idCompra).lista.find((e) => e.chave === v.vencedor.fornecedor_chave) || {};
+      const fab = v.vencedor.fabricante || doVenc.fabricante, mod = v.vencedor.modelo || doVenc.modelo;
+      if (fab || mod) venc.append(' · ', el('span', 'la-fab', [fab && `Fabricante: ${fab}`, mod && `Modelo: ${mod}`].filter(Boolean).join(' · ')));
       box.append(venc);
       const sancVenc = seloSancao(extras, v.vencedor.fornecedor_ni);
       if (sancVenc) box.append(sancVenc);
@@ -450,14 +500,36 @@
     for (const p of v.cancelados) {
       box.append(el('p', 'la-cancelado', `Resultado cancelado (${fornecedorTexto(p)})${p.motivo_cancelamento ? ': ' + p.motivo_cancelamento : ''}`));
     }
-    const part = desenharParticipantes(box, v, extras, idCompra);
+    const part = desenharParticipantes(box, v, extras, idCompra, filtro);
+    if (compra) {
+      const zap = link(linkWhatsApp(textoCompartilhar(compra, v)), 'Compartilhar no WhatsApp');
+      zap.className = 'la-link la-zap';
+      const linha = el('p', 'la-links'); linha.append(zap); box.append(linha);
+    }
     if (part.pregao && !part.itemLido) {
       box.append(el('p', 'la-apoio', `Item ${v.item.numero_item} não foi aberto na gravação do pregão: abra o item e grave com a extensão para ler os motivos.`));
     }
     return box;
   }
 
-  function desenhar(alvo, visao, { comEdital = false, rodape = '', extras = null, atualizar = null, atualizado = false } = {}) {
+  // Barra de filtros do histórico: redesenha a mesma visão (sem nova consulta).
+  function barraFiltros(filtro, mudar) {
+    const barra = el('div', 'la-filtros');
+    const sel = el('select'); sel.setAttribute('aria-label', 'Classificação do participante');
+    for (const [valor, texto] of [['', 'Todas as classificações'], ['vencedora', 'Vencedora'], ['desclassificada', 'Desclassificada'], ['inabilitada', 'Inabilitada']]) {
+      const o = el('option', null, texto); o.value = valor; o.selected = valor === (filtro.classificacao || ''); sel.append(o);
+    }
+    const caixa = el('input'); caixa.type = 'checkbox'; caixa.checked = Boolean(filtro.poucos);
+    const rot = el('label', 'la-check'); rot.append(caixa, ' Só itens com 1 ou 2 licitantes');
+    const rotSel = el('label', 'la-campo', 'Classificação'); rotSel.append(sel);
+    sel.addEventListener('change', () => mudar({ ...filtro, classificacao: sel.value }));
+    caixa.addEventListener('change', () => mudar({ ...filtro, poucos: caixa.checked }));
+    barra.append(rotSel, rot);
+    return barra;
+  }
+
+  function desenhar(alvo, visao, opcoes = {}) {
+    const { comEdital = false, rodape = '', extras = null, atualizar = null, atualizado = false, filtro = {} } = opcoes;
     const raiz = el('div', 'la');
     if (atualizado) { const a = el('p', 'la-atualizado', 'Atualizado com o que você gravou'); a.setAttribute('role', 'status'); raiz.append(a); }
     if (!visao.compras.length) {
@@ -467,6 +539,7 @@
     }
     const resumo = el('p', 'la-apoio', `${visao.compras.length} contratação(ões) anterior(es)` + (visao.ruins ? ` · ${visao.ruins} item(ns) fracassado(s), deserto(s) ou cancelado(s)` : ''));
     raiz.append(resumo);
+    raiz.append(barraFiltros(filtro, (novo) => desenhar(alvo, visao, { ...opcoes, atualizado: false, filtro: novo })));
     const marcas = el('div', 'la-marcas');
     marcas.append(el('h3', 'la-subtitulo', 'Marcas aceitas por este órgão'));
     const chipsDe = (g) => {
@@ -492,7 +565,12 @@
     marcas.append(el('p', 'la-fonte', 'Fonte: marca declarada pelo vencedor na Pesquisa de Preços do Compras.gov (dados abertos).'));
     raiz.append(marcas);
     // Edital grande casa dezenas de itens por compra: cada compra abre e fecha; a mais recente vem aberta.
-    visao.compras.forEach(({ compra, itens }, posicao) => {
+    const filtrando = Boolean(filtro.classificacao || filtro.poucos);
+    let mostrados = 0;
+    visao.compras.forEach(({ compra, itens: todos }, posicao) => {
+      const itens = filtrando ? todos.filter((v) => itemPassa(v, participantesDoItem(v, extras && extras.gravado, compra.id_compra), filtro)) : todos;
+      if (!itens.length) return;
+      mostrados += itens.length;
       const art = el('article', 'la-compra');
       const cab = el('div', 'la-compra-topo');
       cab.append(el('h3', 'la-subtitulo', `${compra.modalidade || 'Contratação'} ${compra.numero || ''}`.trim()));
@@ -523,13 +601,14 @@
         art.append(el('p', 'la-fonte', 'Marca, situação e vencedor lidos das páginas públicas do ComprasNet antigo (sem captcha)' + (compra.fonte_lida_em ? ` em ${data(compra.fonte_lida_em)}` : '') + '.'));
       }
       const lista = el('details', 'la-itens');
-      lista.open = posicao === 0;
+      lista.open = posicao === 0 || filtrando;
       const ruins = itens.filter((v) => v.ruim).length;
       lista.append(el('summary', null, `${itens.length} item(ns) deste produto` + (ruins ? ` · ${ruins} fracassado(s)/deserto(s)/cancelado(s)` : '')));
-      for (const v of itens) lista.append(desenharItem(v, comEdital, extras, compra.id_compra));
+      for (const v of itens) lista.append(desenharItem(v, comEdital, extras, compra.id_compra, compra, filtro));
       art.append(lista);
       raiz.append(art);
     });
+    if (filtrando && !mostrados) raiz.append(el('p', 'la-apoio', 'Nenhum item com esses filtros. A classificação e o nº de licitantes só existem nos itens com a lista de participantes (arquivo de propostas ou pregão gravado pela extensão).'));
     raiz.append(el('p', 'la-fonte', 'Fontes: PNCP (itens e resultados), Pesquisa de Preços e arquivo semanal de propostas do Compras.gov (dados abertos). ' + rodape));
     alvo.replaceChildren(raiz);
   }
@@ -644,7 +723,7 @@
     return { fechar() { parar(); alvo.replaceChildren(); } };
   }
 
-  const api = { montarVisao, vencedorDe, variacao, chaveMarca, montar, montarPesquisa, desenhar, linkOficial, urlsVerTudo, PASSOS_VER_TUDO, indexarGravado, participantesDoItem, cnpjsDaVisao,
+  const api = { resultadoDe, itemPassa, linkGoogle, linkWhatsApp, textoCompartilhar, montarVisao, vencedorDe, variacao, chaveMarca, montar, montarPesquisa, desenhar, linkOficial, urlsVerTudo, PASSOS_VER_TUDO, indexarGravado, participantesDoItem, cnpjsDaVisao,
     textoSelo, seloGravado, sancoesEmLote, lerGravados, carregarExtras, camadasDoPregao, completudeDoPregao, assinaturaGravado, recarregarSeMudou };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else global.LicitaLicitacaoAnterior = api;

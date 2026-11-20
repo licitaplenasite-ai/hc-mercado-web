@@ -1,16 +1,29 @@
-/* global document, window, location -- script de navegador */
+/* global document, window, location, module -- script de navegador (module só no Node, ver o fim) */
 // Central de ajuda "?" (item 28 da análise do Siga Pregão): botão "?" no topo de todas as páginas logadas, com
 // WhatsApp do suporte, link para o Guia de uso (ajuda.html) e tutoriais curtos por tela (texto + print de dados fictícios).
-// Vídeos ficam para depois. Incluir com <script src="ajuda-ui.js" defer></script>; nada mais precisa mudar na página.
+// Vídeos: lugar pronto em cada tutorial (VIDEOS abaixo); enquanto vazio aparece "vídeo em breve". Incluir com <script src="ajuda-ui.js" defer></script>; nada mais precisa mudar na página.
 // No painel reaproveita o "?" que já existe (#header-ajuda-btn); nas outras páginas entra no topo (.acoes /
 // .app-controles) ou, sem topo, como botão flutuante.
-(function () {
+// window = globalThis no Node: o chat com IA (netlify/functions/_chat_ia.js) lê TUTORIAIS por require.
+(function (window) {
   "use strict";
   if (window.LicitaPlenaAjuda) return;
 
-  // Número do WhatsApp do suporte, só dígitos com DDI (ex.: "5592999999999"). Ainda não existe no projeto:
-  // enquanto vazio, o botão fica desligado e a ajuda aponta para o formulário de dúvidas (Jurídico & Dúvidas).
-  const WHATSAPP_SUPORTE = String(window.LICITAPLENA_WHATSAPP_SUPORTE || "").replace(/\D/g, "");
+  // Número do WhatsApp do suporte: vem da configuração do site (LICITAPLENA_WHATSAPP_SUPORTE em supabase-config.js),
+  // só dígitos com DDI 55 (12 ou 13 dígitos). Lido na hora de abrir, não no carregamento: a ordem dos <script> não
+  // importa. Vazio ou inválido: o botão fica desligado e a ajuda aponta para o formulário de dúvidas.
+  function numeroWhatsApp() {
+    const n = String(window.LICITAPLENA_WHATSAPP_SUPORTE || "").replace(/\D/g, "");
+    return /^55\d{10,11}$/.test(n) ? n : "";
+  }
+
+  // Vídeo curto de cada tutorial: id do tutorial -> arquivo em ajuda/videos/ (.mp4 ou .webm, servido pelo próprio
+  // site, sem YouTube: a CSP não libera outro domínio). Os vídeos ainda não foram gravados.
+  const VIDEOS = {};
+  function videoDoTutorial(t) {
+    const src = String((t && VIDEOS[t.id]) || "");
+    return /^ajuda\/videos\/[a-z0-9-]+\.(mp4|webm)$/.test(src) ? src : null;
+  }
 
   // telas: trecho do endereço (página e, no painel, a âncora) que mostra este tutorial primeiro.
   const TUTORIAIS = [
@@ -65,7 +78,8 @@
   }
 
   function linkWhatsApp() {
-    return WHATSAPP_SUPORTE ? `https://wa.me/${WHATSAPP_SUPORTE}?text=${encodeURIComponent("Olá! Preciso de ajuda com o LicitaPlena.")}` : null;
+    const numero = numeroWhatsApp();
+    return numero ? `https://wa.me/${numero}?text=${encodeURIComponent("Olá! Preciso de ajuda com o LicitaPlena.")}` : null;
   }
 
   function listaTutoriais(endereco, abrirPrimeiro) {
@@ -76,6 +90,9 @@
         criar("div", { className: "lp-tutorial" }, [
           criar("ol", {}, t.passos.map((p) => criar("li", { textContent: p }))),
           criar("img", { src: `ajuda/${t.print}.webp`, alt: `Tela: ${t.titulo}`, loading: abrirPrimeiro && i === 0 ? "eager" : "lazy", width: 1280, height: 800 }),
+          videoDoTutorial(t)
+            ? criar("video", { src: videoDoTutorial(t), controls: true, preload: "none", className: "lp-tutorial-video", title: `Vídeo: ${t.titulo}` })
+            : criar("p", { className: "lp-dica lp-tutorial-video-vazio", textContent: "Vídeo deste tutorial: em breve." }),
         ]),
       ]);
       lista.append(criar("li", {}, detalhe));
@@ -101,7 +118,7 @@
       criar("div", { className: "lp-acoes-ajuda" }, [botaoZap, duvida]),
       criar("p", { style: "margin:0 0 16px" }, [criar("a", { href: "ajuda.html", target: "_blank", rel: "noopener", textContent: "Abrir o Guia de uso completo" })]),
       criar("h3", { textContent: "Tutoriais por tela", style: "margin:0 0 8px;font:600 16px/24px var(--font-sans)" }),
-      criar("p", { className: "lp-dica", textContent: "Os da tela onde você está aparecem primeiro. Vídeos curtos em breve.", style: "margin-bottom:12px" }),
+      criar("p", { className: "lp-dica", textContent: "Os da tela onde você está aparecem primeiro. Cada um terá um vídeo curto.", style: "margin-bottom:12px" }),
     ]);
     corpo.dataset.ajudaCorpo = "";
     const gaveta = criar("aside", { className: "lp-gaveta" }, [
@@ -145,7 +162,8 @@
     botao.addEventListener("click", abrirAjuda);
   }
 
-  window.LicitaPlenaAjuda = { abrir: abrirAjuda, listaTutoriais, ordenarPorTela, TUTORIAIS };
+  window.LicitaPlenaAjuda = { abrir: abrirAjuda, listaTutoriais, ordenarPorTela, TUTORIAIS, VIDEOS, videoDoTutorial, linkWhatsApp };
   if (typeof document !== "undefined" && document.body) instalarBotao();
   else if (typeof document !== "undefined") document.addEventListener("DOMContentLoaded", instalarBotao);
-})();
+  if (typeof module !== "undefined" && module.exports) module.exports = window.LicitaPlenaAjuda;
+})(typeof window !== "undefined" ? window : globalThis);

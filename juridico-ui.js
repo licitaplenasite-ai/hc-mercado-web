@@ -170,7 +170,8 @@
         const linhas = await ctx.buscarPecas({ termos, tipos: [...marcados], orgao: orgao.value.replace(/[%_,()]/g, ' ').trim().slice(0, 80), so14133: so14133.checked, limite: LIMITE_RESULTADOS });
         resultado.replaceChildren(h(doc, 'p', { classe: 'jur-contagem', texto: linhas.length ? `${linhas.length} peça(s)${linhas.length >= LIMITE_RESULTADOS ? ' (mostrando as mais recentes)' : ''}` : 'Nenhuma peça encontrada com esses filtros.' }));
         for (const r of linhas) {
-          const topo = `${TIPOS_PECA[r.tipo] || r.tipo} · Pregão nº ${r.pregao || '?'} · UASG ${r.uasg || '?'}${r.data ? ` · ${new Date(`${r.data}T12:00:00`).toLocaleDateString('pt-BR')}` : ''}`;
+          // Peça do PNCP (Lei 14.133) costuma vir sem UASG: só aparece o que existe.
+          const topo = [TIPOS_PECA[r.tipo] || r.tipo, r.pregao && `Nº ${r.pregao}`, r.uasg && `UASG ${r.uasg}`, r.data && new Date(`${r.data}T12:00:00`).toLocaleDateString('pt-BR')].filter(Boolean).join(' · ');
           const cartao = h(doc, 'article', { classe: 'jur-peca' },
             h(doc, 'p', { classe: 'jur-peca-topo', texto: topo }),
             h(doc, 'p', { classe: 'jur-ajuda', texto: [r.orgao, r.empresa_nome && `${r.empresa_nome}${r.empresa_cnpj ? ` (CNPJ ${r.empresa_cnpj})` : ''}`, r.lei && `Lei ${r.lei}`].filter(Boolean).join(' · ') }),
@@ -179,7 +180,7 @@
           const completo = h(doc, 'details', {}, h(doc, 'summary', { texto: 'Ver peça inteira e resposta' }), h(doc, 'p', { classe: 'jur-integral', texto: r.texto }));
           if (r.resposta) completo.append(h(doc, 'p', { classe: 'jur-rotulo', texto: 'Resposta / decisão do pregoeiro' }), h(doc, 'p', { classe: 'jur-integral', texto: r.resposta }));
           cartao.append(completo);
-          if (/^https:\/\/www\.comprasnet\.gov\.br\//.test(r.url || '')) cartao.append(h(doc, 'a', { href: r.url, target: '_blank', rel: 'noopener noreferrer', texto: 'Abrir no portal' }));
+          if (/^https:\/\/(www\.comprasnet\.gov\.br|pncp\.gov\.br)\//.test(r.url || '')) cartao.append(h(doc, 'a', { href: r.url, target: '_blank', rel: 'noopener noreferrer', texto: /pncp\.gov\.br/.test(r.url) ? 'Abrir no PNCP' : 'Abrir no portal' }));
           resultado.append(cartao);
         }
       } catch (e) { resultado.replaceChildren(h(doc, 'p', { texto: e.message || 'Não foi possível buscar agora.' })); }
@@ -187,7 +188,7 @@
     };
     palavras.onkeydown = (ev) => { if (ev.key === 'Enter') buscar.onclick(); };
     alvo.append(
-      h(doc, 'p', { classe: 'jur-ajuda', texto: 'Peças públicas do ComprasNet (pregões até 2023), com a resposta do pregoeiro. CPF, nomes de pessoas, e-mails e telefones são apagados; ficam empresa, CNPJ e órgão. São exemplos reais, não modelos revisados.' }),
+      h(doc, 'p', { classe: 'jur-ajuda', texto: 'Peças públicas do ComprasNet (pregões até 2023, com a resposta do pregoeiro) e, da Lei 14.133, as que os órgãos publicam no PNCP. CPF, nomes de pessoas, e-mails e telefones são apagados; ficam empresa, CNPJ e órgão. São exemplos reais, não modelos revisados.' }),
       h(doc, 'div', { classe: 'jur-linha' },
         h(doc, 'div', { classe: 'jur-campo jur-campo-largo' }, h(doc, 'label', { for: 'jur-banco-palavras', texto: 'Palavras (separe com ;)' }), palavras),
         h(doc, 'div', { classe: 'jur-campo' }, h(doc, 'label', { for: 'jur-banco-orgao', texto: 'Órgão' }), orgao)),

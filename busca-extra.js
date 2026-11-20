@@ -20,6 +20,15 @@
   const exclusivaMeEpp = (r) => ME_EPP.test(norm(r && r.objeto));
   const ehSrp = (r) => (r && r.srp === true) || /registro de precos?\b|\bsrp\b|\bata de registro\b/.test(norm(r && r.objeto));
   const modalidadeDe = (r) => Object.keys(MODALIDADES).find((k) => norm(r && r.modalidadeNome).includes(k)) || "";
+  // Modo de disputa do PNCP (modoDisputaNome): "Aberto", "Fechado", "Aberto-Fechado", "Fechado-Aberto", "Dispensa Com Disputa".
+  const MODOS_DISPUTA = { aberto: "Aberto", "aberto-fechado": "Aberto e fechado", fechado: "Fechado", "dispensa-com-disputa": "Dispensa com disputa", "nao-se-aplica": "Não se aplica" };
+  function modoDisputaDe(r) {
+    const n = norm(r && r.modoDisputaNome).replace(/[\s/]+/g, "-");
+    if (!n) return "";
+    if (n.includes("dispensa")) return "dispensa-com-disputa";
+    if (/^(aberto-fechado|fechado-aberto)$/.test(n)) return "aberto-fechado";
+    return Object.hasOwn(MODOS_DISPUTA, n) ? n : "";
+  }
 
   // f = { limitar, modalidade, portal, mePp, excluirSrp }. Sem filtro, devolve a mesma lista.
   function filtrarExtra(resultados, f = {}) {
@@ -29,7 +38,27 @@
     if (f.portal) saida = saida.filter((r) => Portal && Portal.portalDe(r).nome === f.portal);
     if (f.mePp) saida = saida.filter(exclusivaMeEpp);
     if (f.excluirSrp) saida = saida.filter((r) => !ehSrp(r));
+    if (f.modoDisputa) saida = saida.filter((r) => modoDisputaDe(r) === f.modoDisputa);
     return saida;
+  }
+
+  // --- Filtros que dependem dos itens (PNCP /itens): produto ou serviço e valor unitário estimado do item ---
+  const temFiltroDeItem = (f = {}) => Boolean(f.tipoItem || f.itemMin || f.itemMax);
+  // "12345678000190-1-000123/2026" -> { cnpj, ano, sequencial } para /api/pncp-itens.
+  function partesControle(numeroControle) {
+    const m = /^(\d{14})-\d+-0*(\d+)\/(\d{4})$/.exec(String(numeroControle || "").trim());
+    return m ? { cnpj: m[1], sequencial: Number(m[2]), ano: Number(m[3]) } : null;
+  }
+  // Basta um item conferir: material/serviço pelo materialOuServico do PNCP; valor pela faixa em reais (centavos BigInt).
+  // Item com orçamento sigiloso (sem valor) não entra quando há faixa de valor.
+  function itensConferem(itens, f = {}) {
+    const min = f.itemMin ? centavos(f.itemMin) : null, max = f.itemMax ? centavos(f.itemMax) : null;
+    return (itens || []).some((i) => {
+      if (f.tipoItem && !norm(i.materialOuServico).startsWith(f.tipoItem === "servico" ? "servico" : "material")) return false;
+      if (min === null && max === null) return true;
+      const v = centavos(i.valorUnitarioEstimado);
+      return v !== null && v > 0n && (min === null || v >= min) && (max === null || v <= max);
+    });
   }
   // Data usada no filtro de período: publicação (padrão) ou abertura (fim do prazo de propostas).
   const dataDoPeriodo = (r, periodoPor) => (periodoPor === "abertura" ? r.encerramento : r.publicacao) || null;
@@ -104,6 +133,7 @@
   // --- "Sem ninguém participando": histórico já coletado (licitação anterior / Compras.gov) ---
   // Dinheiro em centavos BigInt a partir do texto do número, sem passar por conta de ponto flutuante.
   function centavos(v) {
+    if (typeof v === "number" && Number.isFinite(v)) v = v.toFixed(2);
     const m = /^(-?)(\d+)(?:\.(\d+))?$/.exec(String(v ?? "").trim());
     if (!m) return null;
     const c = BigInt(m[2]) * 100n + BigInt(((m[3] || "") + "00").slice(0, 2));
@@ -150,7 +180,7 @@
     }).sort((a, b) => b.abertas - a.abertas || a.orgao.localeCompare(b.orgao, "pt-BR"));
   }
 
-  const api = { MODALIDADES, PORTAIS, norm, temTodos, exclusivaMeEpp, ehSrp, modalidadeDe, filtrarExtra, dataDoPeriodo, VOCABULARIO, sugerirPalavras, aplicarSugestao,
+  const api = { MODALIDADES, MODOS_DISPUTA, modoDisputaDe, temFiltroDeItem, partesControle, itensConferem, PORTAIS, norm, temTodos, exclusivaMeEpp, ehSrp, modalidadeDe, filtrarExtra, dataDoPeriodo, VOCABULARIO, sugerirPalavras, aplicarSugestao,
     lerNumero, idCompraGov, linkComprasGov, mesmoNumero, editalDaBusca, centavos, sinaisPorUasg, temSinal, agruparOrgaos };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else raiz.BuscaExtra = api;

@@ -66,3 +66,11 @@
 .itens-licitacao-lista:has(.item-mercado:not([hidden])){max-height:none}
 .item-mercado .mercado-marcas td,.itens-mercado .mercado-marcas td{overflow-wrap:anywhere;min-width:0}
 @media(max-width:640px){.item-mercado .mercado-marcas,.item-mercado .mercado-marcas tbody{display:block;width:100%}.item-mercado .mercado-marcas td{white-space:normal}}
+/* Tabela/Gráfico e % do mercado (20/11/2026, aguarda aprovação). */
+.mercado-barras{display:grid;gap:6px;margin:8px 0 12px}
+.mercado-barra{display:grid;grid-template-columns:minmax(0,14rem) minmax(0,1fr) auto;gap:8px;align-items:center;font-size:13px}
+.mercado-barra-nome{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.mercado-barra-trilho{display:block;height:12px;border-radius:6px;background:var(--surface-subtle,#eef1f5);overflow:hidden}
+.mercado-barra-cheia{display:block;height:100%;background:var(--action-strong,#1c63c7)}
+.mercado-barra-valor{color:var(--text-secondary);white-space:nowrap}
+@media(max-width:640px){.mercado-barra{grid-template-columns:minmax(0,1fr)}.mercado-barra-valor{white-space:normal}}

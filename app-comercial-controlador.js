@@ -105,7 +105,7 @@
 
   // pedirLogin(mensagem): produção não tem formulário próprio; quando a casca cai no login, quem chama redireciona
   // para o login.html. Sem ele (QA), o formulário da própria página continua sendo usado.
-  function criarControlador({ doc, fetch, storage, kit, identificacao, itens = null, portal = globalThis.LicitaPortalCliente || null, esteira = null, anterior = null, monitor = null, robo = null, confirmar = null, autenticacao = null, pedirLogin = null, busca = '' }) {
+  function criarControlador({ doc, fetch, storage, kit, identificacao, itens = null, portal = globalThis.LicitaPortalCliente || null, esteira = null, anterior = null, monitor = null, documentos = null, robo = null, confirmar = null, autenticacao = null, pedirLogin = null, busca = '' }) {
     const auth = autenticacao || autenticacaoQA(fetch);
     const el = (id) => doc.getElementById(id);
     let epoca = 0;
@@ -120,6 +120,7 @@
     let esteiraComp = null;
     let anteriorComp = null;
     let monitorComp = null;
+    let documentosComp = null;
     let roboComp = null;
     let tela = 'carregando';
     // 'hoje' lista empresas/processos autorizados; 'processo' mostra identificação e kit do contexto atual.
@@ -182,6 +183,8 @@
       if (el('licitacao-anterior')) el('licitacao-anterior').hidden = !processo;
       // Monitor do edital: mesma regra (vazio, o CSS esconde).
       if (el('monitor-processo')) el('monitor-processo').hidden = !processo;
+      // Documentos escolhidos e resumo de 1 página (processo-documentos-ui.js): mesma regra.
+      if (el('processo-documentos')) el('processo-documentos').hidden = !processo;
       // Robô de lances: mesma regra (só com processo).
       if (el('robo-lances')) el('robo-lances').hidden = !processo;
       // Uma empresa só (ex.: plano Empresa, 1 CNPJ): sem seletor; o sistema usa sempre essa empresa.
@@ -384,6 +387,9 @@
       try { monitorComp?.fechar(); } catch { /* módulo já desmontado */ }
       monitorComp = null;
       el('monitor-processo')?.replaceChildren();
+      try { documentosComp?.fechar(); } catch { /* módulo já desmontado */ }
+      documentosComp = null;
+      el('processo-documentos')?.replaceChildren();
       try { roboComp?.fechar(); } catch { /* módulo já desmontado */ }
       roboComp = null;
       el('robo-lances')?.replaceChildren();
@@ -582,6 +588,7 @@
       if (anterior && el('licitacao-anterior')) anteriorComp = anterior.montar({ alvo: el('licitacao-anterior'), contexto: { empresaId: contexto.empresaId, processoId: contexto.processoId } });
       // montar do monitor é assíncrono: guarda a promessa e fecha quando ela resolver.
       if (monitor && el('monitor-processo')) { const p = monitor.montar({ alvo: el('monitor-processo'), contexto: { empresaId: contexto.empresaId, processoId: contexto.processoId } }); monitorComp = { fechar: () => { Promise.resolve(p).then((c) => c?.fechar?.()).catch(() => {}); } }; }
+      if (documentos && el('processo-documentos')) documentosComp = documentos.montar({ alvo: el('processo-documentos'), contexto: { empresaId: contexto.empresaId, processoId: contexto.processoId } });
       if (robo && el('robo-lances')) roboComp = robo.montar({ alvo: el('robo-lances'), contexto: { empresaId: contexto.empresaId, processoId: contexto.processoId }, requisitar: requisitarAutenticado });
       // Portal do cliente: compara a resposta do cliente com os itens que o consultar já trouxe.
       // shortcut: só a primeira página de itens do consultar; item de outra página aparece sem a checagem de "valores mudaram".

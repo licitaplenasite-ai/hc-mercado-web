@@ -171,3 +171,13 @@ test('totalCentavos e linhasPlanilha: total sem float, valores em reais e célul
   assert.equal(linha[10], '62.958.500/0001-98');
   assert.deepEqual([linha[13], linha[14]], [3972.8, 19864]);
 });
+
+test("participação no mercado: % das compras e % do valor (unitário × quantidade, sem float)", () => {
+  const c = (centavos, quantidade) => ({ valorUnitarioCentavos: centavos, quantidade });
+  const base = [c(100, 10), c(100, 10), c(200, 30), c(null, 5)];
+  assert.deepEqual(M.fatiaDoMercado(base.slice(0, 2), base), { compras: 50, valor: 25 });
+  assert.deepEqual(M.fatiaDoMercado([base[2]], base), { compras: 25, valor: 75 });
+  assert.deepEqual(M.fatiaDoMercado([base[3]], base), { compras: 25, valor: 0 }, "compra sem preço não soma valor");
+  assert.deepEqual(M.fatiaDoMercado([], []), { compras: null, valor: null });
+  assert.equal(M.fatiaDoMercado([c(1, 1)], [c(1, 1), c(1, 1), c(1, 1)]).compras, 33.3, "arredonda para 1 casa");
+});

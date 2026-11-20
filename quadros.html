@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quadros — LicitaPlena</title>
+<link rel="icon" type="image/png" href="favicon.png?v=3">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" crossorigin="anonymous"></script><script src="supabase-config.js"></script>
+<link rel="stylesheet" href="ds-tokens.css"><link rel="stylesheet" href="menu-lateral.css">
+<!-- Tema: mesma chave do painel; claro é o padrão, só quem escolheu "escuro" fica no escuro. -->
+<script>(function(){var t=null;try{t=localStorage.getItem("licitaplena_tema");}catch(e){}if(t!=="escuro")document.documentElement.classList.add("tema-claro");document.documentElement.dataset.theme=t==="escuro"?"dark":"light";})();</script>
+<style>
+/* Design System (ds-tokens.css): mesmas regras de componentes de sinapi.html/processos.html. Visual aguarda aprovação. */
+*{box-sizing:border-box}
+[data-theme="dark"]{color-scheme:dark}[data-theme="light"]{color-scheme:light}
+body{margin:0;background:var(--surface-page);color:var(--text-primary);font:var(--text-body);font-family:var(--font-sans)}
+button,input,select,textarea{font-family:var(--font-sans)}
+:is(button,a,input,select,textarea,[tabindex]):focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
+header{position:sticky;top:0;z-index:5;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:8px 24px;background:var(--surface-default);border-bottom:1px solid var(--border-default)}
+.topo-marca-linha{display:flex;align-items:center;gap:8px;min-width:0}
+header .marca{display:flex;align-items:center;gap:8px;color:var(--text-primary);text-decoration:none;font:600 16px/24px var(--font-sans)}
+.marca-placa{display:inline-grid;place-content:center;width:32px;height:32px;border-radius:var(--radius-control);background:#f6f8fc;border:1px solid #e3e8f0;flex:none}
+.marca-placa img{width:24px;height:24px;display:block}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:0 16px;border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--surface-default);color:var(--text-primary);font:500 14px/16px var(--font-sans);cursor:pointer;text-decoration:none}
+.btn:hover{background:var(--surface-sunken)}
+.btn:disabled{color:var(--text-disabled);cursor:not-allowed}
+.btn.primario{background:var(--action-strong);border-color:transparent;color:var(--action-on)}
+.btn.primario:hover{background:var(--action-strong-hover)}
+.btn.perigo{color:var(--error-text);border-color:var(--error-border)}
+.tema-icone{width:40px;padding:0;font-size:16px}
+main{padding:24px 24px 56px;min-width:0}
+.topo{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
+.topo h1{font:var(--text-title);margin:0 0 4px}
+.topo p,.nota,.vazio{color:var(--text-secondary);line-height:1.5;margin:0}
+label{display:block;font:var(--text-label);color:var(--text-primary);margin:0 0 6px}
+select,input,textarea{width:100%;min-height:40px;padding:8px 12px;border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--surface-default);color:var(--text-primary);font:var(--text-body)}
+textarea{min-height:96px;resize:vertical}
+.empresa{min-width:260px}
+.barra{display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin:16px 0}
+.barra .seletor{min-width:220px;flex:0 1 320px}
+.aviso{display:none;margin:12px 0;border:1px solid;border-radius:var(--radius-card);padding:12px 16px}
+.aviso.erro{display:block;color:var(--error-text);border-color:var(--error-border);background:var(--error-bg)}
+.aviso.info{display:block;color:var(--info-text);border-color:var(--info-border);background:var(--info-bg)}
+.vazio{padding:32px 16px;text-align:center}.vazio p{margin-bottom:12px}
+#quadro{display:flex;gap:12px;align-items:flex-start;overflow-x:auto;padding-bottom:12px;min-height:320px}
+.q-coluna{flex:0 0 280px;width:280px;min-width:0;display:flex;flex-direction:column;max-height:calc(100vh - 260px);background:var(--surface-sunken);border:1px solid var(--border-default);border-radius:var(--radius-card)}
+.q-coluna.q-alvo{border-color:var(--action-strong)}
+.q-coluna-topo{display:flex;align-items:center;gap:6px;padding:10px 12px;border-bottom:1px solid var(--border-default)}
+.q-coluna-topo h3{margin:0;font:600 14px/20px var(--font-sans);flex:1;min-width:0;overflow-wrap:anywhere}
+.q-ponto{width:8px;height:8px;border-radius:999px;flex:none}
+.q-conta{font:var(--text-label);color:var(--text-secondary);font-variant-numeric:tabular-nums}
+.q-coluna-acoes{display:flex;gap:2px}
+.q-mini{min-width:28px;min-height:28px;border:1px solid transparent;border-radius:var(--radius-control);background:none;color:var(--text-secondary);cursor:pointer;font-size:15px}
+.q-mini:hover:not(:disabled){background:var(--surface-default);border-color:var(--border-default);color:var(--text-primary)}
+.q-mini:disabled{opacity:.35;cursor:default}
+.q-lista{display:flex;flex-direction:column;gap:8px;padding:10px;overflow-y:auto;min-height:48px;flex:1}
+.q-cartao{min-width:0;background:var(--surface-default);border:1px solid var(--border-default);border-radius:var(--radius-control);padding:10px 12px;cursor:grab}
+.q-cartao:hover{border-color:var(--border-strong)}
+.q-cartao.q-arrastando{opacity:.45}
+.q-cartao p{margin:6px 0 0;color:var(--text-secondary);font-size:13px;line-height:18px;overflow-wrap:anywhere}
+.q-cartao-titulo{display:block;width:100%;text-align:left;border:0;background:none;padding:0;color:var(--text-primary);font:600 14px/20px var(--font-sans);cursor:pointer;overflow-wrap:anywhere}
+.q-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.q-tag{display:inline-flex;align-items:center;max-width:100%;min-height:22px;padding:0 8px;border:1px solid var(--border-default);border-radius:var(--radius-control);background:var(--surface-sunken);color:var(--text-secondary);font:var(--text-label);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.q-tag.q-vencido{background:var(--error-bg);border-color:var(--error-border);color:var(--error-text)}
+a.q-processo{color:var(--action-text);text-decoration:none}
+.q-novo-cartao{margin:0 10px 10px;min-height:36px;border:1px dashed var(--border-strong);border-radius:var(--radius-control);background:none;color:var(--text-secondary);cursor:pointer;font:500 14px/20px var(--font-sans)}
+.q-novo-cartao:hover{color:var(--text-primary);background:var(--surface-default)}
+dialog{width:min(520px,calc(100% - 32px));border:1px solid var(--border-default);border-radius:var(--radius-modal);background:var(--surface-raised);color:var(--text-primary);box-shadow:var(--shadow-overlay);padding:20px}
+dialog::backdrop{background:rgba(11,16,32,.5)}
+dialog h2{margin:0 0 16px;font:var(--text-section)}
+.campos{display:grid;gap:12px}.campos .dupla{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.dlg-acoes{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;flex-wrap:wrap}.dlg-acoes .esquerda{margin-right:auto}
+@media(max-width:640px){header{padding:8px 12px}main{padding:16px}.empresa,.barra .seletor{min-width:0;flex:1 1 100%}.q-coluna{flex-basis:84vw}.campos .dupla{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><div class="topo-marca-linha"><button id="nav-gaveta-btn" type="button" aria-controls="menu-principal" aria-expanded="false">Menu</button><a class="marca" href="painel.html" title="Voltar ao painel principal"><span class="marca-placa"><img src="logo-icone.svg" alt=""></span>LicitaPlena</a></div><div class="acoes"><button class="btn tema-icone" id="btn-tema" type="button" title="Alternar tema claro/escuro" aria-label="Alternar tema claro/escuro">☾</button></div></header>
+<div class="shell">
+<!-- Menu lateral: mesma estrutura e itens do menu do painel.html (duplicação intencional entre páginas). Comportamento em menu-lateral.js. -->
+<nav id="menu-principal" aria-label="Menu principal">
+  <button id="nav-colapsar-btn" type="button" title="Recolher menu" aria-controls="menu-principal">
+    <span class="nav-ico" aria-hidden="true">&#171;</span><span class="nav-label">Recolher</span>
+  </button>
+  <a href="/sistema" title="Hoje"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-house"></use></svg></span><span class="nav-label">Hoje</span></a>
+  <a href="painel.html#boletim" title="Boletim"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-clipboard-text"></use></svg></span><span class="nav-label">Boletim</span></a>
+  <a href="painel.html#calendario" title="Calendário"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-calendar"></use></svg></span><span class="nav-label">Calendário</span></a>
+  <a href="painel.html#oportunidades" title="Encontrar Licitações"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-magnifying-glass"></use></svg></span><span class="nav-label">Encontrar Licitações</span></a>
+  <a href="painel.html#diagnostico" title="Inteligência de Mercado"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-chart-bar"></use></svg></span><span class="nav-label">Inteligência de Mercado</span></a>
+  <a href="prospeccao.html" title="Prospecção"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-chart-bar"></use></svg></span><span class="nav-label">Prospecção</span></a>
+  <a href="painel.html#licitacao-anterior" title="Licitação anterior"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-clock-counter-clockwise"></use></svg></span><span class="nav-label">Licitação anterior</span></a>
+  <a href="painel.html#empresa" title="Analisar concorrente"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-buildings"></use></svg></span><span class="nav-label">Analisar concorrente</span></a>
+  <a href="painel.html#transparencia" title="Convênios e Emendas Federais"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-handshake"></use></svg></span><span class="nav-label">Convênios e Emendas Federais</span></a>
+  <a href="painel.html#precos" title="Pesquisa de Preços"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-coins"></use></svg></span><span class="nav-label">Pesquisa de Preços</span></a>
+  <a href="bdi.html" title="Calculadora de BDI"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-coins"></use></svg></span><span class="nav-label">Calculadora de BDI</span></a>
+  <a href="sinapi.html" title="Preços SINAPI"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-buildings"></use></svg></span><span class="nav-label">Preços SINAPI</span></a>
+  <a href="painel.html#kanban" title="Funil"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-folders"></use></svg></span><span class="nav-label">Funil</span></a>
+  <a href="quadros.html" class="ativo" aria-current="page" title="Quadros"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-folders"></use></svg></span><span class="nav-label">Quadros</span></a>
+  <a href="processos.html" title="Processos"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-folder-open"></use></svg></span><span class="nav-label">Processos</span></a>
+  <a href="operacao.html" title="Minhas empresas e documentos"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-files"></use></svg></span><span class="nav-label">Minhas empresas e documentos</span></a>
+  <a href="extensao.html" title="Extensão"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-puzzle-piece"></use></svg></span><span class="nav-label">Extensão</span></a>
+  <a href="painel.html#juridico" title="Jurídico &amp; Dúvidas"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-scales"></use></svg></span><span class="nav-label">Jurídico &amp; Dúvidas</span></a>
+  <a href="painel.html#status" title="Status"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-circle"></use></svg></span><span class="nav-label">Status</span></a>
+</nav>
+<div class="nav-gaveta-fundo" id="nav-gaveta-fundo" hidden></div>
+<main>
+  <div class="topo"><div><h1>Quadros</h1><p>Quadros livres para organizar o trabalho além do funil: cotações, documentos, entregas. Arraste os cartões entre as colunas; um cartão pode apontar para um processo.</p></div><div class="empresa"><label for="empresa-atual">Empresa ativa</label><select id="empresa-atual"></select></div></div>
+  <div class="barra">
+    <div class="seletor"><label for="quadro-atual">Quadro</label><select id="quadro-atual" disabled></select></div>
+    <button class="btn primario" id="btn-novo-quadro" type="button">+ Quadro</button>
+    <button class="btn" id="btn-renomear-quadro" type="button" disabled>Renomear</button>
+    <button class="btn" id="btn-nova-coluna" type="button" disabled>+ Coluna</button>
+    <button class="btn perigo" id="btn-apagar-quadro" type="button" disabled>Excluir quadro</button>
+  </div>
+  <div id="aviso" class="aviso" role="status" aria-live="polite"></div>
+  <div id="quadro" aria-label="Colunas do quadro"><p class="vazio">Carregando…</p></div>
+</main>
+</div>
+
+<dialog id="dlg-nome" aria-labelledby="dlg-nome-titulo"><form method="dialog">
+  <h2 id="dlg-nome-titulo">Nome</h2>
+  <label for="dlg-nome-campo">Nome</label><input id="dlg-nome-campo" required>
+  <div class="dlg-acoes"><button class="btn primario" value="ok">Salvar</button><button class="btn" value="cancelar" formnovalidate>Cancelar</button></div>
+</form></dialog>
+
+<dialog id="dlg-cartao" aria-labelledby="dlg-cartao-titulo"><form id="form-cartao" method="dialog">
+  <h2 id="dlg-cartao-titulo">Cartão</h2>
+  <input type="hidden" name="id">
+  <div class="campos">
+    <div><label for="c-titulo">Título</label><input id="c-titulo" name="titulo" maxlength="200" required></div>
+    <div><label for="c-descricao">Descrição</label><textarea id="c-descricao" name="descricao" maxlength="4000"></textarea></div>
+    <div class="dupla"><div><label for="c-coluna">Coluna</label><select id="c-coluna" name="coluna_id"></select></div><div><label for="c-prazo">Prazo</label><input id="c-prazo" name="prazo" type="date"></div></div>
+    <div><label for="c-processo">Processo ligado</label><select id="c-processo" name="processo_id"></select></div>
+  </div>
+  <div class="dlg-acoes"><button type="button" class="btn perigo esquerda" id="btn-apagar-cartao">Excluir</button><button class="btn primario" value="salvar">Salvar</button><button class="btn" value="cancelar" formnovalidate>Cancelar</button></div>
+</form></dialog>
+
+<script src="quadros-ui.js"></script>
+<script>
+(() => {
+  const btn = document.getElementById("btn-tema");
+  const atualizar = () => { const claro = document.documentElement.classList.contains("tema-claro"); btn.textContent = claro ? "☀" : "☾"; btn.title = claro ? "Mudar para tema escuro" : "Mudar para tema claro"; };
+  btn.addEventListener("click", () => { const claro = document.documentElement.classList.toggle("tema-claro"); document.documentElement.dataset.theme = claro ? "light" : "dark"; try { localStorage.setItem("licitaplena_tema", claro ? "claro" : "escuro"); } catch (_) {} atualizar(); });
+  atualizar();
+})();
+</script>
+<script src="menu-lateral.js"></script>
+<script src="ajuda-ui.js" defer></script>
+<script src="avisos-celular.js" defer></script>
+</body>
+</html>

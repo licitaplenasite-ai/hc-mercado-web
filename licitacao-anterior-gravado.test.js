@@ -8,6 +8,7 @@ class No {
   append(...xs) { for (const x of xs.flat()) if (x !== null && x !== undefined && x !== "") this.filhos.push(typeof x === "string" ? { texto: x } : x); }
   replaceChildren(...xs) { this.filhos = []; this.append(...xs); }
   setAttribute(k, v) { this.attrs[k] = v; }
+  addEventListener(tipo, fn) { (this.ouvintes ||= {})[tipo] = fn; }
   set textContent(t) { this.filhos = t === "" ? [] : [{ texto: String(t) }]; }
   get textContent() { return this.filhos.map((f) => (f.texto !== undefined ? f.texto : f.textContent)).join(""); }
   procurar(pred, achados = []) { for (const f of this.filhos) if (f.tag) { if (pred(f)) achados.push(f); f.procurar(pred, achados); } return achados; }
@@ -204,4 +205,40 @@ test("recarregarSeMudou: redesenha só quando a gravação mudou; o aviso aparec
   assert.equal(desenhos, 1);
   const raiz = new No("div"); U.desenhar(raiz, visao(), { atualizado: true });
   assert.match(raiz.textContent, /Atualizado com o que você gravou/);
+});
+
+test("histórico mais rico: classificação, fabricante e modelo, nº de lances, botão G e WhatsApp sem nome de fornecedor", () => {
+  const lances = [{ valor: 9.5 }, { valor: 9.2 }, { valor: 9.1, excluido: true }];
+  const gravado = U.indexarGravado({ pregoes: [pregao()], propostas: [prop({ fabricante: "Fab X", modelo: "M-200", lances }), prop({ fornecedor_chave: VENCEDOR, cnpj: VENCEDOR, nome: "MAX", situacao: "Aceita e habilitada", lances: [{ valor: 10 }] })], mensagens: [] });
+  const p = U.participantesDoItem(visao().compras[0].itens[0], gravado, ID);
+  const porChave = Object.fromEntries(p.lista.map((e) => [e.chave, e]));
+  assert.equal(porChave[VENCEDOR].resultado, "vencedora");
+  assert.equal(porChave[RECUSADA].resultado, "desclassificada");
+  assert.equal(porChave[SANCIONADA].resultado, null, "sem situação nem motivo a fonte não diz");
+  assert.equal(porChave[RECUSADA].lances, 2, "lance excluído não conta");
+  const t = desenhar({ gravado }).textContent;
+  assert.match(t, /fabricante Fab X · modelo M-200/);
+  assert.match(t, /2 lance\(s\)/);
+  const raiz = desenhar({ gravado });
+  const [g] = raiz.procurar((n) => n.className === "la-link la-google");
+  assert.match(g.href, /^https:\/\/www\.google\.com\/search\?q=Santa%20Cruz%20%C3%81lcool%20et%C3%ADlico%20fabricante$/);
+  const [zap] = raiz.procurar((n) => n.className === "la-link la-zap");
+  const texto = decodeURIComponent(zap.href.replace("https://wa.me/?text=", ""));
+  assert.match(texto, /Item 1: Álcool etílico/);
+  assert.match(texto, /Marca vencedora: Santa Cruz/);
+  assert.doesNotMatch(texto, new RegExp(`MAX|ALFA|${VENCEDOR}|${RECUSADA}`), "sem nome nem CNPJ de fornecedor");
+});
+
+test("filtros do histórico: classificação e só 1 ou 2 licitantes", () => {
+  const v = visao().compras[0].itens[0];
+  const gravado = U.indexarGravado({ pregoes: [pregao()], propostas: [prop()], mensagens: [] });
+  const p = U.participantesDoItem(v, gravado, ID);
+  assert.equal(U.itemPassa(v, p, { classificacao: "desclassificada" }), true);
+  assert.equal(U.itemPassa(v, p, { classificacao: "inabilitada" }), false);
+  assert.equal(U.itemPassa(v, p, { poucos: true }), false, "3 participantes");
+  assert.equal(U.itemPassa(v, { lista: [{}] }, { poucos: true }), true);
+  assert.equal(U.itemPassa(v, { lista: [] }, { poucos: true }), false, "sem lista de participantes a contagem é desconhecida");
+  const raiz = new No("div");
+  U.desenhar(raiz, visao(), { extras: { gravado }, filtro: { classificacao: "inabilitada" } });
+  assert.match(raiz.textContent, /Nenhum item com esses filtros/);
 });

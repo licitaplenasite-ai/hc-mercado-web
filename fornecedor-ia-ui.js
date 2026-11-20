@@ -62,6 +62,13 @@
 
   function linha(rotulo, valor) { return [criar("dt", { textContent: rotulo }), criar("dd", {}, valor)]; }
 
+  // Site provável (domínio do e-mail da Receita) com a origem dita; sem ele, busca no Google pelo nome da empresa.
+  function siteCelula(f) {
+    const site = /^https:\/\/[a-z0-9.-]+$/.test(f.contato.site || "") ? f.contato.site : null;
+    if (site) return [criar("a", { href: site, target: "_blank", rel: "noopener noreferrer", textContent: site.replace("https://", "") }), " (provável: domínio do e-mail na Receita)"];
+    return ["Não localizado · ", criar("a", { href: `https://www.google.com/search?q=${encodeURIComponent(`${f.nome} site oficial`)}`, target: "_blank", rel: "noopener noreferrer", textContent: "Procurar no Google" })];
+  }
+
   function cartao(f) {
     const contato = f.contato.mei
       ? "Não exibido (MEI: o contato da Receita é o da pessoa)"
@@ -72,7 +79,7 @@
       ...linha("Por quê", `${f.porque}${f.analisePor === "dados" ? " (pelos dados, sem IA)" : ""}`),
       ...linha("Contratos", `${f.contratos} contrato(s) parecido(s), ${moeda(f.valorTotal)}${f.ufsAtuacao.length ? ` · ${f.ufsAtuacao.join(", ")}` : ""}`),
       ...linha("Contato", contato),
-      ...linha("Site", "Não localizado"),
+      ...linha("Site", siteCelula(f)),
       ...linha("Localização", `${local}${f.situacao && f.situacao !== "ATIVA" ? ` · situação na Receita: ${f.situacao}` : ""}`),
     ]);
     const filhos = [criar("h3", {}, [criar("span", { textContent: f.nome }), chip]), criar("p", { className: "lp-dica", textContent: `CNPJ ${f.cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5")}` }), dl];

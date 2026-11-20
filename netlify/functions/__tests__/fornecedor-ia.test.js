@@ -40,7 +40,8 @@ test("sem IA: 3 fornecedores com aderência pelos dados, contato só da Receita,
   assert.deepEqual(d.uso, { usadas: 3, limite: 20 });
   const um = d.fornecedores.find((f) => f.cnpj === "11111111000111");
   assert.equal(um.aderencia, 100);
-  assert.deepEqual(um.contato, { telefone: "(92) 3333-4444", email: "vendas@papelaria.com.br", site: null, mei: false });
+  // Site: só o provável, pelo domínio próprio do e-mail da Receita.
+  assert.deepEqual(um.contato, { telefone: "(92) 3333-4444", email: "vendas@papelaria.com.br", site: "https://papelaria.com.br", mei: false });
   const mei = d.fornecedores.find((f) => f.cnpj === "44444444000144");
   assert.deepEqual(mei.contato, { telefone: null, email: null, site: null, mei: true });
   const semCadastro = d.fornecedores.find((f) => f.cnpj === "22222222000122");
@@ -83,4 +84,12 @@ test("falha na consulta de contratos vira 503 sem detalhe interno", async () => 
   const r = await handler(evento({ descricao: "papel" }), { ...ok, fetch: async () => new Response("segredo", { status: 500 }) });
   assert.equal(r.statusCode, 503);
   assert.doesNotMatch(r.body, /segredo|HTTP/);
+});
+
+test("site provável: domínio próprio do e-mail; webmail, contador, órgão público e lixo ficam de fora", () => {
+  const { siteDoEmail } = require("../fornecedor-ia.js");
+  assert.equal(siteDoEmail("vendas@acme.com.br"), "https://acme.com.br");
+  for (const e of ["fulano@gmail.com", "x@hotmail.com", "x@bol.com.br", "fiscal@contabilidadesilva.com.br", "x@prefeitura.am.gov.br", "sem-arroba", "", null, "a@b"]) {
+    assert.equal(siteDoEmail(e), null, String(e));
+  }
 });

@@ -160,13 +160,35 @@ function mudancasDosItens(antes, agora) {
   });
 }
 
+// O pregoeiro citou a empresa? Mensagem dirigida ao CNPJ (fornecedor_chave) ou CNPJ escrito no texto, com ou sem pontuação.
+function citaCnpj(m, cnpj) {
+  if (!/^\d{14}$/.test(cnpj || "")) return false;
+  return m.fornecedor_chave === cnpj || String(m.texto || "").replace(/(\d)[./\s-]+(?=\d)/g, "$1").includes(cnpj);
+}
+const cnpjFormatado = (c) => c.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
+
 // Mensagens gravadas pela extensão (texto já sem CPF: o servidor mascara e o banco tem CHECK).
-function mudancasDoChat(mensagens) {
-  return (mensagens || []).map((m) => ({
-    chave: `chat|${m.chave}`, tipo: "chat", fonte: "extensao", ocorrido_em: m.data_hora ? new Date(`${String(m.data_hora).slice(0, 19)}-03:00`).toISOString() : null,
-    detalhe: { item: m.numero_item || null, categoria: m.tipo || null },
-    resumo: `Mensagem no chat do pregão${m.numero_item ? ` (item ${m.numero_item})` : ""}: "${curto(m.texto, 280)}"`,
-  }));
+// cnpj: CNPJ da empresa do processo (citação vira aviso próprio, sempre com alerta).
+function mudancasDoChat(mensagens, cnpj = null) {
+  return (mensagens || []).map((m) => {
+    const citou = citaCnpj(m, cnpj);
+    const onde = m.numero_item ? ` (item ${m.numero_item})` : "";
+    return {
+      chave: `chat|${m.chave}`, tipo: "chat", fonte: "extensao", ocorrido_em: m.data_hora ? new Date(`${String(m.data_hora).slice(0, 19)}-03:00`).toISOString() : null,
+      detalhe: { item: m.numero_item || null, categoria: m.tipo || null, ...(citou ? { cita_cnpj: true } : {}) },
+      resumo: citou ? `O pregoeiro citou a sua empresa (CNPJ ${cnpjFormatado(cnpj)}) no chat${onde}: "${curto(m.texto, 260)}"`
+        : `Mensagem no chat do pregão${onde}: "${curto(m.texto, 280)}"`,
+    };
+  });
+}
+
+// Alerta da mudança: a primeira verificação e "outro" não alertam; citação do CNPJ sempre alerta; com itens escolhidos
+// no cartão (monitor_itens, até 10), mudança ou mensagem de OUTRO item fica só no histórico.
+function comAlerta(m, inicial, itens) {
+  if (m.detalhe?.cita_cnpj) return true;
+  if (inicial || m.tipo === "outro") return false;
+  const doItem = [m.detalhe?.item, ...(m.detalhe?.itens || [])].filter((n) => Number.isInteger(n) && n > 0);
+  return !(itens?.length && doItem.length && !doItem.some((n) => itens.includes(n)));
 }
 
 // ---------- rede ----------
@@ -246,15 +268,15 @@ async function verificarProcesso(linha, { leitor, rest, agora }) {
   if (idCompra) {
     const desde = retrato.chat_ate || linha.criado_em || iso(0);
     const msgs = await (await rest(`pregoes_gravados_mensagens?id_compra=eq.${idCompra}&gravado_em=gt.${q(desde)}` +
-      "&select=chave,numero_item,data_hora,texto,tipo,gravado_em&order=gravado_em.asc&limit=50")).json();
-    mudancas.push(...mudancasDoChat(msgs));
+      "&select=chave,numero_item,fornecedor_chave,data_hora,texto,tipo,gravado_em&order=gravado_em.asc&limit=50")).json();
+    mudancas.push(...mudancasDoChat(msgs, linha.cnpj_empresa));
     if (msgs.length) novo.chat_ate = msgs.at(-1).gravado_em;
   }
   return {
     patch: { numero_controle_pncp: numero, id_compra: idCompra || null, situacao: atual.situacao, abertura_propostas: atual.abertura,
       encerramento_propostas: atual.encerramento, retrato: novo, verificado_em: iso(agora), proximo_em: iso(agora + INTERVALO_MS - 5 * 60000), erro: null },
     // Primeira verificação = histórico anterior ao monitor: entra sem alerta. "outro" nunca alerta.
-    mudancas: mudancas.map((m) => ({ ...m, fonte: m.fonte || "pncp", alerta: !inicial && m.tipo !== "outro" })),
+    mudancas: mudancas.map((m) => ({ ...m, fonte: m.fonte || "pncp", alerta: comAlerta(m, inicial, linha.monitor_itens) })),
   };
 }
 
@@ -272,12 +294,30 @@ async function cadastrarProcessos(rest) {
   return new Set(linhas.map((l) => l.processo_id));
 }
 
+// CNPJ da empresa e itens escolhidos no cartão (funil_v3.sql). Sem a coluna nova, segue só com o CNPJ.
+async function comContextoDaEmpresa(rest, fila) {
+  if (!fila.length) return fila;
+  const ids = fila.map((l) => l.processo_id).join(",");
+  let linhas;
+  try {
+    linhas = await (await rest(`operacao_processos?id=in.(${ids})&select=id,monitor_itens,operacao_empresas(cnpj)`)).json();
+  } catch {
+    linhas = await (await rest(`operacao_processos?id=in.(${ids})&select=id,operacao_empresas(cnpj)`)).json();
+  }
+  const porId = new Map((Array.isArray(linhas) ? linhas : []).map((p) => [p.id, p]));
+  return fila.map((l) => {
+    const p = porId.get(l.processo_id);
+    const cnpj = String(p?.operacao_empresas?.cnpj || "").replace(/\D/g, "");
+    return { ...l, cnpj_empresa: cnpj.length === 14 ? cnpj : null, monitor_itens: Array.isArray(p?.monitor_itens) ? p.monitor_itens : [] };
+  });
+}
+
 async function rodar({ rest = restFetch, leitor = criarLeitor(), agora = Date.now, lote = LOTE } = {}) {
   const inicio = agora();
   const ativos = await cadastrarProcessos(rest);
   const vencidos = await (await rest(`operacao_monitor_processos?proximo_em=lte.${q(iso(agora()))}&order=proximo_em.asc&limit=500` +
     "&select=processo_id,organizacao_id,empresa_id,numero_controle_pncp,id_compra,retrato,verificado_em,criado_em")).json();
-  const fila = vencidos.filter((l) => ativos.has(l.processo_id)).slice(0, lote);
+  const fila = await comContextoDaEmpresa(rest, vencidos.filter((l) => ativos.has(l.processo_id)).slice(0, lote));
   const contagem = { verificados: 0, mudancas: 0, falhas: 0 };
   for (const linha of fila) {
     if (agora() - inicio > LIMITE_MS) break;
@@ -309,4 +349,4 @@ if (require.main === module) {
 }
 
 module.exports = { rodar, verificarProcesso, referenciaDoProcesso, idCompraDoLink, partesPncp, classificarTexto, mudancasDoHistorico,
-  mudancasDaCompra, retratoDaCompra, mudancasDosItens, retratoDosItens, mudancasDoChat, criarLeitor, dataPncp };
+  mudancasDaCompra, retratoDaCompra, mudancasDosItens, retratoDosItens, mudancasDoChat, citaCnpj, comAlerta, criarLeitor, dataPncp };

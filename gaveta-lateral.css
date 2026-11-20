@@ -35,6 +35,8 @@
 .lp-lista-tutoriais summary { cursor: pointer; padding: var(--space-12) var(--space-16); font-weight: 600; }
 .lp-lista-tutoriais .lp-tutorial { padding: 0 var(--space-16) var(--space-16); }
 .lp-lista-tutoriais img { width: 100%; height: auto; border: 1px solid var(--border-default); border-radius: var(--radius-control); margin-top: var(--space-8); }
+.lp-lista-tutoriais video { width: 100%; height: auto; border-radius: var(--radius-control); margin-top: var(--space-8); background: #000; }
+.lp-tutorial-video-vazio { margin: var(--space-8) 0 0; }
 .lp-acoes-ajuda { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-8); margin: 0 0 var(--space-16); }
 .lp-ajuda-flutuante { position: fixed; right: 16px; bottom: 16px; z-index: 150; /* abaixo dos modais do painel (200) */ width: 48px; height: 48px; border-radius: 50%; border: 0;
   background: var(--action-strong); color: var(--action-on); font: 700 20px/1 var(--font-sans); box-shadow: var(--shadow-overlay); cursor: pointer; }

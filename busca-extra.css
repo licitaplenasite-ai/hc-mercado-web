@@ -21,3 +21,8 @@
 .dash-faixa-novidade { color: var(--texto-fraco); }
 .dash-faixa-novidade a { color: var(--azul-texto); }
 @media (max-width: 600px) { .op-jornais-lista li .btn-imprimir { flex: 1 1 auto; } }
+/* Baixa concorrência por nº de licitantes (baixa-concorrencia.js, 20/11/2026, aguarda aprovação). */
+.bc-licitantes{margin-bottom:16px}
+.bc-abas{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.bc-aba[aria-selected="true"]{background:var(--azul-texto,#1c63c7);color:#fff}
+.bc-tabela td{vertical-align:top}

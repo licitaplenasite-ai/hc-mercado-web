@@ -819,6 +819,7 @@ def main():
         ufs_para_buscar = sorted(ufs_necessarias)
 
     pool = buscar_pool_por_uf(ufs_para_buscar)
+    prospecta = carregar_prospecta()
 
     for d in destinatarios:
         try:
@@ -855,6 +856,15 @@ def main():
                 log("E-mail enviado para " + d["email"] + " avisando que nao ha oportunidades novas.")
                 registrar_log_boletim(d, "sem_novidades", 0)
 
+            empresa_id = (d.get("chave_historico") or "").partition("empresa:")[2]
+            if empresa_id in prospecta and filtrados:
+                try:
+                    n = sugerir_no_funil(empresa_id, itens_prospecta(filtrados, d["palavras_chave"], prospecta[empresa_id]))
+                    log(d["nome"] + ": Prospecta pos " + str(n) + " licitacao(oes) no Funil.")
+                except Exception as e:
+                    # Falha no Prospecta nao pode derrubar o boletim, que ja foi enviado.
+                    log("ERRO no Prospecta de " + d["nome"] + ": " + str(e))
+
             chave_hist = d.get("chave_historico") or d["email"]
             vistos_deste = set(historico.get(chave_hist, []))
             for e in filtrados:
@@ -869,6 +879,64 @@ def main():
 
     salvar_historico(historico)
     log("=== Fim da execucao ===")
+
+
+# ---- Prospecta (funil_v3.sql): as melhores do boletim entram sozinhas no Funil da empresa ----
+# Ligado por empresa em "Metas e automacao" (operacao_funil_preferencias.prospecta_ativo). O robo so calcula a nota e
+# manda a lista ordenada; a funcao prospecta_sugerir (service_role) aplica a nota minima, o limite do dia e nao duplica.
+def nota_oportunidade(e, palavras, valor_minimo=0, agora=None):
+    # Ate 60 pelas palavras do filtro achadas no objeto, 25 pelo valor, 15 se ha pelo menos 3 dias ate o fim das propostas.
+    objeto = _normalizar(e.get("objetoCompra") or "")
+    achadas = len({_normalizar(p) for p in (palavras or []) if _normalizar(p) and _normalizar(p) in objeto})
+    nota = {0: 0, 1: 40, 2: 50}.get(achadas, 60)
+    valor = _numero(e.get("valorTotalEstimado"))
+    if valor and valor > 0 and valor >= (valor_minimo or 0):
+        nota += 25
+    agora = agora or datetime.now(timezone(timedelta(hours=-3)))
+    try:
+        fim = datetime.fromisoformat(str(e.get("dataEncerramentoProposta"))[:19]).replace(tzinfo=timezone(timedelta(hours=-3)))
+        if fim - agora >= timedelta(days=3):
+            nota += 15
+    except ValueError:
+        pass
+    return min(nota, 100)
+
+
+def carregar_prospecta():
+    # {empresa_id: valor minimo da meta}. Sem a tabela (SQL nao aplicado) ou erro: {} e o boletim segue normal.
+    try:
+        linhas = _get_json("operacao_funil_preferencias?prospecta_ativo=eq.true&select=empresa_id,meta")
+    except Exception as e:
+        log("AVISO: Prospecta indisponivel (" + str(e) + ").")
+        return {}
+    return {l["empresa_id"]: (_numero((l.get("meta") or {}).get("valor_minimo")) or 0) for l in linhas if l.get("empresa_id")}
+
+
+def itens_prospecta(editais, palavras, valor_minimo=0, agora=None, limite=20):
+    itens = []
+    for e in editais:
+        n = e.get("numeroControlePNCP") or ""
+        if not re.match(r"^\d{14}-\d-\d{6}/\d{4}$", n):
+            continue
+        valor = _numero(e.get("valorTotalEstimado"))
+        itens.append({
+            "numero_controle": n, "objeto": (e.get("objetoCompra") or "")[:1000],
+            "orgao": ((e.get("orgaoEntidade") or {}).get("razaoSocial") or "")[:300], "modalidade": (e.get("modalidadeNome") or "")[:120],
+            "link": link_pncp(e), "valor": ("%.2f" % valor) if valor and valor > 0 else None,
+            "publicacao": str(e.get("dataPublicacaoPncp") or "")[:10], "encerramento": str(e.get("dataEncerramentoProposta") or "")[:19],
+            "nota": nota_oportunidade(e, palavras, valor_minimo, agora),
+        })
+    itens.sort(key=lambda i: -i["nota"])
+    return itens[:limite]
+
+
+def sugerir_no_funil(empresa_id, itens):
+    chave = _chave_servico()
+    corpo = json.dumps({"p_empresa": empresa_id, "p_itens": itens}).encode("utf-8")
+    req = urllib.request.Request(SUPABASE_URL + "/rest/v1/rpc/prospecta_sugerir", data=corpo, method="POST",
+                                 headers={"apikey": chave, "Authorization": "Bearer " + chave, "Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        return int(json.loads(resp.read().decode("utf-8")) or 0)
 
 
 def enviar_jornal(j, pool, historico):

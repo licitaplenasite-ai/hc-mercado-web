@@ -32,6 +32,8 @@ create table if not exists public.avisos_celular_preferencias (
   certidao boolean not null default true,
   atualizado_em timestamptz not null default now()
 );
+-- Oportunidade nova do boletim (scripts/avisos_celular.js lê logs_boletim). Banco que já tinha a tabela ganha a coluna.
+alter table public.avisos_celular_preferencias add column if not exists boletim boolean not null default true;
 alter table public.avisos_celular_preferencias enable row level security;
 drop policy if exists avisos_celular_preferencias_select_proprio on public.avisos_celular_preferencias;
 create policy avisos_celular_preferencias_select_proprio on public.avisos_celular_preferencias for select to authenticated using (auth.uid() = usuario_id);

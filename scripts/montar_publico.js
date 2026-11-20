@@ -35,9 +35,10 @@ function montarPublico() {
   for (const nome of copiados) fs.copyFileSync(path.join(RAIZ, nome), path.join(DESTINO, nome));
   fs.mkdirSync(path.join(DESTINO, "data"));
   for (const nome of arquivosDeDados()) fs.copyFileSync(path.join(RAIZ, "data", nome), path.join(DESTINO, "data", nome));
-  // Prints dos tutoriais da Central de ajuda "?" (ajuda-ui.js e ajuda.html): só imagens .webp de dados fictícios.
+  // Prints dos tutoriais da Central de ajuda "?" (ajuda-ui.js e ajuda.html): só imagens .webp de dados fictícios, e os
+  // vídeos curtos dos tutoriais (ajuda/videos/*.mp4|.webm) quando existirem.
   const ajuda = path.join(RAIZ, "ajuda");
-  if (fs.existsSync(ajuda)) fs.cpSync(ajuda, path.join(DESTINO, "ajuda"), { recursive: true, filter: (f) => fs.statSync(f).isDirectory() || f.endsWith(".webp") });
+  if (fs.existsSync(ajuda)) fs.cpSync(ajuda, path.join(DESTINO, "ajuda"), { recursive: true, filter: (f) => fs.statSync(f).isDirectory() || /\.(webp|mp4|webm)$/.test(f) });
   return copiados;
 }
 
