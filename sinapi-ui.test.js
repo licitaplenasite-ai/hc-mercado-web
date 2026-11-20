@@ -50,3 +50,71 @@ test('analiticoHtml: custo parcial = coeficiente × preço; item sem preço na U
   assert.match(UI.analiticoHtml(itens, precos, true), /Soma dos itens: <b>R\$\s?24,22<\/b>/); // 23,02 + 1,20
   assert.match(UI.analiticoHtml([], [], false), /não publicou/);
 });
+
+test('centavos: arredonda produto para 2 casas', () => {
+  assert.equal(UI.centavos(1.005), 1.01);
+  assert.equal(UI.centavos(25.579999999), 25.58);
+  assert.equal(UI.centavos(0.1 + 0.2), 0.3);
+});
+
+test('lista: não duplica, quantidade × preço em centavos, BDI por linha e total', () => {
+  const base = { tipo: 'insumo', codigo: '1', descricao: 'A', unidade: 'KG', uf: 'AM', desonerado: false, referencia: '2026-10-01', preco: '10.05' };
+  let l = UI.adicionarLista([], base);
+  l = UI.adicionarLista(l, base);
+  assert.equal(l.length, 1);
+  l = UI.adicionarLista(l, { ...base, desonerado: true }); // outro regime = outra linha
+  assert.equal(l.length, 2);
+  l[0].qtd = 3.333;
+  const r = UI.calcularLista(l, '10,5');
+  assert.equal(r.linhas[0].total, 33.5); // 10,05 × 3,333 = 33,49665
+  assert.equal(r.linhas[0].totalBdi, 37.02); // 33,50 × 1,105 = 37,0175
+  assert.equal(r.semBdi, 43.55); // 33,50 + 10,05
+  assert.equal(r.comBdi, 48.13); // 37,02 + 11,11 (10,05 × 1,105 = 11,10525)
+  assert.equal(UI.calcularLista(l, '').comBdi, r.semBdi);
+  assert.equal(UI.calcularLista(l, 'abc').bdi, 0);
+});
+
+test('qtdNum e bdiNum: vírgula decimal, rejeita zero, negativo e lixo', () => {
+  assert.equal(UI.qtdNum('2,5'), 2.5);
+  for (const v of ['0', '-1', 'x', '', null, '1e12']) assert.equal(UI.qtdNum(v), 0);
+  assert.equal(UI.bdiNum('24,5'), 24.5);
+  assert.equal(UI.bdiNum('5000'), 0);
+});
+
+test('lerLista ignora lixo do navegador', () => {
+  assert.deepEqual(UI.lerLista('{quebrado'), []);
+  assert.deepEqual(UI.lerLista('{"a":1}'), []);
+  const ok = UI.lerLista(JSON.stringify([{ id: 'x', codigo: '1', preco: '5', qtd: 'abc' }, { id: 'y' }, null]));
+  assert.deepEqual(ok.map((x) => [x.codigo, x.preco, x.qtd]), [['1', 5, 1]]);
+});
+
+test('CSV: BOM, ";" e vírgula decimal; descrição com ; e aspas é protegida; fórmula neutralizada', () => {
+  const l = { codigo: '1', descricao: '=SOMA(A1); "x"', unidade: 'M2', tipo: 'composicao', uf: 'AM', desonerado: false, preco: '1234.5', referencia: '2026-10-01' };
+  const c = UI.csvResultados([l]);
+  assert.ok(c.startsWith('\uFEFFCódigo;Descrição;Unidade;Tipo;UF;Regime;Preço (R$);Data-base;Fonte\r\n'));
+  assert.ok(c.includes('1;"\'=SOMA(A1); ""x""";M2;Composição;AM;Não desonerado;1234,50;10/2026;SINAPI/CAIXA'));
+});
+
+test('csvAnalitico: parcial, soma e aviso de item sem preço', () => {
+  const itens = [{ item_tipo: 'insumo', item_codigo: '9', descricao: 'X', unidade: 'H', coeficiente: '1.279' }, { item_tipo: 'insumo', item_codigo: '8', descricao: 'Y', unidade: 'H', coeficiente: '2' }];
+  const c = UI.csvAnalitico({ codigo: '5', descricao: 'COMP', uf: 'AM', desonerado: false, referencia: '2026-10-01' }, itens, [{ tipo: 'insumo', codigo: '9', preco_sd: '20', preco_cd: '1' }]);
+  assert.match(c, /Insumo;9;X;H;1,279;20,00;25,58/);
+  assert.match(c, /Insumo;8;Y;H;2;sem preço;\r\n/);
+  assert.match(c, /Soma dos itens \(R\$\);25,58/);
+  assert.match(c, /1 item\(ns\) sem preço/);
+});
+
+test('csvLista: totais sem e com BDI batem com calcularLista', () => {
+  const l = UI.adicionarLista([], { tipo: 'insumo', codigo: '1', descricao: 'A', unidade: 'KG', uf: 'AM', desonerado: false, referencia: '2026-10-01', preco: 10 });
+  l[0].qtd = 2;
+  const c = UI.csvLista(l, '10');
+  assert.match(c, /Total com BDI 10% \(R\$\)/);
+  assert.match(c, /1;1;A;KG;Insumo;AM;Não desonerado;10\/2026;2;10,00;20,00;22,00;SINAPI\/CAIXA/);
+  assert.match(c, /Total geral;20,00;22,00/);
+});
+
+test('centavos: meio-centavo sobe como no Excel, mesmo com ruído binário', () => {
+  assert.equal(UI.centavos(13.5 * 2.55), 34.43); // 34,425 em decimal
+  assert.equal(UI.centavos(1.255), 1.26);
+  assert.equal(UI.centavos(0), 0);
+});

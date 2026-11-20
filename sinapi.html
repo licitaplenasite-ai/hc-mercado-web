@@ -13,7 +13,7 @@
 <script>(function(){var t=null;try{t=localStorage.getItem("licitaplena_tema");}catch(e){}if(t!=="escuro")document.documentElement.classList.add("tema-claro");document.documentElement.dataset.theme=t==="escuro"?"dark":"light";})();</script>
 <style>
 /* Design System (ds-tokens.css): mesmas regras de componentes de processos.html (topo, botões, campos, tabela, abas, avisos). */
-*{box-sizing:border-box}
+*{box-sizing:border-box}[hidden]{display:none!important}
 [data-theme="dark"]{color-scheme:dark}[data-theme="light"]{color-scheme:light}
 body{margin:0;background:var(--surface-page);color:var(--text-primary);font:var(--text-body);font-family:var(--font-sans)}
 button,input,select{font-family:var(--font-sans)}
@@ -54,6 +54,9 @@ input::placeholder{color:var(--text-secondary);opacity:1}
 .tabela.analitico{background:var(--surface-default);border:1px solid var(--border-default);border-radius:var(--radius-card);margin:8px 0}
 .tabela.analitico td.item{max-width:380px}
 .linha-analitico .nota{margin:4px 0}
+.barra-acoes{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between;margin:8px 0}.barra-acoes #contador{margin:0}
+.lista-campos{display:flex;flex-wrap:wrap;gap:12px;align-items:end;margin:12px 0}.lista-campos>div{width:140px}.tabela input.qtd{width:110px;min-height:34px}
+.totais{margin:12px 0 0;line-height:1.7}.totais b{font-weight:700}
 .vazio{padding:24px;text-align:center}
 .aviso{display:none;margin:12px 0;border:1px solid;border-radius:var(--radius-card);padding:12px 16px}
 .aviso.erro{display:block;color:var(--error-text);border-color:var(--error-border);background:var(--error-bg)}
@@ -103,7 +106,7 @@ input::placeholder{color:var(--text-secondary);opacity:1}
 <div class="nav-gaveta-fundo" id="nav-gaveta-fundo" hidden></div>
 <main>
   <div class="topo"><h1>SINAPI</h1><p>Preços de insumos e custos de composições da CAIXA para orçamento de obras e serviços de engenharia, nas 27 UFs. Escolha a sua UF e o regime pedido no edital, busque pelo código ou pela descrição e use o preço num item do processo. Nas composições, "Ver itens" mostra do que ela é feita (insumos, mão de obra e coeficientes), para você montar a sua composição de preço.</p>
-  <p class="fonte"><span>Data-base (mês de referência): <b id="data-base">…</b></span><span>Atualizada todo mês, quando a CAIXA publica.</span><a href="https://www.caixa.gov.br/poder-publico/modernizacao-gestao/sinapi/" target="_blank" rel="noopener noreferrer">Fonte oficial: SINAPI na CAIXA</a></p></div>
+  <p class="fonte"><span>Atualizado todo mês · referência <b id="data-base">…</b></span><a href="https://www.caixa.gov.br/poder-publico/modernizacao-gestao/sinapi/" target="_blank" rel="noopener noreferrer">Fonte oficial: SINAPI na CAIXA</a></p></div>
   <form class="card" id="form-busca">
     <div class="filtros">
       <div><label for="f-uf">UF</label><select id="f-uf"><option>AC</option><option>AL</option><option selected>AM</option><option>AP</option><option>BA</option><option>CE</option><option>DF</option><option>ES</option><option>GO</option><option>MA</option><option>MG</option><option>MS</option><option>MT</option><option>PA</option><option>PB</option><option>PE</option><option>PI</option><option>PR</option><option>RJ</option><option>RN</option><option>RO</option><option>RR</option><option>RS</option><option>SC</option><option>SE</option><option>SP</option><option>TO</option></select></div>
@@ -115,8 +118,16 @@ input::placeholder{color:var(--text-secondary);opacity:1}
   </form>
   <div id="aviso" class="aviso" role="status" aria-live="polite"></div>
   <p class="nota explica">Fonte: SINAPI/CAIXA, relatório de referência (preço mediano da capital). Não desonerado: empresa paga a contribuição previdenciária sobre a folha de pagamento. Desonerado: empresa que optou pela desoneração da folha (CPRB). Use o regime que o edital pedir e confira sempre o relatório oficial. Origem do insumo: C = coletado, CR = coeficiente de representatividade, AS = atribuído de São Paulo.</p>
-  <p id="contador"></p>
+  <div class="barra-acoes"><p id="contador"></p><button type="button" class="btn" id="btn-baixar" hidden>Baixar planilha (Excel)</button></div>
   <div class="tabela-wrap"><table class="tabela"><thead><tr><th>Código</th><th>Descrição</th><th>Unidade</th><th>Preço</th><th>Ação</th></tr></thead><tbody id="tabela-corpo"><tr><td colspan="5" class="vazio">Busque pelo código ou pela descrição.</td></tr></tbody></table></div>
+<section class="card" id="lista" hidden>
+    <h2 style="margin:0 0 4px;font:var(--text-title)">Minha lista de orçamento</h2>
+    <p class="nota">Itens e composições que você adicionou. Ajuste a quantidade e, se quiser, informe o BDI. Fica guardada neste navegador, na sua conta.</p>
+    <div class="tabela-wrap"><table class="tabela"><thead><tr><th>Código</th><th>Descrição</th><th>Unidade</th><th>UF · regime</th><th>Preço unitário</th><th>Quantidade</th><th>Total</th><th>Ação</th></tr></thead><tbody id="lista-corpo"></tbody></table></div>
+    <div class="lista-campos"><div><label for="l-bdi">BDI % (opcional)</label><input id="l-bdi" inputmode="decimal" placeholder="Ex.: 24,5" maxlength="7"></div>
+      <button type="button" class="btn primario" id="btn-baixar-lista">Baixar planilha da lista (Excel)</button><button type="button" class="btn" id="btn-limpar-lista">Limpar lista</button></div>
+    <p class="totais" id="lista-totais"></p>
+  </section>
 </main>
 </div>
 <script src="sinapi-ui.js"></script>
