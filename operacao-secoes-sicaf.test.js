@@ -1,7 +1,18 @@
 // Quadro "Regularidade": nomes antigos e variações caem na seção certa (sem mudar o que está gravado).
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { secaoDoTipo } = require('./operacao-secoes-sicaf.js');
+const { secaoDoTipo, mesmoTipo } = require('./operacao-secoes-sicaf.js');
+
+test('mesmoTipo: nome exato ou apelido contam; outro tipo não', () => {
+  assert.equal(mesmoTipo('FGTS (CRF)', 'FGTS'), true);
+  assert.equal(mesmoTipo('CND Federal', 'Certidão Federal'), true);
+  assert.equal(mesmoTipo('Contrato social', 'Contrato social'), true);
+  assert.equal(mesmoTipo('Contrato Social', 'Contrato social'), true);
+  assert.equal(mesmoTipo('CND Estadual', 'Certidão Federal'), false);
+  assert.equal(mesmoTipo('Contrato social', 'FGTS'), false);
+  assert.equal(mesmoTipo(null, null), false);
+  assert.equal(mesmoTipo('Atestado', null), false);
+});
 
 test('tipos atuais do formulário caem na própria seção', () => {
   for (const t of ['SICAF', 'Certidão Federal', 'FGTS', 'CNDT', 'Certidão Estadual', 'Certidão Municipal', 'Certidão de falência', 'Balanço patrimonial']) assert.equal(secaoDoTipo(t), t);

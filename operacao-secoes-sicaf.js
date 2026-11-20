@@ -22,7 +22,10 @@
     const achado = APELIDOS.find(([, re]) => re.test(n));
     return achado ? achado[0] : null;
   }
-  const api = { secaoDoTipo };
+  // Documento conta para o tipo pedido pelo mesmo nome (sem diferença de acento/maiúscula) ou pelo apelido.
+  // Prontidão e checklist usam também tipos fora do quadro, como "Contrato social", que só batem pelo nome.
+  const mesmoTipo = (tipoDoc, tipo) => !!normalizar(tipo) && (normalizar(tipoDoc) === normalizar(tipo) || secaoDoTipo(tipoDoc) === tipo);
+  const api = { secaoDoTipo, mesmoTipo };
   global.OperacaoSecoesSicaf = api;
   if (typeof module !== 'undefined') module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

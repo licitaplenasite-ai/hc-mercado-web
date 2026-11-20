@@ -309,7 +309,7 @@ input::placeholder,textarea::placeholder{color:var(--text-secondary);opacity:1}
   const EMISSOR_SICAF_AUTO = "Compras.gov.br (dados abertos)", SICAF_HABILITADO = "Ativo e habilitado a licitar";
   // Documento que vale para a seção: o de validade mais longa (renovar não apaga o antigo). Nomes antigos e
   // variações ("FGTS (CRF)", "CND Federal"...) entram pela seção do mapa de apelidos (operacao-secoes-sicaf.js).
-  const docDaSecao = (tipo) => estado.documentos.filter(d => OperacaoSecoesSicaf.secaoDoTipo(d.tipo) === tipo).sort((a, b) => String(b.vencimento || "").localeCompare(String(a.vencimento || "")))[0];
+  const docDaSecao = (tipo) => estado.documentos.filter(d => OperacaoSecoesSicaf.mesmoTipo(d.tipo, tipo)).sort((a, b) => String(b.vencimento || "").localeCompare(String(a.vencimento || "")))[0];
   function situacaoSecao(s, d) {
     if (!d) return ["pendente", "Não enviada"];
     if (s.auto && d.orgao_emissor === EMISSOR_SICAF_AUTO) return [d.titulo === SICAF_HABILITADO ? "valido" : "vencido", d.titulo || "—"];
@@ -348,8 +348,8 @@ input::placeholder,textarea::placeholder{color:var(--text-secondary);opacity:1}
     } catch (e) { aviso("Não foi possível consultar o SICAF agora. " + (e.message || ""), "erro"); }
     finally { botao.disabled = false; botao.textContent = "Atualizar automaticamente"; }
   }
-  function renderizarMetricas() { const docs = estado.documentos; const status = docs.map(statusDoc); const validos = status.filter(s => s[0] === "valido").length, proximos = status.filter(s => s[0] === "proximo").length, vencidos = status.filter(s => s[0] === "vencido").length; const essenciais = TIPOS_ESSENCIAIS.filter(t => docs.some(d => d.tipo === t && statusDoc(d)[0] === "valido")); const pct = TIPOS_ESSENCIAIS.length ? Math.round(essenciais.length / TIPOS_ESSENCIAIS.length * 100) : 0; $("m-validos").textContent = validos; $("m-proximos").textContent = proximos; $("m-vencidos").textContent = vencidos; $("m-prontidao").textContent = `${pct}%`; }
-  function renderizarChecklist() { const alvo = $("checklist"); alvo.innerHTML = TIPOS_ESSENCIAIS.map(t => { const d = estado.documentos.find(x => x.tipo === t); const [c, txt] = d ? statusDoc(d) : ["pendente", "Pendente"]; return `<p style="display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid var(--borda);padding:9px 0;margin:0"><span>${esc(t)}</span><span class="tag ${c}">${txt}</span></p>`; }).join(""); }
+  function renderizarMetricas() { const docs = estado.documentos; const status = docs.map(statusDoc); const validos = status.filter(s => s[0] === "valido").length, proximos = status.filter(s => s[0] === "proximo").length, vencidos = status.filter(s => s[0] === "vencido").length; const essenciais = TIPOS_ESSENCIAIS.filter(t => docs.some(d => OperacaoSecoesSicaf.mesmoTipo(d.tipo, t) && statusDoc(d)[0] === "valido")); const pct = TIPOS_ESSENCIAIS.length ? Math.round(essenciais.length / TIPOS_ESSENCIAIS.length * 100) : 0; $("m-validos").textContent = validos; $("m-proximos").textContent = proximos; $("m-vencidos").textContent = vencidos; $("m-prontidao").textContent = `${pct}%`; }
+  function renderizarChecklist() { const alvo = $("checklist"); alvo.innerHTML = TIPOS_ESSENCIAIS.map(t => { const d = docDaSecao(t); const [c, txt] = d ? statusDoc(d) : ["pendente", "Pendente"]; return `<p style="display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid var(--borda);padding:9px 0;margin:0"><span>${esc(t)}</span><span class="tag ${c}">${txt}</span></p>`; }).join(""); }
   async function carregarAgenda() {
     const agora = new Date();
     const { data, error } = await sb.from("operacao_agenda").select("*").eq("empresa_id", estado.empresaId).is("concluido_em", null).order("vencimento").limit(100);

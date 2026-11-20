@@ -84,6 +84,10 @@ async function main() {
       exigir(/Válida/.test(await tag('CNDT')), 'CNDT antiga: ' + await tag('CNDT'));
       exigir(/Vencendo/.test(await tag('Certidão Estadual')), 'CND Estadual antiga: ' + await tag('Certidão Estadual'));
       exigir(/Não enviada/.test(await tag('Certidão Municipal')), 'municipal deveria estar não enviada');
+      // Prontidão e checklist também contam os nomes antigos (só a CNDT do seed está válida: 1 de 7).
+      exigir(await p.innerText('#m-prontidao') === '14%', 'prontidão: ' + await p.innerText('#m-prontidao'));
+      const item = async (t) => p.locator('#checklist p', { hasText: t }).first().locator('.tag').innerText();
+      exigir(/Vencido/.test(await item('Certidão Federal')) && /Vence em/.test(await item('FGTS')) && /Válido/.test(await item('CNDT')) && /Sem vencimento/.test(await item('Contrato social')), 'checklist com nomes antigos');
       await p.locator('#secoes-sicaf').screenshot({ path: path.join(PRINTS, '3-quadro-sicaf.png') });
     });
     await passo('SICAF atualizado automaticamente grava situação, fonte e data', p, async () => {
