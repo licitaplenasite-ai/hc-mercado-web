@@ -1,4 +1,4 @@
-/* global document, window -- usados só dentro de p.evaluate/p.waitForFunction (rodam no navegador) */
+/* global document, window, localStorage -- usados só dentro de p.evaluate/p.waitForFunction (rodam no navegador) */
 // E2E local da busca v2 (ferramentas do Siga Pregão) e do Boletim por empresa. Ambiente: subir.cjs + servidor.cjs.
 //   PORTA_TESTE=8892 node ambiente-teste/servidor.cjs
 //   SITE_TESTE=http://127.0.0.1:8892 node ambiente-teste/e2e-busca-v2.cjs
