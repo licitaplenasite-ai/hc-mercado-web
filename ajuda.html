@@ -3,10 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Guia de uso — LicitaPlena</title>
+<title>Central de Ajuda — LicitaPlena</title>
 <link rel="icon" type="image/png" href="favicon.png?v=3">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="supabase-config.js"></script>
 <link rel="stylesheet" href="ds-tokens.css"><link rel="stylesheet" href="gaveta-lateral.css">
 <script>(function(){var t=null;try{t=localStorage.getItem("licitaplena_tema");}catch(e){}if(t!=="escuro")document.documentElement.classList.add("tema-claro");document.documentElement.dataset.theme=t==="escuro"?"dark":"light";})();</script>
 <style>
@@ -16,18 +17,43 @@ main{max-width:880px;margin:0 auto;padding:24px 16px 64px}
 h1{font:var(--text-title);margin:0 0 4px}
 a{color:var(--action-text)}
 .lp-lista-tutoriais summary{font:600 16px/24px var(--font-sans)}
+#busca-ajuda{width:100%;min-height:44px;padding:8px 12px;margin:0 0 16px;font:var(--text-body);font-family:var(--font-sans);border:1px solid var(--border-default,#ccc);border-radius:8px;background:var(--surface-card,transparent);color:inherit}
+#zap-fixo{position:fixed;right:16px;bottom:16px;z-index:50;display:inline-flex;align-items:center;min-height:48px;padding:0 20px;border-radius:24px;background:#16a34a;color:#fff;font:600 15px/1 var(--font-sans);text-decoration:none;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+#zap-fixo[hidden]{display:none}
+#sem-resultado{color:var(--text-secondary)}
 </style>
 </head>
 <body data-sem-ajuda>
 <main>
   <p><a href="painel.html">← Voltar ao painel</a></p>
-  <h1>Guia de uso do LicitaPlena</h1>
-  <p class="lp-dica" style="font:var(--text-body);margin-bottom:24px">Onde fica cada coisa e como usar, tela por tela. As imagens usam dados fictícios. Vídeos curtos em breve.</p>
+  <h1>Central de Ajuda</h1>
+  <p class="lp-dica" style="font:var(--text-body);margin-bottom:16px">Artigos curtos, um por assunto: primeiros passos, boletim, resumo do edital, certidões, mercado, preços SINAPI e extensão/lance. As imagens usam dados fictícios.</p>
+  <input id="busca-ajuda" type="search" placeholder="Buscar por palavra (ex.: certidão, boletim, lance)" aria-label="Buscar na Central de Ajuda" autocomplete="off">
   <div id="tutoriais"></div>
+  <p id="sem-resultado" hidden>Nenhum artigo com essa palavra. Tente outra ou fale com a gente.</p>
+  <p class="lp-dica" style="margin-top:24px">Quer assessoria ou curso? Veja <a href="hc.html">Assessoria e cursos da HC Licitações</a>.</p>
+  <a id="zap-fixo" href="#" target="_blank" rel="noopener" hidden>Falar no WhatsApp</a>
 </main>
 <script src="ajuda-ui.js"></script>
 <script>
   document.getElementById("tutoriais").append(window.LicitaPlenaAjuda.listaTutoriais(location.hash, false));
+  // Busca: esconde os artigos que não têm a palavra (sem acento, sem maiúscula) e abre os que sobram.
+  const limpar = (t) => String(t).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const itens = [...document.querySelectorAll("#tutoriais li")];
+  document.getElementById("busca-ajuda").addEventListener("input", (e) => {
+    const q = limpar(e.target.value.trim());
+    let achou = 0;
+    for (const li of itens) {
+      const ok = !q || limpar(li.textContent).includes(q);
+      li.hidden = !ok;
+      if (ok) achou++;
+      if (q) li.firstElementChild.open = ok;
+    }
+    document.getElementById("sem-resultado").hidden = Boolean(achou);
+  });
+  // Botão fixo do WhatsApp: some se o número do suporte ainda não foi configurado.
+  const zap = window.LicitaPlenaAjuda.linkWhatsApp();
+  if (zap) { const b = document.getElementById("zap-fixo"); b.href = zap; b.hidden = false; }
   // Link direto para um tutorial (ajuda.html#tutorial-funil) abre e rola até ele.
   const alvo = location.hash && document.getElementById(location.hash.slice(1));
   if (alvo && alvo.tagName === "DETAILS") { alvo.open = true; alvo.scrollIntoView(); }

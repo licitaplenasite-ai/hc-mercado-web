@@ -5,6 +5,10 @@ const SUPABASE_ANON_KEY = "sb_publishable_yH695cc52QUKYfFEgV5RwQ_0a8GLIeb";
 // Captcha do login (Cloudflare Turnstile): cole aqui a "Site Key" do painel da Cloudflare, entre as aspas.
 // Vazia = captcha desligado e login normal. No localhost a chave de teste entra sozinha (senha-captcha-ui.js).
 const TURNSTILE_SITEKEY = "";
-// WhatsApp do suporte (botão da Central de ajuda, ajuda-ui.js): só dígitos com DDI 55, ex.: "55" + DDD + número.
+// WhatsApp do suporte: TROCAR pelo número de suporte (botão da Central de ajuda, ajuda-ui.js): só dígitos com DDI 55, ex.: "55" + DDD + número.
 // Vazio = botão "WhatsApp (em breve)" desligado. "var" de propósito: vira window.LICITAPLENA_WHATSAPP_SUPORTE.
 var LICITAPLENA_WHATSAPP_SUPORTE = "";
+// HC Licitações (parceira, página hc.html e chamadas "Fale com a HC"): TROCAR pelo número e site da HC. Vazio = botões somem.
+// WhatsApp: só dígitos com DDI 55. Site: endereço completo começando com https://.
+var LICITAPLENA_HC_WHATSAPP = "";
+var LICITAPLENA_HC_SITE = "";

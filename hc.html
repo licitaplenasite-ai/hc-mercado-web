@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Assessoria e cursos — HC Licitações</title>
+<link rel="icon" type="image/png" href="favicon.png?v=3">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="supabase-config.js"></script>
+<link rel="stylesheet" href="ds-tokens.css"><link rel="stylesheet" href="gaveta-lateral.css">
+<script>(function(){var t=null;try{t=localStorage.getItem("licitaplena_tema");}catch(e){}if(t!=="escuro")document.documentElement.classList.add("tema-claro");document.documentElement.dataset.theme=t==="escuro"?"dark":"light";})();</script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:var(--surface-page);color:var(--text-primary);font:var(--text-body);font-family:var(--font-sans)}
+main{max-width:880px;margin:0 auto;padding:24px 16px 64px}
+h1{font:var(--text-title);margin:0 0 4px}
+h2{font:600 18px/26px var(--font-sans);margin:24px 0 4px}
+a{color:var(--action-text)}
+.acoes-hc{display:flex;flex-wrap:wrap;gap:12px;margin:24px 0}
+.acoes-hc a{display:inline-flex;align-items:center;min-height:44px;padding:0 20px;border-radius:8px;font-weight:600;text-decoration:none;background:#16a34a;color:#fff}
+.acoes-hc a.outro{background:transparent;color:var(--action-text);border:1px solid currentColor}
+.acoes-hc[hidden]{display:none}
+</style>
+</head>
+<body data-sem-ajuda>
+<main>
+  <p><a href="painel.html">← Voltar ao painel</a> · <a href="ajuda.html">Central de Ajuda</a></p>
+  <h1>Assessoria e cursos — HC Licitações</h1>
+  <p>A HC Licitações é a empresa parceira do LicitaPlena, do mesmo dono. O sistema ajuda você a achar e organizar as licitações; a HC pode acompanhar de perto quando você quiser mais segurança.</p>
+  <h2>Assessoria em licitações</h2>
+  <p>Acompanhamos o processo com você, do edital à entrega: análise do edital, proposta, documentos de habilitação, lances e recursos.</p>
+  <h2>Cursos e treinamento</h2>
+  <p>Aprenda a participar de pregões do jeito certo: do cadastro no Compras.gov até a proposta e o lance. Para quem está começando e para quem quer perder menos licitações.</p>
+  <h2>Suporte jurídico</h2>
+  <p>Dúvida sobre desclassificação, recurso, impugnação ou contrato? A HC orienta com apoio jurídico especializado em licitações.</p>
+  <div class="acoes-hc" id="acoes-hc" hidden>
+    <a id="hc-zap" href="#" target="_blank" rel="noopener" hidden>Falar com a HC no WhatsApp</a>
+    <a id="hc-site" class="outro" href="#" target="_blank" rel="noopener" hidden>Conhecer o site da HC</a>
+  </div>
+  <p class="lp-dica" id="hc-aviso" hidden>Em breve os contatos da HC aparecem aqui. Enquanto isso, use a <a href="ajuda.html">Central de Ajuda</a>.</p>
+</main>
+<script src="ajuda-ui.js"></script>
+<script>
+  const c = window.LicitaPlenaAjuda.contatosHC();
+  for (const [id, url] of [["hc-zap", c.whatsapp], ["hc-site", c.site]]) if (url) { const a = document.getElementById(id); a.href = url; a.hidden = false; }
+  document.getElementById("acoes-hc").hidden = !(c.whatsapp || c.site);
+  document.getElementById("hc-aviso").hidden = Boolean(c.whatsapp || c.site);
+</script>
+</body>
+</html>

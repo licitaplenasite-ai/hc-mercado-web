@@ -46,4 +46,32 @@ test("vídeo do tutorial: lugar vazio por enquanto; só arquivo do próprio site
   assert.equal(ajuda.videoDoTutorial({ id: "painel" }), "ajuda/videos/painel.mp4");
   ajuda.VIDEOS.painel = "https://exemplo.com/x.mp4";
   assert.equal(ajuda.videoDoTutorial({ id: "painel" }), null);
+  ajuda.VIDEOS.painel = "youtube:abcDEF12345"; // YouTube não listado: só o ID de 11 caracteres
+  assert.equal(ajuda.videoDoTutorial({ id: "painel" }), "https://www.youtube-nocookie.com/embed/abcDEF12345");
+  ajuda.VIDEOS.painel = "youtube:curto";
+  assert.equal(ajuda.videoDoTutorial({ id: "painel" }), null);
+});
+
+test("HC Licitações: contatos só valem se vierem da configuração; vazio some", () => {
+  const janela = {};
+  const ajuda = carregar(janela);
+  assert.equal(JSON.stringify(ajuda.contatosHC()), JSON.stringify({ whatsapp: null, site: null }));
+  assert.equal(ajuda.chamadaHC(), null);
+  janela.LICITAPLENA_HC_WHATSAPP = "(92) 90000-0000"; // sem DDI 55: inválido
+  janela.LICITAPLENA_HC_SITE = "http://inseguro.exemplo";
+  assert.equal(JSON.stringify(ajuda.contatosHC()), JSON.stringify({ whatsapp: null, site: null }));
+  janela.LICITAPLENA_HC_WHATSAPP = "5592900000000";
+  janela.LICITAPLENA_HC_SITE = "https://hc.exemplo.com.br";
+  const c = ajuda.contatosHC();
+  assert.match(c.whatsapp, /^https:\/\/wa\.me\/5592900000000\?text=/);
+  assert.equal(c.site, "https://hc.exemplo.com.br");
+});
+
+test("Central e página da HC carregam a configuração; a CSP libera o YouTube sem cookies", () => {
+  for (const f of ["ajuda.html", "hc.html"]) {
+    const html = fs.readFileSync(path.join(__dirname, f), "utf8");
+    assert.match(html, /supabase-config\.js/, f);
+    assert.match(html, /ajuda-ui\.js/, f);
+  }
+  for (const f of ["_headers", "netlify.toml"]) assert.match(fs.readFileSync(path.join(__dirname, f), "utf8"), /frame-src [^;]*youtube-nocookie\.com/, f);
 });

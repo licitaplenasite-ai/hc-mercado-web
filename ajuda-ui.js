@@ -19,10 +19,23 @@
 
   // Vídeo curto de cada tutorial: id do tutorial -> arquivo em ajuda/videos/ (.mp4 ou .webm, servido pelo próprio
   // site, sem YouTube: a CSP não libera outro domínio). Os vídeos ainda não foram gravados.
+  // Também aceita YouTube não listado: "youtube:ID_DO_VIDEO" (11 caracteres); entra como player sem cookies.
   const VIDEOS = {};
   function videoDoTutorial(t) {
     const src = String((t && VIDEOS[t.id]) || "");
+    const yt = src.match(/^youtube:([A-Za-z0-9_-]{11})$/);
+    if (yt) return `https://www.youtube-nocookie.com/embed/${yt[1]}`;
     return /^ajuda\/videos\/[a-z0-9-]+\.(mp4|webm)$/.test(src) ? src : null;
+  }
+
+  // HC Licitações (parceira): endereços vêm da configuração do site (supabase-config.js). Vazio = chamada e botões somem.
+  function contatosHC() {
+    const zap = String(window.LICITAPLENA_HC_WHATSAPP || "").replace(/\D/g, "");
+    const site = String(window.LICITAPLENA_HC_SITE || "");
+    return {
+      whatsapp: /^55\d{10,11}$/.test(zap) ? `https://wa.me/${zap}?text=${encodeURIComponent("Olá! Sou cliente do LicitaPlena e preciso de ajuda com licitações.")}` : null,
+      site: /^https:\/\/[^\s]+$/.test(site) ? site : null,
+    };
   }
 
   // telas: trecho do endereço (página e, no painel, a âncora) que mostra este tutorial primeiro.
@@ -43,13 +56,13 @@
       passos: ["Menu → Pesquisa de Preços.", "Digite o item e veja os preços que o governo já pagou, com a marca quando informada."] },
     { id: "inteligencia", titulo: "Inteligência de Mercado e fornecedor com IA", telas: ["#diagnostico"], print: "p07-inteligencia",
       passos: ["Menu → Inteligência de Mercado: Visão Geral, Baixa Concorrência, Histórico de Compras, Licitação Anterior e Prospecção de Fornecedores (IA).", "Em Prospecção de Fornecedores (IA), clique em Encontrar fornecedor com IA e descreva o produto: vêm 3 empresas por vez, com aderência e contato público.", "Use Trazer mais três para ver outras. A IA pode errar: confira antes de negociar."] },
-    { id: "licitacao-anterior", titulo: "Licitação anterior", telas: ["#licitacao-anterior"], print: "p08-licitacao-anterior",
+    { id: "licitacao-anterior", titulo: "Licitação anterior", telas: ["#licitacao-anterior"], print: "p08-licitacao-anterior", hc: true,
       passos: ["Busque o órgão, informe o produto e clique em Consultar licitações anteriores.", "Mostra quem ganhou, preços, marcas e quem foi desclassificado."] },
     { id: "prospeccao", titulo: "Prospecção (antes do edital)", telas: ["prospeccao.html"], print: "p13-prospeccao",
       passos: ["Menu → Prospecção: compras antes do edital sair.", "Abas: planos de contratação (PCA), IRP abertas, atas para adesão e contratos vencendo."] },
     { id: "concorrente", titulo: "Analisar concorrente", telas: ["#empresa"], print: "p09-concorrente",
       passos: ["Menu → Analisar concorrente.", "Cole o CNPJ e clique em Analisar: mostra o que a empresa ganhou, onde e por quanto."] },
-    { id: "juridico", titulo: "Jurídico & Dúvidas", telas: ["#juridico"], print: "p10-juridico",
+    { id: "juridico", titulo: "Jurídico & Dúvidas", telas: ["#juridico"], print: "p10-juridico", hc: true,
       passos: ["Menu → Jurídico & Dúvidas: artigos e formulário para mandar dúvida à equipe."] },
     { id: "hoje", titulo: "Hoje (CRM)", telas: ["/sistema", "sistema.html"], print: "c01-hoje",
       passos: ["A tela Hoje mostra o que vence e os alertas.", "No topo, escolha a empresa e o processo.", "O processo aberto é uma página só: empresa, checklist do edital, itens e preços, robô de lances e documentos."] },
@@ -57,6 +70,10 @@
       passos: ["Menu → Processos: lista de processos, contratos e empenhos.", "Use + Processo para cadastrar um novo."] },
     { id: "empresas", titulo: "Minhas empresas e documentos", telas: ["operacao.html"], print: "c15-perfil-empresa",
       passos: ["Cadastre a empresa e os documentos com a validade.", "Verde, amarelo e vermelho mostram o que está válido, vencendo ou vencido.", "Baixar PDF único junta os documentos marcados."] },
+    { id: "certidoes", titulo: "Certidões e documentos vencendo", telas: ["#certidoes"], print: "c15-perfil-empresa", hc: true,
+      passos: ["Em Minhas empresas, cada documento mostra a validade: verde vale, amarelo vence logo, vermelho venceu.", "Certidão vencida? Peça a nova no site do órgão emissor e anexe aqui com a nova validade.", "Sem certidão válida a empresa pode ser inabilitada na hora de habilitar."] },
+    { id: "lance", titulo: "Lance e acompanhamento do pregão", telas: ["#lance"], print: "e01-pagina-extensao",
+      passos: ["Com a extensão instalada, abra o pregão no Compras.gov.", "A extensão vigia o chat e avisa quando o pregoeiro escrever.", "Confira o valor mínimo antes de qualquer lance: a decisão final é sempre sua."] },
     { id: "extensao", titulo: "Extensão do navegador", telas: ["extensao.html"], print: "e01-pagina-extensao",
       passos: ["Instale a extensão no Chrome ou Edge pela página Extensão.", "Ela lê pregões, ajuda a preencher a proposta no Compras.gov e vigia o chat."] },
     { id: "bdi", titulo: "Calculadora de BDI", telas: ["bdi.html"], print: "p14-bdi",
@@ -82,6 +99,14 @@
     return numero ? `https://wa.me/${numero}?text=${encodeURIComponent("Olá! Preciso de ajuda com o LicitaPlena.")}` : null;
   }
 
+  // Chamada discreta "Precisa de ajuda? Fale com a HC Licitações": só aparece se houver WhatsApp ou site configurado.
+  function chamadaHC() {
+    const c = contatosHC();
+    const destino = c.whatsapp || c.site;
+    if (!destino) return null;
+    return criar("p", { className: "lp-dica lp-chamada-hc" }, ["Precisa de ajuda? ", criar("a", { href: destino, target: "_blank", rel: "noopener", textContent: "Fale com a HC Licitações" }), " ou veja ", criar("a", { href: "hc.html", textContent: "assessoria e cursos" }), "."]);
+  }
+
   function listaTutoriais(endereco, abrirPrimeiro) {
     const lista = criar("ul", { className: "lp-lista-tutoriais" });
     ordenarPorTela(endereco).forEach((t, i) => {
@@ -91,8 +116,11 @@
           criar("ol", {}, t.passos.map((p) => criar("li", { textContent: p }))),
           criar("img", { src: `ajuda/${t.print}.webp`, alt: `Tela: ${t.titulo}`, loading: abrirPrimeiro && i === 0 ? "eager" : "lazy", width: 1280, height: 800 }),
           videoDoTutorial(t)
-            ? criar("video", { src: videoDoTutorial(t), controls: true, preload: "none", className: "lp-tutorial-video", title: `Vídeo: ${t.titulo}` })
-            : criar("p", { className: "lp-dica lp-tutorial-video-vazio", textContent: "Vídeo deste tutorial: em breve." }),
+            ? (videoDoTutorial(t).startsWith("https://")
+              ? criar("iframe", { src: videoDoTutorial(t), loading: "lazy", allowFullscreen: true, className: "lp-tutorial-video", title: `Vídeo: ${t.titulo}`, style: "width:100%;aspect-ratio:16/9;border:0" })
+              : criar("video", { src: videoDoTutorial(t), controls: true, preload: "none", className: "lp-tutorial-video", title: `Vídeo: ${t.titulo}` }))
+            : null,
+          t.hc ? chamadaHC() : null,
         ]),
       ]);
       lista.append(criar("li", {}, detalhe));
@@ -116,9 +144,9 @@
     });
     const corpo = criar("div", { className: "lp-gaveta-corpo" }, [
       criar("div", { className: "lp-acoes-ajuda" }, [botaoZap, duvida]),
-      criar("p", { style: "margin:0 0 16px" }, [criar("a", { href: "ajuda.html", target: "_blank", rel: "noopener", textContent: "Abrir o Guia de uso completo" })]),
+      criar("p", { style: "margin:0 0 16px" }, [criar("a", { href: "ajuda.html", target: "_blank", rel: "noopener", textContent: "Abrir o Guia de uso completo" }), " · ", criar("a", { href: "hc.html", textContent: "Assessoria e cursos (HC Licitações)" })]),
       criar("h3", { textContent: "Tutoriais por tela", style: "margin:0 0 8px;font:600 16px/24px var(--font-sans)" }),
-      criar("p", { className: "lp-dica", textContent: "Os da tela onde você está aparecem primeiro. Cada um terá um vídeo curto.", style: "margin-bottom:12px" }),
+      criar("p", { className: "lp-dica", textContent: "Os da tela onde você está aparecem primeiro. Alguns têm vídeo curto.", style: "margin-bottom:12px" }),
     ]);
     corpo.dataset.ajudaCorpo = "";
     const gaveta = criar("aside", { className: "lp-gaveta" }, [
@@ -162,7 +190,7 @@
     botao.addEventListener("click", abrirAjuda);
   }
 
-  window.LicitaPlenaAjuda = { abrir: abrirAjuda, listaTutoriais, ordenarPorTela, TUTORIAIS, VIDEOS, videoDoTutorial, linkWhatsApp };
+  window.LicitaPlenaAjuda = { abrir: abrirAjuda, listaTutoriais, ordenarPorTela, TUTORIAIS, VIDEOS, videoDoTutorial, linkWhatsApp, contatosHC, chamadaHC };
   if (typeof document !== "undefined" && document.body) instalarBotao();
   else if (typeof document !== "undefined") document.addEventListener("DOMContentLoaded", instalarBotao);
   if (typeof module !== "undefined" && module.exports) module.exports = window.LicitaPlenaAjuda;
