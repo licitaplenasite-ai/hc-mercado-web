@@ -1116,6 +1116,14 @@
   .mk-barra { flex: 1 0 44px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; }
   .mk-barra-coluna { width: 100%; max-width: 38px; background: linear-gradient(180deg, var(--azul), var(--azul-escuro)); border-radius: 5px 5px 0 0; }
   .mk-barra-valor, .mk-barra-rotulo { font-size: 10px; color: var(--texto-fraco); white-space: nowrap; }
+  .mk-angulos-topo { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  .mk-angulos { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .mk-filtro { margin: 0 0 10px; padding: 8px 12px; border-radius: 8px; background: var(--fundo-suave, rgba(37, 99, 235, .08)); }
+  .mk-tabela td.mk-desc { max-width: 340px; min-width: 180px; white-space: normal; text-align: left; }
+  .mk-tabela tr.mk-clicavel { cursor: pointer; }
+  .mk-tabela tr.mk-clicavel:hover td { background: rgba(37, 99, 235, .06); }
+  .mk-barra-uf-celula { width: 30%; min-width: 80px; }
+  .mk-barra-uf { display: block; height: 10px; border-radius: 5px; background: linear-gradient(90deg, var(--azul), var(--azul-escuro)); }
   @media (max-width: 620px) { .mk-busca .campo, .mk-busca .btn-buscar { width: 100%; } }
 
   /* Mini-gráfico de barras "Licitações por mês" (equivalente simplificado ao gráfico do ConLicitação) */
@@ -2021,7 +2029,7 @@
     <div class="boletim-cabecalho">
       <div>
         <h2 style="margin:0;"><svg class='icone-ph'><use href='#ph-chart-line-up'></use></svg> Inteligência de Mercado</h2>
-        <p class="dica-clique" style="margin:4px 0 0;">Digite o que você vende e veja quem ganha, quanto o governo paga e quem compra.</p>
+        <p class="dica-clique" style="margin:4px 0 0;">Digite o que você vende e veja as compras, códigos do catálogo, estados, órgãos, empresas, marcas e o que os órgãos planejam comprar.</p>
       </div>
     </div>
     <div class="dg-subabas" id="dg-subabas">
@@ -2051,7 +2059,7 @@
         </div>
         <button type="submit" class="btn-buscar" id="mk-buscar">Pesquisar</button>
       </form>
-      <div id="mk-resultado"><div class="estado-vazio"><p class="estado-vazio-titulo">Quem compra o que você vende, quanto paga e quem costuma ganhar?</p><p>Escreva o produto ou serviço (ex.: <strong>papel A4</strong>) e clique em <strong>Pesquisar</strong>. Estado e período são opcionais.</p></div></div>
+      <div id="mk-resultado"><div class="estado-vazio"><p class="estado-vazio-titulo">Quem compra o que você vende, quanto paga, quem ganha e com qual marca?</p><p>Escreva o produto ou serviço (ex.: <strong>papel A4</strong>) e clique em <strong>Pesquisar</strong>. Estado e período são opcionais.</p></div></div>
     </div>
 
     <div class="dg-subaba-painel" data-subaba-painel="baixa-concorrencia">
@@ -8365,8 +8373,8 @@
   });
 
   // ---------- Inteligência de Mercado: pesquisa simples (modelo do Siga Pregão) ----------
-  // Uma busca (produto/serviço + estado e período opcionais) e quatro respostas: quem ganha, quanto se paga,
-  // quem compra e quanto se compra por mês. A conta fica em mercado-pesquisa.js (testada); aqui só busca e desenha.
+  // Uma busca (produto/serviço + estado e período opcionais), cartões, compras por mês e as 7 abas do Siga:
+  // Correspondências, Catálogo, Estados, Órgãos, Empresas, Marcas e Contratação futura. A conta fica em mercado-pesquisa.js (testada); aqui só busca e desenha.
   // Substituiu, em 20/11/2026, o "Diagnóstico de Mercado" com filtros laterais, baixa concorrência, histórico de
   // compras e prospecção em abas separadas: o dono achou confuso e pediu uma tela só, igual à do Siga.
 
@@ -8494,31 +8502,167 @@
     return `<div class="mk-grafico" role="img" aria-label="Valor comprado por mês">${meses.map((m) => `<div class="mk-barra" title="${escapeHtml(m.rotulo)}: ${escapeHtml(formatarValor(m.valor))} em ${m.compras} compra(s)"><span class="mk-barra-valor">${escapeHtml(formatarValorCompacto(m.valor))}</span><span class="mk-barra-coluna" style="height:${Math.max(4, Math.round((m.valor / maior) * 140))}px"></span><span class="mk-barra-rotulo">${escapeHtml(m.rotulo)}</span></div>`).join("")}</div>`;
   }
 
+  // As 7 visões do Siga Pregão, na mesma ordem. Cada uma devolve o HTML da aba e as linhas do CSV (mesmos dados).
+  // Pedido do dono em 20/11: com 3 respostas e sem marca a tela tinha "falta de informação"; a marca é primordial.
+  const MK_ABAS = [
+    ["correspondencias", "Correspondências"], ["catalogo", "Catálogo"], ["estados", "Estados"], ["orgaos", "Órgãos"],
+    ["empresas", "Empresas"], ["marcas", "Marcas"], ["futura", "Contratação futura"],
+  ];
+  const MK_MAX_LINHAS = 300;
+  let mkAtual = null; // { termo, uf, dias, vendas, avisos, filtro, aba, pca }
+  const mkData = (d) => (/^\d{4}-\d{2}-\d{2}/.test(d || "") ? d.slice(0, 10).split("-").reverse().join("/") : "-");
+  const mkMoeda = (v) => (v ? formatarValor(v) : "-");
+  const mkLink = (url, texto = "ver") => (url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${texto}</a>` : "-");
+  const mkQtd = (n) => (n ? Number(n).toLocaleString("pt-BR") : "-");
+  const mkPct = (x) => `${(x * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
+
+  function mkMontarAbas(a) {
+    const M = window.MercadoPesquisa;
+    const corresp = M.correspondencias(a.vendas, a.filtro);
+    const catalogo = M.porCatalogo(a.vendas);
+    const precos = M.quantoSePaga(a.vendas);
+    const estados = M.porEstado(a.vendas);
+    const orgaos = M.quemCompra(a.vendas, 500);
+    const empresas = M.quemGanha(a.vendas, 500);
+    const marcas = M.porMarca(a.vendas);
+    const semMarca = a.vendas.filter((v) => !v.marca && v.valorUnitario).length;
+    const nada = (msg) => `<p class="dica-clique">${msg}</p>`;
+    const corte = (n) => (n > MK_MAX_LINHAS ? nada(`Mostrando ${MK_MAX_LINHAS} de ${n.toLocaleString("pt-BR")}. Use <strong>Baixar planilha</strong> para ver todas.`) : "");
+    const maiorUf = Math.max(1, ...estados.map((e) => e.valor));
+    const filtroHtml = a.filtro ? `<div class="mk-filtro">Só as compras de ${a.filtro.campo === "marca" ? "marca" : "código"} <strong>${escapeHtml(a.filtro.rotulo)}</strong> <button type="button" class="btn-filtro-rapido" data-mk-limpar>Mostrar todas</button></div>` : "";
+    const pca = a.pca || { estado: "carregando" };
+    return {
+      correspondencias: {
+        total: corresp.length,
+        cab: ["Descrição", "Órgão", "UF", "Data", "Quantidade", "Unidade", "Preço unitário", "Valor total", "Marca", "Vencedor", "Fonte"],
+        linhas: corresp.map((v) => [v.item, v.orgao, v.uf, mkData(v.data), v.quantidade || "", v.unidade, v.valorUnitario || "", v.valorTotal || "", v.marca, v.fornecedor, v.link || v.fonte]),
+        html: () => `${filtroHtml}<p class="dica-clique">Cada item comprado que bate com a pesquisa, do mais novo para o mais antigo.</p>${corresp.length ? mkTabela(["Descrição", "Órgão", "UF", "Data", "Qtd.", "Unid.", "Preço unit.", "Valor total", "Marca", "Vencedor", "Fonte"],
+          corresp.slice(0, MK_MAX_LINHAS).map((v) => `<tr><td class="mk-desc">${escapeHtml(v.item || "-")}<br><small>${escapeHtml(v.fonte)}</small></td><td>${escapeHtml(v.orgao || "-")}</td><td>${escapeHtml(v.uf || "-")}</td><td>${mkData(v.data)}</td><td class="num">${mkQtd(v.quantidade)}</td><td>${escapeHtml(v.unidade || "-")}</td><td class="num"><strong>${mkMoeda(v.valorUnitario)}</strong></td><td class="num">${mkMoeda(v.valorTotal)}</td><td>${escapeHtml(v.marca || "-")}</td><td>${escapeHtml(v.fornecedor || "-")}</td><td>${mkLink(v.link)}</td></tr>`)) + corte(corresp.length) : nada("Nenhuma compra com esse filtro.")}`,
+      },
+      catalogo: {
+        total: catalogo.length,
+        cab: ["Código CATMAT/CATSER", "Item do catálogo", "Compras", "Unidade", "Preço médio"],
+        linhas: catalogo.map((c) => [c.codigo, c.nome, c.compras, c.unidade, c.medio || ""]),
+        html: () => `<p class="dica-clique">Códigos do catálogo do governo (CATMAT/CATSER) usados nas compras. Clique numa linha para ver só as compras daquele código.</p>${catalogo.length ? mkTabela(["Código", "Item do catálogo", "Compras", "Preço médio", ""],
+          catalogo.map((c) => `<tr class="mk-clicavel" data-mk-filtro="catalogo" data-mk-valor="${escapeHtml(c.codigo)}" data-mk-rotulo="${escapeHtml(`${c.codigo} — ${c.nome}`)}"><td><strong>${escapeHtml(c.codigo)}</strong></td><td>${escapeHtml(c.nome)}</td><td class="num">${c.compras}</td><td class="num">${mkMoeda(c.medio)}${c.unidade ? ` <small>/ ${escapeHtml(c.unidade)}</small>` : ""}</td><td><button type="button" class="btn-filtro-rapido">Ver compras</button></td></tr>`)) : nada("As compras encontradas não informam o código do catálogo (contratos do PNCP não trazem). Use uma palavra de produto, como \"papel A4\".")}
+          <div class="mk-bloco" id="mk-quanto-paga"><h3>Preço por item e unidade</h3><p class="dica-clique">Preço por unidade que os órgãos pagaram. O link abre a compra com o menor preço.</p>${precos.length ? mkTabela(["Item", "Unidade", "Compras", "Preço médio", "Menor", "Maior", "Fonte"],
+          precos.map((g) => `<tr><td>${escapeHtml(g.item)}</td><td>${escapeHtml(g.unidade || "-")}</td><td class="num">${g.compras}</td><td class="num"><strong>${escapeHtml(formatarValor(g.medio))}</strong></td><td class="num">${escapeHtml(formatarValor(g.menor))}</td><td class="num">${escapeHtml(formatarValor(g.maior))}</td><td>${mkLink(g.linkMenor, "ver compra")}</td></tr>`)) : nada("As compras encontradas não informam preço por unidade (só o valor do contrato).")}</div>`,
+      },
+      estados: {
+        total: estados.length,
+        cab: ["UF", "Compras", "Valor", "Preço médio", "Unidade"],
+        linhas: estados.map((e) => [e.uf, e.compras, e.valor, e.medio || "", e.unidade]),
+        html: () => `<p class="dica-clique">Onde mais se compra: compras, valor e preço médio por estado (preço na unidade mais comum de cada estado).</p>${estados.length ? mkTabela(["Estado", "Compras", "Valor", "Preço médio", ""],
+          estados.map((e) => `<tr><td><strong>${escapeHtml(e.uf)}</strong></td><td class="num">${e.compras}</td><td class="num">${escapeHtml(formatarValor(e.valor))}</td><td class="num">${mkMoeda(e.medio)}${e.unidade ? ` <small>/ ${escapeHtml(e.unidade)}</small>` : ""}</td><td class="mk-barra-uf-celula"><span class="mk-barra-uf" style="width:${Math.max(2, Math.round((e.valor / maiorUf) * 100))}%"></span></td></tr>`)) : nada("As compras encontradas não informam o estado.")}`,
+      },
+      orgaos: {
+        total: orgaos.length,
+        cab: ["Órgão", "UF", "Compras", "Valor", "Empresas que venderam", "Última compra"],
+        linhas: orgaos.map((o) => [o.orgao, o.uf, o.compras, o.valor, o.empresas, mkData(o.ultima)]),
+        html: () => `<p class="dica-clique">Quem compra: órgãos que mais gastaram com este produto ou serviço.</p><div id="mk-quem-compra">${orgaos.length ? mkTabela(["Órgão", "UF", "Compras", "Valor", "Empresas", "Última compra"],
+          orgaos.slice(0, MK_MAX_LINHAS).map((o) => `<tr><td>${escapeHtml(o.orgao)}</td><td>${escapeHtml(o.uf || "-")}</td><td class="num">${o.compras}</td><td class="num">${escapeHtml(formatarValor(o.valor))}</td><td class="num">${o.empresas}</td><td class="num">${mkData(o.ultima)}</td></tr>`)) + corte(orgaos.length) : nada("As compras encontradas não informam o órgão.")}</div>`,
+      },
+      empresas: {
+        total: empresas.length,
+        cab: ["Empresa", "CNPJ", "Vitórias", "Participação", "Valor"],
+        linhas: empresas.map((f) => [f.fornecedor, f.documento, f.vitorias, mkPct(f.participacao), f.valor]),
+        html: () => `<p class="dica-clique">Quem ganha: cada contrato ou item ganho conta como uma vitória. Participação = parte das vitórias. <button type="button" class="btn-filtro-rapido" data-abrir-fornecedor-ia="${escapeHtml(a.termo)}">Encontrar fornecedor com IA</button></p><div id="mk-quem-ganha">${empresas.length ? mkTabela(["Empresa", "Vitórias", "Participação", "Valor", ""],
+          empresas.slice(0, MK_MAX_LINHAS).map((f) => `<tr><td>${escapeHtml(f.fornecedor || "Não informado")}${f.documento ? `<br><small>${escapeHtml(f.documento)}</small>` : ""}</td><td class="num">${f.vitorias}</td><td class="num">${mkPct(f.participacao)}</td><td class="num">${escapeHtml(formatarValor(f.valor))}</td><td>${/^\d{14}$/.test(f.documento) ? `<button type="button" class="btn-imprimir mk-analisar" data-mk-cnpj="${escapeHtml(f.documento)}">Analisar empresa</button>` : ""}</td></tr>`)) + corte(empresas.length) : nada("Sem empresa identificada nas compras encontradas.")}</div>`,
+      },
+      marcas: {
+        total: marcas.length,
+        cab: ["Marca", "Vezes que ganhou", "Preço médio", "Unidade", "Órgãos que aceitaram", "Exemplos de órgãos", "Empresas que venderam", "Valor"],
+        linhas: marcas.map((m) => [m.marca, m.vezes, m.medio || "", m.unidade, m.orgaos, m.orgaosNomes.join(" | "), m.empresas, m.valor]),
+        html: () => `<p class="dica-clique">Marca declarada pela empresa vencedora em cada item. Clique numa marca para ver as compras dela.${semMarca ? ` ${semMarca.toLocaleString("pt-BR")} compra(s) sem marca informada ficaram de fora.` : ""}</p>${marcas.length ? mkTabela(["Marca", "Vezes", "Preço médio", "Órgãos que aceitaram", "Exemplos de órgãos", "Empresas", ""],
+          marcas.map((m) => `<tr class="mk-clicavel" data-mk-filtro="marca" data-mk-valor="${escapeHtml(m.marca)}" data-mk-rotulo="${escapeHtml(m.marca)}"><td><strong>${escapeHtml(m.marca)}</strong></td><td class="num">${m.vezes}</td><td class="num">${mkMoeda(m.medio)}${m.unidade ? ` <small>/ ${escapeHtml(m.unidade)}</small>` : ""}</td><td class="num">${m.orgaos}</td><td class="mk-desc"><small>${escapeHtml(m.orgaosNomes.join("; ") || "-")}</small></td><td class="num">${m.empresas}</td><td><button type="button" class="btn-filtro-rapido">Ver compras</button></td></tr>`)) : nada("Nenhuma marca declarada nas compras encontradas. A marca vem da Pesquisa de Preços do Compras.gov (compras federais com item do catálogo); contratos do PNCP não trazem marca.")}`,
+      },
+      futura: {
+        total: pca.estado === "ok" ? pca.linhas.length : null,
+        cab: ["Item planejado", "Órgão", "UF", "Data prevista", "Quantidade", "Valor estimado", "CATMAT/CATSER", "Fonte"],
+        linhas: (pca.linhas || []).map((l) => [l.descricao || l.objeto, l.orgao_nome || l.unidade_nome, l.uf, mkData(l.data_ref), l.quantidade || "", l.valor_total || "", l.catmat || "", l.link]),
+        html: () => {
+          const nota = '<p class="dica-clique">Plano de Contratações Anual (PCA) publicado no PNCP: o que os órgãos planejam comprar nos próximos 12 meses. O PNCP não busca o PCA por palavra; o robô do LicitaPlena copia o PCA dos órgãos todo dia (mesma base da tela Prospecção) e a busca é feita nessa cópia.</p>';
+          if (pca.estado === "carregando") return `${nota}<div class="carregando">Buscando o que os órgãos planejam comprar...</div>`;
+          if (pca.estado === "erro") return `${nota}<div class="aviso">${escapeHtml(pca.erro || "Não foi possível consultar a contratação futura agora. Tente de novo em instantes.")}</div>`;
+          if (!pca.linhas.length) return `${nota}<p class="dica-clique">Nenhum item planejado com esse termo${a.uf ? ` em ${escapeHtml(a.uf)}` : ""} nos próximos 12 meses.</p>`;
+          return `${nota}${pca.aviso ? `<div class="aviso">${escapeHtml(pca.aviso)}</div>` : ""}${mkTabela(["Item planejado", "Órgão", "UF", "Data prevista", "Qtd.", "Valor estimado", "Fonte"],
+            pca.linhas.map((l) => `<tr><td class="mk-desc">${escapeHtml(l.descricao || l.objeto || "-")}${l.catmat ? `<br><small>CATMAT/CATSER ${escapeHtml(l.catmat)}</small>` : ""}</td><td>${escapeHtml(l.orgao_nome || l.unidade_nome || "-")}</td><td>${escapeHtml(l.uf || "-")}</td><td class="num">${mkData(l.data_ref)}</td><td class="num">${mkQtd(l.quantidade)}</td><td class="num">${mkMoeda(l.valor_total)}</td><td>${mkLink(l.link)}</td></tr>`))}`;
+        },
+      },
+    };
+  }
+
+  // Redesenha só os botões e a aba aberta (os cartões e o gráfico ficam).
+  function mkDesenharAbas() {
+    const caixa = document.getElementById("mk-angulos-caixa");
+    if (!caixa || !mkAtual) return;
+    const abas = mkMontarAbas(mkAtual);
+    caixa.querySelector("#mk-angulos").innerHTML = MK_ABAS.map(([id, nome]) => `<button type="button" class="btn-subaba${id === mkAtual.aba ? " ativo" : ""}" data-mk-aba="${id}">${nome} (${abas[id].total === null ? "…" : abas[id].total.toLocaleString("pt-BR")})</button>`).join("");
+    caixa.querySelector("#mk-aba-conteudo").innerHTML = abas[mkAtual.aba].html();
+    caixa.querySelector("#mk-aba-conteudo").dataset.aba = mkAtual.aba;
+  }
+
   function renderPesquisaMercado(alvo, { termo, uf, dias, vendas, avisos }) {
     const M = window.MercadoPesquisa;
     const local = uf ? `em ${uf}` : "no Brasil";
     const cabecalho = `<p class="mk-recorte">Resultado para <strong>${escapeHtml(termo)}</strong> ${escapeHtml(local)}, últimos ${escapeHtml(String(dias))} dias.</p>${avisos.map((a) => `<div class="aviso">${escapeHtml(a)}</div>`).join("")}`;
     if (!vendas.length) {
-      alvo.innerHTML = `${cabecalho}<div class="estado-vazio"><p class="estado-vazio-titulo">Nenhuma compra encontrada</p><p>Tente uma palavra mais curta (ex.: "papel" em vez de "papel sulfite A4 75g"), outro estado ou um período maior.</p></div>`;
+      alvo.innerHTML = `${cabecalho}<div class="estado-vazio"><p class="estado-vazio-titulo">Nenhuma compra encontrada</p><p>Tente uma palavra mais curta (ex.: "papel" em vez de "papel sulfite A4 75g"), outro estado ou um período maior.</p></div><div id="mk-angulos-caixa"><div id="mk-angulos" hidden></div><div id="mk-aba-conteudo"></div></div>`;
       return;
     }
     const r = M.resumo(vendas);
-    const ganha = M.quemGanha(vendas), paga = M.quantoSePaga(vendas), compra = M.quemCompra(vendas);
-    const cartoes = `<div class="cartoes mk-cartoes">
+    const marcas = new Set(vendas.map((v) => v.marca && v.marca.toUpperCase()).filter(Boolean)).size;
+    alvo.innerHTML = `${cabecalho}<div class="cartoes mk-cartoes">
       <div class="cartao"><h3>Valor total comprado</h3><div class="valor" title="${escapeHtml(formatarValor(r.valor))}">${escapeHtml(formatarValorCompacto(r.valor))}</div></div>
       <div class="cartao"><h3>Compras encontradas</h3><div class="valor">${r.compras.toLocaleString("pt-BR")}</div></div>
       <div class="cartao"><h3>Empresas que ganharam</h3><div class="valor">${r.fornecedores.toLocaleString("pt-BR")}</div></div>
       <div class="cartao"><h3>Órgãos que compraram</h3><div class="valor">${r.orgaos.toLocaleString("pt-BR")}</div></div>
-    </div>`;
-    const linhasGanha = ganha.map((f) => `<tr><td>${escapeHtml(f.fornecedor || "Não informado")}${f.documento ? `<br><small>${escapeHtml(f.documento)}</small>` : ""}</td><td class="num">${f.vitorias}</td><td class="num">${escapeHtml(formatarValor(f.valor))}</td><td>${/^\d{14}$/.test(f.documento) ? `<button type="button" class="btn-imprimir mk-analisar" data-mk-cnpj="${escapeHtml(f.documento)}">Analisar empresa</button>` : ""}</td></tr>`);
-    const linhasPaga = paga.map((g) => `<tr><td>${escapeHtml(g.item)}</td><td>${escapeHtml(g.unidade || "-")}</td><td class="num">${g.compras}</td><td class="num"><strong>${escapeHtml(formatarValor(g.medio))}</strong></td><td class="num">${escapeHtml(formatarValor(g.menor))}</td><td class="num">${escapeHtml(formatarValor(g.maior))}</td><td>${g.linkMenor ? `<a href="${escapeHtml(g.linkMenor)}" target="_blank" rel="noopener noreferrer">ver compra</a>` : "-"}</td></tr>`);
-    const linhasCompra = compra.map((o) => `<tr><td>${escapeHtml(o.orgao)}</td><td>${escapeHtml(o.uf || "-")}</td><td class="num">${o.compras}</td><td class="num">${escapeHtml(formatarValor(o.valor))}</td></tr>`);
-    alvo.innerHTML = `${cabecalho}${cartoes}
+      <div class="cartao"><h3>Marcas</h3><div class="valor">${marcas.toLocaleString("pt-BR")}</div></div>
+    </div>
       <div class="mk-bloco"><h3>Compras por mês</h3>${mkGraficoMeses(M.porMes(vendas))}</div>
-      <div class="mk-bloco" id="mk-quem-ganha"><h3>Quem ganha</h3><p class="dica-clique">Empresas que mais venderam este produto ou serviço. Cada contrato ou item ganho conta como uma vitória. <button type="button" class="btn-filtro-rapido" data-abrir-fornecedor-ia="${escapeHtml(termo)}">Encontrar fornecedor com IA</button></p>${ganha.length ? mkTabela(["Empresa", "Vitórias", "Valor", ""], linhasGanha) : '<p class="dica-clique">Sem empresa identificada nas compras encontradas.</p>'}</div>
-      <div class="mk-bloco" id="mk-quanto-paga"><h3>Quanto se paga</h3><p class="dica-clique">Preço por unidade que os órgãos pagaram. O link abre a compra com o menor preço.</p>${paga.length ? mkTabela(["Item", "Unidade", "Compras", "Preço médio", "Menor", "Maior", "Fonte"], linhasPaga) : '<p class="dica-clique">As compras encontradas não informam preço por unidade (só o valor do contrato). Para preço por item, use uma palavra de produto (ex.: "papel A4").</p>'}</div>
-      <div class="mk-bloco" id="mk-quem-compra"><h3>Quem compra</h3><p class="dica-clique">Órgãos que mais gastaram com este produto ou serviço.</p>${compra.length ? mkTabela(["Órgão", "UF", "Compras", "Valor"], linhasCompra) : '<p class="dica-clique">As compras encontradas não informam o órgão.</p>'}</div>
-      <p class="dica-clique">Fontes: contratos e atas de registro de preço do PNCP e resultados homologados do Compras.gov já coletados, mais a Pesquisa de Preços do Compras.gov consultada agora. Um mesmo processo pode aparecer em mais de uma fonte; use os totais como ordem de grandeza.</p>`;
+      <div class="mk-bloco" id="mk-angulos-caixa"><div class="mk-angulos-topo"><h3>Ângulos de análise</h3><button type="button" class="btn-imprimir" id="mk-csv">Baixar planilha (CSV) desta aba</button></div>
+        <div class="mk-angulos" id="mk-angulos" role="tablist"></div><div id="mk-aba-conteudo"></div></div>
+      <p class="dica-clique">Fontes: contratos e atas de registro de preço do PNCP e resultados homologados do Compras.gov já coletados, mais a Pesquisa de Preços do Compras.gov consultada agora (é dela que vêm a marca e o código do catálogo). Contratação futura: PCA do PNCP. Um mesmo processo pode aparecer em mais de uma fonte; use os totais como ordem de grandeza.</p>`;
+    mkDesenharAbas();
+  }
+
+  // Contratação futura (PCA): /api/prospeccao lê a cópia diária do PCA do PNCP (login aprovado; a RLS é a barreira).
+  // A busca do banco é por texto corrido: "papel a4" pode não aparecer junto ("papel sulfite A4"). Sem resultado,
+  // repete com a palavra mais longa e fica só com as linhas que têm todas as palavras do termo.
+  async function mkCarregarContratacaoFutura(atual) {
+    const pedir = async (palavras) => {
+      const p = new URLSearchParams({ tipo: "pca", palavras, dias: "365" });
+      if (atual.uf) p.set("uf", atual.uf);
+      const resposta = await fetchComSessao(`/api/prospeccao?${p}`);
+      const dados = await resposta.json().catch(() => ({}));
+      if (!resposta.ok) throw new Error(dados.erro || `Contratação futura indisponível (${resposta.status}).`);
+      return dados;
+    };
+    try {
+      let dados = await pedir(atual.termo);
+      let linhas = dados.linhas || [];
+      const palavras = atual.termo.split(/\s+/).filter((p) => p.length >= 3).sort((a, b) => b.length - a.length);
+      if (!linhas.length && atual.termo.trim().split(/\s+/).length > 1 && palavras.length) {
+        dados = await pedir(palavras[0]);
+        linhas = window.MercadoPesquisa.todasAsPalavras(dados.linhas || [], atual.termo, ["descricao", "objeto"]);
+      }
+      atual.pca = { estado: "ok", linhas, aviso: dados.truncado ? "Há mais itens planejados do que a tela mostra; escolha um estado para ver todos." : "" };
+    } catch (e) {
+      atual.pca = { estado: "erro", linhas: [], erro: String((e && e.message) || e) };
+    }
+    if (mkAtual === atual) mkDesenharAbas();
+  }
+
+  function mkBaixarCsv() {
+    if (!mkAtual) return;
+    const aba = mkMontarAbas(mkAtual)[mkAtual.aba];
+    // BOM: o Excel só abre acentos certo em UTF-8 com ele.
+    const blob = new Blob(["﻿" + window.MercadoPesquisa.paraCsv(aba.cab, aba.linhas)], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `mercado-${mkAtual.aba}-${mkAtual.termo.replace(/[^\p{L}\p{N}]+/gu, "-").toLowerCase()}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
 
   async function pesquisarMercado() {
@@ -8556,10 +8700,12 @@
       ], desdeIso);
       const avisos = [];
       if (contratos.erro || homologados.erro || !atas) avisos.push("Parte da base guardada não respondeu agora; os números podem estar incompletos. Tente de novo em instantes.");
-      if (aoVivo.erro) avisos.push("A Pesquisa de Preços do Compras.gov não respondeu agora; os preços mostram só o que já estava guardado.");
+      if (aoVivo.erro) avisos.push("A Pesquisa de Preços do Compras.gov não respondeu agora; os preços e as marcas mostram só o que já estava guardado.");
       // A contagem é estimativa do Postgres ("planned"): só avisa corte quando a amostra realmente encheu.
       if (contratos.truncado && contratos.registros.length >= 1000) avisos.push(`Foram achados mais de ${contratos.registros.length.toLocaleString("pt-BR")} contratos; a tela usa os mais recentes. Para um retrato mais fiel, escolha um estado ou um período menor.`);
-      renderPesquisaMercado(alvo, { termo, uf, dias, vendas, avisos });
+      mkAtual = { termo, uf, dias, vendas, avisos, filtro: null, aba: mkAtual && MK_ABAS.some(([id]) => id === mkAtual.aba) ? mkAtual.aba : "correspondencias", pca: null };
+      renderPesquisaMercado(alvo, mkAtual);
+      mkCarregarContratacaoFutura(mkAtual);
     } catch (e) {
       if (seq === mkBuscaSeq) alvo.innerHTML = `<div class="aviso">Não foi possível pesquisar agora: ${escapeHtml(String(e && e.message || e))}</div>`;
     } finally {
@@ -8568,14 +8714,28 @@
   }
 
   document.getElementById("mk-form").addEventListener("submit", (ev) => { ev.preventDefault(); pesquisarMercado(); });
-  // "Analisar empresa" abre a análise do concorrente já com o CNPJ e o produto pesquisado.
   document.getElementById("mk-resultado").addEventListener("click", (ev) => {
+    // "Analisar empresa" abre a análise do concorrente já com o CNPJ e o produto pesquisado.
     const botao = ev.target.closest("[data-mk-cnpj]");
-    if (!botao) return;
-    document.querySelector('nav button[data-alvo="empresa"]').click();
-    document.getElementById("emp-cnpj").value = botao.dataset.mkCnpj;
-    document.getElementById("emp-segmento").value = document.getElementById("mk-termo").value.trim();
-    document.getElementById("emp-buscar").click();
+    if (botao) {
+      document.querySelector('nav button[data-alvo="empresa"]').click();
+      document.getElementById("emp-cnpj").value = botao.dataset.mkCnpj;
+      document.getElementById("emp-segmento").value = document.getElementById("mk-termo").value.trim();
+      document.getElementById("emp-buscar").click();
+      return;
+    }
+    if (!mkAtual) return;
+    const aba = ev.target.closest("[data-mk-aba]");
+    const linha = ev.target.closest("[data-mk-filtro]");
+    if (aba) mkAtual.aba = aba.dataset.mkAba;
+    // Clique numa marca ou num código do catálogo: abre as Correspondências só com aquelas compras.
+    else if (linha) {
+      mkAtual.filtro = { campo: linha.dataset.mkFiltro, valor: linha.dataset.mkValor, rotulo: linha.dataset.mkRotulo };
+      mkAtual.aba = "correspondencias";
+    } else if (ev.target.closest("[data-mk-limpar]")) mkAtual.filtro = null;
+    else if (ev.target.closest("#mk-csv")) return mkBaixarCsv();
+    else return;
+    mkDesenharAbas();
   });
 
   // Baixa concorrência (baixa-concorrencia.js): abas Desertos / 1 / 2 / 3 licitantes do produto pesquisado.

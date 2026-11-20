@@ -71,3 +71,47 @@ test("deAta: cada vencedor de cada item vira uma venda com o órgão da ata", ()
   assert.deepEqual([vendas[0].documento, vendas[0].valorTotal, vendas[0].data, vendas[0].uf, vendas[0].orgao], ["11222333000181", 20, "2026-03-01", "AM", "Hospital Z"]);
   assert.deepEqual([vendas[1].valorTotal, vendas[1].data, vendas[1].link], [50, "2026-04-02", "lk"]);
 });
+
+// Venda ao vivo com marca e código CATMAT (o formato do /api/comprasgov-marcas-produto).
+const comMarca = (id, marca, unit, orgao, uf, un = "RESMA", codigo = "461380", data = "2026-10-01") => M.dePrecoAoVivo({ itemCompra: id, fornecedor: "F" + id, documentoFornecedor: "1" + id,
+  orgao, uf, dataResultado: data, descricaoItem: "Papel A4", unidade: un, valorUnitario: unit, quantidade: 5, marca, catalogoCodigo: codigo, produtoCatalogo: "Papel para impressão formatado", link: "l" + id });
+
+test("porMarca: vezes, preço médio na unidade mais comum, órgãos que aceitaram; sem marca fica fora", () => {
+  const r = M.porMarca([comMarca("1", "Chamex", 20, "Prefeitura X", "AM"), comMarca("2", "CHAMEX", 30, "Hospital Y", "PA"), comMarca("3", "chamex", 900, "Hospital Y", "PA", "CAIXA"),
+    comMarca("4", "Report", 25, "Prefeitura X", "AM"), comMarca("5", "", 10, "Z", "AM")]);
+  assert.deepEqual(r.map((m) => [m.marca, m.vezes, m.orgaos, m.unidade, m.medio]), [["Chamex", 3, 2, "RESMA", 25], ["Report", 1, 1, "RESMA", 25]]);
+  assert.deepEqual(r[0].orgaosNomes, ["Prefeitura X", "Hospital Y"]);
+});
+
+test("porCatalogo agrupa por código CATMAT e ignora contrato sem código", () => {
+  const r = M.porCatalogo([comMarca("1", "A", 10, "O", "AM"), comMarca("2", "B", 20, "O", "AM"), comMarca("3", "C", 7, "O", "AM", "FL", "999"), contrato("9", "X", "O", 100, "")]);
+  assert.deepEqual(r.map((c) => [c.codigo, c.compras, c.medio, c.nome]), [["461380", 2, 15, "Papel A4"], ["999", 1, 7, "Papel A4"]]);
+});
+
+test("porEstado soma valor e compras por UF, ordenado por valor", () => {
+  const r = M.porEstado([comMarca("1", "A", 10, "O", "AM"), comMarca("2", "A", 30, "O", "PA"), comMarca("3", "A", 20, "O", "PA"), contrato("9", "X", "O", 5, "")]);
+  assert.deepEqual(r.map((e) => [e.uf, e.compras, e.valor, e.medio]), [["PA", 2, 250, 25], ["AM", 2, 55, 10]]);
+});
+
+test("correspondencias: mais nova primeiro e filtro do clique em marca ou catálogo", () => {
+  const vendas = [comMarca("1", "Chamex", 10, "O", "AM", "RESMA", "1", "2026-01-01"), comMarca("2", "Report", 10, "O", "AM", "RESMA", "2", "2026-05-01")];
+  assert.deepEqual(M.correspondencias(vendas).map((v) => v.marca), ["Report", "Chamex"]);
+  assert.deepEqual(M.correspondencias(vendas, { campo: "marca", valor: "CHAMEX" }).map((v) => v.id), ["1"]);
+  assert.deepEqual(M.correspondencias(vendas, { campo: "catalogo", valor: "2" }).map((v) => v.id), ["2"]);
+});
+
+test("quemGanha traz a participação nas vitórias; quemCompra traz última compra e nº de empresas", () => {
+  const g = M.quemGanha([contrato("1", "A", "O", 10, ""), contrato("1", "A", "O", 10, ""), contrato("1", "A", "O", 10, ""), contrato("2", "B", "O", 10, "")]);
+  assert.equal(g[0].participacao, 0.75);
+  const c = M.quemCompra([contrato("1", "A", "O", 10, "2026-01-01"), contrato("2", "B", "O", 10, "2026-03-01")]);
+  assert.deepEqual([c[0].ultima, c[0].empresas], ["2026-03-01", 2]);
+});
+
+test("todasAsPalavras: PCA buscado por uma palavra só fica com as linhas que têm o termo inteiro", () => {
+  const linhas = [{ descricao: "Papel sulfite A4 75g" }, { descricao: "Papel higiênico" }, { descricao: "PAPEL A4", objeto: "" }, { descricao: "Bobina papel A40" }];
+  assert.deepEqual(M.todasAsPalavras(linhas, "papel A4", ["descricao", "objeto"]).map((l) => l.descricao), ["Papel sulfite A4 75g", "PAPEL A4"]);
+});
+
+test("paraCsv usa ponto e vírgula, aspas quando precisa e vírgula decimal", () => {
+  assert.equal(M.paraCsv(["Marca", "Preço"], [["A; B", 1.5], ['Diz "x"', 2]]), 'Marca;Preço\r\n"A; B";1,5\r\n"Diz ""x""";2');
+});
