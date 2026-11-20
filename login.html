@@ -144,7 +144,7 @@
     } catch (e) { return "painel.html"; }
   }
   const parametros = new URLSearchParams(window.location.search);
-  const destino = destinoSeguro(parametros.get("voltar"));
+  const destino = destinoSeguro(parametros.get("voltar") || parametros.get("volta"));
 
   SenhaCaptchaUi.ligarOlhosDaSenha(document); // ícone de olho da senha
   const captcha = SenhaCaptchaUi.montarTurnstile(document, window); // Turnstile; sem chave configurada fica desligado

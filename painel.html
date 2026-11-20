@@ -58,7 +58,9 @@
     sb.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) {
         if (typeof window.__resolverClientePronto === "function") window.__resolverClientePronto(null);
-        window.location.replace("login.html");
+        // Veio do link do aviso do Boletim: o login devolve para a mesma edição (só caminho do próprio site).
+        const doBoletim = window.location.hash === "#boletim";
+        window.location.replace(doBoletim ? "login.html?voltar=" + encodeURIComponent(window.location.pathname + window.location.search + window.location.hash) : "login.html");
         return;
       }
       const { data: cliente } = await sb.from("clientes").select("nome, empresa, cnpj, telefone, status, segmento, atividades, estados_interesse, como_conheceu, quantidade_funcionarios, licitacoes_por_mes, faturamento_anual, como_pretende_usar, plano").eq("id", session.user.id).maybeSingle();
@@ -1904,6 +1906,7 @@
       <button class="btn-buscar" id="bol-salvar">Salvar filtro e atualizar boletim</button>
     </div>
     <p id="bol-filtro-status" role="status" aria-live="polite"></p>
+    <div id="bol-edicoes" class="caixa-interna" hidden></div>
     <div class="dg-topo-acoes"><span></span><div class="dg-topo-botoes"><button type="button" class="btn-imprimir btn-baixar-planilha" data-planilha-de="bol-resultado" data-planilha-nome="boletim" title="Baixar esta lista em planilha do Excel (.xlsx)"><svg class='icone-ph' aria-hidden="true"><use href='#ph-download-simple'></use></svg> Baixar planilha</button><button class="btn-imprimir btn-imprimir-generico" title="Gerar PDF/impressão desta tela"><svg class='icone-ph'><use href='#ph-printer'></use></svg> Imprimir / Gerar PDF</button></div></div>
     <div id="bol-calendario" class="caixa-interna"></div>
     <div id="bol-resultado"></div>
@@ -7813,7 +7816,7 @@
   }
 
   async function gerarBoletim({ atualizarAoVivo = false } = {}) {
-    if (bolAtualizacao.emAndamento) return;
+    if (window.__bolEdicaoAberta || bolAtualizacao.emAndamento) return; // edição de um dia anterior na tela
     bolJaGerado = true;
     const alvo = document.getElementById("bol-resultado");
     const metaEl = document.getElementById("bol-meta");
@@ -8046,6 +8049,93 @@
       botao.disabled = false;
     }
   });
+
+  // ---- Edições do aviso por e-mail (supabase/boletim_edicoes.sql) ----
+  // O e-mail só avisa e leva a painel.html?edicao=AAAA-MM-DD&filtro=ID#boletim; a lista de cada dia fica aqui,
+  // por empresa e filtro, junto com as edições dos dias anteriores.
+  {
+    const q = new URLSearchParams(location.search);
+    const edicaoDoLink = /^\d{4}-\d{2}-\d{2}$/.test(q.get("edicao") || "") ? q.get("edicao") : "";
+    const filtroDoLink = (q.get("filtro") || "").slice(0, 60);
+    if (edicaoDoLink && location.hash === "#boletim") window.__bolEdicaoAberta = true; // antes do boletim do dia começar
+    const dataBr = (iso) => String(iso).split("-").reverse().join("/");
+    const alvoEdicoes = document.getElementById("bol-edicoes");
+    let edicoesLista = [];
+
+    function desenharEdicoes(ativaId) {
+      if (!edicoesLista.length) { alvoEdicoes.hidden = true; return; }
+      const grupos = new Map();
+      edicoesLista.forEach((e) => {
+        const nome = `${e.empresa || "Minha empresa"} · filtro: ${e.filtro_nome || "principal"}`;
+        if (!grupos.has(nome)) grupos.set(nome, []);
+        grupos.get(nome).push(e);
+      });
+      alvoEdicoes.hidden = false;
+      alvoEdicoes.innerHTML = `<h3 style="margin-top:0;">Edições do boletim</h3>` + (window.__bolEdicaoAberta
+        ? `<p><button type="button" class="btn-imprimir" id="bol-edicao-hoje">Voltar ao boletim de hoje</button></p>` : "")
+        + Array.from(grupos, ([nome, lista]) => `<div class="bol-edicoes-grupo"><strong>${escapeHtml(nome)}</strong><div class="boletim-filtros-rapidos" style="margin-top:6px;">`
+          + lista.map((e) => `<button type="button" class="btn-filtro-rapido${e.id === ativaId ? " ativo" : ""}" data-edicao="${escapeHtml(e.id)}">${dataBr(e.edicao)} (${e.quantidade})</button>`).join("")
+          + `</div></div>`).join("");
+      alvoEdicoes.querySelectorAll("[data-edicao]").forEach((b) => b.addEventListener("click", () => {
+        abrirEdicao(edicoesLista.find((e) => e.id === b.dataset.edicao));
+      }));
+      const hoje = document.getElementById("bol-edicao-hoje");
+      if (hoje) hoje.addEventListener("click", voltarAoBoletimDeHoje);
+    }
+
+    function voltarAoBoletimDeHoje() {
+      window.__bolEdicaoAberta = false;
+      desenharEdicoes(null);
+      gerarBoletim();
+    }
+
+    async function abrirEdicao(edicao) {
+      if (!edicao) return;
+      window.__bolEdicaoAberta = true;
+      desenharEdicoes(edicao.id);
+      const alvo = document.getElementById("bol-resultado");
+      document.getElementById("bol-calendario").innerHTML = "";
+      document.getElementById("bol-meta").textContent = `Edição de ${dataBr(edicao.edicao)} · ${edicao.empresa || "Minha empresa"} · filtro: ${edicao.filtro_nome || "principal"}`;
+      alvo.innerHTML = '<div class="carregando">Carregando a edição...</div>';
+      const registros = [];
+      try {
+        const numeros = edicao.numeros || [];
+        for (let i = 0; i < numeros.length; i += 80) {
+          const { data, error } = await window.__sbClient.from("oportunidades_abertas").select("dado").in("numero_controle_pncp", numeros.slice(i, i + 80));
+          if (error) throw error;
+          (data || []).forEach((l) => registros.push({ ...l.dado, link: l.dado.link || linkPncp(l.dado.numeroControlePNCP) }));
+        }
+      } catch (e) {
+        alvo.innerHTML = '<div class="aviso">Não foi possível carregar esta edição agora. Tente de novo em instantes.</div>';
+        return;
+      }
+      if (!window.__bolEdicaoAberta) return; // saiu da edição enquanto carregava
+      const encerradas = (edicao.numeros || []).length - registros.length;
+      const aviso = encerradas > 0
+        ? `<div class="aviso">${encerradas} de ${(edicao.numeros || []).length} licitações desta edição já saíram da base (encerradas ou removidas) e não aparecem abaixo.</div>` : "";
+      renderizarPainelBoletim(alvo, registros, aviso, { porPrazo: true });
+    }
+
+    async function carregarEdicoes() {
+      await window.__clientePronto;
+      if (!window.__clienteIdAtual) return;
+      const { data, error } = await window.__sbClient.from("boletim_edicoes")
+        .select("id, edicao, filtro_id, filtro_nome, empresa, quantidade, numeros").order("edicao", { ascending: false }).limit(90);
+      edicoesLista = error ? [] : (data || []);
+      desenharEdicoes(null);
+      if (!edicaoDoLink) return;
+      const doLink = edicoesLista.find((e) => e.edicao === edicaoDoLink && (!filtroDoLink || e.filtro_id === filtroDoLink));
+      if (doLink) { abrirEdicao(doLink); return; }
+      window.__bolEdicaoAberta = false;
+      gerarBoletim();
+      document.getElementById("bol-filtro-status").textContent = "Não encontramos essa edição na sua conta. Mostrando o boletim de hoje.";
+    }
+
+    ["bol-atualizar", "bol-salvar"].forEach((id) => document.getElementById(id).addEventListener("click", () => {
+      if (window.__bolEdicaoAberta) { window.__bolEdicaoAberta = false; desenharEdicoes(null); }
+    }));
+    carregarEdicoes().catch(() => { window.__bolEdicaoAberta = false; gerarBoletim(); });
+  }
 
   // Gera o boletim automaticamente já na primeira carga da página (aba inicial),
   // igual ao ConLicitação abrir direto na tela de boletins.

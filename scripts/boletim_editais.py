@@ -617,97 +617,77 @@ def formatar_valor(v):
     return "R$ " + "{:,.2f}".format(v).replace(",", "X").replace(".", ",").replace("X", ".")
 
 
-def montar_card_html(e):
-    orgao = html.escape(e.get("orgaoEntidade", {}).get("razaoSocial") or "Orgao nao informado")
-    municipio = html.escape((e.get("unidadeOrgao") or {}).get("municipioNome") or "")
-    uf = html.escape((e.get("unidadeOrgao") or {}).get("ufSigla") or "")
-    objeto = html.escape(e.get("objetoCompra") or "Objeto nao informado")
-    modalidade = html.escape(e.get("modalidadeNome") or "")
-    valor = formatar_valor(e.get("valorTotalEstimado"))
-    encerramento = e.get("dataEncerramentoProposta") or ""
-    if encerramento:
-        try:
-            encerramento = datetime.fromisoformat(encerramento).strftime("%d/%m/%Y")
-        except Exception:
-            pass
+# O e-mail do boletim e so um AVISO (decisao do dono, igual ConLicitacao/Effecti): quantas
+# licitações chegaram e um botao para o painel. A lista dos editais fica no painel, que exige
+# login; por isso nada de edital no corpo (nem no texto puro) e nada pessoal na URL.
+URL_PAINEL = "https://licitaplena.com.br/painel.html"
+FILTRO_ID_PADRAO = "principal"
+COR_MARCA = "#0b3b6f"
 
-    link1 = link_pncp(e)
-    link2 = link_origem_valido(e)
 
-    botoes = (
-        '<a href="' + link1 + '" style="display:inline-block;background:#1a73e8;color:#ffffff;'
-        'padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:bold;'
-        'font-family:Arial,sans-serif;font-size:14px;margin-right:8px;">Ver edital no PNCP &rarr;</a>'
-    )
-    if link2:
-        botoes += (
-            '<a href="' + link2 + '" style="display:inline-block;background:#ffffff;color:#1a73e8;'
-            'border:1px solid #1a73e8;padding:9px 18px;border-radius:6px;text-decoration:none;'
-            'font-weight:bold;font-family:Arial,sans-serif;font-size:14px;">Site do orgao (origem)</a>'
+def hoje_brasilia():
+    return datetime.now(timezone(timedelta(hours=-3))).date()
+
+
+def montar_link_boletim(edicao, filtro_id=FILTRO_ID_PADRAO):
+    # So data e id do filtro na URL: sem e-mail, CPF/CNPJ ou token.
+    params = urllib.parse.urlencode({"edicao": edicao.isoformat(), "filtro": filtro_id})
+    return URL_PAINEL + "?" + params + "#boletim"
+
+
+def nome_filtro(destinatario):
+    return ", ".join((destinatario.get("palavras_chave") or [])[:3]) or "Meu filtro"
+
+
+def _titulo_quantidade(quantidade):
+    if quantidade == 1:
+        return "Chegou 1 nova licitação"
+    return "Chegaram " + str(quantidade) + " novas licitações"
+
+
+def montar_assunto(quantidade):
+    if quantidade:
+        return _titulo_quantidade(quantidade) + " no seu boletim"
+    return "Nenhuma oportunidade nova hoje"
+
+
+def montar_email_html(nome_empresa, filtro, edicao, quantidade, link):
+    rodape = ('<div style="font-size:12px;color:#9aa0a6;margin-top:20px;text-align:center;">'
+              'Aviso automático do LicitaPlena.</div>')
+    if quantidade:
+        corpo = (
+            '<div style="font-size:26px;font-weight:bold;color:#202124;margin-bottom:8px;">'
+            + _titulo_quantidade(quantidade) + '</div>'
+            '<div style="font-size:15px;color:#3c4043;line-height:1.5;margin-bottom:22px;">no filtro <b>'
+            + html.escape(filtro) + '</b> da empresa <b>' + html.escape(nome_empresa) + '</b><br>'
+            'Edição de ' + edicao.strftime("%d/%m/%Y") + '</div>'
+            '<a href="' + html.escape(link, quote=True) + '" style="display:inline-block;background:' + COR_MARCA
+            + ';color:#ffffff;padding:16px 36px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:18px;">'
+            'Acessar o boletim</a>'
+            '<div style="font-size:12px;color:#5f6368;margin-top:16px;">Você entra com seu login e vê a lista completa.</div>'
         )
-
-    return (
-        '<div style="border:1px solid #e0e0e0;border-radius:8px;padding:18px;margin-bottom:16px;'
-        'font-family:Arial,sans-serif;background:#ffffff;">'
-        '<div style="font-size:12px;color:#1a73e8;font-weight:bold;text-transform:uppercase;margin-bottom:6px;">'
-        + modalidade + " - " + municipio + "/" + uf + '</div>'
-        '<div style="font-size:15px;color:#202124;font-weight:bold;margin-bottom:8px;">' + orgao + '</div>'
-        '<div style="font-size:14px;color:#3c4043;margin-bottom:10px;line-height:1.5;">' + objeto + '</div>'
-        '<div style="font-size:13px;color:#5f6368;margin-bottom:14px;">'
-        'Valor estimado: <b>' + valor + '</b> &nbsp;|&nbsp; Encerra em: <b>' + html.escape(str(encerramento)) + '</b>'
-        '</div>'
-        + botoes +
-        '</div>'
-    )
-
-
-def montar_email_html(nome_destinatario, editais_novos):
-    if not editais_novos:
-        return (
-            '<html><body style="margin:0;padding:0;background:#f4f4f4;">'
-            '<div style="max-width:640px;margin:0 auto;padding:24px 16px;">'
-            '<div style="font-family:Arial,sans-serif;font-size:20px;color:#202124;margin-bottom:4px;">'
-            'Ola, ' + html.escape(nome_destinatario) + '!</div>'
-            '<div style="font-family:Arial,sans-serif;font-size:14px;color:#5f6368;margin-bottom:20px;">'
-            'Nao encontramos nenhuma oportunidade nova hoje que bata com o seu filtro.</div>'
-            '<div style="font-family:Arial,sans-serif;font-size:12px;color:#9aa0a6;margin-top:20px;">'
-            'Alerta automatico gerado por LicitaPlena com base em dados publicos do PNCP.</div>'
-            '</div></body></html>'
+    else:
+        corpo = (
+            '<div style="font-size:20px;color:#202124;margin-bottom:8px;">Nenhuma oportunidade nova hoje</div>'
+            '<div style="font-size:14px;color:#5f6368;">no filtro <b>' + html.escape(filtro) + '</b> da empresa <b>'
+            + html.escape(nome_empresa) + '</b>.</div>'
         )
-    cards = "".join(montar_card_html(e) for e in editais_novos)
     return (
         '<html><body style="margin:0;padding:0;background:#f4f4f4;">'
-        '<div style="max-width:640px;margin:0 auto;padding:24px 16px;">'
-        '<div style="font-family:Arial,sans-serif;font-size:20px;color:#202124;margin-bottom:4px;">'
-        'Ola, ' + html.escape(nome_destinatario) + '!</div>'
-        '<div style="font-family:Arial,sans-serif;font-size:14px;color:#5f6368;margin-bottom:20px;">'
-        'Encontramos <b>' + str(len(editais_novos)) + '</b> nova(s) oportunidade(s) de licitacao para voce hoje.</div>'
-        + cards +
-        '<div style="font-family:Arial,sans-serif;font-size:12px;color:#9aa0a6;margin-top:20px;">'
-        'Alerta automatico gerado por LicitaPlena com base em dados publicos do PNCP.</div>'
-        '</div></body></html>'
+        '<div style="max-width:560px;margin:0 auto;padding:24px 16px;font-family:Arial,sans-serif;">'
+        '<div style="background:' + COR_MARCA + ';color:#ffffff;font-size:22px;font-weight:bold;padding:16px 24px;'
+        'border-radius:8px 8px 0 0;">LicitaPlena</div>'
+        '<div style="background:#ffffff;padding:32px 24px;border-radius:0 0 8px 8px;text-align:center;">'
+        + corpo + '</div>' + rodape + '</div></body></html>'
     )
 
 
-def montar_email_texto(nome_destinatario, editais_novos):
-    if not editais_novos:
-        return (
-            "Ola, " + nome_destinatario + "!\n\n"
-            "Nao encontramos nenhuma oportunidade nova hoje que bata com o seu filtro.\n"
-        )
-    linhas = ["Ola, " + nome_destinatario + "!", "",
-              "Encontramos " + str(len(editais_novos)) + " nova(s) oportunidade(s) de licitacao:", ""]
-    for e in editais_novos:
-        orgao = e.get("orgaoEntidade", {}).get("razaoSocial") or "Orgao nao informado"
-        objeto = e.get("objetoCompra") or "Objeto nao informado"
-        linhas.append("- " + orgao)
-        linhas.append("  Objeto: " + objeto)
-        linhas.append("  Link PNCP: " + link_pncp(e))
-        link2 = link_origem_valido(e)
-        if link2:
-            linhas.append("  Link do orgao: " + link2)
-        linhas.append("")
-    return "\n".join(linhas)
+def montar_email_texto(nome_empresa, filtro, edicao, quantidade, link):
+    if not quantidade:
+        return "LicitaPlena\n\nNenhuma oportunidade nova hoje no filtro " + filtro + " da empresa " + nome_empresa + ".\n"
+    return ("LicitaPlena\n\n" + _titulo_quantidade(quantidade) + " no filtro " + filtro + " da empresa " + nome_empresa + ".\n"
+            "Edição de " + edicao.strftime("%d/%m/%Y") + ".\n\n"
+            "Acessar o boletim: " + link + "\n")
 
 
 def registrar_log_boletim(destinatario, status, quantidade, mensagem_erro=None):
@@ -768,13 +748,14 @@ def enviar_gmail(destino_email, assunto, texto, html_corpo):
         servidor.sendmail(remetente, [destino_email], msg.as_string())
 
 
-def enviar_email(destino_email, nome_destinatario, editais_novos, prefixo_assunto=""):
-    if editais_novos:
-        assunto = prefixo_assunto + "Novos editais encontrados (" + str(len(editais_novos)) + ")"
-    else:
-        assunto = prefixo_assunto + "Nenhuma oportunidade nova hoje"
-    texto = montar_email_texto(nome_destinatario, editais_novos)
-    html_corpo = montar_email_html(nome_destinatario, editais_novos)
+def enviar_email(destino_email, nome_destinatario, editais_novos, prefixo_assunto="", filtro="", filtro_id=FILTRO_ID_PADRAO):
+    # Aviso curto: so a quantidade e o link do painel (a lista fica la, atras do login).
+    quantidade = len(editais_novos)
+    edicao = hoje_brasilia()
+    link = montar_link_boletim(edicao, filtro_id)
+    assunto = prefixo_assunto + montar_assunto(quantidade)
+    texto = montar_email_texto(nome_destinatario, filtro, edicao, quantidade, link)
+    html_corpo = montar_email_html(nome_destinatario, filtro, edicao, quantidade, link)
     token = os.environ.get("ZEPTOMAIL_TOKEN")
     if token:
         try:
@@ -784,6 +765,34 @@ def enviar_email(destino_email, nome_destinatario, editais_novos, prefixo_assunt
             # So o tipo e o codigo HTTP: nunca o token nem o corpo da resposta.
             log("ZeptoMail falhou (" + type(e).__name__ + " " + str(getattr(e, "code", "")) + "); enviando pelo Gmail")
     enviar_gmail(destino_email, assunto, texto, html_corpo)
+
+
+def registrar_edicao(destinatario, edicao, editais, filtro_id=FILTRO_ID_PADRAO, filtro_nome=None):
+    # Guarda os numeros dos editais da edicao para o painel abrir pelo link do aviso e listar
+    # os dias anteriores (supabase/boletim_edicoes.sql). Sem id de conta (destinatario fixo) nao ha
+    # painel para abrir. Falha aqui nao pode derrubar o aviso.
+    if not destinatario.get("id"):
+        return
+    try:
+        numeros = [e.get("numeroControlePNCP") for e in editais if e.get("numeroControlePNCP")][:500]
+        chave = _chave_servico()
+        corpo = json.dumps([{
+            "cliente_id": destinatario["id"],
+            "edicao": edicao.isoformat(),
+            "filtro_id": filtro_id,
+            "filtro_nome": filtro_nome or nome_filtro(destinatario),
+            "empresa": destinatario["nome"],
+            "quantidade": len(editais),
+            "numeros": numeros,
+        }]).encode("utf-8")
+        req = urllib.request.Request(SUPABASE_URL + "/rest/v1/boletim_edicoes?on_conflict=cliente_id,edicao,filtro_id",
+            data=corpo, method="POST", headers={
+                "apikey": chave, "Authorization": "Bearer " + chave, "Content-Type": "application/json",
+                "Prefer": "resolution=merge-duplicates,return=minimal"})
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            resp.read()
+    except Exception as e:
+        log("AVISO: falha ao registrar a edicao do boletim de " + destinatario["email"] + " (" + str(e) + ").")
 
 
 # ---- WhatsApp via CallMeBot (API gratuita, nao-oficial) ----
@@ -875,7 +884,10 @@ def main():
 
             log(d["nome"] + ": " + str(len(filtrados)) + " editais no filtro.")
 
-            enviar_email(d["email"], d["nome"], filtrados, d.get("assunto", ""))
+            filtro_id = d.get("chave_historico") or FILTRO_ID_PADRAO
+            if filtrados:
+                registrar_edicao(d, hoje_brasilia(), filtrados, filtro_id)  # antes do aviso: o link ja abre a edicao
+            enviar_email(d["email"], d["nome"], filtrados, d.get("assunto", ""), nome_filtro(d), filtro_id)
             if filtrados:
                 log("E-mail enviado para " + d["email"] + " com " + str(len(filtrados)) + " edital(is).")
                 registrar_log_boletim(d, "enviado", len(filtrados))
@@ -990,7 +1002,9 @@ def enviar_jornal(j, pool, historico):
             log("Jornal " + j["nome"] + ": nada novo, sem e-mail.")
             return
         prefixo = "[" + (j["empresa"] + " · " if j["empresa"] else "") + j["nome"] + "] "
-        enviar_email(j["email"], j["empresa"] or j["nome"], novos, prefixo)
+        registrar_edicao({"id": j["cliente_id"], "email": j["email"], "nome": j["empresa"] or j["nome"], "palavras_chave": [j["nome"]]},
+                         hoje_brasilia(), novos, chave, j["nome"])
+        enviar_email(j["email"], j["empresa"] or j["nome"], novos, prefixo, j["nome"], chave)
         registrar_log_boletim(destino, "enviado", len(novos))
         historico[chave] = list(vistos | {e.get("numeroControlePNCP") for e in novos})
         log("Jornal " + j["nome"] + ": " + str(len(novos)) + " edital(is) enviado(s).")

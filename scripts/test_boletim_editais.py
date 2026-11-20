@@ -69,10 +69,11 @@ def test_boletim_por_empresa_e_jornal_viram_emails_separados(monkeypatch):
     monkeypatch.setattr(be, "carregar_historico", lambda: {})
     monkeypatch.setattr(be, "salvar_historico", lambda h: None)
     monkeypatch.setattr(be, "registrar_log_boletim", lambda *a, **k: None)
+    monkeypatch.setattr(be, "registrar_edicao", lambda *a, **k: None)
     monkeypatch.setattr(be, "buscar_pool_por_uf", lambda ufs: {"AM": [_edital(1, "Papel sulfite A4")], "SP": [_edital(2, "Café torrado", uf="SP", municipio="São Paulo")]})
     monkeypatch.setenv("JORNAIS_SEMPRE", "1")
     enviados = []
-    monkeypatch.setattr(be, "enviar_email", lambda email, nome, eds, prefixo="": enviados.append((prefixo, len(eds))))
+    monkeypatch.setattr(be, "enviar_email", lambda email, nome, eds, prefixo="", *a: enviados.append((prefixo, len(eds))))
     be.main()
     # Boletim antigo da conta some (a conta já usa filtro por empresa); um e-mail por empresa e um pelo jornal.
     assert enviados == [("[HCM] ", 1), ("[RYMO] ", 1), ("[HCM · Sulfite] ", 1)]
@@ -107,6 +108,7 @@ def test_prospecta_manda_lista_ordenada_so_da_empresa_ligada(monkeypatch):
     monkeypatch.setattr(be, "carregar_historico", lambda: {})
     monkeypatch.setattr(be, "salvar_historico", lambda h: None)
     monkeypatch.setattr(be, "registrar_log_boletim", lambda *a, **k: None)
+    monkeypatch.setattr(be, "registrar_edicao", lambda *a, **k: None)
     monkeypatch.setattr(be, "e_rodada_dos_jornais", lambda *a: False)
     monkeypatch.setattr(be, "enviar_email", lambda *a, **k: None)
     monkeypatch.setattr(be, "buscar_pool_por_uf", lambda ufs: {"AM": [_edital(1, "Papel toalha"), _edital(2, "Papel sulfite", valorTotalEstimado=5000)]})
@@ -148,3 +150,54 @@ def test_enviar_email_cai_no_gmail_sem_token_ou_com_falha_e_mantem_o_conteudo(mo
     assert [e[0] for e in envios] == ["gmail", "zepto", "gmail"]
     # Mesmo assunto, texto e HTML nos dois caminhos: o formato aprovado nao muda.
     assert envios[1][2:] == envios[2][2:] == envios[0][2:]
+
+
+import re
+from html import escape as html_escape
+from datetime import date
+import boletim_editais as b
+
+EDICAO = date(2026, 11, 20)
+LINK = b.montar_link_boletim(EDICAO)
+
+
+def test_link_do_boletim_so_tem_data_e_filtro():
+    assert LINK == "https://licitaplena.com.br/painel.html?edicao=2026-11-20&filtro=principal#boletim"
+    assert "@" not in LINK and "token" not in LINK
+
+
+def test_email_e_so_aviso_sem_lista_de_editais():
+    html = b.montar_email_html("Empresa X", "limpeza, higiene", EDICAO, 7, LINK)
+    texto = b.montar_email_texto("Empresa X", "limpeza, higiene", EDICAO, 7, LINK)
+    assert "Chegaram 7 novas licitações" in html and "Chegaram 7 novas licitações" in texto
+    assert "Empresa X" in html and "limpeza, higiene" in html and "20/11/2026" in html
+    assert "Acessar o boletim" in html and html_escape(LINK) in html and LINK in texto
+    # nenhum link alem do botao: sem PNCP, sem site do orgao
+    assert re.findall(r'href="([^"]+)"', html) == [html_escape(LINK)]
+    assert "pncp" not in (html + texto).lower()
+
+
+def test_assunto_e_singular_ou_plural():
+    assert b.montar_assunto(1) == "Chegou 1 nova licitação no seu boletim"
+    assert b.montar_assunto(3) == "Chegaram 3 novas licitações no seu boletim"
+
+
+def test_email_sem_novidade_nao_tem_botao():
+    html = b.montar_email_html("Empresa X", "limpeza", EDICAO, 0, LINK)
+    assert "Acessar o boletim" not in html and "href=" not in html
+
+
+def test_nome_da_empresa_e_escapado_no_html():
+    html = b.montar_email_html("<script>x</script>", "a", EDICAO, 2, LINK)
+    assert "<script>" not in html
+
+
+def test_enviar_email_manda_so_aviso_com_link_do_filtro(monkeypatch):
+    envios = []
+    monkeypatch.setattr(b, "enviar_zeptomail", lambda token, email, nome, assunto, texto, html_corpo: envios.append((assunto, texto, html_corpo)))
+    monkeypatch.setenv("ZEPTOMAIL_TOKEN", "token-falso")
+    editais = [{"objetoCompra": "Papel", "numeroControlePNCP": "11222333000181-1-000001/2026"}] * 3
+    b.enviar_email("a@b.com", "HCM", editais, "[HCM] ", "papel", "empresa:e1")
+    assunto, texto, html_corpo = envios[0]
+    assert assunto == "[HCM] Chegaram 3 novas licitações no seu boletim"
+    assert "filtro=empresa%3Ae1#boletim" in texto and "Papel" not in texto + html_corpo
