@@ -1,6 +1,8 @@
 -- Teste de filtros_salvos.sql. Dados fictícios e rollback. Papéis com "set local role"; não prova a API HTTP.
 begin;
 insert into auth.users(id,email) values ('00000000-0000-4000-8000-0000000fa001','a@example.invalid'),('00000000-0000-4000-8000-0000000fa002','b@example.invalid');
+-- boletim_por_empresa.sql passou a exigir conta aprovada (cliente_aprovado) também aqui.
+insert into public.clientes(id,nome,email,status) values ('00000000-0000-4000-8000-0000000fa001','QA fs A','a@example.invalid','aprovado'),('00000000-0000-4000-8000-0000000fa002','QA fs B','b@example.invalid','aprovado');
 do $$
 declare a uuid := '00000000-0000-4000-8000-0000000fa001'; b uuid := '00000000-0000-4000-8000-0000000fa002'; n int; id1 uuid;
 begin

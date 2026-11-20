@@ -1,0 +1,74 @@
+name: Varredura de segurança
+
+# Varredura contínua grátis (segredos, código e dependências). Fase 1: só AVISA.
+# Cada job tem continue-on-error: um achado aparece como aviso na aba Actions e não trava
+# nada; a publicação (publicar-cloudflare.yml) é outro workflow e não depende deste.
+# Para virar trava depois (ver SECURITY.md): tirar o continue-on-error do job e marcar o
+# check como obrigatório na proteção da branch main.
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "17 9 * * 1" # segunda 06:17 (Brasília): avisos novos aparecem mesmo sem commit
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: seguranca-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  segredos:
+    name: Segredos no histórico (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # histórico inteiro: chave apagada do arquivo continua nos commits antigos
+          persist-credentials: false
+      # Imagem oficial com versão fixa; --redact nunca imprime o valor do segredo no log.
+      - name: gitleaks
+        run: >-
+          docker run --rm -v "$PWD:/repo:ro" ghcr.io/gitleaks/gitleaks:v8.30.1
+          git /repo --config /repo/.gitleaks.toml --redact --no-banner --verbose
+
+  codigo:
+    name: Código (Semgrep)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    container:
+      image: semgrep/semgrep:1.140.0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Regras públicas do registro do Semgrep, sem login e sem enviar o código (metrics=off).
+      # Pastas ignoradas ficam em .semgrepignore.
+      - name: semgrep
+        run: >-
+          semgrep scan --metrics=off --error
+          --config p/javascript --config p/nodejs --config p/owasp-top-ten --config p/secrets
+
+  dependencias:
+    name: Dependências (npm audit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "20"
+      # Produção (o que vai para o site e as funções): falha a partir de "moderate".
+      - name: npm audit (produção)
+        run: npm audit --omit=dev --audit-level=moderate
+      # Ferramentas de desenvolvimento (eslint, playwright...): só avisa a partir de "high".
+      - name: npm audit (desenvolvimento)
+        run: npm audit --audit-level=high

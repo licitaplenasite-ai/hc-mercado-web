@@ -81,7 +81,13 @@
     if (Object.hasOwn(REGIOES, o.regiao)) filtro.regiao = o.regiao;
     const km = Number(o.raio?.km);
     if (o.raio?.municipio && /^[A-Za-z]{2}$/.test(o.raio.uf || "") && km >= 1 && km <= 3000) filtro.raio = { municipio: txt(o.raio.municipio, 80), uf: o.raio.uf.toUpperCase(), km: Math.round(km) };
-    for (const c of ["municipio", "esfera", "valorMin", "valorMax", "orgaoTexto"]) if (txt(o[c], 80)) filtro[c] = txt(o[c], 80);
+    for (const c of ["municipio", "esfera", "valorMin", "valorMax", "orgaoTexto", "modalidade", "portal"]) if (txt(o[c], 80)) filtro[c] = txt(o[c], 80);
+    // Busca v2 (busca-extra.js): "limitar" (todas as palavras), período por abertura e chaves liga/desliga.
+    // jornal = este filtro vira um e-mail diário próprio (scripts/boletim_editais.py).
+    const limitar = txt(o.limitar, LIMITES.excluir);
+    if (limitar) filtro.limitar = limitar;
+    if (o.periodoPor === "abertura") filtro.periodoPor = "abertura";
+    for (const c of ["mePp", "excluirSrp", "jornal"]) if (o[c] === true) filtro[c] = true;
     return filtro;
   }
   function nomeValido(nome) {
@@ -95,6 +101,7 @@
     else if (f.regiao) p.push(f.regiao);
     else if (f.ufs?.length) p.push(f.ufs.join(", "));
     if (f.excluir) p.push(`sem: ${f.excluir}`);
+    if (f.limitar) p.push(`com todas: ${f.limitar}`);
     return p.join(" · ");
   }
 

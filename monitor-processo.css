@@ -1,0 +1,30 @@
+/* "Mudou algo no edital?" (monitor-processo-ui.js) no processo do sistema.html. Só tokens do Design System (ds-tokens.css). */
+/* Bloco do Hoje usa as classes hoje-alerta de app-comercial.css; só o botão vai para a coluna do texto. */
+#monitor-processo:empty, #hoje-monitor:empty { display: none; }
+#monitor-processo { max-width: 720px; }
+.mp { display: grid; gap: var(--space-8); min-width: 0; }
+.mp p { margin: 0; overflow-wrap: anywhere; }
+.mp .app-subtitulo { margin: 0; }
+.mp-status { font: var(--text-body-lg); color: var(--text-primary); }
+.mp-apoio, .mp-fonte { font: var(--text-body); color: var(--text-secondary); }
+.mp-fonte { font: var(--text-label); }
+.mp-erro { font: var(--text-body); color: var(--error-text); }
+.mp-contadores { list-style: none; margin: var(--space-4) 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: var(--space-8); }
+.mp-contador { display: grid; gap: 2px; padding: var(--space-8) var(--space-12); border: 1px solid var(--border-default); border-radius: var(--radius-control); background: var(--surface-sunken); }
+.mp-contador.mp-tem { border-color: var(--attention-border); background: var(--attention-bg); }
+.mp-numero { font: var(--text-title); color: var(--text-primary); }
+.mp-contador.mp-tem .mp-numero, .mp-contador.mp-tem .mp-rotulo { color: var(--attention-text); }
+.mp-rotulo { font: var(--text-label); color: var(--text-secondary); }
+.mp-regra { padding: var(--space-8) var(--space-12); border-left: 3px solid var(--info-border); background: var(--info-bg); color: var(--info-text); font: var(--text-body); border-radius: var(--radius-control); }
+.mp-subtitulo { font: var(--text-section); color: var(--text-primary); margin: var(--space-8) 0 0; }
+.mp-lista { list-style: none; margin: 0; padding: 0; display: grid; }
+.mp-item { padding: var(--space-8) 0; border-top: 1px solid var(--border-default); display: grid; gap: var(--space-4); min-width: 0; }
+.mp-item:first-child { border-top: 0; }
+.mp-topo { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4) var(--space-8); }
+.mp-selo { padding: 2px var(--space-8); border-radius: 999px; border: 1px solid var(--border-default); background: var(--surface-sunken); color: var(--text-primary); font: var(--text-label); white-space: nowrap; }
+.mp-selo-novo { border-color: var(--attention-border); background: var(--attention-bg); color: var(--attention-text); }
+.mp-quando { font: var(--text-label); color: var(--text-secondary); }
+.mp-resumo { font: var(--text-body); color: var(--text-primary); }
+.mp-links { display: flex; flex-wrap: wrap; gap: var(--space-8) var(--space-16); }
+.mp-link { color: var(--action-text); font: var(--text-body); display: inline-flex; align-items: center; min-height: 44px; }
+#hoje-monitor .hoje-alerta li button { grid-column: 2; width: max-content; min-height: 44px; }

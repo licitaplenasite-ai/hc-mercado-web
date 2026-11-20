@@ -50,6 +50,9 @@ function criarContexto({ palavras = "expediente", armazenado = {} } = {}) {
     buscarExtrasSistemaS: async () => [],
     renderizarPainelBoletim: (_alvo, resultados) => renderizacoes.push(resultados.map((r) => r.numeroControlePNCP)),
     buscarOportunidadesAbertas: (ufs, lista) => new Promise((resolve) => consultas.push({ palavras: lista.join(","), resolve })),
+    // Busca v2 (busca-extra.js) sem filtros extras: não muda a lista.
+    filtroExtraDaTela: () => ({}),
+    window: { BuscaExtra: { filtrarExtra: (lista) => lista, dataDoPeriodo: (r) => r.publicacao } },
   });
   for (const nome of ["salvarFiltroOportunidades", "lerResultadoOportunidades", "salvarResultadoOportunidades", "definirNotaResultadoOportunidades", "buscarOportunidades"]) {
     vm.runInContext(extrairFuncao(nome), contexto);

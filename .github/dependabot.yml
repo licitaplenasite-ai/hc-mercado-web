@@ -1,0 +1,35 @@
+# Dependabot: abre pedidos de atualização (PR) para revisar; nunca faz merge sozinho.
+# Correção de segurança chega assim que sai o aviso; as atualizações comuns vêm 1 vez por semana,
+# agrupadas, para não encher de PR. Nada é publicado sem o dono aprovar o merge.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Sao_Paulo
+    # Espera 3 dias antes de propor versão recém-publicada (pacote sequestrado costuma ser removido antes).
+    # Correção de segurança ignora essa espera.
+    cooldown:
+      default-days: 3
+    open-pull-requests-limit: 5
+    groups:
+      dependencias-menores:
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Sao_Paulo
+    # Espera 3 dias antes de propor versão recém-publicada (pacote sequestrado costuma ser removido antes).
+    # Correção de segurança ignora essa espera.
+    cooldown:
+      default-days: 3
+    open-pull-requests-limit: 3
+    groups:
+      actions:
+        patterns: ["*"]

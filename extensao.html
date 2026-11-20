@@ -22,6 +22,8 @@
     code{background:var(--surface-sunken,#f1f4fa);padding:1px 6px;border-radius:4px;overflow-wrap:anywhere}
     a{color:var(--action-text,#2255e0)}a:focus-visible{outline:2px solid var(--focus-ring,#3772f8);outline-offset:2px}
     .aviso{background:var(--attention-bg,#fff4e0);border:1px solid var(--attention-border,#f0cf95);color:var(--attention-text,#8a4b00);border-radius:8px;padding:10px 12px}
+    .btn-baixar{display:inline-block;margin:4px 0 16px;padding:10px 18px;border-radius:var(--radius-control,8px);background:var(--action-strong,#2255e0);color:var(--action-on,#fff);font-weight:600;text-decoration:none}
+    .btn-baixar:hover{background:var(--action-strong-hover,#1a44b8)}
     .info{background:var(--info-bg,#eaf1fe);border:1px solid var(--info-border,#b9ccf5);color:var(--info-text,#1f4fb8);border-radius:8px;padding:10px 12px}
   </style>
 </head>
@@ -32,8 +34,10 @@
   <p class="aviso"><strong>Versão de desenvolvedor (0.4.0).</strong> A versão da Chrome Web Store vem depois. Por enquanto a extensão é instalada manualmente, como abaixo.</p>
 
   <h2>Instalar (uma vez, uns 3 minutos)</h2>
+  <!-- Botão de download adicionado em 19/11/2026: aguarda aprovação. -->
+  <a class="btn-baixar" href="extensao/licitaplena-extensao-0.4.0.zip" download>Baixar a extensão (versão 0.4.0)</a>
   <ol>
-    <li>Receba da equipe do LicitaPlena o arquivo <code>licitaplena-extensao-0.4.0.zip</code> e salve na pasta <strong>Documentos</strong>.</li>
+    <li>Clique em <strong>Baixar a extensão</strong>, acima. O arquivo <code>licitaplena-extensao-0.4.0.zip</code> vai para a pasta <strong>Downloads</strong>; mova para a pasta <strong>Documentos</strong>.</li>
     <li>Clique com o botão direito no arquivo e escolha <strong>Extrair tudo…</strong> → <strong>Extrair</strong>. Vai aparecer uma pasta com o mesmo nome. Não apague essa pasta depois: o navegador usa ela.</li>
     <li>No Chrome, digite <code>chrome://extensions</code> na barra de endereço e aperte Enter. No Edge, digite <code>edge://extensions</code>.</li>
     <li>Ligue a chave <strong>Modo do desenvolvedor</strong> (no Chrome fica no canto superior direito; no Edge, na barra da esquerda, embaixo).</li>
@@ -95,5 +99,7 @@
 
   <p><a href="index.html">Voltar ao LicitaPlena</a></p>
 </main>
+<script src="ajuda-ui.js" defer></script>
+<script src="avisos-celular.js" defer></script>
 </body>
 </html>

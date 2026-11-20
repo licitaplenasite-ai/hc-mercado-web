@@ -1515,7 +1515,8 @@ exports.handler = async (event) => {
   const apiKey = process.env.GROQ_API_KEY;
   const documental = require("../_pergunta_documental");
   const pagamento = modo === "pergunta" && documental.responderPagamento(textoEdital, pergunta);
-  if (pagamento) return { statusCode: 200, headers, body: JSON.stringify({ resposta: documental.avisarCobertura(pagamento, coberturaLeitura?.parcial, false), estrutura: null, textoEdital, fonteLida, motivoFonteNaoLida, erro: null }) };
+  const uso = modo === "pergunta" && limite.usadas ? { usadas: limite.usadas, limite: limite.limite } : undefined;
+  if (pagamento) return { statusCode: 200, headers, body: JSON.stringify({ resposta: documental.avisarCobertura(pagamento, coberturaLeitura?.parcial, false), estrutura: null, uso, textoEdital, fonteLida, motivoFonteNaoLida, erro: null }) };
   if (modo !== "resumo" && !haProvedorConfigurado(process.env)) {
     return { statusCode: 500, headers, body: JSON.stringify({ erro: "Nenhum provedor de IA configurado (GROQ_API_KEY, GEMINI_API_KEY, OPENROUTER_API_KEY ou CLOUDFLARE_AI_TOKEN)." }) };
   }
@@ -1540,7 +1541,7 @@ exports.handler = async (event) => {
     if (!r.ok) return { statusCode: 502, headers, body: JSON.stringify({ erro: "A IA não retornou uma resposta utilizável. Tente novamente em instantes ou confira os documentos oficiais." }) };
     const resposta = documental.formatarRespostaDocumental(r.texto, contexto.fontes);
     if (!resposta) return { statusCode: 502, headers, body: JSON.stringify({ erro: "Não foi possível validar a resposta contra os documentos. Tente novamente em instantes ou confira a fonte oficial." }) };
-    return { statusCode: 200, headers, body: JSON.stringify({ resposta: documental.avisarCobertura(resposta, coberturaLeitura?.parcial, contexto.selecaoParcial), estrutura: null, textoEdital: textoEdital || null, fonteLida, motivoFonteNaoLida, erro: null }) };
+    return { statusCode: 200, headers, body: JSON.stringify({ resposta: documental.avisarCobertura(resposta, coberturaLeitura?.parcial, contexto.selecaoParcial), estrutura: null, uso, textoEdital: textoEdital || null, fonteLida, motivoFonteNaoLida, erro: null }) };
   }
 
   // modo === "resumo"

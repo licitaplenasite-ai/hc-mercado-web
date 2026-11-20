@@ -38,7 +38,7 @@ function formatarRespostaDocumental(texto, fontes) {
   let dados;
   try { dados = JSON.parse(texto.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')); } catch (_) { return null; }
   if (!dados || typeof dados.naoLocalizado !== 'boolean' || !Array.isArray(dados.evidencias) || dados.evidencias.length > 6) return null;
-  if (dados.naoLocalizado) return dados.evidencias.length ? null : 'Não localizei a informação nos trechos analisados. Isso não comprova que ela inexista no edital. Confira os documentos oficiais.';
+  if (dados.naoLocalizado) return dados.evidencias.length ? null : 'Não encontrei no edital a resposta para esta pergunta (nos trechos analisados). Isso não comprova que ela inexista no edital. Confira os documentos oficiais.';
   if (!dados.evidencias.length) return null;
   const trechos = [];
   for (const e of dados.evidencias) {

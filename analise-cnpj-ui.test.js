@@ -122,3 +122,45 @@ test("vulnerabilidade: empresa regular e antiga não gera alerta; sanção só e
   const so = U.alertasVulnerabilidade({ hoje: "2026-11-19", sancoes: { vigentes: [], expiradas: [{}] } });
   assert.deepEqual(so.map((x) => x.nivel), ["info"]);
 });
+
+test("relatório: valor disputado x vencido por modalidade, sazonalidade por mês, vitórias por material e marcas", () => {
+  const ls = [
+    { ...base, numero_item: 1, ordem_classificacao: 1, valor_homologado: 10, quantidade_homologada: 3, data_resultado: "2026-03-10", marca: "Melitta", catmat: "123" },
+    { ...base, numero_item: 2, classificacao: 2, valor_lance: 4, quantidade: 5, data_resultado: "2025-03-02", modalidade: "Dispensa" },
+    { ...base, numero_item: 3, ordem_classificacao: 1, valor_homologado: 1, quantidade_homologada: 2, data_publicacao: "2026-07-01", marca: "MELITTA", catmat: "123" },
+  ];
+  const r = U.resumir(ls);
+  assert.equal(r.valorDisputado, 30 + 20 + 2);
+  assert.equal(r.valorGanho, 32);
+  assert.deepEqual(r.porModalidade.map((g) => [g.chave, g.disputas, g.vencidas, g.valorDisputado, g.valor]), [["Pregão", 2, 2, 32, 32], ["Dispensa", 1, 0, 20, 0]]);
+  assert.deepEqual([r.porMes[2].disputas, r.porMes[2].vencidas, r.porMes[6].disputas, r.porMes[0].disputas], [2, 1, 1, 0]);
+  assert.equal(r.vitoriasPorProduto[0].vencidas, 2);
+  assert.deepEqual(r.marcas.map((m) => [m.itens, m.valor]), [[2, 32]], "marca agrupada sem diferença de caixa");
+});
+
+test("motivos: texto literal com a fonte; sem texto na fonte não inventa motivo; peça só se fala de recusa", () => {
+  const r = U.resumir(linhas);
+  const mot = U.motivosGravados([{ id_compra: "78882005900332025", numero_item: 109, tipo: "inabilitacao", motivo: "Atestado não compatível", leituras_concordantes: 1 }], []);
+  const lista = U.motivosComFonte({ r, mot, detalhes: [{ id_compra: "19302805900142024", numero_item: 4, motivo_situacao: "Fornecedor não enviou a proposta ajustada" }],
+    pecas: [{ tipo: "recurso", texto: "Fomos desclassificados injustamente", resposta: "Mantida a desclassificação: amostra reprovada", resultado: "NÃO PROCEDE", url: "https://www.comprasnet.gov.br/x" },
+      { tipo: "recurso", texto: "Preço inexequível do concorrente", resposta: "Negado" }] });
+  const por = (t) => lista.filter((m) => m.tipo === t);
+  assert.equal(por("Inabilitação")[0].texto, "Atestado não compatível");
+  assert.equal(por("Inabilitação")[0].fonte, "Pregão gravado");
+  assert.match(por("Inabilitação")[0].selo, /não verificado/);
+  assert.equal(por("Resultado cancelado")[0].texto, "Não assinou a ata");
+  assert.equal(por("Resultado cancelado")[0].fonte, "PNCP (resultado do item)");
+  assert.equal(lista.find((m) => /termo de adjudicação/.test(m.fonte)).texto, "Fornecedor não enviou a proposta ajustada");
+  assert.equal(por("Recurso").length, 1, "recurso que não fala de recusa fica fora");
+  assert.match(por("Recurso")[0].texto, /^Decisão: NÃO PROCEDE — Mantida a desclassificação/);
+  assert.equal(por("Recusada (arquivo)")[0].texto, "", "arquivo de propostas não tem motivo: fica vazio");
+});
+
+test("planilha do relatório: abas fixas, números como número e todas as disputas", () => {
+  const r = U.resumir(linhas);
+  const abas = U.planilhaRelatorio({ cnpj: "48885922000150", cad: { razao_social: "F M" }, r, motivos: [], ct: U.resumirContratos([], "2026-11-20"), hoje: "2026-11-20" });
+  assert.deepEqual(abas.map((a) => a.nome), ["Resumo", "Por modalidade", "Por UF", "Sazonalidade", "Materiais", "Marcas", "Motivos", "Disputas", "Contratos"]);
+  assert.equal(abas.find((a) => a.nome === "Disputas").linhas.length, 1 + linhas.length);
+  assert.equal(abas[0].linhas.find((l) => l[0] === "Valor vencido (R$)")[1], 1720);
+  assert.ok(abas.every((a) => a.nome.length <= 31), "Excel aceita no máximo 31 caracteres no nome da aba");
+});

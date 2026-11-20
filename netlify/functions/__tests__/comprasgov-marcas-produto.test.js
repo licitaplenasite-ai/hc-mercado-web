@@ -205,3 +205,24 @@ test("handler devolve atributos do termo e compras sem marca aproveitável", asy
     global.fetch = original;
   }
 });
+
+test("codigoItem (CATMAT do PNCP) faz 1 consulta exata por codigoItemCatalogo e valida o código", async () => {
+  const original = global.fetch;
+  const chamadas = [];
+  global.fetch = async (url) => {
+    chamadas.push(String(url));
+    return { ok: true, json: async () => ({ totalRegistros: 1, totalPaginas: 1, resultado: [{ marca: "BIC", descricaoItem: "CANETA", precoUnitario: 0.5, codigoItemCatalogo: 622254 }] }) };
+  };
+  try {
+    assert.equal((await handler({ queryStringParameters: { termo: "caneta", codigoItem: "abc" } })).statusCode, 400);
+    const r = await handler({ queryStringParameters: { termo: "caneta", codigoItem: "622254", produto: "caneta" } });
+    assert.equal(r.statusCode, 200);
+    assert.equal(chamadas.length, 1);
+    const q = new URL(chamadas[0]).searchParams;
+    assert.equal(q.get("tipo"), "codigoItemCatalogo");
+    assert.equal(q.get("codigo"), "622254");
+    assert.equal(JSON.parse(r.body).itens[0].marca, "BIC");
+  } finally {
+    global.fetch = original;
+  }
+});

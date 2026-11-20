@@ -171,6 +171,38 @@
   .mfa-secreto code { background: var(--campo); padding: 2px 6px; border-radius: 4px; color: var(--texto); }
   #btn-mfa-config { background: var(--cartao); border: 1px solid var(--border-strong); color: var(--texto); padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 13px; margin-right: 8px; }
 
+  /* Painel de planos (aguarda aprovação visual): só tokens do Design System. */
+  .tabs { flex-wrap: wrap; }
+  .filtros { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; align-items: center; }
+  .filtros button { background: var(--cartao); border: 1px solid var(--borda); color: var(--texto-fraco); padding: 6px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .filtros button.ativo { background: var(--action-tint); color: var(--action-text); border-color: var(--action-text); }
+  .filtros input[type="search"] { margin-left: auto; min-width: 220px; padding: 8px 12px; background: var(--campo); border: 1px solid var(--border-strong); border-radius: 8px; color: var(--texto); font-size: 14px; }
+  .cards-resumo { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .card-num { background: var(--cartao); border: 1px solid var(--borda); border-radius: var(--raio); padding: 16px; }
+  .card-num strong { display: block; font-size: 24px; line-height: 32px; }
+  .card-num span { color: var(--texto-fraco); font-size: 13px; }
+  .badge.teste { background: var(--info-bg); color: var(--info-text); border-color: var(--info-border); }
+  .badge.gratis { background: var(--cartao-claro); color: var(--texto-fraco); border-color: var(--borda); }
+  .badge.suspenso { background: var(--error-bg); color: var(--error-text); border-color: var(--error-border); }
+  .badge.ativo { background: var(--success-bg); color: var(--success-text); border-color: var(--success-border); }
+  .sub { color: var(--texto-fraco); font-size: 13px; }
+  .tabela-rolavel { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .tabela-rolavel input[type="text"] { width: 72px; padding: 6px 8px; background: var(--campo); border: 1px solid var(--border-strong); border-radius: 6px; color: var(--texto); font-size: 13px; }
+  .linha-titulo { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+  label.inline { display: inline-flex; gap: 8px; align-items: center; font-size: 13px; color: var(--texto-fraco); }
+  label.inline select { padding: 6px 8px; background: var(--campo); border: 1px solid var(--border-strong); border-radius: 6px; color: var(--texto); }
+  .grade-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0 16px; align-items: end; }
+  .grade-form input, .grade-form select { max-width: 100% !important; }
+  .modal-detalhe.largo { max-width: 760px; }
+  .bloco-detalhe { border: 1px solid var(--borda); border-radius: var(--raio-pq); padding: 16px; margin-bottom: 16px; }
+  .bloco-detalhe h4 { margin: 0 0 8px; font-size: 14px; }
+  .bloco-detalhe ul { margin: 0; padding-left: 18px; font-size: 13px; }
+  .grade-plano { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 12px; }
+  .btn-secundario { background: var(--cartao); color: var(--action-text); border: 1px solid var(--border-strong); padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .aviso-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--borda); font-size: 14px; }
+  .aviso-item:last-child { border-bottom: none; }
+  @media (max-width: 600px) { .grade-plano { grid-template-columns: 1fr 1fr; } .filtros input[type="search"] { margin-left: 0; width: 100%; min-width: 0; } }
+
   /* Tablet (768px) */
   @media (max-width: 880px) {
     header { padding: 16px 20px; flex-wrap: wrap; row-gap: 10px; }
@@ -251,7 +283,7 @@
   <header>
     <div class="titulo">
       <span class="placa"><img src="logo-icone.svg" alt=""></span>
-      <h1>Painel Admin — Clientes</h1>
+      <h1>Painel Admin</h1>
     </div>
     <div>
       <button id="btn-mfa-config" title="Configurar/desativar autenticação em duas etapas">🔒 2FA</button>
@@ -260,25 +292,79 @@
     </div>
   </header>
   <main>
-    <div class="tabs">
-      <button data-status="pendente" class="ativo">Pendentes</button>
-      <button data-status="aprovado">Aprovados</button>
-      <button data-status="rejeitado">Rejeitados</button>
-      <button data-status="todos">Todos</button>
+    <nav class="tabs" aria-label="Áreas do painel">
+      <button data-status="visao" class="ativo">Visão geral</button>
+      <button data-status="clientes">Clientes</button>
+      <button data-status="planos" id="tab-planos" style="display:none;">Planos</button>
+      <button data-status="uso">Uso</button>
+      <button data-status="financeiro" id="tab-financeiro" style="display:none;">Financeiro</button>
       <button data-status="boletim">Boletim</button>
       <button data-status="equipe" id="tab-equipe" style="display:none;">Equipe</button>
       <button data-status="acessos" id="tab-acessos" style="display:none;">Acessos por empresa</button>
-    </div>
-    <div class="cartao-lista faixa-auto-aprovacao">
-      <div>
-        <div class="titulo-auto">Aprovação automática de cadastros</div>
-        <div class="nota-auto">Quando ligada, todo cadastro novo já entra aprovado na hora, sem precisar clicar em "Aprovar".</div>
+    </nav>
+    <div id="secao-visao">
+      <div class="cards-resumo" id="cards-resumo"><div class="carregando">Carregando resumo...</div></div>
+      <div class="cartao-lista" style="padding:20px 24px;">
+        <h3 style="margin-top:0;">Avisos</h3>
+        <div id="lista-avisos" class="carregando">Carregando avisos...</div>
       </div>
-      <button type="button" id="btn-toggle-auto-aprovacao" class="switch-aprovacao" data-ativo="false">Desligada</button>
     </div>
-    <div class="erro" id="erro-auto-aprovacao" style="margin-bottom:14px;"></div>
-    <div class="cartao-lista" id="secao-clientes">
-      <div id="conteudo-lista" class="carregando">Carregando clientes...</div>
+    <div id="secao-clientes" style="display:none;">
+      <div class="cartao-lista faixa-auto-aprovacao">
+        <div>
+          <div class="titulo-auto">Aprovação automática de cadastros</div>
+          <div class="nota-auto">Quando ligada, todo cadastro novo já entra aprovado na hora, sem precisar clicar em "Aprovar". O teste de 14 dias começa na aprovação.</div>
+        </div>
+        <button type="button" id="btn-toggle-auto-aprovacao" class="switch-aprovacao" data-ativo="false">Desligada</button>
+      </div>
+      <div class="erro" id="erro-auto-aprovacao" style="margin-bottom:14px;"></div>
+      <div class="filtros" role="group" aria-label="Filtrar clientes">
+        <button type="button" data-filtro="pendente" class="ativo">Pendentes</button>
+        <button type="button" data-filtro="teste">Em teste</button>
+        <button type="button" data-filtro="ativo">Ativos</button>
+        <button type="button" data-filtro="gratis">Grátis</button>
+        <button type="button" data-filtro="suspenso">Suspensos</button>
+        <button type="button" data-filtro="todos">Todos</button>
+        <input type="search" id="busca-clientes" placeholder="Buscar nome, e-mail ou CNPJ" aria-label="Buscar cliente">
+      </div>
+      <div class="cartao-lista">
+        <div id="conteudo-lista" class="carregando">Carregando clientes...</div>
+      </div>
+    </div>
+    <div id="secao-planos" style="display:none;">
+      <div class="cartao-lista" style="padding:20px 24px;">
+        <h3 style="margin-top:0;">Planos e recursos</h3>
+        <p class="nota-equipe">Esta é a tabela única de regras. Vale na hora para todas as contas do plano: o banco bloqueia o que passar do limite. Campo vazio = sem limite (nos recursos, vazio = limite padrão da ferramenta). A linha "Teste grátis" limita quem está nos 14 dias: vale o menor valor entre o plano escolhido e ela.</p>
+        <div class="tabela-rolavel" id="conteudo-planos"><div class="carregando">Carregando planos...</div></div>
+        <div id="resultado-planos" role="status" style="margin-top:12px;"></div>
+      </div>
+    </div>
+    <div id="secao-uso" style="display:none;">
+      <div class="cartao-lista" style="padding:20px 24px;">
+        <div class="linha-titulo"><h3 style="margin:0;">Uso das ferramentas</h3>
+          <label class="inline">Período <select id="uso-dias"><option value="1">Hoje</option><option value="7">7 dias</option><option value="30" selected>30 dias</option></select></label></div>
+        <div class="tabela-rolavel" id="conteudo-uso"><div class="carregando">Carregando uso...</div></div>
+      </div>
+    </div>
+    <div id="secao-financeiro" style="display:none;">
+      <div class="cartao-lista" style="padding:20px 24px;margin-bottom:20px;">
+        <h3 style="margin-top:0;">Registrar cobrança</h3>
+        <p class="nota-equipe">Nenhuma cobrança é enviada daqui e não há integração de pagamento ligada. Registre o Pix que caiu na sua conta: com "Já recebido" marcado, a assinatura fica ativa e o próximo vencimento é calculado (1 mês ou 1 ano). Os pontos de ligação para Asaas ou Pix pelo banco estão em _historico/arquitetura-planos-admin-20261119.md.</p>
+        <form id="form-pagamento" class="form-equipe grade-form">
+          <div><label for="pag-conta">Conta</label><select id="pag-conta" required></select></div>
+          <div><label for="pag-plano">Plano</label><select id="pag-plano"></select></div>
+          <div><label for="pag-ciclo">Ciclo</label><select id="pag-ciclo"><option value="mensal">Mensal</option><option value="anual">Anual</option></select></div>
+          <div><label for="pag-valor">Valor (R$)</label><input id="pag-valor" type="text" inputmode="decimal" placeholder="Preço do plano"></div>
+          <div><label for="pag-vencimento">Vencimento</label><input id="pag-vencimento" type="date"></div>
+          <div><label for="pag-referencia">Referência (ex.: id do Pix)</label><input id="pag-referencia" type="text" maxlength="200"></div>
+          <div class="checkbox-linha"><input type="checkbox" id="pag-pago"><label for="pag-pago">Já recebido</label></div>
+          <div><button type="submit" class="btn-adicionar">Registrar</button></div>
+        </form>
+        <div id="resultado-pagamento" role="status" style="margin-top:12px;"></div>
+      </div>
+      <div class="cartao-lista">
+        <div class="tabela-rolavel" id="conteudo-pagamentos"><div class="carregando">Carregando cobranças...</div></div>
+      </div>
     </div>
     <div id="secao-boletim" style="display:none;">
       <div class="cartao-lista">
@@ -335,7 +421,7 @@
 </div>
 
 <div class="modal-detalhe-fundo" id="modal-detalhe-fundo">
-  <div class="modal-detalhe">
+  <div class="modal-detalhe largo">
     <div class="modal-detalhe-topo">
       <h3 style="margin:0;font-size:16px;">Detalhes do cadastro</h3>
       <button type="button" id="modal-detalhe-fechar" title="Fechar">&#10005;</button>
@@ -426,7 +512,12 @@
   function abrirDetalheCliente(c) {
     clienteEmEdicao = c;
     document.getElementById("erro-detalhe-cliente").style.display = "none";
+    const titular = !c.titular_id || c.titular_id === c.id;
     document.getElementById("modal-detalhe-corpo").innerHTML =
+      `<div class="bloco-detalhe"><h4>Plano e limites</h4><div id="bloco-plano">${titular ? "Carregando..." : `Colaborador de <strong>${escapeHtml(c.titular_nome || "outra conta")}</strong>: usa o plano do titular (${escapeHtml(c.efetivo?.nome || "-")}).`}</div></div>` +
+      `<div class="bloco-detalhe"><h4>Empresas (CNPJs) e usuários</h4><div id="bloco-empresas">Carregando...</div></div>` +
+      `<div class="bloco-detalhe"><h4>Histórico</h4><div id="bloco-historico">Carregando...</div></div>` +
+      `<div class="bloco-detalhe"><h4>Dados do cadastro</h4>` +
       campoTexto("edit-nome", "Nome", c.nome) +
       campoTexto("edit-empresa", "Empresa", c.empresa) +
       `<div class="linha-dupla">` +
@@ -446,34 +537,119 @@
       campoSelect("edit-licitacoes-mes", "Licitações por mês", OPCOES_LICITACOES_MES, c.licitacoes_por_mes) +
       campoSelect("edit-faturamento", "Faturamento anual", OPCOES_FATURAMENTO, c.faturamento_anual) +
       campoSelect("edit-como-usar", "Como pretende usar", OPCOES_COMO_USAR, c.como_pretende_usar) +
-      campoTexto("edit-plano", "Plano", c.plano) +
-      (adminAtual?.role === "owner" ? `<div class="campo-form"><label for="edit-limite-cnpjs">Limite de CNPJs gerenciados</label><select id="edit-limite-cnpjs" disabled><option>Carregando...</option></select><p style="color:var(--texto-fraco);font-size:12px;">Padrão: 3. Seu acesso de proprietário não tem limite. Reduzir a cota não apaga empresas já cadastradas.</p><button type="button" id="btn-salvar-limite-cnpjs" disabled>Salvar limite de CNPJs</button><span id="resultado-limite-cnpjs" role="status"></span></div>` : "") +
-      campoTextarea("edit-observacoes", "Observações internas (só a equipe vê)", c.observacoes_admin);
+      campoTextarea("edit-observacoes", "Observações internas (só a equipe vê)", c.observacoes_admin) + `</div>`;
     document.getElementById("modal-detalhe-fundo").classList.add("aberto");
-    if (adminAtual?.role === "owner") void carregarLimiteCliente(c.id);
+    if (titular) void montarBlocoPlano(c);
+    void montarBlocoEmpresas(c);
+    void montarBlocoHistorico(c);
   }
 
-  async function carregarLimiteCliente(id) {
-    const select = document.getElementById("edit-limite-cnpjs");
-    const botao = document.getElementById("btn-salvar-limite-cnpjs");
-    const resultado = document.getElementById("resultado-limite-cnpjs");
-    const { data, error } = await sb.rpc("consultar_limite_cnpjs_cliente", { p_usuario_id: id });
-    if (clienteEmEdicao?.id !== id || !select) return;
-    if (error) { resultado.textContent = " Cota indisponível: aplique a migração de limite de CNPJs."; return; }
-    if (data === null) { select.innerHTML = "<option>Sem limite (proprietário)</option>"; return; }
-    select.innerHTML = [1, 2, 3].map(n => `<option value="${n}">${n} CNPJ${n === 1 ? "" : "s"}</option>`).join("");
-    select.value = String(data);
-    select.disabled = false;
-    botao.disabled = false;
-    botao.addEventListener("click", async () => {
+  const NOMES_SITUACAO = { teste: "Em teste", ativa: "Ativa", vencida: "Vencida", suspensa: "Suspensa", cancelada: "Cancelada" };
+  const dataBr = (v) => v ? new Date(v.length === 10 ? v + "T12:00:00" : v).toLocaleDateString("pt-BR") : "-";
+  const reais = (centavos) => centavos == null ? "-" : (centavos / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const numeroOuVazio = (v) => { const t = String(v ?? "").trim(); return t === "" ? null : Number.parseInt(t, 10); };
+
+  async function montarBlocoPlano(c) {
+    const alvo = document.getElementById("bloco-plano");
+    const a = c.assinatura || {}, e = c.efetivo || {};
+    const salvo = mensagemPlano ? `<p role="status" id="resultado-plano-salvo"><strong>${escapeHtml(mensagemPlano)}</strong></p>` : "";
+    mensagemPlano = "";
+    const resumo = salvo + `<p class="sub">Agora vale: <strong>${escapeHtml(e.nome || "-")}</strong>${e.em_teste ? ` (teste até ${dataBr(e.teste_ate)})` : ""} · ${c.cnpjs_ativos} de ${e.max_cnpjs ?? "∞"} CNPJs · ${c.usuarios} de ${e.max_usuarios ?? "∞"} usuários · ${c.processos_ativos} processos${e.max_processos != null ? " de " + e.max_processos : ""}${a.plano_solicitado ? ` · <strong>pediu o plano ${escapeHtml(a.plano_solicitado)}</strong>` : ""}</p>`;
+    if (adminAtual?.role !== "owner") { alvo.innerHTML = resumo + '<p class="sub">Só o proprietário muda plano e limites.</p>'; return; }
+    const planos = await carregarPlanosCatalogo();
+    if (clienteEmEdicao?.id !== c.id) return;
+    const opcoesPlano = planos.filter((p) => p.codigo !== "teste" && (p.codigo !== "dono" || a.plano === "dono"))
+      .map((p) => `<option value="${escapeHtml(p.codigo)}"${p.codigo === a.plano ? " selected" : ""}>${escapeHtml(p.nome)}</option>`).join("");
+    const opcoesSituacao = Object.entries(NOMES_SITUACAO).map(([k, v]) => `<option value="${k}"${k === a.situacao ? " selected" : ""}>${v}</option>`).join("");
+    const testeAte = a.teste_ate ? a.teste_ate.slice(0, 10) : "";
+    alvo.innerHTML = resumo + `<div class="grade-plano">
+      <div><label for="ass-plano">Plano</label><select id="ass-plano">${opcoesPlano}</select></div>
+      <div><label for="ass-situacao">Situação</label><select id="ass-situacao">${opcoesSituacao}</select></div>
+      <div><label for="ass-teste-ate">Teste até</label><input type="date" id="ass-teste-ate" value="${escapeHtml(testeAte)}"></div>
+      <div><label for="ass-vence-em">Vencimento</label><input type="date" id="ass-vence-em" value="${escapeHtml(a.vence_em || "")}"></div>
+      <div><label for="ass-ciclo">Ciclo</label><select id="ass-ciclo"><option value="">-</option><option value="mensal"${a.ciclo === "mensal" ? " selected" : ""}>Mensal</option><option value="anual"${a.ciclo === "anual" ? " selected" : ""}>Anual</option></select></div>
+      <div><label for="ass-valor">Valor (R$)</label><input type="text" inputmode="decimal" id="ass-valor" value="${a.valor_centavos != null ? escapeHtml((a.valor_centavos / 100).toFixed(2).replace(".", ",")) : ""}"></div>
+      <div><label for="ass-max-cnpjs">CNPJs (ajuste)</label><input type="text" inputmode="numeric" id="ass-max-cnpjs" placeholder="do plano" value="${a.max_cnpjs ?? ""}"></div>
+      <div><label for="ass-max-usuarios">Usuários (ajuste)</label><input type="text" inputmode="numeric" id="ass-max-usuarios" placeholder="do plano" value="${a.max_usuarios ?? ""}"></div>
+      <div><label for="ass-max-processos">Processos (ajuste)</label><input type="text" inputmode="numeric" id="ass-max-processos" placeholder="do plano" value="${a.max_processos ?? ""}"></div>
+    </div>
+    <label for="ass-observacoes">Observação da assinatura</label><textarea id="ass-observacoes">${escapeHtml(a.observacoes || "")}</textarea>
+    <div class="acoes" style="margin-top:12px;"><button type="button" class="btn-aprovar" id="btn-salvar-plano">Salvar plano e limites</button>
+      ${c.status === "aprovado" ? '<button type="button" class="btn-rejeitar" id="btn-suspender">Suspender conta</button>' : ""}
+      ${a.situacao === "suspensa" ? '<button type="button" class="btn-reverter" id="btn-reativar">Reativar conta</button>' : ""}</div>
+    <p id="resultado-plano" role="status" class="sub"></p>`;
+    const resultado = document.getElementById("resultado-plano");
+    document.getElementById("btn-salvar-plano").addEventListener("click", async (ev) => {
+      const botao = ev.currentTarget;
+      const valor = document.getElementById("ass-valor").value.trim().replace(/\./g, "").replace(",", ".");
+      const dados = {
+        plano: document.getElementById("ass-plano").value,
+        situacao: document.getElementById("ass-situacao").value,
+        teste_ate: document.getElementById("ass-teste-ate").value ? document.getElementById("ass-teste-ate").value + "T23:59:59-04:00" : null,
+        vence_em: document.getElementById("ass-vence-em").value || null,
+        ciclo: document.getElementById("ass-ciclo").value || null,
+        valor_centavos: valor ? Math.round(Number(valor) * 100) : null,
+        max_cnpjs: numeroOuVazio(document.getElementById("ass-max-cnpjs").value),
+        max_usuarios: numeroOuVazio(document.getElementById("ass-max-usuarios").value),
+        max_processos: numeroOuVazio(document.getElementById("ass-max-processos").value),
+        observacoes: document.getElementById("ass-observacoes").value.trim() || null,
+      };
+      if (Object.values(dados).some((v) => typeof v === "number" && !Number.isFinite(v))) { resultado.textContent = "Confira os números."; return; }
       botao.disabled = true;
-      resultado.textContent = " Salvando...";
-      const { error: erroSalvar } = await sb.rpc("configurar_limite_cnpjs_cliente", {
-        p_usuario_id: id, p_limite: Number(select.value),
-      });
-      resultado.textContent = erroSalvar ? " Erro: " + erroSalvar.message : " Limite salvo.";
+      resultado.textContent = "Salvando...";
+      const { error } = await sb.rpc("admin_definir_assinatura", { p_usuario: c.id, p_dados: dados });
       botao.disabled = false;
+      if (error) { resultado.textContent = "Não foi possível salvar: " + error.message; return; }
+      await recarregarEReabrir(c.id, "Plano salvo. Já vale para a conta.");
     });
+    for (const [id, acao, pergunta] of [["btn-suspender", "suspenso", "Suspender a conta? A pessoa deixa de entrar até você reativar. Nada é apagado."], ["btn-reativar", "reativar", "Reativar a conta?"]]) {
+      const botao = document.getElementById(id);
+      if (!botao) continue;
+      botao.addEventListener("click", async () => {
+        if (!confirm(pergunta)) return;
+        const { error } = await sb.rpc("admin_definir_status_cliente", { p_usuario: c.id, p_status: acao });
+        if (error) { resultado.textContent = "Não foi possível: " + error.message; return; }
+        await recarregarEReabrir(c.id);
+      });
+    }
+  }
+
+  async function recarregarEReabrir(id, mensagem) {
+    await carregarClientes();
+    const atual = todosClientes.find((x) => x.id === id);
+    if (!atual) return;
+    mensagemPlano = mensagem || "";
+    abrirDetalheCliente(atual);
+  }
+  let mensagemPlano = "";
+
+  async function montarBlocoEmpresas(c) {
+    const alvo = document.getElementById("bloco-empresas");
+    const { data, error } = await sb.rpc("admin_empresas_da_conta", { p_usuario: c.titular_id || c.id });
+    if (clienteEmEdicao?.id !== c.id) return;
+    if (error) { alvo.textContent = "Indisponível: " + error.message; return; }
+    const empresas = data.empresas || [], membros = data.membros || [];
+    alvo.innerHTML = (empresas.length ? `<ul>${empresas.map((e) => `<li>${escapeHtml(e.razao_social)}${e.cnpj ? " · " + escapeHtml(e.cnpj) : ""}${e.ativo ? "" : " <span class=\"sub\">(inativa)</span>"}</li>`).join("")}</ul>` : '<p class="sub">Nenhuma empresa cadastrada ainda.</p>') +
+      (membros.length ? `<p class="sub" style="margin:10px 0 4px;">Usuários</p><ul>${membros.map((m) => `<li>${escapeHtml(m.nome || m.email)} · ${escapeHtml(m.papel)}${m.empresa ? " · só " + escapeHtml(m.empresa) : ""}</li>`).join("")}</ul>` : "");
+  }
+
+  const NOMES_ACAO = { assinatura_alterada: "Plano ou limites alterados", pagamento_confirmado: "Pagamento confirmado", plano_solicitado: "Cliente pediu plano",
+    status_aprovado: "Aprovado", status_rejeitado: "Rejeitado", status_pendente: "Voltou para pendente", status_suspenso: "Suspenso", status_reativar: "Reativado",
+    pagamento_cancelado: "Cobrança cancelada", pagamento_estornado: "Cobrança estornada", pagamento_vencido: "Cobrança vencida" };
+  async function montarBlocoHistorico(c) {
+    const alvo = document.getElementById("bloco-historico");
+    const { data, error } = await sb.rpc("admin_historico_assinatura", { p_usuario: c.id });
+    if (clienteEmEdicao?.id !== c.id) return;
+    if (error) { alvo.textContent = "Indisponível: " + error.message; return; }
+    alvo.innerHTML = (data || []).length ? `<ul>${data.map((h) => `<li>${new Date(h.feito_em).toLocaleString("pt-BR")} · ${escapeHtml(NOMES_ACAO[h.acao] || h.acao)}${h.depois?.plano ? " · " + escapeHtml(h.depois.plano) : ""} <span class="sub">(${escapeHtml(h.feito_por || "-")})</span></li>`).join("")}</ul>` : '<p class="sub">Sem mudanças registradas.</p>';
+  }
+
+  let planosCatalogo = null;
+  async function carregarPlanosCatalogo(forcar) {
+    if (planosCatalogo && !forcar) return planosCatalogo;
+    const { data, error } = await sb.from("planos").select("*").order("ordem");
+    planosCatalogo = error ? [] : data;
+    return planosCatalogo;
   }
 
   const modalDetalheFundo = document.getElementById("modal-detalhe-fundo");
@@ -506,7 +682,6 @@
       licitacoes_por_mes: document.getElementById("edit-licitacoes-mes").value,
       faturamento_anual: document.getElementById("edit-faturamento").value,
       como_pretende_usar: document.getElementById("edit-como-usar").value,
-      plano: document.getElementById("edit-plano").value.trim(),
       observacoes_admin: document.getElementById("edit-observacoes").value.trim(),
     };
 
@@ -534,6 +709,9 @@
   function configurarAcessoEquipe() {
     document.getElementById("tab-equipe").style.display = adminAtual && adminAtual.role === "owner" ? "" : "none";
     document.getElementById("tab-acessos").style.display = adminAtual && adminAtual.role === "owner" ? "" : "none";
+    // Planos e Financeiro: só o proprietário (o banco confere de novo, com 2 fatores).
+    document.getElementById("tab-planos").style.display = adminAtual && adminAtual.role === "owner" ? "" : "none";
+    document.getElementById("tab-financeiro").style.display = adminAtual && adminAtual.role === "owner" ? "" : "none";
   }
 
   // Chave "config_admin" em public.dados_robo (mesma tabela chave->jsonb usada pelo
@@ -581,6 +759,7 @@
     if (id === "painel") {
       configurarAcessoEquipe();
       atualizarBotaoAutoAprovacao();
+      carregarVisaoGeral();
     }
   }
 
@@ -772,40 +951,56 @@
     mostrarPainelSeAdmin();
   });
 
+  // Contas, plano e uso vêm de admin_listar_contas (supabase/planos_e_recursos.sql): a checagem de quem pode ver é do banco.
   async function carregarClientes() {
     document.getElementById("conteudo-lista").innerHTML = '<div class="carregando">Carregando clientes...</div>';
-    const { data, error } = await sb.from("clientes").select("*").order("criado_em", { ascending: false });
+    const { data, error } = await sb.rpc("admin_listar_contas");
     if (error) {
-      document.getElementById("conteudo-lista").innerHTML = '<div class="vazio">Erro ao carregar: ' + escapeHtml(error.message) + '</div>';
+      document.getElementById("conteudo-lista").innerHTML = '<div class="vazio">Erro ao carregar: ' + escapeHtml(error.message) + '. Confira se supabase/planos_e_recursos.sql foi aplicado.</div>';
       return;
     }
     todosClientes = data || [];
     renderizarLista();
   }
 
+  function categoriaConta(c) {
+    if (c.status === "pendente") return "pendente";
+    if (c.status === "rejeitado" || c.assinatura?.situacao === "suspensa") return "suspenso";
+    if (c.efetivo?.em_teste) return "teste";
+    if (c.efetivo?.plano === "gratis") return "gratis";
+    return "ativo";
+  }
+  const NOMES_CATEGORIA = { pendente: "Pendente", suspenso: "Suspenso", teste: "Em teste", gratis: "Grátis", ativo: "Ativo" };
+
   function renderizarLista() {
     const alvo = document.getElementById("conteudo-lista");
-    const lista = filtroAtual === "todos" ? todosClientes : todosClientes.filter((c) => c.status === filtroAtual);
-
+    const busca = document.getElementById("busca-clientes").value.trim().toLowerCase();
+    const lista = todosClientes.filter((c) => (filtroAtual === "todos" || categoriaConta(c) === filtroAtual)
+      && (!busca || [c.nome, c.empresa, c.email, c.cnpj].some((v) => String(v || "").toLowerCase().includes(busca))));
     if (lista.length === 0) {
-      alvo.innerHTML = '<div class="vazio">Nenhum cliente ' + (filtroAtual === "todos" ? "cadastrado" : "com status \"" + filtroAtual + "\"") + ' ainda.</div>';
+      alvo.innerHTML = '<div class="vazio">Nenhum cliente nesta lista.</div>';
       return;
     }
-
-    let html = '<table><thead><tr><th>Nome / Empresa</th><th>Contato</th><th>Status</th><th>Cadastrado em</th><th>Ações</th></tr></thead><tbody>';
+    let html = '<table><thead><tr><th>Nome / Empresa</th><th>Contato</th><th>Plano</th><th>Situação</th><th>CNPJs</th><th>IA hoje</th><th>Ações</th></tr></thead><tbody>';
     for (const c of lista) {
-      const dataCadastro = c.criado_em ? new Date(c.criado_em).toLocaleString("pt-BR") : "-";
+      const cat = categoriaConta(c), e = c.efetivo || {};
+      const colaborador = c.titular_id && c.titular_id !== c.id;
+      const plano = colaborador ? `<span class="sub">Colaborador de ${escapeHtml(c.titular_nome || "-")}</span>`
+        : `${escapeHtml(e.nome || "-")}${e.plano !== e.plano_contratado && e.nome_contratado ? `<br><span class="sub">contratado: ${escapeHtml(e.nome_contratado)}</span>` : ""}${c.assinatura?.plano_solicitado ? `<br><span class="sub">pediu: ${escapeHtml(c.assinatura.plano_solicitado)}</span>` : ""}`;
+      const situacao = `<span class="badge ${cat}">${NOMES_CATEGORIA[cat]}</span>${cat === "teste" && e.teste_ate ? `<br><span class="sub">até ${dataBr(e.teste_ate)}</span>` : ""}${c.assinatura?.vence_em ? `<br><span class="sub">vence ${dataBr(c.assinatura.vence_em)}</span>` : ""}`;
       html += `<tr>
-        <td><strong>${escapeHtml(c.nome)}</strong><br><span style="color:var(--texto-fraco);font-size:13px;">${escapeHtml(c.empresa || "-")}${c.cnpj ? " · " + escapeHtml(c.cnpj) : ""}</span></td>
-        <td>${escapeHtml(c.email)}<br><span style="color:var(--texto-fraco);font-size:13px;">${escapeHtml(c.telefone || "-")}</span></td>
-        <td>${badgeStatus(c.status)}</td>
-        <td>${dataCadastro}</td>
+        <td><strong>${escapeHtml(c.nome)}</strong><br><span class="sub">${escapeHtml(c.empresa || "-")}${c.cnpj ? " · " + escapeHtml(c.cnpj) : ""}</span></td>
+        <td>${escapeHtml(c.email)}<br><span class="sub">${escapeHtml(c.telefone || "-")}</span></td>
+        <td>${plano}</td>
+        <td>${situacao}</td>
+        <td>${colaborador ? "-" : `${c.cnpjs_ativos} de ${e.max_cnpjs ?? "∞"}`}</td>
+        <td>${c.uso_hoje}<br><span class="sub">${c.uso_30d} em 30 dias</span></td>
         <td><div class="acoes">
-          <button class="btn-detalhe" data-detalhe="${c.id}">Detalhes</button>
-          ${c.status !== "aprovado" ? `<button class="btn-aprovar" data-id="${c.id}" data-acao="aprovado">Aprovar</button>` : ""}
-          ${c.status !== "rejeitado" ? `<button class="btn-rejeitar" data-id="${c.id}" data-acao="rejeitado">Rejeitar</button>` : ""}
-          ${c.status !== "pendente" ? `<button class="btn-reverter" data-id="${c.id}" data-acao="pendente">Voltar p/ pendente</button>` : ""}
-          ${adminAtual?.role === "owner" ? `<button class="btn-rejeitar" data-excluir-cliente="${c.id}" title="Excluir conta definitivamente">Excluir</button>` : ""}
+          <button class="btn-detalhe" data-detalhe="${escapeHtml(c.id)}">Abrir</button>
+          ${c.status !== "aprovado" ? `<button class="btn-aprovar" data-id="${escapeHtml(c.id)}" data-acao="aprovado">Aprovar</button>` : ""}
+          ${c.status === "pendente" ? `<button class="btn-rejeitar" data-id="${escapeHtml(c.id)}" data-acao="rejeitado">Rejeitar</button>` : ""}
+          ${c.status === "rejeitado" ? `<button class="btn-reverter" data-id="${escapeHtml(c.id)}" data-acao="pendente">Voltar p/ pendente</button>` : ""}
+          ${adminAtual?.role === "owner" ? `<button class="btn-rejeitar" data-excluir-cliente="${escapeHtml(c.id)}" title="Excluir conta definitivamente">Excluir</button>` : ""}
         </div></td>
       </tr>`;
     }
@@ -821,15 +1016,9 @@
 
     alvo.querySelectorAll("button[data-acao]").forEach((btn) => {
       btn.addEventListener("click", async () => {
-        const id = btn.dataset.id;
-        const novoStatus = btn.dataset.acao;
         btn.disabled = true;
-        const { data: { session } } = await sb.auth.getSession();
-        await sb.from("clientes").update({
-          status: novoStatus,
-          aprovado_em: novoStatus === "aprovado" ? new Date().toISOString() : null,
-          aprovado_por: novoStatus === "aprovado" ? session.user.email : null,
-        }).eq("id", id);
+        const { error } = await sb.rpc("admin_definir_status_cliente", { p_usuario: btn.dataset.id, p_status: btn.dataset.acao });
+        if (error) { alert("Não foi possível: " + error.message); btn.disabled = false; return; }
         carregarClientes();
       });
     });
@@ -861,6 +1050,122 @@
       finally { btn.disabled = false; }
     }));
   }
+
+  const NOMES_AVISO = { teste_vencendo: "Teste termina em até 3 dias", teste_vencido: "Teste terminou (conta no Grátis)", vencida: "Assinatura vencida",
+    plano_solicitado: "Pediu mudança de plano", pendente: "Cadastro pendente há mais de 24 h", pagamento_pendente: "Cobrança pendente" };
+  async function carregarVisaoGeral() {
+    const { data, error } = await sb.rpc("admin_resumo");
+    const cards = document.getElementById("cards-resumo"), avisos = document.getElementById("lista-avisos");
+    if (error) { cards.innerHTML = '<div class="vazio">Resumo indisponível: ' + escapeHtml(error.message) + '</div>'; avisos.textContent = ""; return; }
+    const porPlano = data.por_plano || {};
+    cards.innerHTML = [["Pendentes", data.pendentes], ["Em teste", data.em_teste], ["Ativas", data.ativas], ["Suspensas", data.suspensas],
+      ["Empresa", porPlano.empresa || 0], ["Assessoria", porPlano.assessoria || 0], ["Grátis", porPlano.gratis || 0]]
+      .map(([rotulo, n]) => `<div class="card-num"><strong>${Number(n) || 0}</strong><span>${rotulo}</span></div>`).join("");
+    const lista = data.avisos || [];
+    avisos.className = "";
+    avisos.innerHTML = lista.length ? lista.map((a) => `<div class="aviso-item"><span><strong>${escapeHtml(a.nome || "-")}</strong> · ${escapeHtml(NOMES_AVISO[a.tipo] || a.tipo)}${a.plano ? " (" + escapeHtml(a.plano) + ")" : ""} <span class="sub">${a.quando ? dataBr(a.quando) : ""}</span></span>${a.usuario_id ? `<button type="button" class="btn-secundario" data-abrir-conta="${escapeHtml(a.usuario_id)}">Abrir</button>` : ""}</div>`).join("")
+      : '<div class="vazio">Nada pedindo atenção agora.</div>';
+    avisos.querySelectorAll("[data-abrir-conta]").forEach((b) => b.addEventListener("click", async () => {
+      if (!todosClientes.length) await carregarClientes();
+      const c = todosClientes.find((x) => x.id === b.dataset.abrirConta);
+      if (c) abrirDetalheCliente(c);
+    }));
+  }
+
+  async function carregarPlanos() {
+    const alvo = document.getElementById("conteudo-planos");
+    const [planos, recursos, matriz] = await Promise.all([carregarPlanosCatalogo(true), sb.from("recursos_plano").select("*").order("codigo"), sb.from("plano_recursos").select("*")]);
+    if (recursos.error || matriz.error) { alvo.innerHTML = '<div class="vazio">Planos indisponíveis: ' + escapeHtml((recursos.error || matriz.error).message) + '</div>'; return; }
+    const celula = (p, r) => matriz.data.find((x) => x.plano === p && x.recurso === r) || { permitido: false, limite_diario: null };
+    const campo = (id, valor, rotulo) => `<input type="text" inputmode="numeric" id="${id}" value="${valor ?? ""}" placeholder="∞" aria-label="${escapeHtml(rotulo)}">`;
+    alvo.innerHTML = `<table><thead><tr><th>Plano</th><th>CNPJs</th><th>Usuários</th><th>Processos</th><th>Mensal (R$)</th><th>Anual (R$)</th>${recursos.data.map((r) => `<th title="${escapeHtml(r.nome)}">${escapeHtml(r.nome.split(" (")[0])}<br><span class="sub">por dia</span></th>`).join("")}<th></th></tr></thead><tbody>${planos.map((p) => `<tr>
+      <td><strong>${escapeHtml(p.nome)}</strong><br><span class="sub">${escapeHtml(p.codigo)}</span></td>
+      <td>${campo(`pl-${p.codigo}-max_cnpjs`, p.max_cnpjs, p.nome + " CNPJs")}</td>
+      <td>${campo(`pl-${p.codigo}-max_usuarios`, p.max_usuarios, p.nome + " usuários")}</td>
+      <td>${campo(`pl-${p.codigo}-max_processos`, p.max_processos, p.nome + " processos")}</td>
+      <td>${campo(`pl-${p.codigo}-preco_mensal_centavos`, p.preco_mensal_centavos != null ? p.preco_mensal_centavos / 100 : null, p.nome + " mensal")}</td>
+      <td>${campo(`pl-${p.codigo}-preco_anual_centavos`, p.preco_anual_centavos != null ? p.preco_anual_centavos / 100 : null, p.nome + " anual")}</td>
+      ${recursos.data.map((r) => { const c = celula(p.codigo, r.codigo); return `<td><label class="inline"><input type="checkbox" id="pr-${p.codigo}-${r.codigo}"${c.permitido ? " checked" : ""} aria-label="${escapeHtml(p.nome + ": " + r.nome)}"> sim</label><br>${campo(`prl-${p.codigo}-${r.codigo}`, c.limite_diario, p.nome + " limite " + r.nome)}</td>`; }).join("")}
+      <td><button type="button" class="btn-aprovar" data-salvar-plano="${escapeHtml(p.codigo)}">Salvar</button></td></tr>`).join("")}</tbody></table>`;
+    alvo.querySelectorAll("[data-salvar-plano]").forEach((b) => b.addEventListener("click", async () => {
+      const codigo = b.dataset.salvarPlano, resultado = document.getElementById("resultado-planos");
+      const ler = (id) => numeroOuVazio(document.getElementById(id).value.replace(",", "."));
+      const dados = { max_cnpjs: ler(`pl-${codigo}-max_cnpjs`), max_usuarios: ler(`pl-${codigo}-max_usuarios`), max_processos: ler(`pl-${codigo}-max_processos`) };
+      for (const k of ["preco_mensal_centavos", "preco_anual_centavos"]) {
+        const t = document.getElementById(`pl-${codigo}-${k}`).value.trim().replace(/\./g, "").replace(",", ".");
+        dados[k] = t ? Math.round(Number(t) * 100) : null;
+      }
+      b.disabled = true;
+      resultado.textContent = "Salvando...";
+      let { error } = await sb.rpc("admin_salvar_plano", { p_codigo: codigo, p_dados: dados });
+      for (const r of recursos.data) {
+        if (error) break;
+        ({ error } = await sb.rpc("admin_salvar_plano_recurso", { p_plano: codigo, p_recurso: r.codigo,
+          p_permitido: document.getElementById(`pr-${codigo}-${r.codigo}`).checked, p_limite: ler(`prl-${codigo}-${r.codigo}`) }));
+      }
+      b.disabled = false;
+      resultado.textContent = error ? "Não foi possível salvar: " + error.message : `Plano ${codigo} salvo. Já vale para todas as contas dele.`;
+    }));
+  }
+
+  async function carregarUso() {
+    const alvo = document.getElementById("conteudo-uso");
+    alvo.innerHTML = '<div class="carregando">Carregando uso...</div>';
+    const { data, error } = await sb.rpc("admin_uso", { p_dias: Number(document.getElementById("uso-dias").value) });
+    if (error) { alvo.innerHTML = '<div class="vazio">Uso indisponível: ' + escapeHtml(error.message) + '</div>'; return; }
+    alvo.innerHTML = (data || []).length ? `<table><thead><tr><th>Conta</th><th>Recurso</th><th>Ferramenta</th><th>Hoje</th><th>No período</th></tr></thead><tbody>${data.map((u) =>
+      `<tr><td>${escapeHtml(u.nome || "-")}<br><span class="sub">${escapeHtml(u.email || "")}</span></td><td>${escapeHtml(u.recurso)}</td><td>${escapeHtml(u.funcao)}</td><td>${u.hoje || 0}</td><td>${u.total}</td></tr>`).join("")}</tbody></table>`
+      : '<div class="vazio">Nenhum uso registrado no período.</div>';
+  }
+
+  const NOMES_PAGAMENTO = { pendente: "Pendente", pago: "Pago", cancelado: "Cancelado", estornado: "Estornado", vencido: "Vencido" };
+  async function carregarFinanceiro() {
+    if (!todosClientes.length) await carregarClientes();
+    const planos = await carregarPlanosCatalogo();
+    document.getElementById("pag-conta").innerHTML = '<option value="">Selecione</option>' + todosClientes.filter((c) => !c.titular_id || c.titular_id === c.id)
+      .map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.nome || c.email)}${c.empresa ? " · " + escapeHtml(c.empresa) : ""}</option>`).join("");
+    document.getElementById("pag-plano").innerHTML = planos.filter((p) => p.preco_mensal_centavos > 0)
+      .map((p) => `<option value="${escapeHtml(p.codigo)}">${escapeHtml(p.nome)} · ${reais(p.preco_mensal_centavos)}/mês · ${reais(p.preco_anual_centavos)}/ano</option>`).join("");
+    const alvo = document.getElementById("conteudo-pagamentos");
+    const { data, error } = await sb.rpc("admin_listar_pagamentos", { p_usuario: null });
+    if (error) { alvo.innerHTML = '<div class="vazio">Cobranças indisponíveis: ' + escapeHtml(error.message) + '</div>'; return; }
+    alvo.innerHTML = (data || []).length ? `<table><thead><tr><th>Conta</th><th>Plano</th><th>Valor</th><th>Vencimento</th><th>Situação</th><th>Período</th><th>Ações</th></tr></thead><tbody>${data.map((g) => `<tr>
+      <td>${escapeHtml(g.nome || g.cliente_email || "-")}<br><span class="sub">${escapeHtml(g.referencia || "")}</span></td><td>${escapeHtml(g.plano || "-")} · ${escapeHtml(g.ciclo || "")}</td>
+      <td>${reais(g.valor_centavos)}</td><td>${dataBr(g.vencimento)}</td><td><span class="badge ${g.situacao === "pago" ? "ativo" : g.situacao === "pendente" ? "pendente" : "gratis"}">${NOMES_PAGAMENTO[g.situacao] || g.situacao}</span></td>
+      <td>${g.periodo_inicio ? dataBr(g.periodo_inicio) + " a " + dataBr(g.periodo_fim) : "-"}</td>
+      <td><div class="acoes">${g.situacao === "pendente" ? `<button type="button" class="btn-aprovar" data-pagamento="${escapeHtml(g.id)}" data-situacao="pago">Recebido</button><button type="button" class="btn-rejeitar" data-pagamento="${escapeHtml(g.id)}" data-situacao="cancelado">Cancelar</button>` : ""}</div></td></tr>`).join("")}</tbody></table>`
+      : '<div class="vazio">Nenhuma cobrança registrada.</div>';
+    alvo.querySelectorAll("[data-pagamento]").forEach((b) => b.addEventListener("click", async () => {
+      if (!confirm(b.dataset.situacao === "pago" ? "Confirmar que o valor caiu na conta? A assinatura fica ativa." : "Cancelar esta cobrança?")) return;
+      b.disabled = true;
+      const { error: erro } = await sb.rpc("admin_atualizar_pagamento", { p_pagamento: b.dataset.pagamento, p_situacao: b.dataset.situacao });
+      if (erro) { alert("Não foi possível: " + erro.message); b.disabled = false; return; }
+      await Promise.all([carregarFinanceiro(), carregarClientes()]);
+    }));
+  }
+
+  document.getElementById("form-pagamento").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const form = ev.currentTarget, resultado = document.getElementById("resultado-pagamento"), btn = form.querySelector('button[type="submit"]');
+    const valor = document.getElementById("pag-valor").value.trim().replace(/\./g, "").replace(",", ".");
+    const dados = { plano: document.getElementById("pag-plano").value, ciclo: document.getElementById("pag-ciclo").value,
+      vencimento: document.getElementById("pag-vencimento").value || null, referencia: document.getElementById("pag-referencia").value.trim() || null,
+      pago: document.getElementById("pag-pago").checked, ...(valor ? { valor_centavos: Math.round(Number(valor) * 100) } : {}) };
+    if (valor && !(dados.valor_centavos > 0)) { resultado.textContent = "Confira o valor."; return; }
+    btn.disabled = true;
+    const { error } = await sb.rpc("admin_registrar_pagamento", { p_usuario: document.getElementById("pag-conta").value, p_dados: dados });
+    btn.disabled = false;
+    resultado.textContent = error ? "Não foi possível registrar: " + error.message : dados.pago ? "Pagamento registrado e assinatura ativada." : "Cobrança registrada como pendente.";
+    if (!error) { form.reset(); await Promise.all([carregarFinanceiro(), carregarClientes()]); }
+  });
+
+  document.querySelectorAll(".filtros button[data-filtro]").forEach((btn) => btn.addEventListener("click", () => {
+    document.querySelectorAll(".filtros button[data-filtro]").forEach((b) => b.classList.toggle("ativo", b === btn));
+    filtroAtual = btn.dataset.filtro;
+    renderizarLista();
+  }));
+  document.getElementById("busca-clientes").addEventListener("input", () => renderizarLista());
+  document.getElementById("uso-dias").addEventListener("change", carregarUso);
 
   function badgeStatusBoletim(status) {
     const nomes = { enviado: "Enviado", sem_novidades: "Sem novidades", erro: "Erro" };
@@ -1026,7 +1331,7 @@
   document.getElementById("form-convite-empresa").addEventListener("submit", async ev => {
     ev.preventDefault();
     if (adminAtual?.role !== "owner") return;
-    const btn = ev.currentTarget.querySelector('button[type="submit"]');
+    const form = ev.currentTarget, btn = form.querySelector('button[type="submit"]');
     const resultado = document.getElementById("resultado-convite-empresa");
     btn.disabled = true;
     resultado.textContent = "Criando convite...";
@@ -1044,33 +1349,18 @@
       try { await navigator.clipboard.writeText(link.href); resultado.querySelector("strong").textContent = "Link copiado. Envie à pessoa indicada."; }
       catch (_) { document.getElementById("link-convite-empresa").select(); }
     };
-    ev.currentTarget.reset();
+    form.reset();
     await carregarAcessosEmpresa();
   });
 
+  const SECOES = { visao: carregarVisaoGeral, clientes: renderizarLista, planos: carregarPlanos, uso: carregarUso, financeiro: carregarFinanceiro,
+    boletim: carregarLogsBoletim, equipe: carregarEquipe, acessos: carregarAcessosEmpresa };
   document.querySelectorAll(".tabs button").forEach((btn) => {
     btn.addEventListener("click", () => {
       document.querySelectorAll(".tabs button").forEach((b) => b.classList.remove("ativo"));
       btn.classList.add("ativo");
-      const status = btn.dataset.status;
-      document.getElementById("secao-clientes").style.display = "none";
-      document.getElementById("secao-equipe").style.display = "none";
-      document.getElementById("secao-boletim").style.display = "none";
-      document.getElementById("secao-acessos").style.display = "none";
-      if (status === "equipe") {
-        document.getElementById("secao-equipe").style.display = "block";
-        carregarEquipe();
-      } else if (status === "acessos") {
-        document.getElementById("secao-acessos").style.display = "block";
-        carregarAcessosEmpresa();
-      } else if (status === "boletim") {
-        document.getElementById("secao-boletim").style.display = "block";
-        carregarLogsBoletim();
-      } else {
-        document.getElementById("secao-clientes").style.display = "block";
-        filtroAtual = status;
-        renderizarLista();
-      }
+      for (const nome of Object.keys(SECOES)) document.getElementById("secao-" + nome).style.display = nome === btn.dataset.status ? "block" : "none";
+      SECOES[btn.dataset.status]();
     });
   });
 

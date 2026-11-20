@@ -35,12 +35,24 @@ function montarPublico() {
   for (const nome of copiados) fs.copyFileSync(path.join(RAIZ, nome), path.join(DESTINO, nome));
   fs.mkdirSync(path.join(DESTINO, "data"));
   for (const nome of arquivosDeDados()) fs.copyFileSync(path.join(RAIZ, "data", nome), path.join(DESTINO, "data", nome));
+  // Prints dos tutoriais da Central de ajuda "?" (ajuda-ui.js e ajuda.html): só imagens .webp de dados fictícios.
+  const ajuda = path.join(RAIZ, "ajuda");
+  if (fs.existsSync(ajuda)) fs.cpSync(ajuda, path.join(DESTINO, "ajuda"), { recursive: true, filter: (f) => fs.statSync(f).isDirectory() || f.endsWith(".webp") });
   return copiados;
+}
+
+// Pacote da extensão em publico/extensao/ (link "Baixar a extensão" do extensao.html). Gerado aqui, e não copiado
+// de dist/ (gitignored), para o build do CI publicar sempre a versão do manifesto atual.
+async function publicarExtensao() {
+  const { empacotar } = await import("./empacotar-extensao.mjs");
+  return empacotar({ destino: path.join(DESTINO, "extensao") });
 }
 
 if (require.main === module) {
   const copiados = montarPublico();
-  console.log(`publico/: ${copiados.length} arquivos da raiz + data/`);
+  publicarExtensao().then((r) => {
+    console.log(`publico/: ${copiados.length} arquivos da raiz + data/ + extensao/${path.basename(r.arquivo)}`);
+  }).catch((e) => { console.error(e.message); process.exitCode = 1; });
 }
 
-module.exports = { montarPublico, arquivosDaRaiz, arquivosDeDados };
+module.exports = { montarPublico, arquivosDaRaiz, arquivosDeDados, publicarExtensao };

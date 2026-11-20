@@ -206,8 +206,66 @@
     }).join("");
   }
 
+  // ---- Execução em fases: Potencial → Empenhado → Entregue → Faturado → Recebido -----------------------------------
+  // Dinheiro em centavos BigInt (soma sem erro de float). Cada fase junta três origens e fica com a MAIOR, nunca a soma:
+  //   oficial  = Contratos.gov.br/PNCP (operacao_contratos_publicos): empenhado, liquidado (= entrega atestada pelo órgão),
+  //              faturas não canceladas (notas) e pago;
+  //   lançado  = o que a pessoa registrou (operacao_execucao_eventos: entrega, nota, recebimento; operacao_empenhos);
+  //   situação = empenho antigo marcado "entregue/recebido/pago" sem lançamento.
+  // Ficar com a maior evita contar duas vezes o mesmo empenho que veio da fonte e também foi digitado, e deixa a pessoa
+  // adiantar o que a fonte ainda não publicou (ex.: entregou hoje, liquidação sai semana que vem).
+  const FASES = Object.freeze({ potencial: "Potencial", empenhado: "Empenhado", entregue: "Entregue", faturado: "Faturado", recebido: "Recebido" });
+  function centavos(v) {
+    const n = numero(v);
+    if (n == null) return null;
+    const [i, f] = Math.abs(n).toFixed(2).split(".");
+    const c = BigInt(i + f);
+    return n < 0 ? -c : c;
+  }
+  const somaCentavos = (lista) => { const v = lista.filter((x) => x != null); return v.length ? v.reduce((s, x) => s + x, 0n) : null; };
+  const maiorFonte = (fontes) => fontes.filter((f) => f.valor != null).reduce((m, f) => (!m || f.valor > m.valor ? f : m), null) || { valor: null, fonte: null };
+  const percentual = (v, total) => (v == null || total == null || total <= 0n ? 0 : Math.min(100, Math.max(0, Number((v * 1000n) / total) / 10)));
+
+  function fasesExecucao({ contratos = [], publicos = [], empenhos = [], eventos = [], homologado = null } = {}) {
+    const ativos = empenhos.filter((e) => e.status !== "cancelado");
+    const porSituacao = (lista) => somaCentavos(ativos.filter((e) => lista.includes(e.status)).map((e) => centavos(e.valor)));
+    const lancado = (tipo) => somaCentavos(eventos.filter((e) => e.tipo === tipo).map((e) => centavos(e.valor)));
+    const oficial = (campo) => somaCentavos(publicos.map((c) => centavos(c[campo])));
+    const notasOficiais = somaCentavos(publicos.flatMap((c) => (Array.isArray(c.faturas) ? c.faturas : []).filter((f) => !f.cancelada).map((f) => centavos(f.valor))));
+    const fases = {
+      potencial: maiorFonte([{ fonte: "oficial", valor: oficial("valor_global") }, { fonte: "lancado", valor: somaCentavos(contratos.map((c) => centavos(c.valor))) }]),
+      empenhado: maiorFonte([{ fonte: "oficial", valor: oficial("valor_empenhado") }, { fonte: "lancado", valor: somaCentavos(ativos.map((e) => centavos(e.valor))) }]),
+      entregue: maiorFonte([{ fonte: "oficial", valor: oficial("valor_liquidado") }, { fonte: "lancado", valor: lancado("entrega") }, { fonte: "situacao", valor: porSituacao(["entregue", "recebido", "pago"]) }]),
+      faturado: maiorFonte([{ fonte: "oficial", valor: notasOficiais }, { fonte: "lancado", valor: lancado("nota") }]),
+      recebido: maiorFonte([{ fonte: "oficial", valor: oficial("valor_pago") }, { fonte: "lancado", valor: lancado("recebimento") }, { fonte: "situacao", valor: porSituacao(["pago"]) }]),
+    };
+    // Sem contrato registrado, o potencial é o valor ganho no resultado (homologado).
+    if (fases.potencial.valor == null && centavos(homologado) != null) fases.potencial = { valor: centavos(homologado), fonte: "resultado" };
+    const potencial = fases.potencial.valor;
+    for (const k of Object.keys(FASES)) fases[k].percentual = k === "potencial" ? 100 : percentual(fases[k].valor, potencial);
+    const vigencias = [...publicos, ...contratos].map((c) => dia(c.vigencia_fim)).filter(Boolean).sort();
+    return {
+      fases, vigenciaFim: vigencias.length ? vigencias[vigencias.length - 1] : null,
+      // Finalizado: recebeu todo o potencial (Siga Pregão separa "Em andamento" de "Finalizados" assim).
+      finalizado: potencial != null && potencial > 0n && fases.recebido.valor != null && fases.recebido.valor >= potencial,
+      temExecucao: contratos.length + publicos.length + empenhos.length + eventos.length > 0,
+    };
+  }
+  // Soma das fases de vários contratos (cartões do topo). Fase sem valor conta zero.
+  function totaisFases(lista) {
+    const t = Object.fromEntries(Object.keys(FASES).map((k) => [k, lista.reduce((s, x) => s + (x.fases[k].valor ?? 0n), 0n)]));
+    return Object.fromEntries(Object.keys(FASES).map((k) => [k, { valor: t[k], percentual: k === "potencial" ? 100 : percentual(t[k], t.potencial) }]));
+  }
+  // R$ a partir de centavos BigInt, sem passar por float.
+  function reaisDeCentavos(c) {
+    if (c == null) return "Não informado";
+    const a = c < 0n ? -c : c;
+    return `${c < 0n ? "-" : ""}R$ ${String(a / 100n).replace(/\B(?=(\d{3})+$)/g, ".")},${String(a % 100n).padStart(2, "0")}`;
+  }
+
   const api = { DIAS_PAGAMENTO_ATRASADO, NIVEIS_VENCIMENTO, cnpjLimpo, numero, classificarItem, itensAindaPendentes, dadosDoItem, textoSugestao,
-    liquidadoSemPagamento, montarLinha, situacaoContrato, textoVigencia, alertasDoContrato, htmlQuadroContrato };
+    liquidadoSemPagamento, montarLinha, situacaoContrato, textoVigencia, alertasDoContrato, htmlQuadroContrato,
+    FASES, centavos, fasesExecucao, totaisFases, reaisDeCentavos };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else raiz.ContratoPublico = api;
 })(typeof window !== "undefined" ? window : globalThis);

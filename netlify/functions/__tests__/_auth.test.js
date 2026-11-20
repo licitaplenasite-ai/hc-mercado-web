@@ -36,7 +36,7 @@ test('IA mantém limite 40 e prazo de consulta; indisponibilidade de outras fun�
     for (const n of [1, 40, 41]) {
       global.fetch = async (_, opcoes) => { assert(opcoes.signal instanceof globalThis.AbortSignal); return new Response(JSON.stringify(n)); };
       const r = await verificarLimiteDiario('usuario', 'ia-edital', 40);
-      assert.equal(r.ok, n <= 40); if (n === 41) assert.equal(r.status, 429);
+      assert.equal(r.ok, n <= 40); if (n === 41) assert.equal(r.status, 429); if (n === 1) assert.deepEqual(r, { ok: true, usadas: 1, limite: 40 });
     }
     global.fetch = async () => new Response('{}', { status: 503 });
     for (const nome of ['enviar_resumo_edital', 'enviar_duvida', 'sancoes', 'despesas-fornecedor']) assert.equal((await verificarLimiteDiario('usuario', nome, 20)).ok, true);
@@ -129,4 +129,31 @@ test('limitarPorIp: só IP da plataforma conta, banco recebe HMAC (nunca o IP), 
 
 test('B2: origem antiga do Netlify não é mais confiável', () => {
   assert.equal(origemPermitida({ headers: { origin: 'https://hc-mercado-web.netlify.app' } }), 'https://licitaplena.com.br');
+});
+
+test('plano: recurso fora do plano é 403, limite do plano vale e sem consumir_uso_plano cai no contador antigo', async () => {
+  const fetchAnterior = global.fetch, chaveAnterior = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const chamadas = [];
+  const fetchCom = (plano, antigo) => async (url) => {
+    chamadas.push(String(url).split('/rpc/')[1]);
+    if (String(url).endsWith('/rpc/consumir_uso_plano')) return plano === undefined ? new Response('{}', { status: 404 }) : Response.json(plano);
+    return Response.json(antigo);
+  };
+  try {
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'teste-local';
+    global.fetch = fetchCom({ permitido: false, motivo: 'plano', plano: 'Grátis', nome_recurso: 'Análise por CNPJ' });
+    const fora = await verificarLimiteDiario('u', 'analise-cnpj', 10);
+    assert.equal(fora.status, 403); assert.match(fora.erro, /plano Grátis não inclui Análise por CNPJ/);
+    global.fetch = fetchCom({ permitido: true, contagem: 4, limite: 3 });
+    assert.equal((await verificarLimiteDiario('u', 'ia-edital', 40)).status, 429, 'limite do plano (3) vale sobre o da rota (40)');
+    global.fetch = fetchCom({ permitido: true, contagem: 2, limite: 3 });
+    assert.deepEqual(await verificarLimiteDiario('u', 'ia-edital', 40), { ok: true, usadas: 2, limite: 3 });
+    chamadas.length = 0;
+    global.fetch = fetchCom(undefined, 5);
+    assert.deepEqual(await verificarLimiteDiario('u', 'ia-edital', 40), { ok: true, usadas: 5, limite: 40 });
+    assert.deepEqual(chamadas, ['consumir_uso_plano', 'incrementar_uso']);
+  } finally {
+    global.fetch = fetchAnterior;
+    if (chaveAnterior === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY; else process.env.SUPABASE_SERVICE_ROLE_KEY = chaveAnterior;
+  }
 });

@@ -31,3 +31,38 @@
 .itens-mercado{margin-top:8px;padding:8px;border:1px solid var(--border-default);border-radius:var(--radius-control)}
 .catalogo-usar-opcao{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:4px 0}
 .catalogo-form,#itens-titulo{scroll-margin-top:140px}
+/* Pesquisa de preços v2 (19/11/2026, aguarda aprovação): chips de produto do catálogo, tabela de compras e exportação. */
+.mercado-chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0}
+.mercado-chips-rotulo{font-size:13px;color:var(--text-secondary);width:100%}
+.mercado-chip{min-height:36px;padding:4px 12px;border:1px solid var(--border-default);border-radius:999px;background:var(--surface-default);color:var(--text-primary);font:inherit;font-size:14px;cursor:pointer;max-width:100%;overflow-wrap:anywhere;text-align:left}
+.mercado-chip[aria-pressed="true"]{background:var(--action-strong);border-color:var(--action-strong);color:var(--action-on);font-weight:600}
+.mercado-chip:focus-visible,.mercado-marca-nome:focus-visible{outline:2px solid var(--action-strong);outline-offset:2px}
+.mercado-filtros{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+.mercado-campo input{width:100%;min-height:40px;box-sizing:border-box}
+.mercado-numeros{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
+.mercado-desc{display:block;font-size:12px;color:var(--text-secondary);overflow-wrap:anywhere}
+.mercado-lista-topo{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-top:12px}
+.mercado-compras-tabela td{overflow-wrap:break-word}
+.mercado-compras-tabela td[data-rotulo="Data"]{white-space:nowrap}
+.mercado-compras-tabela td[data-rotulo="Vencedor"]{min-width:130px}
+.mercado-compras-tabela td[data-rotulo="Órgão"]{max-width:190px}
+.mercado-compras-tabela td[data-rotulo="Data"] a{color:var(--action-text);font-size:13px;padding:4px 0}
+.mercado-compras-tabela td[data-rotulo="Marca e modelo"]{min-width:180px}
+.mercado-compras-tabela .mercado-selo{display:block;margin:4px 0 0;white-space:normal;max-width:140px;border-radius:var(--radius-control)}
+.mercado-compras-tabela td[data-rotulo="Valor unitário"],.mercado-compras-tabela td[data-rotulo="Total"]{white-space:nowrap;font-variant-numeric:tabular-nums}
+.mercado-compras>.btn,.mercado-marcas-caixa>.btn{margin-top:8px}
+@media(max-width:640px){.mercado-compras-tabela td[data-rotulo]{min-width:0}.mercado-marcas{table-layout:fixed}.mercado-marcas tr{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.mercado-compras-tabela td{white-space:normal}.mercado-filtros{grid-template-columns:repeat(2,minmax(0,1fr))}.mercado-compras-tabela td[data-rotulo="Marca e modelo"],.mercado-compras-tabela td[data-rotulo="Órgão"],.mercado-compras-tabela td[data-rotulo="Vencedor"],.mercado-marcas td[data-rotulo="Modelos"],.mercado-marcas td[data-rotulo="Quem ganhou"],.mercado-marcas td[data-rotulo="Empresa"],.mercado-marcas td[data-rotulo="Marca e modelo"],.mercado-marcas td[data-rotulo="Última vitória"]{grid-column:1/-1}.mercado-compras-tabela td[data-rotulo="Valor unitário"]{white-space:normal}.mercado-lista-topo .btn{width:100%}}
+/* "Ver mercado deste item" (item-mercado-ui.js, 20/11/2026, aguarda aprovação): 4 abas dentro do item do edital e do processo. */
+.item-mercado{margin-top:8px;padding:8px;border:1px solid var(--border-default);border-radius:var(--radius-control);background:var(--surface-default)}
+.item-mercado-acao{margin-top:6px}
+.item-mercado-abas{display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid var(--border-default);margin-bottom:8px}
+.item-mercado-aba{background:none;border:0;border-bottom:2px solid transparent;color:var(--text-secondary);padding:8px 12px;min-height:40px;font-weight:600;font-size:14px;line-height:22px;font-family:inherit;cursor:pointer}
+.item-mercado-aba[aria-selected="true"]{color:var(--action-text);border-bottom-color:var(--action-strong)}
+.item-mercado-aba:focus-visible,.item-mercado [role="tabpanel"]:focus-visible{outline:2px solid var(--action-strong);outline-offset:2px}
+@media(max-width:640px){.item-mercado-aba{flex:1 1 45%;padding:6px 8px}}
+.item-mercado-botao,.item-mercado .btn{min-height:36px;padding:6px 12px;border:1px solid var(--action-strong);border-radius:var(--radius-control);background:var(--surface-default);color:var(--action-text);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.item-mercado-botao:focus-visible,.item-mercado .btn:focus-visible{outline:2px solid var(--action-strong);outline-offset:2px}
+/* Lista de itens do PNCP no cartão tem altura fixa com rolagem; com o mercado aberto ela cresce para caber as abas. */
+.itens-licitacao-lista:has(.item-mercado:not([hidden])){max-height:none}
+.item-mercado .mercado-marcas td,.itens-mercado .mercado-marcas td{overflow-wrap:anywhere;min-width:0}
+@media(max-width:640px){.item-mercado .mercado-marcas,.item-mercado .mercado-marcas tbody{display:block;width:100%}.item-mercado .mercado-marcas td{white-space:normal}}

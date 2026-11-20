@@ -36,7 +36,7 @@ test("robô: lê cada mês uma vez para todos os CNPJs, grava, tira o mês da fi
   assert.deepEqual(lidos, ["2026/10", "2026/09"]);
   assert.equal(c.meses, 2);
   assert.equal(c.completos, 2);
-  const participacoes = escritas.filter((e) => e.caminho.startsWith("historico_participacoes"));
+  const participacoes = escritas.filter((e) => e.metodo === "POST" && e.caminho.startsWith("historico_participacoes"));
   assert.ok(participacoes.length >= 1);
   assert.equal(participacoes[0].corpo[0].situacao_proposta, "6");
   const fechadas = escritas.filter((e) => e.metodo === "PATCH" && e.corpo.situacao === "completo").map((e) => e.caminho);
@@ -192,4 +192,35 @@ test("parte 2: PNCP fora do ar nos contratos deixa a análise parcial (lê de no
   const c = await completarAnalises({ rest, lerMes: async () => ({}), fetchPncp: async () => { throw new Error("ECONNRESET"); }, esperar: async () => {} });
   assert.equal(c.completos, 0);
   assert.ok(!escritas.some((e) => e.corpo?.contratos_lidos_em));
+});
+
+test("robô parte 3: marca do item vencido pela Pesquisa de Preços (CATMAT + compra); toda linha olhada fica marcada", async () => {
+  const cnpj = "48885922000150", id = "78882005900332025";
+  const filas = [{ cnpj, compras_pendentes: [], meses_pendentes: [], meses_lidos: [], contratos_lidos_em: LIDO }];
+  const escritas = [], urls = [];
+  const rest = async (caminho, opcoes = {}) => {
+    escritas.push({ caminho, metodo: opcoes.method || "GET", corpo: opcoes.body ? JSON.parse(opcoes.body) : null });
+    if (cadastroEmDia(caminho)) return cadastroEmDia(caminho);
+    if (caminho.startsWith("historico_cnpj_consultas?situacao=eq.parcial")) return { json: async () => filas };
+    if (caminho.startsWith(`historico_participacoes?fornecedor_ni=eq.${cnpj}&marca_consultada_em=is.null`)) {
+      return { json: async () => [{ id_compra: id, numero_item: 1, ordem_classificacao: 1, valor_homologado: 10 }, { id_compra: id, numero_item: 2, classificacao: 3 },
+        { id_compra: "PNCP-OUTRA", numero_item: 1, ordem_classificacao: 1 }] };
+    }
+    if (caminho.startsWith(`historico_itens?id_compra=eq.${id}`)) return { json: async () => [{ numero_item: 1, catmat: "453617" }, { numero_item: 2, catmat: "999" }] };
+    return { json: async () => [] };
+  };
+  const fetchPncp = async (url) => {
+    urls.push(url);
+    const resultado = /pesquisa-preco/.test(url) ? [{ idCompraItem: `${id}00001`, numeroItemCompra: 1, niFornecedor: cnpj, marca: "Melitta", descricaoItem: "CAFÉ" },
+      { idCompraItem: `${id}00001`, numeroItemCompra: 1, niFornecedor: "11111111000191", marca: "Outra" }] : [];
+    return { ok: true, status: 200, json: async () => ({ resultado }) };
+  };
+  const c = await completarAnalises({ rest, fetchPncp, lerMes: async () => ({}), esperar: async () => {} });
+  assert.deepEqual([c.marcas.compras, c.marcas.marcas], [2, 1]);
+  assert.equal(urls.filter((u) => /pesquisa-preco/.test(u)).length, 1, "só o CATMAT do item vencido é pesquisado");
+  assert.match(urls.find((u) => /pesquisa-preco/.test(u)), /codigo=453617.*idCompra=78882005900332025/);
+  const gravadas = escritas.filter((e) => e.metodo === "POST" && e.caminho.startsWith("historico_participacoes")).flatMap((e) => e.corpo);
+  assert.equal(gravadas.find((g) => g.numero_item === 1 && g.id_compra === id).marca, "Melitta");
+  assert.equal(gravadas.length, 3, "todas as linhas olhadas ganham marca_consultada_em");
+  assert.ok(gravadas.every((g) => g.marca_consultada_em && g.fornecedor_chave === cnpj));
 });

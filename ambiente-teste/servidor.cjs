@@ -46,7 +46,7 @@ function cabecalhosDe(caminho) {
   return h;
 }
 const TIPOS = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json',
-  '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.txt': 'text/plain', '.xml': 'application/xml', '.webmanifest': 'application/manifest+json' };
+  '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.txt': 'text/plain', '.xml': 'application/xml', '.webmanifest': 'application/manifest+json', '.zip': 'application/zip' };
 const CONFIG = `// Gerado por ambiente-teste/servidor.cjs: Supabase LOCAL (teste).\nconst SUPABASE_URL = ${JSON.stringify(chaves.API_URL)};\nconst SUPABASE_ANON_KEY = ${JSON.stringify(chaves.ANON_KEY)};\n`;
 
 async function api(req, res, nome) {

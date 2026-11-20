@@ -1,0 +1,41 @@
+/* Jurídico & Dúvidas (juridico-ui.js): tokens do Design System (ds-tokens.css), claro e escuro; nada passa da largura no celular. */
+#juridico-central { display: grid; gap: var(--space-12); min-width: 0; color: var(--text-primary); font: var(--text-body); }
+#juridico-central p { margin: 0; }
+#juridico-central a { color: var(--action-text); overflow-wrap: anywhere; }
+.jur-pendente { background: var(--attention-bg); color: var(--attention-text); border: 1px solid var(--attention-border); border-radius: var(--radius-control); padding: var(--space-8) var(--space-12); font: var(--text-label); }
+.jur-abas { display: flex; flex-wrap: wrap; gap: var(--space-4); border-bottom: 1px solid var(--border-default); }
+.jur-aba { background: none; border: 0; border-bottom: 2px solid transparent; color: var(--text-secondary); padding: var(--space-8) var(--space-12); font: 600 14px/22px var(--font-sans); cursor: pointer; }
+.jur-aba[aria-selected="true"] { color: var(--action-text); border-bottom-color: var(--action-strong); }
+.jur-aba:focus-visible, .jur-chip:focus-visible, .jur-botao:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.jur-painel { display: grid; gap: var(--space-12); min-width: 0; }
+.jur-rotulo, .jur-campo label { font: var(--text-label); color: var(--text-secondary); }
+#juridico-central input:not([type=checkbox]), #juridico-central select, #juridico-central textarea {
+  width: 100%; min-width: 0; box-sizing: border-box; padding: 8px 10px; background: var(--surface-default); color: var(--text-primary);
+  border: 1px solid var(--border-strong); border-radius: var(--radius-control); font: var(--text-body); }
+#juridico-central textarea { resize: vertical; }
+.jur-chips { display: flex; flex-wrap: wrap; gap: var(--space-8); }
+.jur-chip { border: 1px solid var(--border-strong); background: var(--surface-default); color: var(--text-secondary); border-radius: 999px; padding: 2px 12px; font: var(--text-label); cursor: pointer; }
+.jur-chip[aria-pressed="true"] { background: var(--action-tint); color: var(--action-text); border-color: var(--action-strong); }
+.jur-lista { display: grid; gap: var(--space-8); min-width: 0; }
+.jur-contagem, .jur-ajuda { color: var(--text-secondary); font: var(--text-label); }
+.jur-item, .jur-peca { border: 1px solid var(--border-default); background: var(--surface-default); border-radius: var(--radius-card); padding: var(--space-12); display: grid; gap: var(--space-8); min-width: 0; overflow-wrap: anywhere; }
+.jur-item > summary { cursor: pointer; font-weight: 600; }
+.jur-base { font: var(--text-label); color: var(--text-secondary); }
+.jur-selo { font: var(--text-label); color: var(--info-text); }
+.jur-prazo { background: var(--info-bg); border: 1px solid var(--info-border); color: var(--text-primary); border-radius: var(--radius-control); padding: var(--space-8) var(--space-12); overflow-wrap: anywhere; }
+.jur-linha { display: flex; flex-wrap: wrap; gap: var(--space-12); }
+.jur-linha > .jur-campo { flex: 1 1 220px; }
+.jur-campos { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: var(--space-12); }
+.jur-campo { display: grid; gap: var(--space-4); min-width: 0; }
+.jur-campo-largo { grid-column: 1 / -1; }
+.jur-linha > .jur-campo-largo { flex-basis: 100%; }
+.jur-revisao { display: flex; gap: var(--space-8); align-items: flex-start; }
+.jur-acoes { display: flex; flex-wrap: wrap; gap: var(--space-8); }
+.jur-botao { border: 1px solid var(--border-strong); background: var(--surface-default); color: var(--text-primary); border-radius: var(--radius-control); padding: 8px 16px; font: 600 14px/22px var(--font-sans); cursor: pointer; }
+.jur-primario { background: var(--action-strong); color: var(--action-on); border-color: var(--action-strong); }
+.jur-botao:disabled { opacity: .55; cursor: not-allowed; }
+.jur-aviso { color: var(--text-secondary); }
+.jur-peca-topo { font-weight: 600; }
+.jur-trecho { color: var(--text-primary); }
+.jur-trecho mark { background: var(--action-tint); color: var(--action-text); font-weight: 600; padding: 0; border-radius: 2px; }
+.jur-integral { white-space: pre-wrap; max-height: 420px; overflow: auto; font: var(--text-body); color: var(--text-primary); }

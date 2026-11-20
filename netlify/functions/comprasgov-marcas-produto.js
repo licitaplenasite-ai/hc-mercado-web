@@ -7,12 +7,20 @@
 // Usada pela Pesquisa de Preços do painel e pelo "Buscar no mercado" do catálogo e do preço por item.
 // Cloudflare (plano gratuito): 1 + MAX_PDMS subrequisições (limite 50) e 10 ms de CPU, por isso
 // poucos PDMs bem escolhidos e no máximo 200 linhas lidas por busca (cada linha traz o objeto da compra inteiro).
+// Duas formas de chamar:
+//   ?termo=notebook            -> candidatos do catálogo, cada um com o total de compras (o mais comprado e com o
+//                                termo como nome do produto vem primeiro) e uma amostra de compras de cada um;
+//   ?termo=notebook&codigoPdm=8435&pagina=2 -> 200 compras de um só produto (1 subrequisição), para a tela paginar;
+//   ?termo=caneta&codigoItem=622254         -> 200 compras de um item CATMAT exato (o catalogoCodigoItem do PNCP), 1 subrequisição.
 
 const { cabecalhosPadrao, limitarPorIp } = require("./_auth");
 const CATALOGO_URL = "https://cnbs.estaleiro.serpro.gov.br/cnbs-api/material/v1/palavra";
 const PRECO_URL = "https://dadosabertos.compras.gov.br/modulo-pesquisa-preco/1_consultarMaterial";
 const LINK_COMPRA = "https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/public/landing?destino=acompanhamento-compra&compra=";
-const MAX_PDMS = 6;
+// "pneu": o catálogo devolve ~25 PDMs com a palavra e o pneu de carro é só o 13º na ordem dele; 12 candidatos cobrem.
+const MAX_PDMS = 12;
+const LINHAS_POR_PAGINA = 200;
+const MAX_PAGINA = 100;
 // Linhas lidas no total, divididas entre os PDMs (1 PDM = 200 linhas; 6 PDMs = 33 cada). Medido: 300 linhas = 4-7 ms de CPU, perto demais do teto.
 const MAX_LINHAS = 200;
 // A fonte muda no máximo uma vez por dia; 10 min no navegador/CDN poupam a API pública em buscas repetidas.
@@ -144,12 +152,13 @@ function selecionarPdms(registros, termo, limite = MAX_PDMS) {
     const codigo = Number(registro.codigoPdm ?? registro.codigoPDM);
     const descricao = textoSeguro(registro.descricaoPDM || registro.nomePdm || registro.descricao);
     if (!Number.isInteger(codigo) || codigo <= 0 || !descricao) continue;
-    if (!unicos.has(codigo)) unicos.set(codigo, { codigo, descricao });
+    if (!unicos.has(codigo)) unicos.set(codigo, { codigo, descricao, posicao: unicos.size });
   }
   const nota = (pdm) => {
     const nome = semAcento(pdm.descricao);
     const doNome = new Set(palavras(nome));
-    return [nome === apelido ? 1 : 0, nome === busca ? 1 : 0, termos.filter((p) => doNome.has(p)).length, nome.startsWith(busca) ? 1 : 0];
+    // Produto principal: o nome do PDM começa pela 1ª palavra do termo ("Notebook" sim, "Bateria notebook" não).
+    return [nome === apelido ? 1 : 0, nome === busca ? 1 : 0, termos.filter((p) => doNome.has(p)).length, palavras(nome)[0] === termos[0] ? 1 : 0, nome.startsWith(busca) ? 1 : 0];
   };
   const notas = [...unicos.values()].map((pdm) => ({ pdm, n: nota(pdm) }));
   // Havendo PDM do apelido ou com todas as palavras do termo, os parciais ("Caneta - indicador" para "caneta esferográfica",
@@ -158,16 +167,30 @@ function selecionarPdms(registros, termo, limite = MAX_PDMS) {
   const doApelido = busca !== completo ? notas.filter((x) => x.n[0]) : [];
   const completos = doApelido.length ? doApelido : notas.filter((x) => x.n[0] || x.n[2] === termos.length);
   return (completos.length ? completos : notas)
-    .sort((a, b) => b.n[0] - a.n[0] || b.n[1] - a.n[1] || b.n[2] - a.n[2] || b.n[3] - a.n[3] || a.pdm.descricao.localeCompare(b.pdm.descricao, "pt-BR"))
+    // Empate: vale a ordem do próprio catálogo (relevância dele), não a alfabética ("Cadeira escritório" antes de "Cadeira alimentação").
+    .sort((a, b) => b.n[0] - a.n[0] || b.n[1] - a.n[1] || b.n[2] - a.n[2] || b.n[3] - a.n[3] || b.n[4] - a.n[4] || a.pdm.posicao - b.pdm.posicao)
     .slice(0, limite)
-    .map(({ pdm }, ordem) => ({ ...pdm, ordem }));
+    .map(({ pdm: { posicao, ...pdm }, n }, ordem) => ({ ...pdm, ordem, principal: n[0] || n[1] || n[3] ? 1 : 0 }));
+}
+
+// Depois da consulta: produto principal (apelido, nome igual ou começando pelo termo) antes de acessório, e entre eles
+// o mais comprado. Medido em 19/11/2026: "notebook" -> Notebook (6.666) antes de Bateria notebook (362);
+// "pneu" -> Pneu veículo automotivo (30.878) antes de Pneu bicicleta (46); "cadeira giratória" -> Cadeira escritório (12.112).
+function ordenarPorVolume(pdms) {
+  return [...pdms].sort((a, b) => b.principal - a.principal || (b.total || 0) - (a.total || 0) || a.ordem - b.ordem);
 }
 
 function normalizarResultado(linha, pdm) {
   const descricaoItem = textoSeguro(linha.descricaoItem || linha.descricaoDetalhadaItem, 500);
-  const util = marcaUtil(linha.marca, descricaoItem);
+  // "Notebook ASUS Vivobook 15": o fornecedor pôs o nome do produto antes da marca e do modelo; tira o nome e fica o resto.
+  // Só com 2+ palavras depois do nome: "DETERGENTE DESINCRUS" é descrição, não marca.
+  const nomeProduto = palavras(pdm.descricao);
+  const textoMarca = textoSeguro(linha.marca, 120);
+  const palavrasMarca = textoMarca.split(" ");
+  const repeteProduto = nomeProduto.length && palavrasMarca.length >= nomeProduto.length + 2 && palavras(palavrasMarca.slice(0, nomeProduto.length).join(" ")).join(" ") === nomeProduto.join(" ");
+  const util = marcaUtil(repeteProduto ? palavrasMarca.slice(nomeProduto.length).join(" ") : textoMarca, descricaoItem);
   // "DETERGENTE DESINCRUS" ou a própria categoria: o fornecedor repetiu o nome do produto no campo marca.
-  const declarada = util && semAcento(util) !== semAcento(pdm.descricao) && palavras(util)[0] !== palavras(pdm.descricao)[0] ? util : null;
+  const declarada = util && semAcento(util) !== semAcento(pdm.descricao) && palavras(util)[0] !== nomeProduto[0] ? util : null;
   // Sem marca aproveitável a compra continua (preço e órgão valem), no grupo "marca não informada".
   const { marca, modelo, fabricante } = declarada ? separarMarcaModelo(declarada) : { marca: null, modelo: null, fabricante: null };
   // idCompra vem como número JSON de 17 dígitos (> 2^53): o JSON.parse arredonda (…025 vira …024). O idCompraItem vem
@@ -188,6 +211,8 @@ function normalizarResultado(linha, pdm) {
     valorUnitario: Number(linha.precoUnitario) || null,
     valorUnitarioCentavos: centavosDoPreco(linha.precoUnitario),
     quantidade: Number(linha.quantidade) || null,
+    // F/E/M: federal, estadual, municipal (filtro "esfera" da tela).
+    esfera: /^[FEMD]$/.test(String(linha.esfera || "")) ? linha.esfera : null,
     unidade: textoSeguro(linha.siglaUnidadeFornecimento, 20).toUpperCase(),
     unidadeNome: textoSeguro(linha.nomeUnidadeFornecimento, 60),
     // "FR" sozinho não diz o tamanho; a fonte informa a capacidade à parte (FR 500 ML, EMB 5 L).
@@ -222,42 +247,64 @@ async function buscarJson(url, signal) {
   return resposta.json();
 }
 
+// Uma página de compras de um PDM. tamanhoPagina mínimo da fonte é 10 (1 devolve 400).
+async function paginaDoPdm(pdm, { pagina = 1, tamanhoPagina, uf, signal }) {
+  const params = new URLSearchParams({ pagina: String(pagina), tamanhoPagina: String(tamanhoPagina), tipo: pdm.tipo || "codigoPdm", codigo: String(pdm.codigo), dataResultado: "true" });
+  if (uf) params.set("estado", uf);
+  const dados = await buscarJson(`${PRECO_URL}?${params}`, signal);
+  const total = Number.isSafeInteger(dados.totalRegistros) ? dados.totalRegistros : null;
+  return { pdm: { ...pdm, total }, paginas: Number.isSafeInteger(dados.totalPaginas) ? dados.totalPaginas : null, itens: (dados.resultado || []).map((linha) => normalizarResultado(linha, pdm)).filter(Boolean) };
+}
+const porData = (a, b) => String(b.dataResultado).localeCompare(String(a.dataResultado));
+
 exports.handler = async (event) => {
   // Proxy público: CORS só do nosso domínio e teto diário por IP (teste de ataque 19/11, M5).
   const headers = cabecalhosPadrao(event);
   const limite = await limitarPorIp(event, "comprasgov-marcas-produto");
   if (!limite.ok) return { statusCode: limite.status, headers, body: JSON.stringify({ erro: limite.erro }) };
-  const termo = textoSeguro(event.queryStringParameters?.termo, 100);
-  const uf = textoSeguro(event.queryStringParameters?.uf, 2).toUpperCase();
+  const q = event.queryStringParameters || {};
+  const termo = textoSeguro(q.termo, 100);
+  const uf = textoSeguro(q.uf, 2).toUpperCase();
+  const codigoPdm = q.codigoPdm === undefined ? null : Number(q.codigoPdm);
+  const codigoItem = q.codigoItem === undefined ? null : Number(q.codigoItem);
+  const pagina = q.pagina === undefined ? 1 : Number(q.pagina);
   if (termo.length < 2) return { statusCode: 400, headers, body: JSON.stringify({ ok: false, erro: "Informe ao menos 2 caracteres do produto." }) };
   if (uf && !/^[A-Z]{2}$/.test(uf)) return { statusCode: 400, headers, body: JSON.stringify({ ok: false, erro: "UF inválida." }) };
+  if (codigoPdm !== null && !(Number.isSafeInteger(codigoPdm) && codigoPdm > 0)) return { statusCode: 400, headers, body: JSON.stringify({ ok: false, erro: "Produto do catálogo inválido." }) };
+  if (codigoItem !== null && !(Number.isSafeInteger(codigoItem) && codigoItem > 0)) return { statusCode: 400, headers, body: JSON.stringify({ ok: false, erro: "Código CATMAT inválido." }) };
+  if (!(Number.isSafeInteger(pagina) && pagina >= 1 && pagina <= MAX_PAGINA)) return { statusCode: 400, headers, body: JSON.stringify({ ok: false, erro: "Página inválida." }) };
 
   const controlador = new AbortController();
-  const timeout = setTimeout(() => controlador.abort(), 18000);
+  const timeout = setTimeout(() => controlador.abort(), 25000);
+  const atributos = separarEspecificacao(termo).atributos.map((a) => a.rotulo);
   try {
+    if (codigoPdm !== null || codigoItem !== null) {
+      // Paginação de um produto já escolhido (ou item CATMAT exato): o nome vem do parâmetro da tela.
+      const pdm = codigoItem !== null ? { codigo: codigoItem, tipo: "codigoItemCatalogo", descricao: textoSeguro(q.produto, 120) || termo, ordem: 0 }
+        : { codigo: codigoPdm, descricao: textoSeguro(q.produto, 120) || "Produto do catálogo", ordem: 0 };
+      const r = await paginaDoPdm(pdm, { pagina, tamanhoPagina: LINHAS_POR_PAGINA, uf, signal: controlador.signal });
+      return { statusCode: 200, headers: { ...headers, "Cache-Control": CACHE },
+        body: JSON.stringify({ ok: true, fonte: "Pesquisa de Preços do Compras.gov", catalogo: r.pdm, pagina, paginas: r.paginas, atributos, itens: marcarEspecificacao(r.itens.sort(porData), termo) }) };
+    }
+
     const catalogo = await buscarJson(`${CATALOGO_URL}?${new URLSearchParams({ palavra: termo })}`, controlador.signal);
     const pdms = selecionarPdms(catalogo, termo);
-    if (!pdms.length) return { statusCode: 200, headers: { ...headers, "Cache-Control": CACHE }, body: JSON.stringify({ ok: true, itens: [], catalogos: [] }) };
+    if (!pdms.length) return { statusCode: 200, headers: { ...headers, "Cache-Control": CACHE }, body: JSON.stringify({ ok: true, itens: [], catalogos: [], atributos }) };
 
     const tamanhoPagina = Math.max(10, Math.floor(MAX_LINHAS / pdms.length));
-    const consultas = await Promise.allSettled(pdms.map(async (pdm) => {
-      const params = new URLSearchParams({ pagina: "1", tamanhoPagina: String(tamanhoPagina), tipo: "codigoPdm", codigo: String(pdm.codigo), dataResultado: "true" });
-      if (uf) params.set("estado", uf);
-      const dados = await buscarJson(`${PRECO_URL}?${params}`, controlador.signal);
-      return { pdm, itens: (dados.resultado || []).map((linha) => normalizarResultado(linha, pdm)).filter(Boolean) };
-    }));
-    // Para um termo amplo (por exemplo, "caneta"), o catálogo devolve vários
-    // PDMs. Colocar primeiro o PDM com mais registros declarados evita que uma
-    // variação rara, como caneta laser, esconda o produto principal pesquisado.
+    const consultas = await Promise.allSettled(pdms.map((pdm) => paginaDoPdm(pdm, { tamanhoPagina, uf, signal: controlador.signal })));
     const grupos = consultas.filter((consulta) => consulta.status === "fulfilled").map((consulta) => consulta.value);
-    grupos.sort((a, b) => a.pdm.ordem - b.pdm.ordem || b.itens.length - a.itens.length);
-    const itens = marcarEspecificacao(grupos.flatMap((grupo) => grupo.itens.sort((a, b) => String(b.dataResultado).localeCompare(String(a.dataResultado)))).slice(0, MAX_LINHAS), termo);
+    // O total de compras de cada PDM vem de graça na mesma resposta: decide qual produto aparece primeiro.
+    const ordem = ordenarPorVolume(grupos.map((g) => g.pdm)).map((p, k) => ({ ...p, ordem: k }));
+    const posicao = new Map(ordem.map((p) => [p.codigo, p.ordem]));
+    grupos.sort((a, b) => posicao.get(a.pdm.codigo) - posicao.get(b.pdm.codigo));
+    const itens = marcarEspecificacao(grupos.flatMap((grupo) => grupo.itens.map((i) => ({ ...i, ordemCatalogo: posicao.get(grupo.pdm.codigo) })).sort(porData)).slice(0, MAX_LINHAS), termo);
     const falhas = consultas.filter((c) => c.status === "rejected").length;
     return {
       statusCode: 200,
       // Resposta parcial (alguma consulta falhou) não fica em cache: a próxima busca tenta de novo.
       headers: falhas ? headers : { ...headers, "Cache-Control": CACHE },
-      body: JSON.stringify({ ok: true, fonte: "Catálogo e Pesquisa de Preços do Compras.gov", catalogos: pdms, atributos: separarEspecificacao(termo).atributos.map((a) => a.rotulo), itens, consultasComFalha: falhas }),
+      body: JSON.stringify({ ok: true, fonte: "Catálogo e Pesquisa de Preços do Compras.gov", catalogos: ordem.filter((p) => p.total !== 0), atributos, itens, consultasComFalha: falhas }),
     };
   } catch (erro) {
     return { statusCode: 502, headers, body: JSON.stringify({ ok: false, erro: "Não foi possível consultar as fontes públicas agora." }) };
@@ -274,3 +321,4 @@ module.exports.centavosDoPreco = centavosDoPreco;
 module.exports.separarEspecificacao = separarEspecificacao;
 module.exports.marcarEspecificacao = marcarEspecificacao;
 module.exports.MAX_PDMS = MAX_PDMS;
+module.exports.ordenarPorVolume = ordenarPorVolume;

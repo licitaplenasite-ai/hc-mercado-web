@@ -50,6 +50,7 @@ function instalar(b) {
   delete require.cache[KIT];
   require.cache[AUTH] = { id: AUTH, filename: AUTH, loaded: true, children: [], paths: [], exports: {
     cabecalhosPadrao: () => ({}),
+    verificarLimiteDiario: async () => ({ ok: true }), // plano (consumir_uso_plano) fica fora deste teste
     exigirUsuarioLogado: async (event) => {
       const u = TOKEN[(event.headers && event.headers.authorization) || ''];
       return u ? { ok: true, userId: u } : { ok: false, status: 401, erro: 'Sessão inválida.' };

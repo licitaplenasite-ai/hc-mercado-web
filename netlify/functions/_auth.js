@@ -67,32 +67,62 @@ async function exigirUsuarioLogado(event) {
   }
 }
 
+function recursoForaDoPlano(plano) {
+  return {
+    ok: false,
+    status: 403,
+    erro: `O plano ${plano.plano || "atual"} não inclui ${plano.nome_recurso || "este recurso"}. Fale com a gente para mudar de plano.`,
+  };
+}
+// Resposta de consumir_uso_plano, ou null se a função não existe/não respondeu (o chamador usa o contador antigo).
+async function consumirUsoPlano(opcoes) {
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/consumir_uso_plano`, opcoes);
+    const corpo = r.ok ? await r.json() : null;
+    return corpo && typeof corpo === "object" && typeof corpo.permitido === "boolean" ? corpo : null;
+  } catch {
+    return null;
+  }
+}
+
 // Limite diário de uso por usuário e por função (ex: 30 resumos de edital/dia). Guardado no
-// Supabase via a função incrementar_uso (ver supabase/rls_e_limite_de_uso.sql). Se
+// Supabase via consumir_uso_plano (planos_e_recursos.sql), com incrementar_uso de reserva. A
 // IA só prossegue com contagem válida. Os demais consumidores mantêm o comportamento
 // anterior de contingência para não alterar envios e consultas fora deste fluxo.
 async function verificarLimiteDiario(userId, nomeFuncao, limite) {
-  const ehIA = nomeFuncao === "ia-edital" || nomeFuncao === "monte-busca-ia";
+  const ehIA = nomeFuncao === "ia-edital" || nomeFuncao === "monte-busca-ia" || nomeFuncao === "fornecedor-ia";
   const indisponivel = ehIA ? { ok: false, status: 503, erro: "Não foi possível verificar o limite de uso da IA agora. Tente novamente em instantes." } : { ok: true };
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceKey) {
     return indisponivel;
   }
   try {
-    const resp = await fetch(`${SUPABASE_URL}/rest/v1/rpc/incrementar_uso`, {
+    const opcoes = (corpo) => ({
       method: "POST",
       headers: {
         apikey: serviceKey,
         Authorization: `Bearer ${serviceKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ p_usuario_id: userId, p_funcao: nomeFuncao }),
+      body: JSON.stringify(corpo),
       ...(ehIA ? { signal: globalThis.AbortSignal.timeout(5000) } : {}),
     });
-    if (!resp.ok) {
-      return indisponivel;
+    // Plano da conta (supabase/planos_e_recursos.sql): recurso incluso? Limite do plano ou o desta rota.
+    const plano = await consumirUsoPlano(opcoes({ p_usuario_id: userId, p_funcao: nomeFuncao, p_limite_padrao: limite }));
+    if (plano?.motivo === "plano") return recursoForaDoPlano(plano);
+    let resultado;
+    if (plano) {
+      limite = plano.limite;
+      resultado = plano.contagem;
+    } else {
+      // Sem a função no banco (SQL ainda não aplicado): contador antigo, como antes.
+      const resp = await fetch(`${SUPABASE_URL}/rest/v1/rpc/incrementar_uso`, opcoes({ p_usuario_id: userId, p_funcao: nomeFuncao }));
+      if (!resp.ok) {
+        return indisponivel;
+      }
+      resultado = await resp.json();
     }
-    const contagem = await resp.json();
+    const contagem = resultado;
     if (ehIA && (!Number.isSafeInteger(contagem) || contagem < 1)) return indisponivel;
     if (typeof contagem === "number" && contagem > limite) {
       return {
@@ -101,7 +131,8 @@ async function verificarLimiteDiario(userId, nomeFuncao, limite) {
         erro: `Limite diário de uso desta ferramenta atingido (${limite}/dia). Volta amanhã ou fala com a gente pra ajustar seu plano.`,
       };
     }
-    return { ok: true };
+    // usadas/limite: a tela mostra "N de X hoje" (contador de perguntas da IA).
+    return typeof contagem === "number" ? { ok: true, usadas: contagem, limite } : { ok: true };
   } catch (e) {
     return indisponivel;
   }
@@ -167,5 +198,6 @@ async function limitarPorIp(event, nomeFuncao, limite = LIMITE_PROXY_POR_IP) {
     return { ok: true };
   }
 }
+
 
 module.exports = { cabecalhosPadrao, exigirUsuarioLogado, exigirClienteAprovado, exigirUsuarioAprovado, verificarLimiteDiario, origemPermitida, limitarPorIp };

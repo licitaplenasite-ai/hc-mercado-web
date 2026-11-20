@@ -26,6 +26,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="ds-tokens.css">
 <link rel="stylesheet" href="licitacao-anterior.css">
+<link rel="stylesheet" href="mercado-comprasgov.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" crossorigin="anonymous"></script>
 <script src="supabase-config.js"></script>
 <script src="resumo-modelo.js?v=31e52fa09b74"></script>
@@ -33,13 +34,17 @@
 <script src="capag.js?v=167fac74e421"></script>
 <script src="defesa-licitante.js?v=0fc91f5a970b"></script>
 <script src="empresa-identificacao-ui.js?v=782a6b926bae"></script>
-<script src="defesa-ui.js?v=56a6e32aae57"></script>
+<script src="defesa-ui.js?v=9e766ff069af"></script>
 <script src="operacao-edital.js"></script>
 <script src="licitacao-anterior-ui.js"></script>
 <script src="sancoes-ui.js"></script>
 <script src="analise-cnpj-ui.js"></script>
 <script src="busca-avancada.js"></script>
+<script src="mercado-comprasgov.js"></script>
+<script src="item-mercado-ui.js"></script>
 <script src="portal-origem.js"></script>
+<script src="busca-extra.js"></script>
+<script src="busca-extra-ui.js" defer></script>
 <script>
   // Guarda de acesso: só entra quem tiver login aprovado. Roda antes do resto da página carregar.
   (function () {
@@ -1521,8 +1526,13 @@
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link rel="stylesheet" href="painel-design.css?v=7">
+<link rel="stylesheet" href="busca-extra.css">
 <script src="contatos-resumo.js?v=1" defer></script>
 <script src="decisoes-resumo.js?v=1" defer></script>
+<script src="monitor-processo-ui.js" defer></script>
+<script src="fornecedor-ia-ui.js" defer></script>
+<script src="ajuda-ui.js" defer></script>
+<script src="avisos-celular.js" defer></script>
 </head>
 <body>
 <!-- Sprite de ícones Phosphor (peso "fill") — SVG inline embutido de propósito, sem
@@ -1538,6 +1548,8 @@
 <symbol id="ph-briefcase" viewBox="0 0 256 256"><path d="M152,112a8,8,0,0,1-8,8H112a8,8,0,0,1,0-16h32A8,8,0,0,1,152,112Zm80-40V200a16,16,0,0,1-16,16H40a16,16,0,0,1-16-16V72A16,16,0,0,1,40,56H80V48a24,24,0,0,1,24-24h48a24,24,0,0,1,24,24v8h40A16,16,0,0,1,232,72ZM96,56h64V48a8,8,0,0,0-8-8H104a8,8,0,0,0-8,8Zm120,57.61V72H40v41.61A184,184,0,0,0,128,136,184,184,0,0,0,216,113.61Z"/></symbol>
 <symbol id="ph-buildings" viewBox="0 0 256 256"><path d="M239.73,208H224V96a16,16,0,0,0-16-16H164a4,4,0,0,0-4,4V208H144V32.41a16.43,16.43,0,0,0-6.16-13,16,16,0,0,0-18.72-.69L39.12,72A16,16,0,0,0,32,85.34V208H16.27A8.18,8.18,0,0,0,8,215.47,8,8,0,0,0,16,224H240a8,8,0,0,0,8-8.53A8.18,8.18,0,0,0,239.73,208ZM76,184a8,8,0,0,1-8.53,8A8.18,8.18,0,0,1,60,183.72V168.27A8.19,8.19,0,0,1,67.47,160,8,8,0,0,1,76,168Zm0-56a8,8,0,0,1-8.53,8A8.19,8.19,0,0,1,60,127.72V112.27A8.19,8.19,0,0,1,67.47,104,8,8,0,0,1,76,112Zm40,56a8,8,0,0,1-8.53,8,8.18,8.18,0,0,1-7.47-8.26V168.27a8.19,8.19,0,0,1,7.47-8.26,8,8,0,0,1,8.53,8Zm0-56a8,8,0,0,1-8.53,8,8.19,8.19,0,0,1-7.47-8.26V112.27a8.19,8.19,0,0,1,7.47-8.26,8,8,0,0,1,8.53,8Z"/></symbol>
 <symbol id="ph-calendar" viewBox="0 0 256 256"><path d="M208,32H184V24a8,8,0,0,0-16,0v8H88V24a8,8,0,0,0-16,0v8H48A16,16,0,0,0,32,48V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V48A16,16,0,0,0,208,32ZM112,184a8,8,0,0,1-16,0V132.94l-4.42,2.22a8,8,0,0,1-7.16-14.32l16-8A8,8,0,0,1,112,120Zm56-8a8,8,0,0,1,0,16H136a8,8,0,0,1-6.4-12.8l28.78-38.37A8,8,0,1,0,145.07,132a8,8,0,1,1-13.85-8A24,24,0,0,1,176,136a23.76,23.76,0,0,1-4.84,14.45L152,176ZM48,80V48H72v8a8,8,0,0,0,16,0V48h80v8a8,8,0,0,0,16,0V48h24V80Z"/></symbol>
+<symbol id="ph-clock-counter-clockwise" viewBox="0 0 256 256"><path d="M224,128A96,96,0,0,1,62.11,197.82a8,8,0,1,1,11-11.64A80,80,0,1,0,71.43,71.43C67.9,75,64.58,78.51,61.35,82L77.66,98.34A8,8,0,0,1,72,112H32a8,8,0,0,1-8-8V64a8,8,0,0,1,13.66-5.66L50,70.7c3.22-3.49,6.54-7,10.06-10.55A96,96,0,0,1,224,128ZM128,72a8,8,0,0,0-8,8v48a8,8,0,0,0,3.88,6.86l40,24a8,8,0,1,0,8.24-13.72L136,123.47V80A8,8,0,0,0,128,72Z"/></symbol>
+<symbol id="ph-puzzle-piece" viewBox="0 0 256 256"><path d="M165.78,224H208a16,16,0,0,0,16-16V170.35A8,8,0,0,0,212.94,163a23.37,23.37,0,0,1-8.94,1.77c-13.23,0-24-11.1-24-24.73s10.77-24.73,24-24.73a23.37,23.37,0,0,1,8.94,1.77A8,8,0,0,0,224,109.65V72a16,16,0,0,0-16-16H171.78a35.36,35.36,0,0,0,.22-4,36,36,0,0,0-72,0,35.36,35.36,0,0,0,.22,4H64A16,16,0,0,0,48,72v32.22a35.36,35.36,0,0,0-4-.22,36,36,0,0,0,0,72,35.36,35.36,0,0,0,4-.22V208a16,16,0,0,0,16,16h42.22"/></symbol>
 <symbol id="ph-chalkboard-teacher" viewBox="0 0 256 256"><path d="M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H53.39a8,8,0,0,0,7.23-4.57,48,48,0,0,1,86.76,0,8,8,0,0,0,7.23,4.57H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40ZM104,168a32,32,0,1,1,32-32A32,32,0,0,1,104,168Zm112,32H159.43a63.93,63.93,0,0,0-13.16-16H192a8,8,0,0,0,8-8V80a8,8,0,0,0-8-8H64a8,8,0,0,0-8,8v96a8,8,0,0,0,6,7.75A63.72,63.72,0,0,0,48.57,200H40V56H216Z"/></symbol>
 <symbol id="ph-chart-bar" viewBox="0 0 256 256"><path d="M232,208a8,8,0,0,1-8,8H32a8,8,0,0,1,0-16h8V136a8,8,0,0,1,8-8H72a8,8,0,0,1,8,8v64H96V88a8,8,0,0,1,8-8h32a8,8,0,0,1,8,8V200h16V40a8,8,0,0,1,8-8h40a8,8,0,0,1,8,8V200h8A8,8,0,0,1,232,208Z"/></symbol>
 <symbol id="ph-chart-line-up" viewBox="0 0 256 256"><path d="M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40ZM200,192H56a8,8,0,0,1-8-8V72a8,8,0,0,1,16,0v76.69l34.34-34.35a8,8,0,0,1,11.32,0L128,132.69,172.69,88H144a8,8,0,0,1,0-16h48a8,8,0,0,1,8,8v48a8,8,0,0,1-16,0V99.31l-50.34,50.35a8,8,0,0,1-11.32,0L104,131.31l-40,40V176H200a8,8,0,0,1,0,16Z"/></symbol>
@@ -1663,22 +1675,28 @@
 </div>
 
 <div class="shell">
+<!-- Itens Hoje, Calendário, Licitação anterior, Processos e Extensão adicionados em 19/11/2026: aguarda aprovação. -->
 <nav id="menu-principal" aria-label="Menu principal">
   <button id="nav-colapsar-btn" type="button" title="Recolher menu">
     <span class="nav-ico">&#171;</span><span class="nav-label">Recolher</span>
   </button>
+  <a href="/sistema" title="Hoje"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-house'></use></svg></span><span class="nav-label">Hoje</span></a>
   <button class="ativo" data-alvo="dashboard" title="Dashboard"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-house'></use></svg></span><span class="nav-label">Dashboard</span></button>
   <button data-alvo="boletim" title="Boletim"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-clipboard-text'></use></svg></span><span class="nav-label">Boletim</span></button>
+  <a href="#calendario" title="Calendário"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-calendar'></use></svg></span><span class="nav-label">Calendário</span></a>
   <button data-alvo="oportunidades" title="Encontrar Licitações"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-magnifying-glass'></use></svg></span><span class="nav-label">Encontrar Licitações</span></button>
   <button data-alvo="diagnostico" title="Inteligência de Mercado"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-chart-bar'></use></svg></span><span class="nav-label">Inteligência de Mercado</span></button>
   <a href="prospeccao.html" title="Prospecção"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-chart-bar'></use></svg></span><span class="nav-label">Prospecção</span></a>
+  <a href="#licitacao-anterior" title="Licitação anterior"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-clock-counter-clockwise'></use></svg></span><span class="nav-label">Licitação anterior</span></a>
   <button data-alvo="empresa" title="Analisar concorrente"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-buildings'></use></svg></span><span class="nav-label">Analisar concorrente</span></button>
   <button data-alvo="transparencia" title="Convênios e Emendas Federais"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-handshake'></use></svg></span><span class="nav-label">Convênios e Emendas Federais</span></button>
   <button data-alvo="precos" title="Pesquisa de Preços"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-coins'></use></svg></span><span class="nav-label">Pesquisa de Preços</span></button>
   <a href="bdi.html" title="Calculadora de BDI"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-coins'></use></svg></span><span class="nav-label">Calculadora de BDI</span></a>
   <a href="sinapi.html" title="Preços SINAPI"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-buildings'></use></svg></span><span class="nav-label">Preços SINAPI</span></a>
   <button data-alvo="kanban" title="Funil"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-folders'></use></svg></span><span class="nav-label">Funil</span></button>
+  <a href="processos.html" title="Processos"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-folder-open'></use></svg></span><span class="nav-label">Processos</span></a>
   <a href="operacao.html" class="nav-externo" title="Minhas empresas e documentos (abre outra página)"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-files'></use></svg></span><span class="nav-label">Minhas empresas e documentos</span><svg class='icone-ph nav-externo-ico' aria-hidden="true"><use href='#ph-arrow-square-out'></use></svg></a>
+  <a href="extensao.html" title="Extensão"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-puzzle-piece'></use></svg></span><span class="nav-label">Extensão</span></a>
   <button data-alvo="juridico" title="Jurídico &amp; Dúvidas"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-scales'></use></svg></span><span class="nav-label">Jurídico &amp; Dúvidas</span></button>
   <button data-alvo="status" title="Status das Ferramentas"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-info'></use></svg></span><span class="nav-label">Status das Ferramentas</span></button>
 </nav>
@@ -1756,6 +1774,10 @@
     </div>
 
     <div class="secao-conteudo-principal">
+    <div class="dash-faixa-hoje" id="dash-faixa-hoje" role="status" aria-live="polite">
+      <span class="dash-faixa-num"><strong id="dash-faixa-publicadas">&ndash;</strong> licita&ccedil;&otilde;es publicadas hoje</span>
+      <span class="dash-faixa-novidade" id="dash-faixa-novidade"></span>
+    </div>
     <div class="dash-painel dash-vence-semana">
       <h3 class="dash-painel-titulo" style="margin:0 0 4px;">O que vence esta semana?</h3>
       <p style="margin:0 0 12px;font-size:13px;color:var(--texto-fraco);">Prazos de proposta dos pr&oacute;ximos 7 dias no seu Boletim e no seu Funil, do mais urgente para o menos urgente.</p>
@@ -1868,6 +1890,11 @@
         <input id="bol-palavras" placeholder="Ex: hospitalar, limpeza, informatica" aria-describedby="bol-palavras-erro">
         <p id="bol-palavras-erro" class="erro-campo" hidden>Escreva pelo menos uma palavra do que você vende, por exemplo: limpeza.</p>
       </div>
+      <p class="dica-clique" id="bol-filtro-empresa" style="flex-basis:100%;margin:0;"></p>
+      <div class="campo" id="bol-copiar-campo" hidden>
+        <label for="bol-copiar">Copiar o filtro de outra empresa</label>
+        <select id="bol-copiar"></select>
+      </div>
       <button class="btn-buscar" id="bol-salvar">Salvar filtro e atualizar boletim</button>
     </div>
     <p id="bol-filtro-status" role="status" aria-live="polite"></p>
@@ -1886,6 +1913,16 @@
         <p class="dica-clique" style="margin:4px 0 0;">Pesquise oportunidades publicadas e aplique apenas os filtros que importam. Depois, abra o processo para ver os detalhes e a fonte oficial.</p>
       </div>
     </div>
+    <details class="op-numero" id="op-numero">
+      <summary><svg class='icone-ph'><use href='#ph-magnifying-glass'></use></svg> Já tenho o número (UASG + pregão)</summary>
+      <form class="op-linha" id="op-numero-form">
+        <div class="campo"><label for="op-numero-uasg">UASG</label><input id="op-numero-uasg" inputmode="numeric" maxlength="6" placeholder="Ex: 158465" autocomplete="off"></div>
+        <div class="campo"><label for="op-numero-num">Número/ano</label><input id="op-numero-num" maxlength="12" placeholder="Ex: 90012/2026" autocomplete="off"></div>
+        <div class="campo"><label for="op-numero-mod">Modalidade</label><select id="op-numero-mod"><option value="pregao">Pregão eletrônico</option><option value="dispensa">Dispensa eletrônica</option></select></div>
+        <button type="submit" class="btn-buscar" id="op-numero-buscar">Achar</button>
+        <p class="dica-clique op-linha-dica" id="op-numero-status" role="status" aria-live="polite">Para compras do Compras.gov.br. Procuramos na nossa base e no PNCP e mostramos o link oficial.</p>
+      </form>
+    </details>
     <div class="painel-filtros painel-filtros-recolhivel" id="op-filtros-principais">
       <div class="painel-filtros-recolhivel-cabecalho">
         <h3 class="painel-filtros-recolhivel-titulo">Filtros de busca</h3>
@@ -1896,6 +1933,7 @@
         <label for="op-palavras">Palavras-chave (separadas por vírgula)</label>
         <input id="op-palavras" placeholder="Ex: hospitalar, limpeza, informatica" aria-describedby="op-palavras-erro">
         <p id="op-palavras-erro" class="erro-campo" hidden>Para receber no Boletim, escreva pelo menos uma palavra do que você vende.</p>
+        <div id="op-sugestoes" class="op-sugestoes" aria-label="Sugestões de palavras" hidden></div>
       </div>
       <div class="campo">
         <label for="op-uf">Estado (UF) — opcional</label>
@@ -1941,6 +1979,10 @@
           <button type="button" class="btn-imprimir" id="op-salvos-cancelar">Cancelar</button>
         </form>
         <p class="dica-clique op-linha-dica" id="op-salvos-status" role="status" aria-live="polite"></p>
+        <div class="op-jornais" id="op-jornais" hidden>
+          <p class="dica-clique op-linha-dica">Meus jornais: cada filtro salvo com o e-mail ligado chega como <strong>um e-mail separado</strong>, de manhã, com as licitações novas daquele filtro. Sem novidade no dia, não mandamos e-mail.</p>
+          <ul id="op-jornais-lista" class="op-jornais-lista"></ul>
+        </div>
       </div>
       <details class="op-ia" id="op-ia">
         <summary><svg class='icone-ph'><use href='#ph-robot'></use></svg> Monte minha busca com IA</summary>
@@ -2007,9 +2049,42 @@
           <label for="op-orgao">Nome do órgão</label>
           <input id="op-orgao" placeholder="Ex: Ministério da Saúde">
         </div>
+        <div class="campo">
+          <label for="op-periodo-por">As datas acima valem para</label>
+          <select id="op-periodo-por"><option value="">Data de publicação</option><option value="abertura">Data de abertura (fim das propostas)</option></select>
+        </div>
+        <div class="campo">
+          <label for="op-modalidade">Modalidade</label>
+          <select id="op-modalidade"><option value="">Todas</option><option value="pregao">Pregão</option><option value="dispensa">Dispensa</option><option value="concorrencia">Concorrência</option><option value="inexigibilidade">Inexigibilidade</option><option value="credenciamento">Credenciamento</option><option value="leilao">Leilão</option></select>
+        </div>
+        <div class="campo">
+          <label for="op-portal">Portal da disputa</label>
+          <select id="op-portal"><option value="">Todos</option></select>
+        </div>
+        <div class="campo" style="flex:2">
+          <label for="op-limitar">Precisa ter também (todas as palavras)</label>
+          <input id="op-limitar" maxlength="600" placeholder="Ex: sulfite, A4">
+        </div>
+        <div class="campo campo-checks">
+          <label><input type="checkbox" id="op-me-epp"> Só exclusivas para ME/EPP</label>
+          <label><input type="checkbox" id="op-excluir-srp"> Excluir registro de preços (SRP)</label>
+          <label id="op-sem-disputa-rotulo" hidden><input type="checkbox" id="op-sem-disputa"> Só órgãos com itens desertos, fracassados ou com lance acima do estimado</label>
+        </div>
       </div>
+      <p class="dica-clique" style="margin:8px 2px 0;">Palavras-chave: cada termo entre vírgulas é procurado como frase exata (ex.: "papel sulfite"); basta um deles aparecer. Use "Precisa ter também" para exigir todos e "Não quero ver" para excluir. ME/EPP e SRP são lidos do texto do objeto e do cadastro do PNCP; o filtro de órgãos sem disputa só aparece quando já temos o histórico de pregões anteriores desse órgão.</p>
       <p class="dica-clique" style="margin:8px 2px 0;">Deixe as duas datas em branco pra buscar em todo o histórico coletado. Preencha pra buscar num período específico (ex: últimos 30 ou 60 dias) — inclui licitações já encerradas nesse período, não só as que ainda estão com prazo aberto.</p>
       <p class="dica-clique" style="margin:8px 2px 0;">Esfera: quando o dado direto do PNCP não está disponível (licitações ainda não recapturadas pelo robô), classificamos pelo nome do órgão — pode ficar "Não classificado" em casos raros. Valor e código dependem de dados que só a busca já coletada pelo robô traz completos; licitações vindas só da busca ao vivo podem não ter esses campos ainda.</p>
+    </details>
+    <details class="painel-filtros-avancados" id="op-orgaos" style="margin:8px 2px 0;">
+      <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--azul-texto,#1c63c7);"><svg class='icone-ph'><use href='#ph-map-pin'></use></svg> Órgãos compradores (por estado e portal, com CAPAG)</summary>
+      <form class="op-linha" id="op-orgaos-form">
+        <div class="campo"><label for="op-orgaos-uf">Estado</label><select id="op-orgaos-uf"><option value="">Escolha</option></select></div>
+        <div class="campo"><label for="op-orgaos-portal">Portal</label><select id="op-orgaos-portal"><option value="">Todos</option></select></div>
+        <div class="campo campo-largo"><label for="op-orgaos-texto">Nome ou UASG (opcional)</label><input id="op-orgaos-texto" maxlength="80" autocomplete="off" placeholder="Ex: prefeitura, 158465"></div>
+        <button type="submit" class="btn-buscar">Ver órgãos</button>
+        <p class="dica-clique op-linha-dica" id="op-orgaos-status" role="status" aria-live="polite">Órgãos com licitação aberta na nossa base. CAPAG é a nota fiscal do Tesouro e só existe para prefeituras; não mede pontualidade de pagamento.</p>
+      </form>
+      <div id="op-orgaos-resultado"></div>
     </details>
     <div class="op-receber-boletim">
       <button type="button" class="btn-imprimir" id="op-receber-boletim"><svg class='icone-ph'><use href='#ph-clipboard-text'></use></svg> Receber isso todo dia no Boletim</button>
@@ -2142,6 +2217,7 @@
     </div>
 
     <div class="dg-subaba-painel" data-subaba-painel="prospeccao-ia">
+      <div class="aviso" style="display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:16px;"><span>Descreva um produto e a IA traz 3 fornecedores por vez, com aderência e contato público.</span><button type="button" class="btn-filtro-rapido" data-abrir-fornecedor-ia="">Encontrar fornecedor com IA</button></div>
       <div id="dg-prospeccao-resultado" class="conteudo-mercado"><div class="aviso">Gere um diagnóstico de mercado para encontrar fornecedores que já venceram contratos no seu segmento.</div></div>
     </div>
   </section>
@@ -2411,33 +2487,18 @@
 
   <section id="precos">
     <h2 style="margin-top:0;">Pesquisa de Preços de Mercado</h2>
-    <p class="dica-clique" style="margin:0 0 14px;">Veja quanto o governo pagou por um item nas compras registradas na base oficial do Compras.gov.br (a mesma que substituiu o antigo "Painel de Preços"). Busque um produto, escolha a especificação exata e veja o preço médio, mediano e as compras reais por trás (fornecedor, órgão, valor, link do edital) dos últimos 12 meses.</p>
+    <p class="dica-clique" style="margin:0 0 14px;">Digite o produto e veja na hora as marcas e os modelos que ganharam, quem venceu, o órgão, a data, a quantidade e o preço pago nas compras registradas no Compras.gov (a base que substituiu o antigo "Painel de Preços"). O sistema já escolhe o produto do catálogo mais provável; troque nos botões se quiser outro (ex.: "Notebook" ou "Bateria notebook").</p>
 
     <div class="secao-conteudo-principal">
-    <ol class="pp-passos" aria-label="Passos da pesquisa de preços">
-      <li class="pp-passo" data-passo="1"><span>1</span> Produto</li>
-      <li class="pp-passo" data-passo="2"><span>2</span> Categoria</li>
-      <li class="pp-passo" data-passo="3"><span>3</span> Especificação</li>
-      <li class="pp-passo" data-passo="4"><span>4</span> Preços</li>
-    </ol>
-    <div class="painel-filtros">
-      <div class="campo" style="flex:3">
-        <label for="pp-busca">1. O que você quer pesquisar?</label>
-        <input id="pp-busca" placeholder="Ex: caneta esferográfica, notebook, papel A4, cadeira...">
-      </div>
-      <button class="btn-buscar" id="pp-buscar-categoria">Buscar categorias</button>
-    </div>
-
-    <div id="pp-categorias"></div>
-    <div id="pp-itens"></div>
-    <div id="pp-selecao"></div>
-    <div id="pp-resultado"></div>
+    <div id="pp-mercado" class="pp-mercado"></div>
 
     <div class="dg-topo-acoes"><span></span><button class="btn-imprimir btn-imprimir-generico" title="Gerar PDF/impressão desta tela"><svg class='icone-ph'><use href='#ph-printer'></use></svg> Imprimir / Gerar PDF</button></div>
     </div>
   </section>
 
   <section id="kanban">
+    <link rel="stylesheet" href="funil-checklist.css">
+    <script src="funil-checklist-ui.js"></script>
     <div class="boletim-cabecalho">
       <div>
         <h2 style="margin:0;"><svg class='icone-ph'><use href='#ph-folders'></use></svg> Funil</h2>
@@ -2455,7 +2516,11 @@
     <!-- Escondido até as etapas carregarem do banco; sem a tabela, o Funil fica nas 4 colunas padrão. -->
     <button type="button" class="btn-imprimir" id="kanban-etapas" aria-haspopup="dialog" hidden><svg class='icone-ph'><use href='#ph-gear'></use></svg> Etapas</button>
     </div>
+    <div id="funil-filtros" class="funil-filtros"></div>
     <div id="kanban-quadro" class="kanban-quadro"></div>
+    <div id="funil-lista" hidden></div>
+    <div id="funil-arquivados" hidden></div>
+    <dialog id="funil-checklist-dialogo" class="etapas-dialogo funil-checklist-dialogo" aria-labelledby="funil-checklist-titulo"></dialog>
     <dialog id="etapas-dialogo" class="etapas-dialogo" aria-labelledby="etapas-titulo">
       <div class="etapas-dialogo-topo">
         <h3 id="etapas-titulo">Etapas do Funil</h3>
@@ -2471,7 +2536,15 @@
   </section>
 
   <section id="juridico">
-    <h2 style="margin-top:0;">Envie sua dúvida</h2>
+    <h2 style="margin-top:0;">Perguntas, modelos e peças reais</h2>
+    <p class="dica-clique" style="margin:0 0 14px;">Respostas curtas com o artigo da lei, modelos-base para preencher e peças reais do ComprasNet com a resposta do pregoeiro. Conteúdo informativo, não substitui advogado.</p>
+    <div class="secao-conteudo-principal">
+    <link rel="stylesheet" href="juridico.css">
+    <div id="juridico-central"></div>
+    <script src="juridico-base.js"></script>
+    <script src="juridico-ui.js"></script>
+    </div>
+    <h2>Envie sua dúvida</h2>
     <p class="dica-clique" style="margin:0 0 14px;">Descreva sua dúvida sobre um edital, cadastro ou processo — o Harreson responde direto no seu e-mail.</p>
     <div class="secao-conteudo-principal">
     <form id="duvida-form" name="duvida-cliente" method="POST" class="painel-filtros" style="align-items:flex-start;">
@@ -2502,11 +2575,6 @@
     </div>
     </div>
 
-    <h2>Artigos Jurídicos</h2>
-    <p class="dica-clique" style="margin:0 0 14px;">Conteúdo de referência sobre licitações públicas — não substitui orientação jurídica pontual sobre o seu processo específico.</p>
-    <div class="secao-conteudo-principal">
-    <div id="juridico-artigos"></div>
-    </div>
   </section>
 
   <section id="status">
@@ -2540,6 +2608,7 @@
       <input id="modal-ia-pergunta" aria-label="Pergunta sobre o edital" placeholder="Pergunte algo sobre este edital...">
       <button type="submit" class="resumo-botao primario" id="modal-ia-enviar">Perguntar</button>
     </form>
+    <p class="dica-clique" id="modal-ia-uso" role="status" hidden></p>
     <p class="modal-ia-objeto" id="modal-ia-objeto" hidden></p>
     <div class="modal-ia-cartoes-topo" id="modal-ia-cartoes-topo" style="display:none;"></div>
     <div class="modal-ia-conversa" id="modal-ia-conversa"></div>
@@ -2559,7 +2628,7 @@
     </div>
     <div class="modal-ia-acoes-rodape">
       <button type="button" class="resumo-botao resumo-link" id="modal-ia-baixar"><svg class='icone-ph' aria-hidden="true"><use href='#ph-download-simple'></use></svg> Baixar Edital Completo</button>
-      <button type="button" class="resumo-botao" id="modal-ia-checklist-email"><svg class='icone-ph' aria-hidden="true"><use href='#ph-envelope-simple'></use></svg> Enviar Checklist por E-mail</button>
+      <button type="button" class="resumo-botao" id="modal-ia-checklist-email"><svg class='icone-ph' aria-hidden="true"><use href='#ph-envelope-simple'></use></svg> Enviar ao cliente</button>
       <button type="button" class="resumo-botao" id="modal-ia-checklist-doc"><svg class='icone-ph' aria-hidden="true"><use href='#ph-file-text'></use></svg> Gerar Checklist .docx</button>
       <button type="button" class="resumo-botao primario" id="modal-ia-imprimir"><svg class='icone-ph' aria-hidden="true"><use href='#ph-printer'></use></svg> Imprimir Checklist</button>
     </div>
@@ -2693,10 +2762,18 @@
     try { id = decodeURIComponent(id); } catch (e) { return null; }
     return alvos.includes(id) ? id : null;
   }
+  // Atalhos do menu para uma parte de seção: #calendario (dentro do Boletim) e #licitacao-anterior (aba da Inteligência de Mercado).
+  const ATALHOS_DO_HASH = { calendario: "boletim", "licitacao-anterior": "diagnostico" };
   function abrirSecaoDoHash() {
-    const id = secaoDoHash(location.hash, Array.from(botoesNav, (b) => b.dataset.alvo));
+    const atalho = secaoDoHash(location.hash, Object.keys(ATALHOS_DO_HASH));
+    const id = atalho ? ATALHOS_DO_HASH[atalho] : secaoDoHash(location.hash, Array.from(botoesNav, (b) => b.dataset.alvo));
     const botao = id && document.querySelector(`nav button[data-alvo="${id}"]`);
     if (botao && !botao.classList.contains("ativo")) botao.click();
+    if (!atalho || !botao) return;
+    if (atalho === "licitacao-anterior") document.querySelector('#dg-subabas [data-subaba="licitacao-anterior"]').click();
+    else document.getElementById("bol-calendario").scrollIntoView({ block: "start" });
+    // Volta o endereço para a seção: clicar de novo no mesmo atalho dispara outro hashchange.
+    history.replaceState(null, "", "#" + id);
   }
   // DOMContentLoaded: os outros scripts já ligaram os seus cliques no menu (ex.: Boletim, Status).
   document.addEventListener("DOMContentLoaded", abrirSecaoDoHash);
@@ -2719,37 +2796,45 @@
     btn.addEventListener("click", () => window.print());
   });
 
-  // ---- Jurídico & Dúvidas: artigos estáticos + formulário de contato (Netlify Forms) ----
-  const ARTIGOS_JURIDICOS = [
-    {
-      titulo: "O que é o SICAF e por que manter o cadastro em dia",
-      corpo: "O SICAF (Sistema de Cadastramento Unificado de Fornecedores) reúne a documentação que comprova a regularidade fiscal, trabalhista e jurídica de uma empresa perante o governo federal. Vários pregões dispensam o envio de documentos já cadastrados no SICAF, desde que estejam válidos — por isso um cadastro vencido pode significar inabilitação automática, mesmo com a proposta mais barata. Vale revisar as validades com regularidade, principalmente certidões negativas (federal, estadual, municipal, FGTS e trabalhista), que costumam ter prazos curtos.",
-    },
-    {
-      titulo: "Pregão eletrônico x concorrência: qual a diferença na prática",
-      corpo: "O pregão eletrônico é a modalidade mais comum para compra de bens e serviços comuns (aqueles cujas especificações podem ser objetivamente descritas), com disputa de lances em tempo real e inversão de fases — primeiro julga-se o preço, depois se verifica a habilitação do vencedor. A concorrência é usada para contratações mais complexas (obras de maior vulto, serviços técnicos especializados), com fase de habilitação mais criteriosa e prazos de publicação mais longos. Na prática, isso muda o ritmo de preparação: pregão exige agilidade na disputa, concorrência exige mais tempo de análise do edital antes de participar.",
-    },
-    {
-      titulo: "Documentos de habilitação mais cobrados em licitações",
-      corpo: "Além da regularidade fiscal (Receita Federal, FGTS, trabalhista, e fiscal estadual/municipal), a maioria dos editais pede: contrato social ou estatuto atualizado, balanço patrimonial ou outra prova de qualificação econômico-financeira, certidão negativa de falência e, dependendo do objeto, atestado de capacidade técnica emitido por outro cliente comprovando que a empresa já executou algo semelhante antes. Ter essa pasta organizada e atualizada reduz o risco de perder um prazo apertado de habilitação por falta de um documento.",
-    },
-    {
-      titulo: "Prazo de recurso administrativo em licitações",
-      corpo: "Depois do resultado do julgamento, o licitante tem direito a manifestar intenção de recurso (geralmente no fim da sessão, no caso do pregão) e depois apresentar as razões por escrito — o prazo mais comum é de 3 dias úteis, mas pode variar conforme a modalidade e o edital, então o prazo exato deve sempre ser conferido no instrumento convocatório daquele processo específico. Perder esse prazo geralmente significa perder o direito de contestar o resultado por essa via.",
-    },
-  ];
-
-  function renderizarArtigosJuridicos() {
-    const alvo = document.getElementById("juridico-artigos");
-    if (!alvo) return;
-    alvo.innerHTML = ARTIGOS_JURIDICOS.map((a, i) => `
-      <details class="cartao" style="margin-bottom:12px;" ${i === 0 ? "open" : ""}>
-        <summary style="cursor:pointer;font-weight:700;color:var(--texto);">${escapeHtml(a.titulo)}</summary>
-        <p style="margin:10px 0 0;color:var(--texto-fraco);line-height:1.55;">${escapeHtml(a.corpo)}</p>
-      </details>
-    `).join("");
+  // ---- Jurídico & Dúvidas: perguntas, modelos-base e banco de peças (juridico-ui.js) + formulário de contato ----
+  if (window.JuridicoUI) {
+    JuridicoUI.renderizar(document.getElementById("juridico-central"), {
+      empresa: () => window.__clienteAtual,
+      listarProcessos: async () => {
+        const { data, error } = await window.__sbClient.from("operacao_processos").select("id,numero,orgao,objeto").order("data_sessao", { ascending: false, nullsFirst: false }).limit(50);
+        if (error) throw error;
+        return data || [];
+      },
+      buscarPecas: async ({ termos, tipos, orgao, so14133, limite }) => {
+        let q = window.__sbClient.from("pecas_juridicas").select("id,tipo,pregao,uasg,orgao,data,empresa_nome,empresa_cnpj,texto,resposta,resultado,lei,url")
+          .in("tipo", tipos).order("data", { ascending: false }).limit(limite);
+        for (const t of termos) q = q.ilike("busca", `%${t}%`);
+        if (orgao) q = q.ilike("orgao", `%${orgao}%`);
+        if (so14133) q = q.eq("lei", "14133");
+        const { data, error } = await q;
+        if (error) throw new Error(/relation|does not exist|schema cache/i.test(error.message || "") ? "O banco de peças ainda não está ligado neste ambiente." : "Não foi possível buscar as peças agora.");
+        return data || [];
+      },
+      baixarWord: async (minuta) => {
+        const token = await obterTokenSessao();
+        const resp = await fetch("/api/gerar-checklist", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ minuta }) });
+        if (!resp.ok) { const erro = await resp.json().catch(() => ({})); throw new Error(erro.erro || "Não foi possível gerar o Word."); }
+        const url = URL.createObjectURL(await resp.blob());
+        const link = document.createElement("a"); link.href = url; link.download = `${minuta.tipo}.docx`; link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      },
+      imprimir: (titulo, texto) => {
+        const janela = window.open("", "_blank");
+        if (!janela) { alert("Permita a janela de impressão para salvar o PDF."); return; }
+        janela.document.title = titulo;
+        const pre = janela.document.createElement("div");
+        pre.style.cssText = "white-space:pre-wrap;font:12pt/1.5 Arial,sans-serif;max-width:17cm;margin:1.5cm auto;color:#000";
+        pre.textContent = texto;
+        janela.document.body.append(pre);
+        janela.focus(); janela.print();
+      },
+    });
   }
-  renderizarArtigosJuridicos();
 
   // Envio da dúvida por e-mail via /api/enviar-duvida (exige sessão, como as demais ferramentas
   // autenticadas) — intercepta o submit pra evitar recarregar a página.
@@ -3030,6 +3115,14 @@
     div.textContent = texto;
     conversa.appendChild(div);
     conversa.scrollTop = conversa.scrollHeight;
+    return div;
+  }
+
+  // Pergunte ao Edital: a resposta aparece logo abaixo da caixa de pergunta (a mais nova em cima), e não no fim do resumo.
+  function mostrarPertoDaPergunta(div) {
+    const ancora = document.getElementById("modal-ia-uso");
+    div.style.whiteSpace = "pre-line"; // separa os trechos e a fonte [documento, página] em linhas
+    if (ancora) { ancora.after(div); div.scrollIntoView({ block: "nearest" }); }
     return div;
   }
 
@@ -3358,7 +3451,8 @@
         if (campo.valor === "Não informado") dd.className = "vazio";
         if (Array.isArray(campo.valor)) {
           const ul = document.createElement("ul");
-          campo.valor.forEach(valor => { const li = document.createElement("li"); li.textContent = valor; ul.appendChild(li); });
+          campo.valor.forEach(valor => { const li = document.createElement("li"); li.textContent = valor; ul.appendChild(li);
+            if (String(campo.rotulo).startsWith("Itens da oportunidade")) window.LicitaItemMercado?.noResumo(li, est.itensPncp); });
           dd.appendChild(ul);
         } else if (campo.rotulo === "Fonte CAPAG" && String(campo.valor).startsWith("https://www.tesourotransparente.gov.br/")) {
           const link = document.createElement("a"); link.href = campo.valor; link.textContent = "Consultar base oficial do Tesouro"; link.target = "_blank"; link.rel = "noopener noreferrer"; dd.append(link);
@@ -3586,6 +3680,7 @@
     if (modo === "resumo") bloquearAcoesResumo(true);
     const mensagemEspera = modo === "resumo" ? "Carregando..." : "Pensando...";
     const carregando = escreverMensagemIA(mensagemEspera, "msg-carregando");
+    if (modo === "pergunta") mostrarPertoDaPergunta(carregando);
     try {
       const token = await obterTokenSessao();
       if (geracao !== iaGeracaoModal) return;
@@ -3636,7 +3731,7 @@
           oferecerNovaAnalise(dados.erro || "Não foi possível concluir a análise dos documentos. Tente novamente para retomar.");
           return;
         }
-        escreverMensagemIA(dados.erro || "Não deu pra gerar a resposta agora.", "msg-erro");
+        mostrarPertoDaPergunta(escreverMensagemIA(dados.erro || "Não deu pra gerar a resposta agora.", "msg-erro"));
         return;
       }
       if (modo === "resumo" && !dados.modoDegradado) salvarCacheLocalResumo(edital, dados);
@@ -3657,7 +3752,9 @@
         }
         if (dados.dossieEmPreparacao) aguardarDossiePronto(edital, geracao);
       } else {
-        escreverMensagemIA((dados.resposta || "").replace(/\*\*(.+?)\*\*/g, "$1"), "");
+        const uso = document.getElementById("modal-ia-uso");
+        if (uso && dados.uso) { uso.textContent = `A resposta vem só do edital, com trecho e página. Você usou ${dados.uso.usadas} de ${dados.uso.limite} consultas de IA do edital hoje.`; uso.hidden = false; }
+        mostrarPertoDaPergunta(escreverMensagemIA((dados.resposta || "").replace(/\*\*(.+?)\*\*/g, "$1"), ""));
       }
       if (modo === "resumo") bloquearAcoesResumo(false);
       iaHistorico.push({ role: "user", content: pergunta || "(resumo inicial)" });
@@ -3668,7 +3765,7 @@
       if (modo === "resumo") {
         oferecerNovaAnalise(e.message === "SESSAO_AUSENTE" ? "Sessão expirada. Faça login novamente para retomar a análise." : e.message === "SESSAO_INDISPONIVEL" ? "Não foi possível validar sua sessão agora. Tente novamente em instantes." : "Não foi possível concluir a análise agora. Tente novamente para retomar a leitura dos documentos.", e.message === "SESSAO_AUSENTE" || e.message === "SESSAO_INDISPONIVEL");
       } else {
-        escreverMensagemIA("Não deu pra conectar com a IA agora — tenta de novo em instantes.", "msg-erro");
+        mostrarPertoDaPergunta(escreverMensagemIA("Não deu pra conectar com a IA agora — tenta de novo em instantes.", "msg-erro"));
       }
     } finally {
       if (geracao === iaGeracaoModal) {
@@ -5007,6 +5104,9 @@
       // Quem não informa a etapa (ex.: atualização vinda do Boletim) conserva a do cartão.
       etapaId: "etapaId" in edital ? edital.etapaId : (mapa[id]?.etapaId || null),
       statusProcesso: "statusProcesso" in edital ? edital.statusProcesso : (mapa[id]?.statusProcesso || null),
+      // Checklist e favorita moram em operacao_processos (operacao_funil_checklist.sql); aqui só o retrato.
+      checklistFunil: "checklistFunil" in edital ? edital.checklistFunil : (mapa[id]?.checklistFunil || {}),
+      favorito: "favorito" in edital ? Boolean(edital.favorito) : Boolean(mapa[id]?.favorito),
     };
     salvarMapa("kanban-editais", mapa, empresaId);
   }
@@ -5044,6 +5144,10 @@
   const sincronizacoesOperacionais = new Map();
   // Selo da esteira por processo (operacao_esteira_tarefas); vazio = banco sem a tabela ou sem tarefas.
   let esteiraPorProcesso = {};
+  // Estado de cada etapa do robô por processo: marca sozinha as tarefas do checklist que a esteira já fez.
+  let esteiraEtapasPorProcesso = {};
+  // Processos com status 'arquivado' da empresa ativa (aba Arquivados do Funil).
+  let arquivadosFunil = [];
   // Qualquer etapa com falha pede atenção; as três feitas = pronto; o resto ainda está lendo.
   function seloEsteira(estados) {
     if (!estados?.length) return null;
@@ -5277,6 +5381,8 @@
     const status = {};
     const snapshots = {};
     const anteriores = lerMapa("kanban-editais", empresaId);
+    arquivadosFunil = processos.filter((p) => p.status === "arquivado" && p.origem_externa_id)
+      .sort((a, b) => String(b.atualizado_em || "").localeCompare(String(a.atualizado_em || "")));
     for (const processo of processos) {
       const id = processo.origem_externa_id;
       const valor = id && statusDoProcessoAcompanhamento(processo);
@@ -5289,7 +5395,9 @@
         modalidade: processo.modalidade || null, fonte: processo.sistema || null,
         publicacao: processo.data_publicacao || null, dataSessao: processo.data_sessao || null,
         valorTotalEstimado: processo.valor_estimado ?? null,
-        etapaId: processo.etapa_id ?? null, statusProcesso: processo.status || null
+        etapaId: processo.etapa_id ?? null, statusProcesso: processo.status || null,
+        checklistFunil: processo.checklist_funil && typeof processo.checklist_funil === "object" ? processo.checklist_funil : {},
+        favorito: Boolean(processo.favorito)
       };
     }
     const idsProcesso = processos.filter(p => status[p.origem_externa_id]).map(p => p.id);
@@ -5307,15 +5415,20 @@
     }
     // Selo da esteira: leitura opcional; erro (tabela ausente, RLS) só deixa o cartão sem selo.
     const estadosEsteira = {};
+    const etapasEsteira = {};
     try {
       for (let inicio = 0; inicio < idsProcesso.length; inicio += 100) {
         const { data, error } = await sb.from("operacao_esteira_tarefas")
-          .select("processo_id,estado").in("processo_id", idsProcesso.slice(inicio, inicio + 100));
+          .select("processo_id,etapa,estado").in("processo_id", idsProcesso.slice(inicio, inicio + 100));
         if (error) break;
-        for (const t of data || []) (estadosEsteira[t.processo_id] ||= []).push(t.estado);
+        for (const t of data || []) {
+          (estadosEsteira[t.processo_id] ||= []).push(t.estado);
+          (etapasEsteira[t.processo_id] ||= {})[t.etapa] = t.estado;
+        }
       }
     } catch (erro) { console.warn("Selo da esteira indisponível:", erro); }
     esteiraPorProcesso = Object.fromEntries(Object.entries(estadosEsteira).map(([id, estados]) => [id, seloEsteira(estados)]));
+    esteiraEtapasPorProcesso = etapasEsteira;
     // O banco decide quais cartões pertencem à empresa; o navegador só guarda
     // detalhes de apresentação e anotações separados pelo ID da empresa.
     salvarMapa("status-licitacao", status, empresaId);
@@ -5365,6 +5478,17 @@
     const chave = colunaDoCard(etapas, lerMapa("status-licitacao")[id], edital?.etapaId, edital?.statusProcesso);
     return etapas.find((e) => e.id === chave) || null;
   }
+  // Plano da conta (meu_plano, supabase/planos_e_recursos.sql). No plano de 1 CNPJ com 1 empresa somem o seletor e
+  // "Gerenciar empresas": o painel usa sempre a empresa da conta. A garantia é do banco; aqui é só a tela.
+  let planoDaConta = null;
+  async function aplicarPlanoNoSeletorEmpresa(empresas) {
+    if (!planoDaConta) {
+      try { const { data, error } = await window.__sbClient.rpc("meu_plano"); planoDaConta = error ? {} : (data || {}); } catch (_) { planoDaConta = {}; }
+    }
+    const umaEmpresa = planoDaConta.max_cnpjs === 1 && empresas.length <= 1;
+    document.querySelectorAll(".empresa-acompanhamento > label, .empresa-acompanhamento > a, .empresa-acompanhamento > .empresa-ajuda")
+      .forEach((el) => { el.style.display = umaEmpresa ? "none" : ""; });
+  }
   async function carregarEmpresasAcompanhamento() {
     empresaAcompanhamentoPronta = false;
     contextoOperacionalPromise = null;
@@ -5386,6 +5510,7 @@
       semEmpresaCadastrada = !empresaOperacionalId;
       document.querySelectorAll(".empresa-convite").forEach((el) => { el.hidden = !semEmpresaCadastrada; });
       document.querySelectorAll(".empresa-acompanhamento .empresa-ajuda").forEach((el) => { el.hidden = semEmpresaCadastrada; });
+      await aplicarPlanoNoSeletorEmpresa(empresas);
       if (semEmpresaCadastrada) { atualizarStatusAcompanhamentoNaTela(); return; }
       await carregarEtapasFunil(organizacaoId);
       await carregarAcompanhamentosEmpresa(organizacaoId, empresaOperacionalId);
@@ -5404,6 +5529,7 @@
     empresaOperacionalId = id;
     atualizarCentralDefesa();
     localStorage.setItem("licitaplena_empresa_operacional_id", id);
+    void trocarFiltroBoletimDaEmpresa(); // Boletim e jornais são por empresa
     try {
       const { organizacaoId, empresas } = await contextoOperacionalPromise;
       atualizarSeletoresEmpresa(empresas);
@@ -5539,12 +5665,14 @@
     return `
       <div class="kanban-card" draggable="true" data-id="${escapeHtml(id)}">
         <div class="kanban-card-topo">
+          ${LicitaFunil.htmlEstrela(id, edital.favorito)}
           <p class="kanban-card-objeto">${escapeHtml(edital.objeto || "Licitação sem título")}</p>
-          <button class="kanban-card-remover" type="button" title="Tirar do acompanhamento" data-id="${escapeHtml(id)}">✕</button>
+          <button class="kanban-card-remover" type="button" title="Arquivar (sai do Funil e fica em Arquivados)" aria-label="Arquivar" data-id="${escapeHtml(id)}">✕</button>
         </div>
         <p class="kanban-card-meta"><svg class='icone-ph'><use href='#ph-bank'></use></svg> ${escapeHtml(edital.orgao || "Órgão não informado")}</p>
         <p class="kanban-card-meta"><svg class='icone-ph'><use href='#ph-map-pin'></use></svg> ${escapeHtml([edital.municipio, edital.uf].filter(Boolean).join(" / ") || "Não informado")}</p>
         ${prazoHtml}${seloHtml}
+        ${LicitaFunil.htmlContador(id, contagemChecklistFunil(id, edital))}
         ${PortalOrigem.htmlPortal(edital)}
         <select class="kanban-card-mover" data-id="${escapeHtml(id)}" title="Mover para outra coluna">${opcoesMoverHtml}</select>
         <textarea class="kanban-card-anotacao" data-id="${escapeHtml(id)}" placeholder="Anotações (ex: liguei dia X, aguardando retorno...)" rows="2">${escapeHtml(anotacaoAtual || "")}</textarea>
@@ -5561,6 +5689,10 @@
   function renderizarKanban() {
     const alvo = document.getElementById("kanban-quadro");
     if (!alvo) return;
+    if (semEmpresaCadastrada || !empresaAcompanhamentoPronta) {
+      mostrarVistaFunil("quadro");
+      document.getElementById("funil-filtros").innerHTML = "";
+    }
     if (semEmpresaCadastrada) {
       alvo.innerHTML = '<div class="kanban-vazio convite-neutro">O Funil mostra os editais que sua empresa está acompanhando. Para começar, cadastre sua empresa em <a href="operacao.html">Minhas empresas e documentos</a>.</div>';
       return;
@@ -5575,14 +5707,32 @@
     const soVencendo = document.querySelector('#kanban-filtros-rapidos .btn-filtro-rapido.ativo')?.dataset.modo === "vence-3";
 
     const etapas = etapasDoQuadro();
-    alvo.innerHTML = colunasDoFunil(etapas).map((col) => {
-      const idsColuna = ordenarPorPrazo(Object.keys(statusMapa)
-        .filter((id) => editaisMapa[id] && colunaDoCard(etapas, statusMapa[id], editaisMapa[id].etapaId, editaisMapa[id].statusProcesso) === col.chave)
-        .filter((id) => !soVencendo || venceEmAteDias(editaisMapa[id].encerramento, 3))
-        .map((id) => ({ id, encerramento: editaisMapa[id].encerramento }))).map((x) => x.id);
+    const colunas = colunasDoFunil(etapas);
+    const itens = Object.keys(statusMapa).filter((id) => editaisMapa[id])
+      .filter((id) => !soVencendo || venceEmAteDias(editaisMapa[id].encerramento, 3))
+      .map((id) => ({ id, edital: editaisMapa[id], portal: PortalOrigem.portalDe({ sistema: editaisMapa[id].fonte, ...editaisMapa[id] }).nome, favorito: editaisMapa[id].favorito,
+        coluna: colunaDoCard(etapas, statusMapa[id], editaisMapa[id].etapaId, editaisMapa[id].statusProcesso) }));
+    desenharFiltrosFunil(itens);
+    mostrarVistaFunil(filtrosFunil.visao);
+    if (filtrosFunil.visao === "arquivados") {
+      document.getElementById("funil-arquivados").innerHTML = LicitaFunil.htmlArquivados(arquivadosFunil,
+        (p) => linkPncp(p.origem_externa_id) || PortalOrigem.linkDisputa(p.url_origem));
+      return;
+    }
+    const visiveis = LicitaFunil.filtrarCards(itens, filtrosFunil);
+    if (filtrosFunil.visao === "lista") {
+      document.getElementById("funil-lista").innerHTML = LicitaFunil.htmlLista(ordenarPorPrazo(visiveis.map((i) => ({ ...i, encerramento: i.edital.encerramento })))
+        .map((i) => ({ ...i, etapaNome: colunas.find((c) => c.chave === i.coluna)?.titulo || "—", prazoTexto: i.edital.encerramento ? formatarPrazoPropostas(i.edital.encerramento).split(" (")[0] : "",
+          contagem: contagemChecklistFunil(i.id, i.edital) })));
+      return;
+    }
+    const filtrado = LicitaFunil.filtroAtivo(filtrosFunil);
+    alvo.innerHTML = colunas.map((col) => {
+      const idsColuna = ordenarPorPrazo(visiveis.filter((i) => i.coluna === col.chave)
+        .map((i) => ({ id: i.id, encerramento: i.edital.encerramento }))).map((x) => x.id);
       const cardsHtml = idsColuna.length
         ? idsColuna.map((id) => montarCardKanban(id, editaisMapa[id], col.chave, anotacoesMapa[id])).join("")
-        : (soVencendo ? `<div class="kanban-vazio">Nada vence nos próximos 3 dias nesta coluna.</div>` : `<div class="kanban-vazio">Nenhuma licitação aqui ainda.<br>Marque um status pra ela aparecer.</div>`);
+        : (filtrado ? `<div class="kanban-vazio">Nenhuma licitação com esses filtros nesta coluna.</div>` : soVencendo ? `<div class="kanban-vazio">Nada vence nos próximos 3 dias nesta coluna.</div>` : `<div class="kanban-vazio">Nenhuma licitação aqui ainda.<br>Marque um status pra ela aparecer.</div>`);
       return `
         <div class="kanban-coluna" data-status="${escapeHtml(col.chave)}" style="--cor-coluna:${escapeHtml(col.cor)};">
           <div class="kanban-coluna-topo">
@@ -5595,6 +5745,125 @@
 
     ligarAcoesKanban();
   }
+
+  // ---- Funil: filtros, lista, Arquivados, favoritas e checklist (funil-checklist-ui.js) ----
+  const filtrosFunil = { visao: "quadro", texto: "", portal: "", modalidade: "", de: "", ate: "", favoritas: false };
+  const SEM_COLUNA_CHECKLIST = "O banco ainda não tem o checklist do Funil. Peça ao suporte para rodar supabase/operacao_funil_checklist.sql.";
+  function mostrarVistaFunil(visao) {
+    document.getElementById("kanban-quadro").hidden = visao !== "quadro";
+    document.getElementById("funil-lista").hidden = visao !== "lista";
+    document.getElementById("funil-arquivados").hidden = visao !== "arquivados";
+  }
+  function desenharFiltrosFunil(itens) {
+    const host = document.getElementById("funil-filtros");
+    const foco = host.contains(document.activeElement) ? document.activeElement.dataset.funilFiltro : null;
+    host.innerHTML = LicitaFunil.htmlFiltros(filtrosFunil, LicitaFunil.opcoesFiltro(itens));
+    const campo = foco && host.querySelector(`[data-funil-filtro="${foco}"]`);
+    if (campo) { campo.focus(); if (foco === "texto") campo.setSelectionRange(campo.value.length, campo.value.length); }
+  }
+  // Sem a tabela de etapas, o checklist usa as 4 colunas fixas com o estágio de cada uma (sem edição).
+  function etapasChecklistFunil() {
+    return etapasDoQuadro() || KANBAN_COLUNAS.map((c, i) => ({ id: c.valor, nome: c.titulo, ordem: i, status_sistema: dadosStatusOperacional(c.valor).estagio }));
+  }
+  function etapaChecklistDoCard(id, edital, etapas) {
+    const coluna = colunaDoCard(etapasDoQuadro(), lerMapa("status-licitacao")[id], edital?.etapaId, edital?.statusProcesso);
+    return etapas.find((e) => e.id === coluna) || null;
+  }
+  function contagemChecklistFunil(id, edital) {
+    const etapas = etapasChecklistFunil();
+    return LicitaFunil.contarChecklist(etapas, etapaChecklistDoCard(id, edital, etapas), edital.checklistFunil, esteiraEtapasPorProcesso[edital.processoId]);
+  }
+  function erroColunaFunil(erro) { return ["42703", "PGRST204"].includes(erro?.code); }
+  // Grava checklist_funil/favorito do processo (RLS: pode_escrever_empresa_operacao) e atualiza o retrato local.
+  async function salvarProcessoFunil(id, campos) {
+    const empresaId = empresaOperacionalId;
+    const edital = lerMapa("kanban-editais", empresaId)[id];
+    if (!edital?.processoId || !empresaAcompanhamentoPronta) throw new Error("Aguarde o Funil carregar e tente de novo.");
+    const { organizacaoId } = await empresaOperacionalParaDossie(empresaId);
+    const { data, error } = await window.__sbClient.from("operacao_processos").update(campos)
+      .eq("id", edital.processoId).eq("organizacao_id", organizacaoId).eq("empresa_id", empresaId).select("id");
+    if (error) throw new Error(erroColunaFunil(error) ? SEM_COLUNA_CHECKLIST : "O banco não aceitou a mudança. Confira a conexão e tente de novo.");
+    if (!data?.length) throw new Error("Seu acesso não permite mudar esta licitação. Peça a um administrador da conta.");
+    const atual = lerMapa("kanban-editais", empresaId)[id];
+    if (atual) salvarSnapshotKanban(id, { ...atual, ...("checklist_funil" in campos ? { checklistFunil: campos.checklist_funil } : {}), ...("favorito" in campos ? { favorito: campos.favorito } : {}) }, empresaId);
+  }
+  // Tarefas padrão da etapa: mesma regra de escrita de renomear etapa (pode_escrever_org_operacao). null = volta ao padrão.
+  async function salvarTarefasEtapaFunil(etapa, tarefas) {
+    const { data, error } = await window.__sbClient.from("operacao_funil_etapas").update({ tarefas })
+      .eq("id", etapa.id).eq("organizacao_id", organizacaoFunilId).select("*");
+    if (error) throw new Error(erroColunaFunil(error) ? SEM_COLUNA_CHECKLIST : mensagemErroEtapa(error));
+    if (!data?.length) throw new Error(mensagemErroEtapa({ code: "42501" }));
+    etapasFunil = etapasFunil.map((e) => (e.id === etapa.id ? data[0] : e));
+    renderizarKanban();
+    return data[0];
+  }
+  function abrirChecklistFunil(id) {
+    const edital = lerMapa("kanban-editais")[id];
+    if (!edital) return;
+    const etapas = etapasChecklistFunil();
+    LicitaFunil.abrirChecklist(document.getElementById("funil-checklist-dialogo"), {
+      titulo: edital.objeto || "Licitação sem título", etapas, etapaAtual: etapaChecklistDoCard(id, edital, etapas),
+      marcas: edital.checklistFunil || {}, esteira: esteiraEtapasPorProcesso[edital.processoId] || {}, podeEditar: Boolean(etapasDoQuadro()),
+      marcar: async (marcas) => { await salvarProcessoFunil(id, { checklist_funil: marcas }); renderizarKanban(); },
+      salvarTarefas: salvarTarefasEtapaFunil,
+      // Esclarecimento/impugnação: a Central de Defesa fica no Resumo do edital. Recurso/contrarrazão: seção Jurídico.
+      abrirLink: (tipo) => {
+        if (tipo === "defesa") abrirModalIA(lerMapa("kanban-editais")[id] || edital);
+        else document.querySelector('nav button[data-alvo="juridico"]')?.click();
+      },
+    });
+  }
+  async function restaurarArquivadoFunil(processoId, botao) {
+    const p = arquivadosFunil.find((x) => x.id === processoId);
+    if (!p) return;
+    botao.disabled = true;
+    try {
+      await salvarStatusAcompanhamento(p.origem_externa_id, {
+        objeto: p.objeto, orgao: p.orgao, modalidade: p.modalidade, fonte: p.sistema, link: p.url_origem,
+        numeroControlePNCP: /^\d{14}-\d-\d+\/\d{4}$/.test(p.origem_externa_id) ? p.origem_externa_id : null,
+        valorTotalEstimado: p.valor_estimado, publicacao: p.data_publicacao, dataSessao: p.data_sessao,
+        checklistFunil: p.checklist_funil || {}, favorito: Boolean(p.favorito),
+      }, "interesse");
+      arquivadosFunil = arquivadosFunil.filter((x) => x.id !== processoId);
+      avisarSincronizacaoOperacional("A licitação voltou ao Funil, em Tenho interesse.");
+      renderizarKanban();
+    } catch (erro) {
+      botao.disabled = false;
+      avisarSincronizacaoOperacional("Não foi possível voltar a licitação ao Funil: " + erro.message, true);
+    }
+  }
+  let temporizadorFiltroFunil = null;
+  document.getElementById("funil-filtros").addEventListener("input", (ev) => {
+    const campo = ev.target.dataset.funilFiltro;
+    if (!campo) return;
+    filtrosFunil[campo] = ev.target.value;
+    clearTimeout(temporizadorFiltroFunil);
+    temporizadorFiltroFunil = setTimeout(renderizarKanban, campo === "texto" ? 250 : 0);
+  });
+  document.getElementById("funil-filtros").addEventListener("click", (ev) => {
+    const b = ev.target.closest("button");
+    if (!b) return;
+    if (b.dataset.funilVisao) filtrosFunil.visao = b.dataset.funilVisao;
+    else if (b.hasAttribute("data-funil-favoritas")) filtrosFunil.favoritas = !filtrosFunil.favoritas;
+    else if (b.hasAttribute("data-funil-limpar")) Object.assign(filtrosFunil, { texto: "", portal: "", modalidade: "", de: "", ate: "", favoritas: false });
+    else return;
+    renderizarKanban();
+  });
+  document.getElementById("kanban").addEventListener("click", async (ev) => {
+    const b = ev.target.closest("[data-funil-favorito],[data-funil-checklist],[data-funil-restaurar]");
+    if (!b) return;
+    if (b.dataset.funilChecklist) { abrirChecklistFunil(b.dataset.funilChecklist); return; }
+    if (b.dataset.funilRestaurar) { await restaurarArquivadoFunil(b.dataset.funilRestaurar, b); return; }
+    const id = b.dataset.funilFavorito;
+    b.disabled = true;
+    try {
+      await salvarProcessoFunil(id, { favorito: !lerMapa("kanban-editais")[id]?.favorito });
+      renderizarKanban();
+    } catch (erro) {
+      b.disabled = false;
+      avisarSincronizacaoOperacional("Não foi possível marcar a favorita: " + erro.message, true);
+    }
+  });
 
   // ---- Diálogo "Etapas" do Funil ----
   // Escrita direto na tabela, sob RLS: só quem tem vínculo com a organização inteira grava.
@@ -5809,9 +6078,16 @@
     alvo.querySelectorAll(".kanban-card-remover").forEach((btn) => {
       btn.addEventListener("click", async () => {
         const id = btn.dataset.id;
-        if (!confirm("Tirar essa licitação do quadro de acompanhamento?")) return;
+        if (!confirm("Arquivar esta licitação? Ela sai do Funil e fica em Arquivados, com edital, itens e preços guardados.")) return;
         btn.disabled = true;
-        try { await salvarStatusAcompanhamento(id, null, ""); }
+        const e = lerMapa("kanban-editais")[id] || {};
+        try {
+          await salvarStatusAcompanhamento(id, null, "");
+          // Aparece já em Arquivados; a próxima carga da empresa traz a linha completa do banco.
+          if (e.processoId) arquivadosFunil = [{ id: e.processoId, origem_externa_id: id, objeto: e.objeto, orgao: e.orgao, modalidade: e.modalidade, sistema: e.fonte,
+            url_origem: e.link, valor_estimado: e.valorTotalEstimado, data_publicacao: e.publicacao, data_sessao: e.dataSessao, checklist_funil: e.checklistFunil,
+            favorito: e.favorito, atualizado_em: new Date().toISOString() }, ...arquivadosFunil.filter((p) => p.id !== e.processoId)];
+        }
         catch (erro) { btn.disabled = false; avisarSincronizacaoOperacional("Não foi possível arquivar o acompanhamento: " + erro.message, true); }
       });
     });
@@ -6732,6 +7008,7 @@
           ${it.valorUnitarioEstimado ? `<span>Valor unit. estimado: <strong>${formatarMoedaItem(it.valorUnitarioEstimado)}</strong></span>` : ""}
           ${it.valorTotal ? `<span>Valor total: <strong>${formatarMoedaItem(it.valorTotal)}</strong></span>` : ""}
         </div>
+        <div class="item-mercado-acao" data-item-mercado="${escapeHtml(it.numero ?? "")}"></div>
       </div>`).join("");
     return `<div class="itens-licitacao-lista">${linhas}</div>`;
   }
@@ -6767,6 +7044,7 @@
       const dados = await resp.json();
       const itens = Array.isArray(dados.itens) ? dados.itens : [];
       painel.innerHTML = montarHtmlItens(itens);
+      window.LicitaItemMercado?.ligarItens(painel, itens);
       sincronizarItensPncpNoResumo(edital, itens);
       try {
         localStorage.setItem(`itens-pncp-v2:${idOportunidade(edital)}`, JSON.stringify({ em: Date.now(), itens }));
@@ -7035,13 +7313,20 @@
 
   // ---- Boletim (painel automático, baseado num filtro salvo — igual ao conceito de
   // "edição do dia" do ConLicitação, só que sem precisar clicar em nada toda vez) ----
+  // Cada empresa (CNPJ) tem o seu filtro (supabase/boletim_por_empresa.sql). Sem empresa cadastrada, ou antes de o
+  // SQL ser aplicado, vale o filtro da conta (clientes.boletim_filtro), como antes.
+  function donoFiltroBoletim() {
+    if (window.__filtroBoletimEmpresa === undefined) window.__filtroBoletimEmpresa = localStorage.getItem("licitaplena_empresa_operacional_id") || null;
+    return window.__clienteIdAtual ? `${window.__clienteIdAtual}:${window.__filtroBoletimEmpresa || "conta"}` : null;
+  }
   function chaveFiltroBoletimConta() {
-    return window.__clienteIdAtual ? `hc_boletim_filtro:${window.__clienteIdAtual}` : null;
+    const dono = donoFiltroBoletim();
+    return dono ? `hc_boletim_filtro:${dono}` : null;
   }
   function lerFiltroBoletim() {
     const chave = chaveFiltroBoletimConta();
     if (!chave) return null;
-    if (window.__filtroBoletimAtual?.id === window.__clienteIdAtual) return window.__filtroBoletimAtual.filtro;
+    if (window.__filtroBoletimAtual?.id === donoFiltroBoletim()) return window.__filtroBoletimAtual.filtro;
     try {
       const bruto = localStorage.getItem(chave);
       return bruto ? JSON.parse(bruto) : null;
@@ -7049,14 +7334,41 @@
       return null;
     }
   }
+  // Empresa ativa + filtros já gravados das empresas da organização; null = sem empresa ou tabela ainda não criada.
+  async function filtrosBoletimDasEmpresas() {
+    let ctx;
+    try { ctx = await empresaOperacionalParaDossie(empresaOperacionalId || null); } catch (e) { return null; }
+    const { data, error } = await window.__sbClient.from("boletim_filtros_empresa").select("empresa_id, filtro").eq("organizacao_id", ctx.organizacaoId);
+    return error ? null : { ...ctx, linhas: data || [] };
+  }
   async function carregarFiltroBoletimConta() {
+    const seq = (window.__filtroBoletimSeq = (window.__filtroBoletimSeq || 0) + 1);
     const cliente = await window.__clientePronto;
     if (!cliente || !window.__clienteIdAtual) return;
     const { data, error } = await window.__sbClient.from("clientes").select("boletim_filtro").eq("id", window.__clienteIdAtual).maybeSingle();
     if (error) throw new Error(error.message || "Não foi possível recuperar o filtro da conta.");
-    window.__filtroBoletimAtual = { id: window.__clienteIdAtual, filtro: data?.boletim_filtro || null };
+    let filtro = data?.boletim_filtro || null, outras = [];
+    const ctx = await filtrosBoletimDasEmpresas();
+    if (ctx) {
+      const daEmpresa = ctx.linhas.find((l) => l.empresa_id === ctx.empresa.id);
+      // Migração: o filtro antigo da conta vira o da empresa ativa, só enquanto nenhuma empresa tem filtro próprio.
+      const migrar = !daEmpresa && !ctx.linhas.length && filtro;
+      if (migrar) {
+        const { error: erroMigrar } = await window.__sbClient.from("boletim_filtros_empresa").insert({ empresa_id: ctx.empresa.id, organizacao_id: ctx.organizacaoId, filtro });
+        if (erroMigrar) throw new Error(erroMigrar.message || "Não foi possível levar o filtro para a empresa.");
+      }
+      filtro = daEmpresa ? daEmpresa.filtro : migrar ? filtro : null;
+      outras = ctx.linhas.filter((l) => l.empresa_id !== ctx.empresa.id)
+        .map((l) => ({ nome: (ctx.empresas.find((e) => e.id === l.empresa_id) || {}).razao_social || "Outra empresa", filtro: l.filtro }));
+    }
+    if (seq !== window.__filtroBoletimSeq) return; // trocou de empresa no meio: vale a consulta mais nova
+    window.__filtroBoletimEmpresa = ctx ? ctx.empresa.id : null;
+    window.__filtroBoletimOrg = ctx ? ctx.organizacaoId : null;
+    window.__filtroBoletimEmpresaNome = ctx ? ctx.empresa.razao_social : "";
+    window.__filtrosBoletimOutras = outras;
+    window.__filtroBoletimAtual = { id: donoFiltroBoletim(), filtro };
     try {
-      localStorage.setItem(chaveFiltroBoletimConta(), JSON.stringify(data?.boletim_filtro || null));
+      localStorage.setItem(chaveFiltroBoletimConta(), JSON.stringify(filtro));
     } catch (e) { /* a preferência da conta funciona mesmo sem cache local */ }
   }
   async function salvarFiltroBoletim(ufs, palavrasRaw) {
@@ -7065,9 +7377,12 @@
     const lista = normalizarUfs(ufs);
     const filtro = { ufs: lista, uf: lista[0] || "", palavrasRaw: String(palavrasRaw || "").trim() };
     if (!filtro.palavrasRaw || filtro.palavrasRaw.length > 1000) throw new Error("Informe palavras-chave com até 1.000 caracteres.");
-    const { data, error } = await window.__sbClient.from("clientes").update({ boletim_filtro: filtro }).eq("id", window.__clienteIdAtual).select("boletim_filtro").maybeSingle();
+    const empresaId = window.__filtroBoletimEmpresa, organizacaoId = window.__filtroBoletimOrg;
+    const { data, error } = empresaId && organizacaoId
+      ? await window.__sbClient.from("boletim_filtros_empresa").upsert({ empresa_id: empresaId, organizacao_id: organizacaoId, filtro }, { onConflict: "empresa_id" }).select("filtro").maybeSingle()
+      : await window.__sbClient.from("clientes").update({ boletim_filtro: filtro }).eq("id", window.__clienteIdAtual).select("boletim_filtro").maybeSingle();
     if (error || !data) throw new Error(error?.message || "O filtro não foi salvo na conta. Tente novamente.");
-    window.__filtroBoletimAtual = { id: window.__clienteIdAtual, filtro };
+    window.__filtroBoletimAtual = { id: donoFiltroBoletim(), filtro };
     try {
       localStorage.setItem(chaveFiltroBoletimConta(), JSON.stringify(filtro));
     } catch (e) { /* localStorage indisponível */ }
@@ -7475,6 +7790,30 @@
     }
     definirUfsNoSelect(document.getElementById("bol-uf"), filtro && (filtro.ufs || filtro.uf));
     document.getElementById("bol-palavras").value = (filtro && filtro.palavrasRaw) || "";
+    // Filtro por empresa: diz de quem é e, se esta empresa ainda não tem, oferece copiar de outra.
+    const nome = window.__filtroBoletimEmpresaNome, outras = filtro ? [] : (window.__filtrosBoletimOutras || []);
+    document.getElementById("bol-filtro-empresa").textContent = nome ? `Filtro da empresa ${nome}. Cada empresa tem o seu e recebe o seu e-mail.` : "";
+    document.getElementById("bol-copiar-campo").hidden = !outras.length;
+    document.getElementById("bol-copiar").innerHTML = '<option value="">Escolha</option>' + outras.map((o, i) => `<option value="${i}">${escapeHtml(o.nome)}</option>`).join("");
+  }
+  document.getElementById("bol-copiar").addEventListener("change", (ev) => {
+    const origem = (window.__filtrosBoletimOutras || [])[Number(ev.target.value)];
+    if (!ev.target.value || !origem) return;
+    definirUfsNoSelect(document.getElementById("bol-uf"), origem.filtro.ufs || origem.filtro.uf);
+    atualizarSeletorUfs(document.getElementById("bol-uf"));
+    document.getElementById("bol-palavras").value = origem.filtro.palavrasRaw || "";
+  });
+  // Troca de empresa no seletor: carrega o filtro (e os jornais) daquela empresa e refaz o boletim.
+  function trocarFiltroBoletimDaEmpresa() {
+    window.__filtroBoletimPronto = carregarFiltroBoletimConta().catch(() => {
+      document.getElementById("bol-filtro-status").textContent = "Não foi possível carregar o filtro desta empresa. Tente de novo.";
+    });
+    return window.__filtroBoletimPronto.then(() => {
+      if (document.getElementById("bol-config-painel").style.display !== "none") preencherConfigBoletim();
+      document.getElementById("bol-filtro-status").textContent = window.__filtroBoletimEmpresaNome ? `Boletim de ${window.__filtroBoletimEmpresaNome}.` : "";
+      void gerarBoletim();
+      if (typeof window.__recarregarFiltrosSalvos === "function") void window.__recarregarFiltrosSalvos();
+    });
   }
 
   // Sem filtro, o Boletim é um passo só: o formulário já aberto, sem Atualizar/Imprimir
@@ -7669,7 +8008,13 @@
       palavrasRaw: $op("op-palavras").value, excluir: $op("op-excluir").value, ufs: ufsDoSelect($op("op-uf")), regiao: $op("op-regiao").value,
       raio: m ? { municipio: m[1], uf: m[2], km: $op("op-raio-km").value } : null,
       municipio: $op("op-municipio").value, esfera: $op("op-esfera").value, valorMin: $op("op-valor-min").value, valorMax: $op("op-valor-max").value, orgaoTexto: $op("op-orgao").value,
+      ...filtroExtraDaTela(),
     });
+  }
+  // Busca v2 (busca-extra.js): campos que entram no filtro salvo e na busca.
+  function filtroExtraDaTela() {
+    return { limitar: $op("op-limitar").value.trim(), modalidade: $op("op-modalidade").value, portal: $op("op-portal").value,
+      periodoPor: $op("op-periodo-por").value, mePp: $op("op-me-epp").checked, excluirSrp: $op("op-excluir-srp").checked };
   }
 
   let filtrosSalvos = [];
@@ -7682,7 +8027,44 @@
       : '<option value="">Nenhum salvo ainda</option>';
     lista.value = filtrosSalvos.some((f) => f.id === idSelecionado) ? idSelecionado : "";
     $op("op-salvos-renomear").hidden = $op("op-salvos-apagar").hidden = !lista.value;
+    // Meus jornais: um e-mail diário por filtro salvo com a chave ligada (scripts/boletim_editais.py).
+    $op("op-jornais").hidden = !filtrosSalvos.length;
+    $op("op-jornais-lista").innerHTML = filtrosSalvos.map((f) => `<li data-id="${escapeHtml(f.id)}">
+      <span class="op-jornal-nome"><strong>${escapeHtml(f.nome)}</strong> <small>${escapeHtml(BA.resumoFiltro(f.filtro).slice(0, 90))}</small></span>
+      <label class="op-jornal-email"><input type="checkbox" data-jornal="email"${f.filtro && f.filtro.jornal ? " checked" : ""}> E-mail diário</label>
+      <button type="button" class="btn-imprimir" data-jornal="hoje">Ver resultado de hoje</button>
+      <button type="button" class="btn-imprimir" data-jornal="editar">Editar</button>
+      <button type="button" class="btn-imprimir" data-jornal="excluir">Excluir</button></li>`).join("");
   }
+  $op("op-jornais-lista").addEventListener("click", async (ev) => {
+    const alvo = ev.target.closest("button[data-jornal]"), li = ev.target.closest("li[data-id]");
+    if (!alvo || !li) return;
+    $op("op-salvos-lista").value = li.dataset.id;
+    const f = filtroEscolhido();
+    if (!f) return;
+    $op("op-salvos-renomear").hidden = $op("op-salvos-apagar").hidden = false;
+    if (alvo.dataset.jornal === "excluir") { abrirFormSalvos("apagar"); return; }
+    if (alvo.dataset.jornal === "editar") {
+      await restaurarOportunidades({ dataDe: "", dataAte: "", uasg: "", codigo: "", ...f.filtro });
+      $op("op-mais-filtros").open = true;
+      abrirFormSalvos("novo");
+      mensagemSalvos(`Editando "${f.nome}": mude os campos e clique em Salvar com o mesmo nome.`);
+      return;
+    }
+    const hoje = new Date(Date.now() - 3 * 36e5).toISOString().slice(0, 10); // dia de Brasília
+    mensagemSalvos(`"${f.nome}": licitações publicadas hoje.`);
+    await restaurarOportunidades({ uasg: "", codigo: "", ...f.filtro, dataDe: hoje, dataAte: hoje, periodoPor: "" });
+  });
+  $op("op-jornais-lista").addEventListener("change", async (ev) => {
+    if (ev.target.dataset.jornal !== "email") return;
+    const f = filtrosSalvos.find((x) => x.id === ev.target.closest("li[data-id]").dataset.id);
+    if (!f) return;
+    const filtro = BA.limparFiltro({ ...f.filtro, jornal: ev.target.checked });
+    const { error } = await window.__sbClient.from("filtros_salvos").update({ filtro }).eq("id", f.id);
+    if (error) { ev.target.checked = !ev.target.checked; mensagemSalvos("Não foi possível mudar o e-mail deste jornal agora."); return; }
+    f.filtro = filtro;
+    mensagemSalvos(ev.target.checked ? `"${f.nome}" vai chegar por e-mail todo dia útil de manhã.` : `"${f.nome}" não vai mais por e-mail.`);
+  });
   function abrirFormSalvos(modo) {
     const f = filtroEscolhido();
     modoSalvos = modo;
@@ -7697,7 +8079,11 @@
   const fecharFormSalvos = () => { modoSalvos = null; $op("op-salvos-form").hidden = true; };
   const mensagemSalvos = (t) => { $op("op-salvos-status").textContent = t; };
   async function carregarFiltrosSalvos() {
-    const { data, error } = await window.__sbClient.from("filtros_salvos").select("id, nome, filtro").order("nome");
+    // Jornais por empresa: os da empresa ativa e os sem empresa (da conta). Sem a coluna (SQL não aplicado), todos.
+    const empresa = window.__filtroBoletimEmpresa;
+    let resposta = await window.__sbClient.from("filtros_salvos").select("id, nome, filtro, empresa_id").or(empresa ? `empresa_id.is.null,empresa_id.eq.${empresa}` : "empresa_id.is.null").order("nome");
+    if (resposta.error) resposta = await window.__sbClient.from("filtros_salvos").select("id, nome, filtro").order("nome");
+    const { data, error } = resposta;
     if (error) { mensagemSalvos("Não foi possível carregar seus filtros salvos agora."); return; }
     filtrosSalvos = data || [];
     desenharFiltrosSalvos($op("op-salvos-lista").value);
@@ -7734,12 +8120,13 @@
         if (error) throw error;
         aviso = `Filtro renomeado para "${nome}".`;
       } else {
-        await lerRaio().catch(() => null); // normaliza "Manaus" para "Manaus - AM" antes de guardar
-        const filtro = filtroDaTela();
+        const raio = await lerRaio().catch(() => null); // normaliza "Manaus" para "Manaus - AM" antes de guardar
         const igual = filtrosSalvos.find((f) => BA.norm(f.nome) === BA.norm(nome));
+        // Jornal: filtro novo já sai com o e-mail diário ligado; editar mantém a escolha anterior.
+        const filtro = BA.limparFiltro({ ...filtroDaTela(), ...(raio ? { ufs: raio.ufs } : {}), jornal: igual ? Boolean(igual.filtro && igual.filtro.jornal) : true });
         const { data, error } = igual
           ? await sb.from("filtros_salvos").update({ filtro }).eq("id", igual.id).select("id").single()
-          : await sb.from("filtros_salvos").insert({ nome, filtro }).select("id").single();
+          : await sb.from("filtros_salvos").insert({ nome, filtro, ...(window.__filtroBoletimEmpresa ? { empresa_id: window.__filtroBoletimEmpresa } : {}) }).select("id").single();
         if (error) throw error;
         idFinal = data.id; aviso = igual ? `Filtro "${nome}" atualizado.` : `Filtro "${nome}" salvo.`;
       }
@@ -7792,7 +8179,8 @@
     redesenharPaineis();
     avisarSincronizacaoOperacional("Editais restaurados nas suas buscas.");
   });
-  if (window.__clientePronto) window.__clientePronto.then((c) => { if (c && window.__sbClient) { void carregarFiltrosSalvos(); void carregarSemInteresse(); } });
+  window.__recarregarFiltrosSalvos = carregarFiltrosSalvos;
+  if (window.__clientePronto) window.__clientePronto.then(async (c) => { if (c && window.__sbClient) { await window.__filtroBoletimPronto; void carregarFiltrosSalvos(); void carregarSemInteresse(); } });
 
   // "Monte minha busca com IA": a sugestão só vai para os campos quando o usuário confirma em "Usar na busca".
   const iaCaixas = (id, lista) => { $op(id).innerHTML = lista.map((t) => `<label class="op-ia-opcao"><input type="checkbox" checked value="${escapeHtml(t)}"> ${escapeHtml(t)}</label>`).join("") || '<span class="dica-clique">Nada sugerido.</span>'; };
@@ -7872,7 +8260,9 @@
       valorMax: valorMaxRaw,
       codigo: document.getElementById("op-codigo").value.trim(),
       orgaoTexto: document.getElementById("op-orgao").value.trim(),
+      ...filtroExtraDaTela(),
     }));
+    const extra = filtroExtraDaTela();
     // Uma busca mais nova (filtro trocado no meio do caminho) invalida a resposta desta.
     const seq = ++opBuscaSeq;
     const anterior = lerResultadoOportunidades(chaveFiltro);
@@ -7965,7 +8355,7 @@
         const limiteDe = dataDe ? new Date(dataDe + "T00:00:00") : null;
         const limiteAte = dataAte ? new Date(dataAte + "T23:59:59") : null;
         resultados = resultados.filter((r) => {
-          const refBruta = r.publicacao;
+          const refBruta = window.BuscaExtra.dataDoPeriodo(r, extra.periodoPor);
           if (!refBruta) return false; // sem publicação verificável, não pertence a um período de publicação
           const d = new Date(refBruta);
           if (isNaN(d)) return false;
@@ -7974,6 +8364,10 @@
           return true;
         });
       }
+
+      resultados = window.BuscaExtra.filtrarExtra(resultados, extra);
+      // "Sem ninguém participando": só aparece quando há histórico de pregões anteriores dos órgãos da lista.
+      if (window.BuscaExtraUI) resultados = await window.BuscaExtraUI.filtrarSemDisputa(resultados);
 
       if (seq !== opBuscaSeq) return;
       if (anterior && falhaConexao) {
@@ -8014,6 +8408,8 @@
   }
 
   document.getElementById("op-buscar").addEventListener("click", () => buscarOportunidades());
+  // busca-extra-ui.js ("Já tenho o número") desenha a lista com o mesmo cartão do Encontrar Licitações.
+  window.__buscaPainel = { renderizar: (alvo, lista, aviso) => renderizarPainelBoletim(alvo, lista, aviso || "") };
 
   // "Receber isso todo dia no Boletim": grava palavras + estados desta busca como o filtro
   // do Boletim da conta (mesmo salvarFiltroBoletim do formulário do Boletim).
@@ -8062,6 +8458,12 @@
     document.getElementById("op-valor-max").value = filtro.valorMax || "";
     document.getElementById("op-codigo").value = filtro.codigo || "";
     document.getElementById("op-orgao").value = filtro.orgaoTexto || "";
+    document.getElementById("op-limitar").value = filtro.limitar || "";
+    document.getElementById("op-modalidade").value = filtro.modalidade || "";
+    document.getElementById("op-portal").value = filtro.portal || "";
+    document.getElementById("op-periodo-por").value = filtro.periodoPor || "";
+    document.getElementById("op-me-epp").checked = filtro.mePp === true;
+    document.getElementById("op-excluir-srp").checked = filtro.excluirSrp === true;
     if (filtro.municipio) {
       try {
         const municipios = await carregarTodosMunicipios();
@@ -10233,32 +10635,11 @@
     }
   });
 
-  // ---------- Pesquisa de Preços de Mercado (Catálogo + Painel de Preços do Compras.gov.br) ----------
-  // Fonte: substituto oficial do antigo "Painel de Preços" (agora "Pesquisa de Preços"),
-  // acessado 100% no navegador do usuário (API pública, sem login, CORS liberado), sem
-  // depender de robô. Fluxo: palavra-chave -> PDM (categoria) -> item específico (com
-  // características técnicas) -> unidade de fornecimento -> preços reais pagos.
-  // As fontes do Compras.gov são públicas, porém a chamada direta pelo navegador
-  // oscila por CORS. O proxy próprio mantém categorias, especificações e preços
-  // no mesmo fluxo confiável já aplicado à pesquisa de marcas.
-  const PP_API_URL = "/api/comprasgov-precos";
-
-  let ppItens = [];
-  let ppUnidades = [];
-  let ppPdmAtual = null;
-
-  function ppFormatarUnidade(u) {
-    if (u.capacidadeUnidadeMedida && u.capacidadeUnidadeMedida > 0) {
-      return `${u.nomeUnidadeFornecimento} (${u.capacidadeUnidadeMedida % 1 === 0 ? u.capacidadeUnidadeMedida.toFixed(0) : u.capacidadeUnidadeMedida} ${u.nomeUnidadeMedida || ""})`.trim();
-    }
-    return u.nomeUnidadeFornecimento;
-  }
-
-  function ppResumoCaracteristicas(item) {
-    const lista = item.buscaItemCaracteristica || [];
-    return lista.map((c) => `${c.nomeCaracteristica}: ${c.nomeValorCaracteristica}`).join(" · ");
-  }
-
+  // ---------- Pesquisa de Preços de Mercado (Catálogo + Pesquisa de Preços do Compras.gov.br) ----------
+  // Uma caixa de busca (mercado-comprasgov.js): termo -> produto do catálogo mais comprado com o termo no nome
+  // -> marcas, modelos, empresas vencedoras e compras. Substitui o fluxo de 4 passos (Produto, Categoria,
+  // Especificação, Preço), em que "notebook" repetia "Notebook" na categoria e a especificação era uma lista
+  // de 101 itens começando por "Tela: ...", sem marca nem nome do produto (reclamação do dono, 19/11/2026).
   function salvarFiltroPrecos(termo) {
     try { localStorage.setItem("hc_precos_filtro", JSON.stringify({ termo })); } catch (e) {}
   }
@@ -10266,242 +10647,8 @@
     try { const b = localStorage.getItem("hc_precos_filtro"); return b ? JSON.parse(b) : null; } catch (e) { return null; }
   }
   let ppJaBuscado = false;
-
-  async function ppBuscarCategorias() {
-    ppJaBuscado = true;
-    const termo = document.getElementById("pp-busca").value.trim();
-    const alvoCat = document.getElementById("pp-categorias");
-    document.getElementById("pp-itens").innerHTML = "";
-    document.getElementById("pp-selecao").innerHTML = "";
-    document.getElementById("pp-resultado").innerHTML = "";
-    if (!termo) {
-      alvoCat.innerHTML = '<div class="aviso">Digite um termo pra pesquisar (ex: "caneta", "notebook").</div>';
-      return;
-    }
-    salvarFiltroPrecos(termo);
-    alvoCat.innerHTML = '<div class="carregando">Buscando categorias no Catálogo do Compras.gov.br...</div>';
-    try {
-      const resp = await fetch(`${PP_API_URL}?${new URLSearchParams({ acao: "categorias", termo })}`);
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const corpo = await resp.json();
-      if (!corpo.ok) throw new Error(corpo.erro || "fonte indisponível");
-      const pdms = corpo.itens;
-      if (!Array.isArray(pdms) || pdms.length === 0) {
-        alvoCat.innerHTML = '<div class="aviso">Nenhuma categoria de material encontrada com esse termo. Tente outra palavra (ex: mais genérica).</div>';
-        return;
-      }
-      let html = `<p class="pp-passo-titulo">2. Escolha a categoria</p><p style="color:var(--texto-fraco);font-size:13px;margin:0 0 6px;">${pdms.length} categoria(s) encontrada(s) — clique numa pra ver os itens específicos:</p>`;
-      html += `<table><tr><th>Categoria (PDM)</th><th>Classe</th></tr>`;
-      pdms.forEach((p, i) => {
-        const nome = p.descricaoPDM || p.nomePdm || "-";
-        const classe = p.descricaoClasse || p.nomeClasse || "-";
-        html += `<tr class="linha-clicavel" data-idx="${i}"><td>${escapeHtml(nome)}</td><td>${escapeHtml(classe)}</td></tr>`;
-      });
-      html += `</table>`;
-      alvoCat.innerHTML = html;
-      alvoCat.querySelectorAll("tr.linha-clicavel").forEach((tr) => {
-        tr.addEventListener("click", () => {
-          alvoCat.querySelectorAll("tr.linha-selecionada").forEach((x) => x.classList.remove("linha-selecionada"));
-          tr.classList.add("linha-selecionada");
-          const p = pdms[Number(tr.dataset.idx)];
-          const codigoPdm = p.codigoPDM ?? p.codigoPdm;
-          ppCarregarItens(codigoPdm, p.descricaoPDM || p.nomePdm || "-");
-        });
-      });
-    } catch (e) {
-      alvoCat.innerHTML = `<div class="aviso">Erro ao buscar categorias: ${escapeHtml(String(e))}</div>`;
-    }
-  }
-
-  async function ppCarregarItens(codigoPdm, nomePdm) {
-    ppPdmAtual = { codigoPdm, nomePdm };
-    const alvoItens = document.getElementById("pp-itens");
-    document.getElementById("pp-selecao").innerHTML = "";
-    document.getElementById("pp-resultado").innerHTML = "";
-    alvoItens.innerHTML = '<div class="carregando">Carregando itens específicos dessa categoria...</div>';
-    try {
-      const resp = await fetch(`${PP_API_URL}?${new URLSearchParams({ acao: "itens", codigoPdm: String(codigoPdm) })}`);
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const corpo = await resp.json();
-      if (!corpo.ok) throw new Error(corpo.erro || "fonte indisponível");
-      ppItens = corpo.itens || [];
-      ppUnidades = corpo.unidades || [];
-
-      if (!Array.isArray(ppItens) || ppItens.length === 0) {
-        alvoItens.innerHTML = '<div class="aviso">Nenhum item específico cadastrado nessa categoria.</div>';
-        return;
-      }
-
-      let html = `<p class="pp-passo-titulo">3. Escolha a especificação</p><h3 style="margin-bottom:4px;">${escapeHtml(nomePdm)} — ${ppItens.length} item(ns) específico(s)</h3>`;
-      html += `<div class="campo" style="max-width:420px;margin-bottom:10px;"><label for="pp-filtro-itens">Refinar por característica</label><input id="pp-filtro-itens" placeholder="Ex: azul, plástico, touch"></div>`;
-      const LIMITE_EXIBIDOS = 80;
-      html += `<table id="pp-tabela-itens"><tr><th>Código</th><th>Características</th></tr>`;
-      ppItens.forEach((item, i) => {
-        html += `<tr class="linha-clicavel pp-item-linha" data-idx="${i}" data-texto="${escapeHtml(normalizar(ppResumoCaracteristicas(item)))}" style="${i >= LIMITE_EXIBIDOS ? "display:none;" : ""}">
-          <td>${escapeHtml(String(item.codigoItem))}</td>
-          <td>${escapeHtml(ppResumoCaracteristicas(item))}</td>
-        </tr>`;
-      });
-      html += `</table>`;
-      if (ppItens.length > LIMITE_EXIBIDOS) {
-        html += `<p style="color:var(--texto-fraco);font-size:12px;margin-top:6px;">Mostrando os primeiros ${LIMITE_EXIBIDOS} de ${ppItens.length} itens. Use o filtro acima pra refinar.</p>`;
-      }
-      alvoItens.innerHTML = html;
-
-      const ligarClique = () => {
-        alvoItens.querySelectorAll(".pp-item-linha").forEach((tr) => {
-          tr.addEventListener("click", () => {
-            alvoItens.querySelectorAll("tr.linha-selecionada").forEach((x) => x.classList.remove("linha-selecionada"));
-            tr.classList.add("linha-selecionada");
-            ppSelecionarItem(ppItens[Number(tr.dataset.idx)]);
-          });
-        });
-      };
-      ligarClique();
-
-      document.getElementById("pp-filtro-itens").addEventListener("input", (ev) => {
-        const termo = normalizar(ev.target.value.trim());
-        const linhas = alvoItens.querySelectorAll(".pp-item-linha");
-        let visiveis = 0;
-        linhas.forEach((tr) => {
-          const bate = !termo || tr.dataset.texto.includes(termo);
-          const dentroLimite = visiveis < LIMITE_EXIBIDOS;
-          const mostrar = bate && (termo ? true : dentroLimite);
-          tr.style.display = mostrar ? "" : "none";
-          if (mostrar) visiveis++;
-        });
-      });
-    } catch (e) {
-      alvoItens.innerHTML = `<div class="aviso">Erro ao carregar itens: ${escapeHtml(String(e))}</div>`;
-    }
-  }
-
-  function ppSelecionarItem(item) {
-    const alvoSel = document.getElementById("pp-selecao");
-    document.getElementById("pp-resultado").innerHTML = "";
-    let unidadesUnicas = [];
-    const vistos = new Set();
-    for (const u of ppUnidades) {
-      const chave = `${u.siglaUnidadeFornecimento}|${u.capacidadeUnidadeMedida}`;
-      if (!vistos.has(chave)) { vistos.add(chave); unidadesUnicas.push(u); }
-    }
-    if (unidadesUnicas.length === 0) unidadesUnicas = [{ siglaUnidadeFornecimento: "UN", nomeUnidadeFornecimento: "Unidade", capacidadeUnidadeMedida: 0, siglaUnidadeMedida: null }];
-
-    let opcoesUnidade = unidadesUnicas.map((u, i) => `<option value="${i}">${escapeHtml(ppFormatarUnidade(u))}</option>`).join("");
-
-    alvoSel.innerHTML = `
-      <div class="painel-filtros">
-        <div class="campo">
-          <label>Item selecionado</label>
-          <div style="padding:9px 0;color:var(--texto);font-size:14px;">Código ${escapeHtml(String(item.codigoItem))} — ${escapeHtml(ppResumoCaracteristicas(item)) || "sem características adicionais"}</div>
-        </div>
-      </div>
-      <div class="painel-filtros">
-        <div class="campo">
-          <label for="pp-unidade">Unidade de fornecimento</label>
-          <select id="pp-unidade">${opcoesUnidade}</select>
-        </div>
-        <button class="btn-buscar" id="pp-buscar-precos">Buscar preços pagos</button>
-      </div>
-    `;
-    alvoSel.dataset.unidades = JSON.stringify(unidadesUnicas);
-    document.getElementById("pp-buscar-precos").addEventListener("click", () => ppBuscarPrecos(item, unidadesUnicas));
-  }
-
-  async function ppBuscarPrecos(item, unidadesUnicas) {
-    const alvoRes = document.getElementById("pp-resultado");
-    const idxUnidade = Number(document.getElementById("pp-unidade").value);
-    const unidade = unidadesUnicas[idxUnidade];
-    alvoRes.innerHTML = '<div class="carregando">Consultando preços pagos pelo governo nos últimos 12 meses...</div>';
-
-    const params = new URLSearchParams({
-      codigoItemCatalogo: String(item.codigoItem),
-      tipoItem: "M",
-      siglaUnidadeFornecimento: unidade.siglaUnidadeFornecimento,
-    });
-    if (unidade.capacidadeUnidadeMedida && unidade.capacidadeUnidadeMedida > 0) {
-      params.set("capacidadeUnidadeFornecimento", String(unidade.capacidadeUnidadeMedida));
-    }
-    if (unidade.siglaUnidadeMedida) params.set("siglaUnidadeMedida", unidade.siglaUnidadeMedida);
-
-    try {
-      params.set("acao", "precos");
-      const resp = await fetch(`${PP_API_URL}?${params.toString()}`);
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const corpo = await resp.json();
-      if (!corpo.ok) throw new Error(corpo.erro || "fonte indisponível");
-      ppRenderizarResultado(corpo.dados, item, unidade);
-    } catch (e) {
-      alvoRes.innerHTML = `<div class="aviso">Erro ao consultar preços: ${escapeHtml(String(e))}</div>`;
-    }
-  }
-
-  function ppRenderizarResultado(dados, item, unidade) {
-    const alvoRes = document.getElementById("pp-resultado");
-    const est = dados.estatisticas || {};
-    const registros = dados.itens || [];
-
-    if (registros.length === 0) {
-      alvoRes.innerHTML = '<div class="aviso">Nenhuma compra registrada pra esse item + unidade nos últimos 12 meses. Tente outra unidade de fornecimento ou uma característica diferente.</div>';
-      return;
-    }
-
-    // Abre pela mediana: é o preço "do meio", que uma compra muito cara ou muito barata não distorce.
-    let html = `<p class="pp-passo-titulo">4. Preços pagos pelo governo</p>
-    <div class="pp-mediana"><span class="pp-mediana-rotulo">Preço mediano pago</span><span class="pp-mediana-valor">${formatarValor(est.mediana)}</span><span class="pp-mediana-ajuda">Metade das compras saiu por até este valor. Use como referência de preço; a média abaixo pode ser puxada por compras fora da curva.</span></div>`;
-    html += `<div class="aviso" style="background:var(--surface-sunken);border-color:var(--aviso-neutro-borda);color:var(--aviso-neutro-texto);">Amostra: até 50 compras mais recentes dos últimos 12 meses, unidade "${escapeHtml(ppFormatarUnidade(unidade))}". Fonte: Compras.gov.br (Pesquisa de Preços).</div>`;
-    html += `<div class="cartoes">
-      <div class="cartao"><h3>Preço médio</h3><div class="valor">${formatarValor(est.media)}</div></div>
-      <div class="cartao"><h3>Menor preço</h3><div class="valor">${formatarValor(est.menorPreco)}</div></div>
-      <div class="cartao"><h3>Maior preço</h3><div class="valor">${formatarValor(est.maiorPreco)}</div></div>
-      <div class="cartao"><h3>Coeficiente de variação</h3><div class="valor">${est.coeficienteVariacao != null ? est.coeficienteVariacao.toFixed(1) + "%" : "-"}</div></div>
-      <div class="cartao"><h3>Compras encontradas</h3><div class="valor">${est.quantidadePrecos ?? registros.length}</div></div>
-    </div>`;
-
-    html += `<table><tr><th>Fornecedor</th><th>Órgão</th><th>UF/Município</th><th>Preço unitário</th><th>Data</th><th>Edital</th></tr>`;
-    registros.forEach((r, i) => {
-      html += `<tr class="linha-clicavel pp-registro-linha" data-idx="${i}">
-        <td>${escapeHtml(r.nomeFornecedor || r.niFornecedor || "-")}</td>
-        <td>${escapeHtml(r.nomeOrgao || "-")}</td>
-        <td>${escapeHtml(r.estado || "-")}${r.municipio ? " / " + escapeHtml(r.municipio) : ""}</td>
-        <td>${formatarValor(r.precoUnitario)}</td>
-        <td>${formatarDataIso(r.dataResultado)}</td>
-        <td>${r.link ? `<a class="link-pncp" href="${escapeHtml(r.link)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Ver edital <svg class='icone-ph'><use href='#ph-arrow-square-out'></use></svg></a>` : "-"}</td>
-      </tr>`;
-    });
-    html += `</table>`;
-    alvoRes.innerHTML = html;
-
-    alvoRes.querySelectorAll(".pp-registro-linha").forEach((tr) => {
-      tr.addEventListener("click", () => {
-        const jaSelecionada = tr.classList.contains("linha-selecionada");
-        alvoRes.querySelectorAll("tr.linha-selecionada").forEach((x) => x.classList.remove("linha-selecionada"));
-        const detalheExistente = alvoRes.querySelector(".detalhe-drilldown");
-        if (detalheExistente) detalheExistente.remove();
-        if (jaSelecionada) return;
-        tr.classList.add("linha-selecionada");
-        const r = registros[Number(tr.dataset.idx)];
-        const detalhe = document.createElement("div");
-        detalhe.className = "detalhe-drilldown";
-        detalhe.innerHTML = `<dl>
-          <div><dt>Descrição detalhada</dt><dd>${escapeHtml(r.descricaoDetalhadaItem || "-")}</dd></div>
-          <div><dt>Marca</dt><dd>${escapeHtml(r.marca || "-")}</dd></div>
-          <div><dt>Quantidade comprada</dt><dd>${escapeHtml(String(r.quantidade ?? "-"))} ${escapeHtml(r.unidadeFornecimentoMedidaConcatenada || "")}</dd></div>
-          <div><dt>UASG / unidade compradora</dt><dd>${escapeHtml(r.nomeUasg || "-")} (${escapeHtml(String(r.codigoUasg ?? "-"))})</dd></div>
-          <div><dt>Modalidade</dt><dd>${escapeHtml(r.modalidade || "-")}</dd></div>
-          <div><dt>Forma</dt><dd>${escapeHtml(r.forma || "-")}</dd></div>
-          <div><dt>Esfera</dt><dd>${escapeHtml({ F: "Federal", E: "Estadual", M: "Municipal" }[r.esfera] || r.esfera || "-")}</dd></div>
-          <div><dt>Critério de julgamento</dt><dd>${escapeHtml(r.criterioJulgamentoCompra || r.criterioJulgamento || "-")}</dd></div>
-        </dl>`;
-        tr.after(detalhe);
-      });
-    });
-  }
-
-  document.getElementById("pp-buscar-categoria").addEventListener("click", ppBuscarCategorias);
-  document.getElementById("pp-busca").addEventListener("keydown", (ev) => {
-    if (ev.key === "Enter") ppBuscarCategorias();
-  });
+  const ppMercado = window.MercadoComprasGov ? window.MercadoComprasGov.montar({ alvo: document.getElementById("pp-mercado") }) : null;
+  ppMercado?.campo.form.addEventListener("submit", () => { ppJaBuscado = true; salvarFiltroPrecos(ppMercado.campo.value.trim()); });
 
   // ---------- Restaura o último filtro de cada ferramenta ao carregar a página ----------
   // Mesma ideia usada no Boletim e no Encontrar Licitações: ninguém devia precisar preencher
@@ -10595,9 +10742,10 @@
 
   function restaurarPrecos() {
     const filtro = lerFiltroPrecos();
-    if (!filtro || !filtro.termo) return;
-    document.getElementById("pp-busca").value = filtro.termo;
-    document.getElementById("pp-buscar-categoria").click();
+    if (!filtro || !filtro.termo || !ppMercado) return;
+    ppJaBuscado = true;
+    ppMercado.campo.value = filtro.termo;
+    void ppMercado.buscar(filtro.termo);
   }
   document.querySelector('nav button[data-alvo="precos"]').addEventListener("click", () => {
     if (!ppJaBuscado) restaurarPrecos();
@@ -10607,6 +10755,9 @@
   // git log, porque mensagem de commit é jargão técnico interno, não linguagem pro cliente.
   // Mais novo primeiro; datas conferem com a data real de cada mudança no histórico do repo.
   const MURAL_NOVIDADES = [
+    { tag: "novo", data: "2026-11-20", titulo: "Boletim e jornais por empresa", desc: "Cada empresa (CNPJ) tem o seu filtro do Boletim e recebe o seu e-mail. Troque a empresa no seletor e o filtro troca junto." },
+    { tag: "novo", data: "2026-11-20", titulo: "Meus jornais: um e-mail por filtro salvo", desc: "Cada filtro salvo com nome pode chegar como um e-mail separado de manhã, com editar, excluir e ver o resultado de hoje." },
+    { tag: "novo", data: "2026-11-20", titulo: "Pesquisa avançada e busca pelo número", desc: "Modalidade, portal, ME/EPP, excluir SRP, data de abertura, palavras obrigatórias, sugestões enquanto digita, UASG + número do pregão e lista de órgãos com CAPAG." },
     { tag: "novo", data: "2026-08-20", titulo: "Dashboard com visão geral do mercado", desc: "Total de licitações monitoradas, novas do dia, estados cobertos e ranking dos principais estados e segmentos, direto na tela inicial." },
     { tag: "novo", data: "2026-08-20", titulo: "Tags automáticas nos cards", desc: "Cada licitação agora mostra etiquetas automáticas (Material, Limpeza, Hospitalar, Engenharia etc.) pra identificar do que se trata sem precisar ler o texto inteiro." },
     { tag: "melhoria", data: "2026-08-20", titulo: "Mais campos preenchidos nos cards", desc: "Amparo legal, valor estimado, processo e outros dados do PNCP agora aparecem preenchidos em mais cartões, quando o PNCP informa." },
@@ -10633,6 +10784,7 @@
     }).join("");
   }
   renderizarMuralNovidades();
+  window.__muralNovidades = MURAL_NOVIDADES; // faixa "Novidades" do início (busca-extra-ui.js)
 
   // Rótulos de exibição pros códigos internos de segmento (ver SEGMENTOS em
   // scripts/atualizar_dados.js — são os mesmos códigos gravados em contratos.dado.segmentos).
@@ -10715,7 +10867,7 @@
     // verdade a "nova licitação" no sentido do Effecti. Conta no servidor (head: true,
     // igual ao total em consultasMercadoGeral) em vez de baixar a base nacional inteira só pra filtrar
     // uma data no navegador: o payload aqui é zero.
-    const hojeIso = new Date().toISOString().slice(0, 10);
+    const hojeIso = new Date(Date.now() - 3 * 36e5).toISOString().slice(0, 10); // dia de Brasília, não UTC
     const novasHojePromise = window.__sbClient.from("oportunidades_abertas").select("chave", { count: "exact", head: true }).eq("publicacao", hojeIso);
 
     const [[totalResp, estadosResp, rankingEstadosResp, rankingSegmentosResp], novasHojeResp] = await Promise.all([
@@ -10973,6 +11125,8 @@ window.__preencherIdentidadeUsuario();
   const ajudaBtn = document.getElementById("header-ajuda-btn");
   if (ajudaBtn) {
     ajudaBtn.addEventListener("click", () => {
+      // Central de ajuda (ajuda-ui.js): WhatsApp, Guia de uso e tutoriais por tela; o formulário de dúvidas fica lá dentro.
+      if (window.LicitaPlenaAjuda) { window.LicitaPlenaAjuda.abrir(); return; }
       const navJuridico = document.querySelector('nav button[data-alvo="juridico"]');
       if (navJuridico) navJuridico.click();
     });

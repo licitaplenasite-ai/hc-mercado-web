@@ -117,6 +117,16 @@
     font: var(--text-body); color: var(--text-secondary);
   }
   .campo-termos input { margin-top: 3px; }
+  /* Escolha do plano (aguarda aprovação visual): dois cartões de rádio. */
+  .planos-opcoes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0 0 8px; border: 0; padding: 0; }
+  .planos-opcoes label { display: flex; gap: 8px; align-items: flex-start; padding: 12px; margin: 0; cursor: pointer;
+    border: 1px solid var(--border-strong); border-radius: var(--radius-control); font: var(--text-body); }
+  .planos-opcoes label:has(input:checked) { border-color: var(--action-text); background: var(--action-tint); }
+  .planos-opcoes input { width: auto; height: auto; margin: 3px 0 0; }
+  .planos-opcoes strong { display: block; }
+  .planos-opcoes span { color: var(--text-secondary); font-size: 13px; }
+  .planos-nota { color: var(--text-secondary); font-size: 13px; margin: 0 0 16px; }
+  @media (max-width: 420px) { .planos-opcoes { grid-template-columns: 1fr; } }
   .captcha-turnstile { max-width: 100%; }
   .captcha-aviso { font: var(--text-label); color: var(--text-secondary); margin: 0 0 16px; }
   button.criar {
@@ -280,6 +290,13 @@
         <option value="Automatizar rotina de participação">Automatizar rotina de participação</option>
         <option value="Todas as opções acima">Todas as opções acima</option>
       </select>
+
+      <h2 class="secao">Plano</h2>
+      <fieldset class="planos-opcoes" aria-label="Escolha o plano">
+        <label><input type="radio" name="plano_desejado" value="empresa" checked><span><strong>Empresa</strong><span>Minha empresa participa de licitações (1 CNPJ).</span></span></label>
+        <label><input type="radio" name="plano_desejado" value="assessoria"><span><strong>Assessoria</strong><span>Atendo várias empresas (vários CNPJs).</span></span></label>
+      </fieldset>
+      <p class="planos-nota">14 dias grátis, sem cartão. No fim do teste nada é cobrado: a conta passa para o plano Grátis.</p>
 
       <h2 class="secao">Acesso</h2>
       <label for="email">E-mail</label>
@@ -530,6 +547,7 @@
     const licitacoes_por_mes = document.getElementById("licitacoes_por_mes").value;
     const faturamento_anual = document.getElementById("faturamento_anual").value;
     const como_pretende_usar = document.getElementById("como_pretende_usar").value;
+    const plano_desejado = document.querySelector('input[name="plano_desejado"]:checked')?.value || "empresa";
     const telefone = document.getElementById("telefone").value.trim();
     const email = document.getElementById("email").value.trim();
     const email_confirmar = document.getElementById("email_confirmar").value.trim();
@@ -575,7 +593,7 @@
         data: {
           nome, cargo, empresa, cnpj, porte_empresa, segmento, telefone, aceite_termos: true,
           atividades, estados_interesse, como_conheceu, quantidade_funcionarios,
-          licitacoes_por_mes, faturamento_anual, como_pretende_usar,
+          licitacoes_por_mes, faturamento_anual, como_pretende_usar, plano_desejado,
         },
       },
     });

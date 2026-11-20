@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guia de uso — LicitaPlena</title>
+<link rel="icon" type="image/png" href="favicon.png?v=3">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds-tokens.css"><link rel="stylesheet" href="gaveta-lateral.css">
+<script>(function(){var t=null;try{t=localStorage.getItem("licitaplena_tema");}catch(e){}if(t!=="escuro")document.documentElement.classList.add("tema-claro");document.documentElement.dataset.theme=t==="escuro"?"dark":"light";})();</script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:var(--surface-page);color:var(--text-primary);font:var(--text-body);font-family:var(--font-sans)}
+main{max-width:880px;margin:0 auto;padding:24px 16px 64px}
+h1{font:var(--text-title);margin:0 0 4px}
+a{color:var(--action-text)}
+.lp-lista-tutoriais summary{font:600 16px/24px var(--font-sans)}
+</style>
+</head>
+<body data-sem-ajuda>
+<main>
+  <p><a href="painel.html">← Voltar ao painel</a></p>
+  <h1>Guia de uso do LicitaPlena</h1>
+  <p class="lp-dica" style="font:var(--text-body);margin-bottom:24px">Onde fica cada coisa e como usar, tela por tela. As imagens usam dados fictícios. Vídeos curtos em breve.</p>
+  <div id="tutoriais"></div>
+</main>
+<script src="ajuda-ui.js"></script>
+<script>
+  document.getElementById("tutoriais").append(window.LicitaPlenaAjuda.listaTutoriais(location.hash, false));
+  // Link direto para um tutorial (ajuda.html#tutorial-funil) abre e rola até ele.
+  const alvo = location.hash && document.getElementById(location.hash.slice(1));
+  if (alvo && alvo.tagName === "DETAILS") { alvo.open = true; alvo.scrollIntoView(); }
+</script>
+</body>
+</html>

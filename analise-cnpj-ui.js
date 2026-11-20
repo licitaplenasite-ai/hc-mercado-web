@@ -37,15 +37,44 @@
     const g = new Map();
     for (const p of linhas) {
       const k = chaveDe(p) || 'Não informado';
-      const a = g.get(k) || { chave: k, disputas: 0, vencidas: 0, valor: 0 };
+      const a = g.get(k) || { chave: k, disputas: 0, vencidas: 0, valor: 0, valorDisputado: 0 };
       a.disputas++;
+      a.valorDisputado += p._valorDisputado || 0;
       if (p._venceu) { a.vencidas++; a.valor += p._valorGanho || 0; }
       g.set(k, a);
     }
     return [...g.values()].sort((x, y) => y.disputas - x.disputas || y.valor - x.valor);
   }
-  // Produto: código do catálogo quando existe; senão as 2 primeiras palavras da descrição.
-  const produto = (p) => (p.catmat ? `CATMAT ${p.catmat} · ${String(p.descricao || '').split(/[,;:]/)[0].slice(0, 60)}` : String(p.descricao || '').split(/[\s,;:]+/).slice(0, 2).join(' ').toUpperCase());
+  // Produto: código do catálogo quando existe; senão o nome do item (descrição até a 1ª vírgula; 2 palavras cortavam "SOLUÇÃO DE").
+  const produto = (p) => (p.catmat ? `CATMAT ${p.catmat} · ${String(p.descricao || '').split(/[,;:]/)[0].slice(0, 60)}` : String(p.descricao || '').split(/[,;:]/)[0].replace(/\s+/g, ' ').trim().slice(0, 60).toUpperCase());
+
+  // Sazonalidade: mês do ano (jan-dez, todos os anos somados) da data do resultado ou, sem ela, da publicação.
+  const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  function porMesDoAno(itens) {
+    const meses = MESES.map((rotulo) => ({ rotulo, disputas: 0, vencidas: 0, valor: 0 }));
+    for (const p of itens) {
+      const m = /^\d{4}-(\d{2})/.exec(String(p.data_resultado || p.data_publicacao || ''));
+      if (!m) continue;
+      const a = meses[Number(m[1]) - 1];
+      a.disputas++;
+      if (p._venceu) { a.vencidas++; a.valor += p._valorGanho || 0; }
+    }
+    return meses;
+  }
+  // Marcas que a empresa usa nos itens que venceu (a fonte pública só traz a marca do vencedor).
+  function marcasDe(vencidas) {
+    const g = new Map();
+    for (const p of vencidas) {
+      const marca = String(p.marca || '').trim();
+      if (!marca) continue;
+      const k = marca.toUpperCase();
+      const a = g.get(k) || { chave: marca, itens: 0, valor: 0, exemplo: p.descricao || '' };
+      a.itens++;
+      a.valor += p._valorGanho || 0;
+      g.set(k, a);
+    }
+    return [...g.values()].sort((x, y) => y.itens - x.itens || y.valor - x.valor);
+  }
 
   // linhas: RPC analise_cnpj_participacoes. -> números da tela (puro).
   function resumir(linhas) {
@@ -54,6 +83,7 @@
       const preco = precoFinal(p);
       const qtd = num(p.quantidade_homologada) ?? num(p.quantidade);
       return { ...p, _venceu: v, _posicao: posicao(p) ?? (v ? 1 : null), _preco: preco, _valorGanho: v && preco !== null && qtd !== null ? preco * qtd : 0,
+        _valorDisputado: preco !== null && qtd !== null ? preco * qtd : 0,
         _vencedorPreco: num(p.vencedor_valor), _recusada: p.situacao_proposta === RECUSADA, _fracassado1: fracassadoSendo1o(p) };
     });
     const vencidas = itens.filter((p) => p._venceu), naoVencidas = itens.filter((p) => !p._venceu);
@@ -63,6 +93,8 @@
     return {
       disputas: itens.length, compras: new Set(itens.map((p) => p.id_compra)).size, vencidas: vencidas.length, naoVencidas: naoVencidas.length,
       vitoria: itens.length ? (vencidas.length / itens.length) * 100 : null, valorGanho: vencidas.reduce((s, p) => s + p._valorGanho, 0),
+      valorDisputado: itens.reduce((s, p) => s + p._valorDisputado, 0), porMes: porMesDoAno(itens), marcas: marcasDe(vencidas),
+      vitoriasPorProduto: agrupar(vencidas, produto).sort((x, y) => y.vencidas - x.vencidas || y.valor - x.valor),
       precoMedioGanha: media(vencidas.map((p) => p._preco).filter((x) => x > 0)), descontoMedioGanha: media(descontos),
       precoMedioPerde: media(pares.map((p) => p._preco)), precoMedioVencedor: media(pares.map((p) => p._vencedorPreco)),
       diferencaMediaPerde: media(pares.map((p) => (p._preco / p._vencedorPreco - 1) * 100)), paresComparados: pares.length,
@@ -100,6 +132,46 @@
       if (leituras(p) < 2) naoVerificados += 1;
     }
     return { desclassificacoes: desclass.size, inabilitacoes: inabil.size, lista, chaves: new Set([...desclass, ...inabil]), naoVerificados };
+  }
+
+  // Todas as desclassificações/inabilitações/recusas com o motivo LITERAL e a fonte (puro). Nunca inventa motivo:
+  // sem texto na fonte, a linha diz "Motivo não registrado" e manda abrir o pregão.
+  //   detalhes: RPC analise_cnpj_detalhes (motivo do item no termo de adjudicação do ComprasNet antigo);
+  //   pecas: pecas_juridicas da empresa (intenção de recurso, recurso, contrarrazão com a decisão do pregoeiro).
+  const ROTULO_PECA = { intencao_recurso: 'Intenção de recurso', recurso: 'Recurso', contrarrazao: 'Contrarrazão' };
+  const SOBRE_RECUSA = /desclassific|inabilit|recusad|recusa\b|n[aã]o aceit/i;
+  const MAX_MOTIVO = 600;
+  const cortar = (t) => { const x = String(t || '').replace(/\s+/g, ' ').trim(); return x.length > MAX_MOTIVO ? `${x.slice(0, MAX_MOTIVO)}…` : x; };
+  function motivosComFonte({ r, mot, detalhes, pecas }) {
+    const lista = [];
+    const onde = (p) => p.orgao_nome || p.unidade_nome || (p.uasg ? `UASG ${p.uasg}` : '');
+    for (const m of mot.lista) {
+      lista.push({ item: `${m.numero_item}. ${m.descricao || ''}`.trim(), tipo: ROTULO[m.tipo], texto: m.texto || '', orgao: m.orgao || `Compra ${m.id_compra}`, data: m.data,
+        fonte: 'Pregão gravado', selo: m.verificado ? null : seloNaoVerificado(m.leituras), url: m.url });
+    }
+    const todos = [...r.itensVencidos, ...r.itensNaoVencidos];
+    for (const p of todos.filter((x) => cancelado(x) && x.motivo_cancelamento)) {
+      lista.push({ item: `${p.numero_item}. ${p.descricao || ''}`.trim(), tipo: 'Resultado cancelado', texto: p.motivo_cancelamento, orgao: onde(p),
+        data: p.data_resultado || p.data_publicacao, fonte: 'PNCP (resultado do item)', url: p.link_pncp || p.link_origem });
+    }
+    const porItem = new Map(todos.map((p) => [`${p.id_compra}|${p.numero_item}`, p]));
+    for (const d of Array.isArray(detalhes) ? detalhes : []) {
+      const p = porItem.get(`${d.id_compra}|${d.numero_item}`);
+      if (!d.motivo_situacao || !p) continue;
+      lista.push({ item: `${p.numero_item}. ${p.descricao || ''}`.trim(), tipo: `Item ${String(p.situacao_item || 'cancelado').toLowerCase()}`, texto: d.motivo_situacao, orgao: onde(p),
+        data: p.data_resultado || p.data_publicacao, fonte: 'ComprasNet (termo de adjudicação)', url: p.link_origem });
+    }
+    for (const x of Array.isArray(pecas) ? pecas : []) {
+      if (!ROTULO_PECA[x.tipo] || !SOBRE_RECUSA.test(`${x.texto || ''} ${x.resposta || ''}`)) continue;
+      const decisao = [x.resultado, x.resposta].filter(Boolean).join(' — ');
+      lista.push({ item: x.item ? `Item ${x.item}` : 'Pregão', tipo: ROTULO_PECA[x.tipo], texto: cortar(decisao ? `Decisão: ${decisao}` : x.texto),
+        orgao: [x.orgao, x.pregao && `Pregão ${x.pregao}`].filter(Boolean).join(' · '), data: x.data, fonte: 'ComprasNet (recursos do pregão)', url: x.url });
+    }
+    for (const p of r.recusadas.filter((x) => !mot.chaves.has(`${x.id_compra}|${x.numero_item}`))) {
+      lista.push({ item: `${p.numero_item}. ${p.descricao || ''}`.trim(), tipo: 'Recusada (arquivo)', texto: '', orgao: onde(p),
+        data: p.data_resultado || p.data_publicacao, fonte: 'Arquivo de propostas do Compras.gov (situação "2", sem motivo)', url: p.link_origem });
+    }
+    return lista;
   }
 
   // Contratos do fornecedor (historico_contratos_fornecedor) -> totais e por UF da unidade contratante (puro).
@@ -307,9 +379,9 @@
   function tabelaGrupo(doc, titulo, grupos) {
     if (!grupos.length) return null;
     return el(doc, 'details', { class: 'acn-grupo' }, el(doc, 'summary', { texto: `${titulo} (${grupos.length})` }), rolavel(doc, el(doc, 'table', {},
-      el(doc, 'tr', {}, ['', 'Disputas', 'Vencidas', '% vitória', 'Valor ganho'].map((t) => el(doc, 'th', { texto: t || titulo }))),
+      el(doc, 'tr', {}, ['', 'Disputas', 'Vencidas', '% vitória', 'Valor disputado', 'Valor vencido'].map((t) => el(doc, 'th', { texto: t || titulo }))),
       grupos.slice(0, 30).map((g) => el(doc, 'tr', {}, el(doc, 'td', { texto: g.chave }), el(doc, 'td', { texto: String(g.disputas) }),
-        el(doc, 'td', { texto: String(g.vencidas) }), el(doc, 'td', { texto: pct((g.vencidas / g.disputas) * 100) }), el(doc, 'td', { texto: moeda(g.valor) }))))));
+        el(doc, 'td', { texto: String(g.vencidas) }), el(doc, 'td', { texto: pct((g.vencidas / g.disputas) * 100) }), el(doc, 'td', { texto: moeda(g.valorDisputado) }), el(doc, 'td', { texto: moeda(g.valor) }))))));
   }
 
   const MAX_LINHAS = 100;
@@ -343,29 +415,26 @@
     const caixa = el(doc, 'div', { class: 'acn-participacoes' }, el(doc, 'h3', { texto: 'Participações' }));
     caixa.append(el(doc, 'div', { class: 'cartoes' },
       cartao(doc, 'Disputas (itens)', `${r.disputas} em ${r.compras} contratação(ões)`), cartao(doc, 'Vencidas', String(r.vencidas)),
-      cartao(doc, 'Não vencidas', String(r.naoVencidas)), cartao(doc, '% de vitória', pct(r.vitoria)), cartao(doc, 'Valor ganho', moeda(r.valorGanho))));
+      cartao(doc, 'Não vencidas', String(r.naoVencidas)), cartao(doc, '% de vitória', pct(r.vitoria)), cartao(doc, 'Valor disputado', moeda(r.valorDisputado)), cartao(doc, 'Valor vencido', moeda(r.valorGanho))));
     caixa.append(el(doc, 'div', { class: 'cartoes' },
       cartao(doc, 'Preço médio com que ganha', `${moeda(r.precoMedioGanha)}${Number.isFinite(r.descontoMedioGanha) ? ` (${pct(r.descontoMedioGanha)} vs estimado)` : ''}`),
       cartao(doc, 'Preço médio com que perde', r.paresComparados ? `${moeda(r.precoMedioPerde)} vs ${moeda(r.precoMedioVencedor)} do vencedor (${pct(Math.abs(r.diferencaMediaPerde))} ${r.diferencaMediaPerde >= 0 ? 'acima' : 'abaixo'}, ${r.paresComparados} itens)` : '—')));
-    caixa.append(tabelaGrupo(doc, 'Por estado (UF do órgão)', r.porUf) || '', tabelaGrupo(doc, 'Por modalidade', r.porModalidade) || '',
+    caixa.append(el(doc, 'p', { class: 'dica-clique', texto: 'Valor disputado = preço final da empresa (homologado, negociado, lance ou proposta) × quantidade, em todos os itens em que entrou; valor vencido = o mesmo só nos itens que ganhou.' }));
+    caixa.append(tabelaGrupo(doc, 'Por modalidade', r.porModalidade) || '', tabelaGrupo(doc, 'Por estado (UF do órgão)', r.porUf) || '',
       tabelaGrupo(doc, 'Por órgão', r.porOrgao) || '', tabelaGrupo(doc, 'Por produto / CATMAT', r.porProduto) || '');
     caixa.append(tabelaItens(doc, 'Itens vencidos', r.itensVencidos, false), tabelaItens(doc, 'Itens não vencidos', r.itensNaoVencidos, true, selos));
     return caixa;
   }
 
   const ROTULO = { recusa: 'Recusa', desclassificacao: 'Desclassificação', inabilitacao: 'Inabilitação' };
-  function blocoMotivos(doc, r, mot) {
-    const caixa = el(doc, 'div', { class: 'acn-motivos' }, el(doc, 'h3', { texto: 'Motivos de desclassificação / inabilitação' }));
-    const linhas = mot.lista.map((m) => el(doc, 'tr', {}, el(doc, 'td', { texto: `${m.numero_item}. ${m.descricao || ''}`.trim() }), el(doc, 'td', { texto: ROTULO[m.tipo] }),
-      el(doc, 'td', { texto: m.texto }), el(doc, 'td', { texto: m.orgao || `Compra ${m.id_compra}` }), el(doc, 'td', { texto: dataBr(m.data) }),
-      el(doc, 'td', {}, link(doc, m.url, 'Pregão gravado'), m.verificado ? null : el(doc, 'small', { class: 'selo-nao-verificado', texto: seloNaoVerificado(m.leituras) }))));
-    for (const p of r.recusadas.filter((x) => !mot.chaves.has(`${x.id_compra}|${x.numero_item}`)).slice(0, MAX_LINHAS)) {
-      linhas.push(el(doc, 'tr', {}, el(doc, 'td', { texto: `${p.numero_item}. ${p.descricao || ''}`.trim() }), el(doc, 'td', { texto: 'Recusada (arquivo)' }),
-        el(doc, 'td', { texto: 'Motivo não registrado — abra o pregão' }), el(doc, 'td', { texto: p.orgao_nome || (p.uasg ? `UASG ${p.uasg}` : '—') }),
-        el(doc, 'td', { texto: dataBr(p.data_resultado || p.data_publicacao) }), el(doc, 'td', {}, link(doc, p.link_origem, 'Abrir no Compras.gov'))));
-    }
-    if (!linhas.length) { caixa.append(el(doc, 'p', { class: 'dica-clique', texto: 'Nenhuma desclassificação ou inabilitação registrada no histórico guardado.' })); return caixa; }
-    caixa.append(rolavel(doc, el(doc, 'table', {}, el(doc, 'tr', {}, ['Item', 'Tipo', 'Motivo (texto literal)', 'Órgão', 'Data', 'Fonte'].map((t) => el(doc, 'th', { texto: t }))), linhas)));
+  function blocoMotivos(doc, motivos) {
+    const caixa = el(doc, 'div', { class: 'acn-motivos' }, el(doc, 'h3', { texto: `Motivos de desclassificação / inabilitação (${motivos.length})` }));
+    if (!motivos.length) { caixa.append(el(doc, 'p', { class: 'dica-clique', texto: 'Nenhuma desclassificação ou inabilitação registrada no histórico guardado.' })); return caixa; }
+    const linhas = motivos.slice(0, MAX_LINHAS).map((m) => el(doc, 'tr', {}, el(doc, 'td', { texto: m.item }), el(doc, 'td', { texto: m.tipo }),
+      el(doc, 'td', { texto: m.texto || 'Motivo não registrado — abra o pregão' }), el(doc, 'td', { texto: m.orgao || '—' }), el(doc, 'td', { texto: dataBr(m.data) }),
+      el(doc, 'td', {}, link(doc, m.url, m.fonte) || m.fonte, m.selo ? el(doc, 'small', { class: 'selo-nao-verificado', texto: ` ${m.selo}` }) : null)));
+    caixa.append(rolavel(doc, el(doc, 'table', {}, el(doc, 'tr', {}, ['Item', 'Tipo', 'Motivo (texto literal da fonte)', 'Órgão', 'Data', 'Fonte'].map((t) => el(doc, 'th', { texto: t }))), linhas)));
+    if (motivos.length > MAX_LINHAS) caixa.append(el(doc, 'p', { class: 'dica-clique', texto: `Mostrando ${MAX_LINHAS} de ${motivos.length}; a planilha traz todos.` }));
     return caixa;
   }
 
@@ -383,6 +452,96 @@
     return caixa;
   }
 
+  // Sazonalidade: colunas do mini-gráfico do painel (.mini-grafico), altura = disputas; rótulo "vencidas/disputas".
+  function blocoSazonalidade(doc, r) {
+    const caixa = el(doc, 'div', { class: 'acn-sazonalidade' }, el(doc, 'h3', { texto: 'Sazonalidade: em que meses disputa e vence' }));
+    const maior = Math.max(0, ...r.porMes.map((m) => m.disputas));
+    if (!maior) { caixa.append(el(doc, 'p', { class: 'dica-clique', texto: 'Sem datas nas disputas guardadas ainda.' })); return caixa; }
+    // Em 375 px as 12 colunas não cabem com os rótulos: o gráfico rola dentro da caixa, a página não.
+    caixa.append(rolavel(doc, el(doc, 'div', { class: 'mini-grafico', style: 'min-width:420px', role: 'img', 'aria-label': r.porMes.map((m) => `${m.rotulo}: ${m.vencidas} vitória(s) em ${m.disputas} disputa(s)`).join('; ') },
+      r.porMes.map((m) => el(doc, 'div', { class: 'mini-grafico-coluna', title: `${m.rotulo}: ${m.vencidas} vitória(s) em ${m.disputas} disputa(s) · ${moeda(m.valor)}` },
+        el(doc, 'div', { class: 'mini-grafico-valor', texto: `${m.vencidas}/${m.disputas}` }),
+        el(doc, 'div', { class: 'mini-grafico-barra', style: `height:${Math.max(m.disputas ? 4 : 0, Math.round((m.disputas / maior) * 100))}%` }),
+        el(doc, 'div', { class: 'mini-grafico-rotulo', texto: m.rotulo }))))));
+    caixa.append(el(doc, 'p', { class: 'dica-clique', texto: 'Barra = disputas no mês (todos os anos guardados somados); número = vitórias/disputas. Data do resultado ou, sem ela, da publicação.' }));
+    return caixa;
+  }
+
+  function blocoMateriais(doc, r) {
+    const caixa = el(doc, 'div', { class: 'acn-materiais' }, el(doc, 'h3', { texto: 'Onde ela ganha: materiais e marcas' }));
+    const vit = r.vitoriasPorProduto;
+    caixa.append(vit.length ? rolavel(doc, el(doc, 'table', {}, el(doc, 'tr', {}, ['Material / CATMAT', 'Vitórias', 'Disputas', 'Valor vencido'].map((t) => el(doc, 'th', { texto: t }))),
+      vit.slice(0, 20).map((g) => el(doc, 'tr', {}, el(doc, 'td', { texto: g.chave }), el(doc, 'td', { texto: String(g.vencidas) }),
+        el(doc, 'td', { texto: String((r.porProduto.find((x) => x.chave === g.chave) || g).disputas) }), el(doc, 'td', { texto: moeda(g.valor) })))))
+      : el(doc, 'p', { class: 'dica-clique', texto: 'Nenhuma vitória no histórico guardado.' }));
+    caixa.append(el(doc, 'h3', { texto: `Marcas que ela usa (${r.marcas.length})` }));
+    caixa.append(r.marcas.length ? rolavel(doc, el(doc, 'table', {}, el(doc, 'tr', {}, ['Marca', 'Itens vencidos', 'Valor vencido', 'Exemplo de item'].map((t) => el(doc, 'th', { texto: t }))),
+      r.marcas.slice(0, 30).map((m) => el(doc, 'tr', {}, el(doc, 'td', { texto: m.chave }), el(doc, 'td', { texto: String(m.itens) }), el(doc, 'td', { texto: moeda(m.valor) }), el(doc, 'td', { texto: m.exemplo })))))
+      : el(doc, 'p', { class: 'dica-clique', texto: 'Nenhuma marca publicada ainda para os itens que ela venceu. O robô procura na Pesquisa de Preços do Compras.gov e no ComprasNet antigo.' }));
+    caixa.append(el(doc, 'p', { class: 'dica-clique', texto: 'Marca: Pesquisa de Preços do Compras.gov e páginas públicas do ComprasNet antigo; o governo só publica a marca de quem venceu o item.' }));
+    return caixa;
+  }
+
+  // Relatório da empresa em abas de planilha (puro): [{ nome, linhas: [[...]] }]. Números ficam como número.
+  function planilhaRelatorio({ cnpj, cad, r, motivos, ct, hoje }) {
+    const n = (v) => (Number.isFinite(v) ? Math.round(v * 100) / 100 : '');
+    const grupos = (gs) => [['', 'Disputas', 'Vencidas', '% vitória', 'Valor disputado (R$)', 'Valor vencido (R$)'], ...gs.map((g) => [g.chave, g.disputas, g.vencidas, n((g.vencidas / g.disputas) * 100), n(g.valorDisputado), n(g.valor)])];
+    const itens = [...r.itensVencidos, ...r.itensNaoVencidos];
+    return [
+      { nome: 'Resumo', linhas: [['Relatório da empresa — LicitaPlena', ''], ['CNPJ', cnpjFormatado(cnpj)], ['Razão social', cad?.razao_social || ''], ['Situação na Receita', cad?.situacao || ''],
+        ['Gerado em', hoje || ''], ['Disputas (itens)', r.disputas], ['Contratações', r.compras], ['Vencidas', r.vencidas], ['Não vencidas', r.naoVencidas],
+        ['% de vitória', n(r.vitoria)], ['Valor disputado (R$)', n(r.valorDisputado)], ['Valor vencido (R$)', n(r.valorGanho)], ['Desclassificações/inabilitações/recusas listadas', motivos.length],
+        ['Contratos (PNCP)', ct.total], ['Valor contratado (R$)', n(ct.valorContratado)],
+        ['Fontes', 'PNCP, dados abertos e arquivo semanal de propostas do Compras.gov, Pesquisa de Preços, ComprasNet antigo, pregões gravados, Receita (base aberta), Contratos.gov.br']] },
+      { nome: 'Por modalidade', linhas: grupos(r.porModalidade) },
+      { nome: 'Por UF', linhas: grupos(r.porUf) },
+      { nome: 'Sazonalidade', linhas: [['Mês', 'Disputas', 'Vencidas', 'Valor vencido (R$)'], ...r.porMes.map((m) => [m.rotulo, m.disputas, m.vencidas, n(m.valor)])] },
+      { nome: 'Materiais', linhas: [['Material / CATMAT', 'Vitórias', 'Valor vencido (R$)'], ...r.vitoriasPorProduto.map((g) => [g.chave, g.vencidas, n(g.valor)])] },
+      { nome: 'Marcas', linhas: [['Marca', 'Itens vencidos', 'Valor vencido (R$)', 'Exemplo de item'], ...r.marcas.map((m) => [m.chave, m.itens, n(m.valor), m.exemplo])] },
+      { nome: 'Motivos', linhas: [['Item', 'Tipo', 'Motivo (literal)', 'Órgão', 'Data', 'Fonte', 'Link'], ...motivos.map((m) => [m.item, m.tipo, m.texto || 'Motivo não registrado', m.orgao, dataBr(m.data), [m.fonte, m.selo].filter(Boolean).join(' — '), m.url || ''])] },
+      { nome: 'Disputas', linhas: [['Compra', 'Item', 'Descrição', 'Resultado', 'Posição', 'Preço unit. (R$)', 'Quantidade', 'Valor disputado (R$)', 'Marca', 'Vencedor', 'Preço do vencedor (R$)', 'Modalidade', 'Órgão', 'UF', 'Data', 'Link'],
+        ...itens.map((p) => [p.id_compra, p.numero_item, p.descricao || '', p._venceu ? 'Venceu' : p._recusada ? 'Recusada' : 'Não venceu', p._posicao ?? '', n(p._preco),
+          num(p.quantidade_homologada ?? p.quantidade) ?? '', n(p._valorDisputado), p.marca || '', p.vencedor_nome || '', n(p._vencedorPreco), p.modalidade || '',
+          p.orgao_nome || p.unidade_nome || '', p.uf || '', dataBr(p.data_resultado || p.data_publicacao), p.link_pncp || p.link_origem || ''])] },
+      { nome: 'Contratos', linhas: [['Contrato', 'Objeto', 'Contratante', 'UF', 'Assinatura', 'Vigência até', 'Valor global (R$)', 'Empenhado (R$)', 'Pago (R$)', 'Link'],
+        ...ct.lista.map((x) => [x.numero || '', x.objeto || '', x.unidade_nome || x.orgao_nome || '', x.uf || '', dataBr(x.data_assinatura), dataBr(x.vigencia_fim),
+          n(num(x.valor_global)), n(num(x.valor_empenhado)), n(num(x.valor_pago)), x.link_pncp || ''])] },
+    ];
+  }
+
+  // Baixa a planilha: .xlsx pelo SheetJS do painel (window.XLSX); sem ele, uma aba por arquivo seria ruim, então CSV só do resumo + disputas.
+  function baixarPlanilha(doc, abas, nome) {
+    const X = global.XLSX;
+    if (X) {
+      const wb = X.utils.book_new();
+      for (const a of abas) X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(a.linhas), a.nome);
+      X.writeFile(wb, `${nome}.xlsx`);
+      return;
+    }
+    // shortcut: sem SheetJS sai um CSV com todas as abas empilhadas; abre no Excel pt-BR (BOM e ";").
+    const celula = (c) => { const t = typeof c === 'number' ? String(c).replace('.', ',') : String(c ?? ''); return /[;"\r\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+    const csv = abas.flatMap((a) => [[a.nome], ...a.linhas, []]).map((l) => l.map(celula).join(';')).join('\r\n');
+    const url = global.URL.createObjectURL(new global.Blob([`${String.fromCharCode(0xfeff)}${csv}`], { type: 'text/csv;charset=utf-8' }));
+    Object.assign(doc.createElement('a'), { href: url, download: `${nome}.csv` }).click();
+    global.setTimeout(() => global.URL.revokeObjectURL(url), 1000);
+  }
+
+  // Imprimir / Gerar PDF: impressão do navegador; abre os <details> do relatório só durante a impressão.
+  function imprimir(alvo) {
+    const fechados = [...alvo.querySelectorAll('details:not([open])')];
+    fechados.forEach((d) => { d.open = true; });
+    global.addEventListener('afterprint', () => fechados.forEach((d) => { d.open = false; }), { once: true });
+    global.print();
+  }
+
+  function barraExportar(doc, alvo, dados) {
+    const planilha = el(doc, 'button', { type: 'button', class: 'btn-imprimir', title: 'Baixar o relatório da empresa em planilha do Excel (.xlsx)', texto: 'Baixar planilha' });
+    const pdf = el(doc, 'button', { type: 'button', class: 'btn-imprimir', title: 'Imprimir ou salvar o relatório em PDF', texto: 'Imprimir / Gerar PDF' });
+    planilha.addEventListener('click', () => baixarPlanilha(doc, planilhaRelatorio(dados), `licitaplena-empresa-${dados.cnpj}-${dados.hoje || ''}`));
+    pdf.addEventListener('click', () => imprimir(alvo));
+    return el(doc, 'div', { class: 'dg-topo-botoes acn-exportar' }, planilha, pdf);
+  }
+
   async function lerTudo(sb, cnpj) {
     const linhas = [];
     for (let de = 0; de < 10000; de += 1000) {
@@ -394,7 +553,11 @@
     // Contratos: tabela da parte 2 (analise_cnpj_v2.sql); ausente, a tela segue sem contratos.
     const ct = await sb.from('historico_contratos_fornecedor').select('numero_controle_pncp,numero,objeto,orgao_nome,unidade_nome,municipio,uf,esfera,data_assinatura,vigencia_inicio,vigencia_fim,valor_global,valor_empenhado,valor_liquidado,valor_pago,valor_faturado,contratos_gov_id,link_pncp')
       .eq('fornecedor_ni', cnpj).order('data_assinatura', { ascending: false, nullsFirst: false }).limit(1000);
-    return { linhas, contratos: ct.error ? [] : ct.data, ...(await lerGravados(sb, cnpj)) };
+    // Parte 3 (analise_cnpj_v3.sql e pecas_juridicas.sql): ausentes, a tela segue sem esses motivos e marcas declaradas.
+    const [det, pec] = await Promise.all([sb.rpc('analise_cnpj_detalhes', { p_cnpj: cnpj }).range(0, 4999),
+      sb.from('pecas_juridicas').select('tipo,pregao,orgao,item,data,texto,resposta,resultado,url').eq('empresa_cnpj', cnpj)
+        .in('tipo', ['intencao_recurso', 'recurso', 'contrarrazao']).order('data', { ascending: false }).limit(300)]);
+    return { linhas, contratos: ct.error ? [] : ct.data, detalhes: det.error ? [] : det.data || [], pecas: pec.error ? [] : pec.data || [], ...(await lerGravados(sb, cnpj)) };
   }
   async function lerGravados(sb, cnpj) {
     // Tabelas da extensão ausentes (banco sem pregoes_gravados.sql): sem motivos gravados, o resto segue.
@@ -426,11 +589,13 @@
     if (vencedores.length) {
       try { const lote = await sancoesLote(vencedores); if (lote && lote.resultados) selos = { resultados: lote.resultados, hoje: lote.hoje || hoje, LicitaSancoes }; } catch { selos = null; }
     }
-    const desenhar = (mot, atualizado) => alvo.replaceChildren(cabecalho(doc, cnpj, cad, ficha), blocoVulnerabilidade(doc, vulneraveis), blocoColeta(doc, coleta, () => montar({ alvo, cnpj, ficha, sb, requisitar, sancoes, sancoesLote, hoje, LicitaSancoes })) || '',
+    const desenhar = (mot, atualizado) => alvo.replaceChildren(cabecalho(doc, cnpj, cad, ficha),
+      barraExportar(doc, alvo, { cnpj, cad, r, ct, hoje, motivos: motivosComFonte({ r, mot, detalhes: dados.detalhes, pecas: dados.pecas }) }), blocoVulnerabilidade(doc, vulneraveis), blocoColeta(doc, coleta, () => montar({ alvo, cnpj, ficha, sb, requisitar, sancoes, sancoesLote, hoje, LicitaSancoes })) || '',
       atualizado ? el(doc, 'p', { class: 'la-atualizado', role: 'status', texto: 'Atualizado com o que você gravou' }) : '',
       blocoCamadas(doc, camadasCnpj(r, mot.mensagens, mot.propostas)),
-      blocoAlertas(doc, r, mot, sanc, hoje, LicitaSancoes), blocoParticipacoes(doc, r, selos), blocoContratos(doc, ct), blocoMotivos(doc, r, mot),
-      el(doc, 'p', { class: 'dica-clique', texto: 'Fontes: PNCP (resultados e contratos por fornecedor), Contratos.gov.br (empenhos e faturas de contrato federal), base aberta de CNPJ da Receita, dados abertos do Compras.gov, arquivo semanal de propostas (repositorio.dados.gov.br, só itens homologados), CEIS/CNEP da CGU e pregões gravados pela extensão. Outras plataformas (Licitanet, BLL, BNC…) entram só pelo resultado publicado no PNCP: as disputas perdidas nelas não são públicas.' }));
+      blocoAlertas(doc, r, mot, sanc, hoje, LicitaSancoes), blocoParticipacoes(doc, r, selos), blocoSazonalidade(doc, r), blocoMateriais(doc, r), blocoContratos(doc, ct),
+      blocoMotivos(doc, motivosComFonte({ r, mot, detalhes: dados.detalhes, pecas: dados.pecas })),
+      el(doc, 'p', { class: 'dica-clique', texto: 'Fontes: PNCP (resultados e contratos por fornecedor), Contratos.gov.br (empenhos e faturas de contrato federal), base aberta de CNPJ da Receita, dados abertos do Compras.gov, arquivo semanal de propostas (repositorio.dados.gov.br, só itens homologados), CEIS/CNEP da CGU, Pesquisa de Preços (marcas), ComprasNet antigo (termos de adjudicação e recursos, páginas sem captcha) e pregões gravados pela extensão. Outras plataformas (Licitanet, BLL, BNC…) entram só pelo resultado publicado no PNCP: as disputas perdidas nelas não são públicas.' }));
     desenhar(Object.assign(mot, { mensagens: dados.mensagens, propostas: dados.propostas }), false);
     // Voltou da página do governo (foco da janela) e há gravação nova: atualiza sozinho, sem clicar.
     if (alvo.__acnVoltar && global.removeEventListener) global.removeEventListener('focus', alvo.__acnVoltar);
@@ -460,7 +625,7 @@
     })));
   }
 
-  const api = { resumir, motivosGravados, venceu, posicao, precoFinal, montar, montarEscolha, cnpjsDosVencedores, camadasCnpj, resumirContratos, alertasVulnerabilidade };
+  const api = { motivosComFonte, planilhaRelatorio, resumir, motivosGravados, venceu, posicao, precoFinal, montar, montarEscolha, cnpjsDosVencedores, camadasCnpj, resumirContratos, alertasVulnerabilidade };
   global.LicitaAnaliseCnpj = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(globalThis);

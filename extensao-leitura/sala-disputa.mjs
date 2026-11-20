@@ -17,6 +17,11 @@
 // Quem chama converte cada item no snapshot do cérebro (motor-lances.js, decide): leading = situacao === 'ganhando',
 // bestPrice = melhorValor, ownPrice = meuValor, itemState = etapa aberta ? 'aberto' : 'fechado', session = 'ativa' só com ok.
 // Leitura ausente ou ambígua bloqueia a sugestão; nunca é preenchida com palpite.
+//
+// PRÓXIMO PASSO: testar no AMBIENTE DE TREINAMENTO OFICIAL do Compras.gov.br junto com o dono (contas de teste
+// fornec1, fornec2…; pregões de treino), logado no navegador dele. Lá se mapeiam os seletores da sala (melhor valor,
+// meu valor, situação, relógio) sem pregão real. Nunca pedir nem guardar a senha gov.br: usa a sessão já aberta.
+// Hoje a tela (robo-lances-ui.js) recebe esses mesmos dados digitados pela pessoa na aba "Em disputa".
 
 export const IMPLEMENTADO = false;
 export const MOTIVO_NAO_IMPLEMENTADO = 'Leitura da sala de disputa não implementada: precisa da sala real do Compras.gov.br.';

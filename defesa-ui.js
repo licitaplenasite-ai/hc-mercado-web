@@ -7,6 +7,7 @@
     return texto.replace("Destinatário e identificação da interessada: [preencher e conferir]", `Destinatário: [preencher e conferir]\nInteressada: ${razaoSocial}\nCNPJ: ${cnpj}`)
       .replaceAll("[RAZAO_SOCIAL]", razaoSocial).replaceAll("[CNPJ]", cnpj);
   }
+  const POS_SESSAO = new Set(["recurso", "contrarrazao"]);
   function renderizar(host, contexto) {
     const { estrutura = {}, edital = {}, usuarioId, empresaId, storage, exportar } = contexto;
     const identidade = JSON.stringify([usuarioId, empresaId, edital.numeroControlePNCP]);
@@ -141,15 +142,16 @@
     };
     mostrarHistorico();
     const botoesIA = [];
-    for (const [acao, titulo] of [["esclarecimento", "Analisar esclarecimento com IA"], ["impugnacao", "Analisar impugnação com IA"]]) {
+    for (const [acao, titulo] of [["esclarecimento", "Analisar esclarecimento com IA"], ["impugnacao", "Analisar impugnação com IA"], ["recurso", "Analisar recurso com IA"], ["contrarrazao", "Analisar contrarrazão com IA"]]) {
       const botao = el("button", titulo); botao.type = "button"; botao.className = "defesa-botao defesa-botao-destaque";
       botao.disabled = fonteBloqueada || !hash || !chave || typeof contexto.analisar !== "function";
       if (botao.disabled) botao.title = fonteBloqueada ? "A leitura está parcial ou contém OCR não revisado. Confira a fonte antes de analisar." : !chave ? "Selecione uma conta e empresa antes de analisar." : !hash ? "A fonte documental ainda não está identificada. Aguarde o processamento do edital." : "O serviço de análise não está disponível.";
       botao.onclick = async () => {
         if (botao.disabled) return;
+        if (POS_SESSAO.has(acao) && fase.value === "questionamento") { fase.value = "resposta_orgao"; fase.onchange(); }
         if (!pergunta.value.trim() || !objetivo.value.trim()) { avisos.textContent = "Preencha o questionamento e o objetivo antes de analisar."; pergunta.focus(); return; }
         if (!["questionamento", "resposta_orgao", "manifestacao"].includes(fase.value) || pergunta.value.length > 3000 || objetivo.value.length > 3000 || respostaOrgao.value.length > 12000 || manifestacaoAnterior.value.length > 6000) { avisos.textContent = "Confira a etapa e os limites dos textos informados."; return; }
-        if (fase.value !== "questionamento" && !respostaOrgao.value.trim()) { avisos.textContent = "Informe a resposta do órgão para analisar esta etapa."; respostaOrgao.focus(); return; }
+        if (fase.value !== "questionamento" && !respostaOrgao.value.trim()) { avisos.textContent = acao === "recurso" ? "Transcreva a decisão recorrida para analisar o recurso." : acao === "contrarrazao" ? "Transcreva as razões do recurso da outra empresa para preparar a contrarrazão." : "Informe a resposta do órgão para analisar esta etapa."; respostaOrgao.focus(); return; }
         if (alterado && texto.value.trim() && !doc.defaultView.confirm("Substituir o texto atual pela análise? Salve o rascunho antes se quiser conservá-lo.")) return;
         const textoAnterior = texto.value;
         analisando = true;
@@ -227,17 +229,22 @@
       const perguntaDiferente = pergunta.value.trim() !== perguntaAlvo.trim();
       if (ponto && pontoAberto !== ponto && pergunta.value.trim() && perguntaDiferente && !doc.defaultView.confirm("Substituir o questionamento atual por este ponto? A minuta em edição será preservada.")) return false;
       abridor = botao;
-      tituloDialogo.textContent = acao === "impugnacao" ? "Central de Defesa — analisar possível impugnação" : "Central de Defesa — preparar esclarecimento";
+      tituloDialogo.textContent = { impugnacao: "Central de Defesa — analisar possível impugnação", recurso: "Central de Defesa — recurso ou contrarrazão", contrarrazao: "Central de Defesa — recurso ou contrarrazão" }[acao] || "Central de Defesa — preparar esclarecimento";
+      rotuloResposta.textContent = POS_SESSAO.has(acao) ? "Decisão recorrida (recurso) ou razões do recurso da outra empresa (contrarrazão) — transcreva o texto" : "Resposta do órgão — transcreva o texto recebido";
+      if (POS_SESSAO.has(acao) && fase.value === "questionamento") { fase.value = "resposta_orgao"; fase.onchange(); }
       if (ponto && pontoAberto !== ponto || !pergunta.value.trim()) pergunta.value = perguntaAlvo;
-      if (ponto && pontoAberto !== ponto && perguntaDiferente || !objetivo.value.trim()) objetivo.value = String(ponto?.descricao || (acao === "impugnacao" ? "Conferir o cabimento e os fundamentos antes de formular qualquer pedido de alteração." : "Esclarecer o alcance da regra e suas condições com base nos documentos do edital.")).slice(0, 3000);
+      if (ponto && pontoAberto !== ponto && perguntaDiferente || !objetivo.value.trim()) objetivo.value = String(ponto?.descricao || (POS_SESSAO.has(acao) ? "Reformar (recurso) ou manter (contrarrazão) a decisão, com base nas regras do edital." : acao === "impugnacao" ? "Conferir o cabimento e os fundamentos antes de formular qualquer pedido de alteração." : "Esclarecer o alcance da regra e suas condições com base nos documentos do edital.")).slice(0, 3000);
       pontoAberto = ponto;
-      botoesIA.forEach((botaoIA, indice) => { botaoIA.hidden = indice !== (acao === "impugnacao" ? 1 : 0); });
+      botoesIA.forEach((botaoIA, indice) => { botaoIA.hidden = POS_SESSAO.has(acao) ? indice < 2 : indice !== (acao === "impugnacao" ? 1 : 0); });
       if (!dialogo.open) { if (dialogo.showModal) dialogo.showModal(); else dialogo.open = true; }
       pergunta.focus();
       return true;
     };
     const abrirLivre = el("button", "Abrir Central de Defesa"); abrirLivre.type = "button"; abrirLivre.className = "defesa-botao";
     abrirLivre.onclick = () => abrir(null, "esclarecimento", abrirLivre); secao.append(abrirLivre);
+    // Depois da sessão: mesma Central, com a decisão (ou o recurso adversário) como texto declarado.
+    const abrirRecurso = el("button", "Recurso ou contrarrazão"); abrirRecurso.type = "button"; abrirRecurso.className = "defesa-botao";
+    abrirRecurso.onclick = () => abrir(null, "recurso", abrirRecurso); secao.append(abrirRecurso);
     const lista = (v) => Array.isArray(v) ? v.filter((p) => p && ["string", "object"].includes(typeof p)) : [];
     const vincularSugestao = p => {
       const titulo = typeof p === "string" ? p : p.texto || p.titulo || p.pergunta;
@@ -303,7 +310,7 @@
     };
     try {
       const salvo = rascunhoEmMemoria?.texto ? rascunhoEmMemoria : chave && JSON.parse(storage.getItem(chave) || "null");
-      if (salvo && typeof salvo.texto === "string" && salvo.texto.length <= 50000 && ["esclarecimento", "impugnacao"].includes(salvo.tipo)) {
+      if (salvo && typeof salvo.texto === "string" && salvo.texto.length <= 50000 && ["esclarecimento", "impugnacao", "recurso", "contrarrazao"].includes(salvo.tipo)) {
         identificacaoReferencia = typeof salvo.identificacaoReferencia === "string" ? salvo.identificacaoReferencia : undefined; texto.value = salvo.texto; tipo = salvo.tipo; hashMinuta = salvo.hashFonte; editor.hidden = false;
         for (const [campo, valor, limite] of [[pergunta, salvo.questionamento, 3000], [objetivo, salvo.objetivo, 3000], [respostaOrgao, salvo.respostaOrgao, 12000], [manifestacaoAnterior, salvo.manifestacaoAnterior, 6000]]) if (typeof valor === "string") campo.value = valor.slice(0, limite);
         if (["questionamento", "resposta_orgao", "manifestacao"].includes(salvo.fase)) { fase.value = salvo.fase; fase.onchange(); }

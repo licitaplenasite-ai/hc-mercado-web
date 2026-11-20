@@ -83,6 +83,8 @@ exports.handler = async (event) => {
       margemPreferencia: margemPreferencia(i),
       exigenciaConteudoNacional: i.exigenciaConteudoNacional === true,
       ncmNbs: [i.ncmNbsCodigo, i.ncmNbsDescricao].filter(Boolean).join(" - "),
+      // CATMAT do Compras.gov (só em compras publicadas por ele): "Ver mercado deste item" busca por ele.
+      codigoCatalogo: /^\d{1,12}$/.test(String(i.catalogoCodigoItem ?? "")) ? String(i.catalogoCodigoItem) : null,
       informacaoComplementar: i.informacaoComplementar || "",
     }));
     return { statusCode: 200, headers, body: JSON.stringify({ erro: null, itens, proximaPagina: paginado && itens.length === tamanhoPagina ? paginaPedida + 1 : null }) };

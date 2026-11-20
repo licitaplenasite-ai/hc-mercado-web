@@ -237,11 +237,195 @@ def carregar_clientes_aprovados():
     return destinatarios
 
 
+# ---- Boletim por empresa e jornais (filtros salvos com nome) ----
+# Pedido do dono (19-20/11): cada empresa (CNPJ) da organizacao tem o proprio filtro do Boletim
+# (tabela boletim_filtros_empresa, supabase/boletim_por_empresa.sql) e recebe um e-mail proprio, com o
+# nome da empresa no assunto. Quem ja tem filtro por empresa deixa de receber o boletim antigo da conta
+# (segmento do cadastro). Cada filtro salvo com o e-mail ligado (filtro.jornal = true) vira mais um
+# e-mail diario separado, so na primeira rodada do dia e so quando ha licitacao nova.
+HORA_LIMITE_JORNAIS = int(os.environ.get("HORA_LIMITE_JORNAIS", "10"))  # rodada das 06h de Brasilia
+
+
+def _get_json(caminho):
+    chave = _chave_servico()
+    req = urllib.request.Request(SUPABASE_URL + "/rest/v1/" + caminho, headers={"apikey": chave, "Authorization": "Bearer " + chave})
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def _clientes_aprovados_por_id(ids):
+    ids = sorted({i for i in ids if i})
+    if not ids:
+        return {}
+    linhas = _get_json("clientes?status=eq.aprovado&select=id,nome,empresa,email&id=in.(" + ",".join(ids) + ")")
+    return {c["id"]: c for c in linhas if (c.get("email") or "").strip()}
+
+
+def _palavras_do_texto(texto):
+    return [p.strip() for p in str(texto or "").split(",") if p.strip()]
+
+
+def _ufs_do_filtro(filtro):
+    ufs = [str(u).upper() for u in (filtro.get("ufs") or []) if str(u).upper() in TODAS_UFS]
+    return ufs or None
+
+
+def carregar_boletins_por_empresa():
+    # Devolve (destinatarios, ids de clientes que ja usam boletim por empresa). Sem a tabela, ([], set()).
+    try:
+        linhas = _get_json("boletim_filtros_empresa?select=empresa_id,cliente_id,filtro,operacao_empresas(razao_social,ativo)")
+        clientes = _clientes_aprovados_por_id([l.get("cliente_id") for l in linhas])
+    except Exception as e:
+        log("AVISO: boletim por empresa indisponivel (" + str(e) + "); seguindo so com o boletim da conta.")
+        return [], set()
+    destinatarios = []
+    for l in linhas:
+        empresa = l.get("operacao_empresas") or {}
+        c = clientes.get(l.get("cliente_id"))
+        palavras = _palavras_do_texto((l.get("filtro") or {}).get("palavrasRaw"))
+        if not c or not palavras or empresa.get("ativo") is False:
+            continue
+        nome_empresa = (empresa.get("razao_social") or "Empresa").strip()
+        destinatarios.append({
+            "id": c["id"], "nome": nome_empresa, "email": c["email"].strip(), "ufs": _ufs_do_filtro(l.get("filtro") or {}),
+            "palavras_chave": palavras, "whatsapp": None, "assunto": "[" + nome_empresa + "] ",
+            "chave_historico": "empresa:" + str(l.get("empresa_id")),
+        })
+    return destinatarios, {d["id"] for d in destinatarios}
+
+
+def carregar_jornais():
+    try:
+        try:
+            linhas = _get_json("filtros_salvos?select=id,nome,filtro,cliente_id,empresa_id,operacao_empresas(razao_social)&filtro->>jornal=eq.true&limit=2000")
+        except urllib.error.HTTPError:
+            linhas = _get_json("filtros_salvos?select=id,nome,filtro,cliente_id&filtro->>jornal=eq.true&limit=2000")  # sem boletim_por_empresa.sql
+        clientes = _clientes_aprovados_por_id([l.get("cliente_id") for l in linhas])
+    except Exception as e:
+        log("AVISO: jornais indisponiveis (" + str(e) + ").")
+        return []
+    jornais = []
+    for l in linhas:
+        c = clientes.get(l.get("cliente_id"))
+        filtro = l.get("filtro") or {}
+        if not c or not _palavras_do_texto(filtro.get("palavrasRaw")):
+            continue
+        empresa = ((l.get("operacao_empresas") or {}).get("razao_social") or "").strip()
+        jornais.append({"id": l["id"], "nome": (l.get("nome") or "Jornal").strip(), "empresa": empresa, "filtro": filtro,
+                        "cliente_id": c["id"], "email": c["email"].strip()})
+    return jornais
+
+
+# Mesmos nomes de portal-origem.js (o primeiro padrao que casar vence).
+PORTAIS_ORIGEM = [
+    (r"compras\.gov|comprasnet|comprasgov|siasg|cnetmobile", "Compras.gov.br"),
+    (r"ecustomize|portal de compras publicas|portaldecompraspublicas", "Portal de Compras Públicas"),
+    (r"licitanet", "Licitanet"), (r"\bbll\b", "BLL"), (r"bolsa nacional de compras|\bbnc\b", "BNC"),
+    (r"bbmnet|\bbbm\b", "BBMNET"), (r"br ?conectado", "BR Conectado"),
+    (r"licitacoes-e\b|licitacoes e bb|banco do brasil", "Licitações-e (BB)"), (r"licitar digital", "Licitar Digital"),
+    (r"licita ?\+ ?brasil|licita mais brasil", "Licita+Brasil"), (r"licitacon", "LicitaCon (TCE-RS)"),
+]
+MODALIDADES_JORNAL = ["pregao", "dispensa", "concorrencia", "inexigibilidade", "credenciamento", "leilao"]
+ME_EPP = re.compile(r"exclusiv\w*\b.{0,60}\b(me|epp|mei|microempresas?|pequeno porte)\b|\b(me|epp)\s*/\s*(me|epp)\b.{0,30}exclusiv")
+SRP = re.compile(r"registro de precos?\b|\bsrp\b|\bata de registro\b")
+
+
+def _norm(texto):
+    return " ".join(_normalizar(texto).split())
+
+
+def portal_do_edital(e):
+    n = _norm(e.get("usuarioNome"))
+    if not n:
+        return None
+    for padrao, nome in PORTAIS_ORIGEM:
+        if re.search(padrao, n):
+            return nome
+    return (e.get("usuarioNome") or "").strip()[:80]
+
+
+def _numero(v):
+    try:
+        return float(str(v).replace(",", "."))
+    except (TypeError, ValueError):
+        return None
+
+
+def _distancia_km(a, b):
+    import math
+    la1, lo1, la2, lo2 = map(math.radians, (a[0], a[1], b[0], b[1]))
+    h = math.sin((la2 - la1) / 2) ** 2 + math.cos(la1) * math.cos(la2) * math.sin((lo2 - lo1) / 2) ** 2
+    return 2 * 6371 * math.asin(min(1, math.sqrt(h)))
+
+
+_CENTROIDES = None
+
+
+def _centroides():
+    global _CENTROIDES
+    if _CENTROIDES is None:
+        with open(os.path.join(DIR_DADOS, "municipios-centroides.json"), encoding="utf-8") as f:
+            _CENTROIDES = {(_norm(m[0]), m[1]): (m[2], m[3]) for m in json.load(f)["m"]}
+    return _CENTROIDES
+
+
+def _passa_no_jornal(e, f):
+    objeto = _norm(e.get("objetoCompra"))
+    unidade, orgao = e.get("unidadeOrgao") or {}, e.get("orgaoEntidade") or {}
+    if not any(_norm(p) in objeto for p in _palavras_do_texto(f.get("palavrasRaw"))):
+        return False
+    if any(_norm(p) in objeto for p in _palavras_do_texto(f.get("excluir"))):
+        return False
+    if not all(_norm(p) in objeto for p in _palavras_do_texto(f.get("limitar"))):
+        return False
+    if f.get("municipio") and _norm(f["municipio"]) not in _norm(unidade.get("municipioNome")):
+        return False
+    if f.get("orgaoTexto") and _norm(f["orgaoTexto"]) not in _norm(orgao.get("razaoSocial")):
+        return False
+    esfera = {"F": "federal", "E": "estadual", "D": "estadual", "M": "municipal"}.get(orgao.get("esferaId"), "")
+    if f.get("esfera") and esfera != f["esfera"]:
+        return False
+    valor = _numero(e.get("valorTotalEstimado"))
+    if (f.get("valorMin") or f.get("valorMax")) and valor is None:
+        return False
+    if f.get("valorMin") and _numero(f["valorMin"]) is not None and valor < _numero(f["valorMin"]):
+        return False
+    if f.get("valorMax") and _numero(f["valorMax"]) is not None and valor > _numero(f["valorMax"]):
+        return False
+    modalidade = next((m for m in MODALIDADES_JORNAL if m in _norm(e.get("modalidadeNome"))), "")
+    if f.get("modalidade") and modalidade != f["modalidade"]:
+        return False
+    if f.get("portal") and portal_do_edital(e) != f["portal"]:
+        return False
+    if f.get("mePp") is True and not ME_EPP.search(objeto):
+        return False
+    if f.get("excluirSrp") is True and (e.get("srp") is True or SRP.search(objeto)):
+        return False
+    raio = f.get("raio")
+    if raio:
+        origem = _centroides().get((_norm(raio.get("municipio")), raio.get("uf")))
+        destino = _centroides().get((_norm(unidade.get("municipioNome")), unidade.get("ufSigla")))
+        if not origem or not destino or _distancia_km(origem, destino) > float(raio.get("km") or 0):
+            return False
+    return True
+
+
+def filtrar_jornal(editais, filtro):
+    return [e for e in filtrar_por_uf_exata(editais, _ufs_do_filtro(filtro)) if _passa_no_jornal(e, filtro)]
+
+
+def e_rodada_dos_jornais(agora=None):
+    agora = agora or datetime.now(timezone(timedelta(hours=-3)))
+    return os.environ.get("JORNAIS_SEMPRE") == "1" or agora.hour < HORA_LIMITE_JORNAIS
+
+
 def montar_lista_destinatarios():
     dinamicos = carregar_clientes_aprovados()
+    por_empresa, com_empresa = carregar_boletins_por_empresa()
     emails_fixos = {d["email"].strip().lower() for d in DESTINATARIOS}
-    extras = [d for d in dinamicos if d["email"].strip().lower() not in emails_fixos]
-    return DESTINATARIOS + extras
+    # Quem ja tem filtro por empresa recebe um boletim por empresa no lugar do boletim da conta.
+    extras = [d for d in dinamicos if d["email"].strip().lower() not in emails_fixos and d.get("id") not in com_empresa]
+    return DESTINATARIOS + extras + por_empresa
 
 
 def data_final_busca():
@@ -548,14 +732,14 @@ def registrar_log_boletim(destinatario, status, quantidade, mensagem_erro=None):
         log("AVISO: falha ao registrar log do boletim para " + destinatario["email"] + " (" + str(e) + ").")
 
 
-def enviar_email(destino_email, nome_destinatario, editais_novos):
+def enviar_email(destino_email, nome_destinatario, editais_novos, prefixo_assunto=""):
     remetente = os.environ["EMAIL_REMETENTE"]
     senha_app = os.environ["EMAIL_SENHA_APP"]
     msg = MIMEMultipart("alternative")
     if editais_novos:
-        msg["Subject"] = "Novos editais encontrados (" + str(len(editais_novos)) + ")"
+        msg["Subject"] = prefixo_assunto + "Novos editais encontrados (" + str(len(editais_novos)) + ")"
     else:
-        msg["Subject"] = "Nenhuma oportunidade nova hoje"
+        msg["Subject"] = prefixo_assunto + "Nenhuma oportunidade nova hoje"
     msg["From"] = formataddr((str(Header(NOME_REMETENTE, "utf-8")), remetente))
     msg["To"] = destino_email
     msg.attach(MIMEText(montar_email_texto(nome_destinatario, editais_novos), "plain", "utf-8"))
@@ -614,8 +798,16 @@ def main():
     log("Destinatarios do boletim: " + str(len(destinatarios)) + " (" + str(len(DESTINATARIOS)) +
         " fixo(s) + " + str(len(destinatarios) - len(DESTINATARIOS)) + " cliente(s) aprovado(s) no Supabase).")
 
+    jornais = carregar_jornais() if e_rodada_dos_jornais() else []
+    log("Jornais nesta rodada: " + str(len(jornais)) + ".")
+
     ufs_necessarias = set()
     precisa_todas = False
+    for j in jornais:
+        if _ufs_do_filtro(j["filtro"]) is None:
+            precisa_todas = True
+        else:
+            ufs_necessarias.update(_ufs_do_filtro(j["filtro"]))
     for d in destinatarios:
         if d["ufs"] is None:
             precisa_todas = True
@@ -645,7 +837,7 @@ def main():
 
             log(d["nome"] + ": " + str(len(filtrados)) + " editais no filtro.")
 
-            enviar_email(d["email"], d["nome"], filtrados)
+            enviar_email(d["email"], d["nome"], filtrados, d.get("assunto", ""))
             if filtrados:
                 log("E-mail enviado para " + d["email"] + " com " + str(len(filtrados)) + " edital(is).")
                 registrar_log_boletim(d, "enviado", len(filtrados))
@@ -663,16 +855,43 @@ def main():
                 log("E-mail enviado para " + d["email"] + " avisando que nao ha oportunidades novas.")
                 registrar_log_boletim(d, "sem_novidades", 0)
 
-            vistos_deste = set(historico.get(d["email"], []))
+            chave_hist = d.get("chave_historico") or d["email"]
+            vistos_deste = set(historico.get(chave_hist, []))
             for e in filtrados:
                 vistos_deste.add(e.get("numeroControlePNCP"))
-            historico[d["email"]] = list(vistos_deste)
+            historico[chave_hist] = list(vistos_deste)
         except Exception as e:
             log("ERRO ao processar destinatario " + d["nome"] + ": " + str(e))
             registrar_log_boletim(d, "erro", 0, mensagem_erro=str(e))
 
+    for j in jornais:
+        enviar_jornal(j, pool, historico)
+
     salvar_historico(historico)
     log("=== Fim da execucao ===")
+
+
+def enviar_jornal(j, pool, historico):
+    # Um e-mail por jornal, so com o que ainda nao foi mandado neste jornal.
+    destino = {"id": j["cliente_id"], "email": j["email"], "nome": "Jornal " + j["nome"]}
+    try:
+        editais = []
+        for uf in (_ufs_do_filtro(j["filtro"]) or TODAS_UFS):
+            editais.extend(pool.get(uf, []))
+        chave = "jornal:" + str(j["id"])
+        vistos = set(historico.get(chave, []))
+        novos = [e for e in filtrar_jornal(filtrar_por_publicacao_recente(editais), j["filtro"]) if e.get("numeroControlePNCP") not in vistos]
+        if not novos:
+            log("Jornal " + j["nome"] + ": nada novo, sem e-mail.")
+            return
+        prefixo = "[" + (j["empresa"] + " · " if j["empresa"] else "") + j["nome"] + "] "
+        enviar_email(j["email"], j["empresa"] or j["nome"], novos, prefixo)
+        registrar_log_boletim(destino, "enviado", len(novos))
+        historico[chave] = list(vistos | {e.get("numeroControlePNCP") for e in novos})
+        log("Jornal " + j["nome"] + ": " + str(len(novos)) + " edital(is) enviado(s).")
+    except Exception as e:
+        log("ERRO no jornal " + j["nome"] + ": " + str(e))
+        registrar_log_boletim(destino, "erro", 0, mensagem_erro=str(e))
 
 
 if __name__ == "__main__":

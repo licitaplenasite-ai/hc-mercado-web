@@ -1,0 +1,55 @@
+/* Gaveta lateral da Central de ajuda "?" (ajuda-ui.js) e da Prospecção de fornecedores (fornecedor-ia-ui.js).
+   Só tokens do Design System (ds-tokens.css). Mudança visual: aguarda aprovação do dono. */
+.lp-gaveta-fundo { position: fixed; inset: 0; background: rgba(11,16,32,0.45); z-index: 900; display: flex; justify-content: flex-end; }
+.lp-gaveta-fundo[hidden] { display: none; }
+.lp-gaveta { width: min(560px, 100vw); height: 100%; background: var(--surface-raised); color: var(--text-primary); box-shadow: var(--shadow-overlay);
+  display: flex; flex-direction: column; font: var(--text-body); border-radius: var(--radius-modal) 0 0 var(--radius-modal); }
+.lp-gaveta-topo { display: flex; align-items: center; gap: var(--space-12); padding: var(--space-16) var(--space-24); border-bottom: 1px solid var(--border-default); }
+.lp-gaveta-topo h2 { flex: 1; margin: 0; font: var(--text-section); }
+.lp-gaveta-corpo { flex: 1; overflow-y: auto; padding: var(--space-16) var(--space-24); }
+.lp-gaveta-rodape { padding: var(--space-16) var(--space-24); border-top: 1px solid var(--border-default); display: flex; flex-direction: column; gap: var(--space-8); }
+.lp-gaveta button, .lp-gaveta a.lp-botao { font: 500 14px/20px var(--font-sans); min-height: 40px; padding: 8px 14px; border-radius: var(--radius-control);
+  border: 1px solid var(--border-strong); background: var(--surface-default); color: var(--text-primary); cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: var(--space-8); }
+.lp-gaveta button.lp-primario, .lp-gaveta a.lp-primario { background: var(--action-strong); border-color: var(--action-strong); color: var(--action-on); }
+.lp-gaveta button.lp-primario:hover, .lp-gaveta a.lp-primario:hover { background: var(--action-strong-hover); }
+.lp-gaveta button:disabled { opacity: 0.6; cursor: default; }
+.lp-gaveta :focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.lp-gaveta-fechar { width: 40px; padding: 0 !important; }
+.lp-gaveta textarea { width: 100%; box-sizing: border-box; min-height: 64px; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-control);
+  background: var(--surface-default); color: var(--text-primary); font: var(--text-body); resize: vertical; }
+.lp-dica { color: var(--text-secondary); font: var(--text-label); margin: 0; }
+.lp-aviso { border: 1px solid var(--attention-border); background: var(--attention-bg); color: var(--attention-text); border-radius: var(--radius-control); padding: var(--space-8) var(--space-12); margin: 0 0 var(--space-12); }
+.lp-erro { border-color: var(--error-border); background: var(--error-bg); color: var(--error-text); }
+.lp-uso { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-8) var(--space-24); background: var(--surface-sunken); border-bottom: 1px solid var(--border-default); }
+.lp-uso-barra { height: 4px; border-radius: 2px; background: var(--border-default); overflow: hidden; }
+.lp-uso-barra span { display: block; height: 100%; background: var(--action-strong); }
+.lp-cartao { border: 1px solid var(--border-default); border-radius: var(--radius-card); background: var(--surface-default); padding: var(--space-16); margin: 0 0 var(--space-12); }
+.lp-cartao h3 { margin: 0 0 var(--space-4); font: 600 16px/24px var(--font-sans); display: flex; justify-content: space-between; gap: var(--space-8); align-items: flex-start; }
+.lp-cartao dl { margin: var(--space-8) 0 0; display: grid; grid-template-columns: max-content 1fr; gap: var(--space-4) var(--space-12); }
+.lp-cartao dt { font: var(--text-label); color: var(--text-secondary); padding-top: 3px; }
+.lp-cartao dd { margin: 0; overflow-wrap: anywhere; }
+.lp-chip { font: var(--text-label); padding: 2px 8px; border-radius: 999px; white-space: nowrap; border: 1px solid var(--success-border); background: var(--success-bg); color: var(--success-text); }
+.lp-chip.medio { border-color: var(--attention-border); background: var(--attention-bg); color: var(--attention-text); }
+.lp-lista-tutoriais { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-8); }
+.lp-lista-tutoriais details { border: 1px solid var(--border-default); border-radius: var(--radius-card); background: var(--surface-default); }
+.lp-lista-tutoriais summary { cursor: pointer; padding: var(--space-12) var(--space-16); font-weight: 600; }
+.lp-lista-tutoriais .lp-tutorial { padding: 0 var(--space-16) var(--space-16); }
+.lp-lista-tutoriais img { width: 100%; height: auto; border: 1px solid var(--border-default); border-radius: var(--radius-control); margin-top: var(--space-8); }
+.lp-acoes-ajuda { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-8); margin: 0 0 var(--space-16); }
+.lp-ajuda-flutuante { position: fixed; right: 16px; bottom: 16px; z-index: 150; /* abaixo dos modais do painel (200) */ width: 48px; height: 48px; border-radius: 50%; border: 0;
+  background: var(--action-strong); color: var(--action-on); font: 700 20px/1 var(--font-sans); box-shadow: var(--shadow-overlay); cursor: pointer; }
+.lp-ajuda-flutuante:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.lp-ajuda-flutuante.so-celular { display: none; }
+@media (max-width: 480px) { .lp-ajuda-flutuante.so-celular { display: block; } }
+@media (max-width: 600px) {
+  .lp-gaveta { border-radius: 0; }
+  .lp-gaveta-topo, .lp-gaveta-corpo, .lp-gaveta-rodape, .lp-uso { padding-left: var(--space-16); padding-right: var(--space-16); }
+  .lp-acoes-ajuda { grid-template-columns: 1fr; }
+}
+/* LicitaPlena no celular (avisos-celular.js): botão ao lado do "?" e opções da gaveta. */
+.lp-celular-flutuante { bottom: 72px; right: 20px; width: 40px; height: 40px; display: grid; place-items: center; }
+#celular-btn { display: inline-grid; place-items: center; }
+.lp-gaveta .lp-opcao { display: flex; align-items: center; gap: var(--space-8); min-height: 40px; cursor: pointer; }
+.lp-gaveta .lp-opcao input { width: 20px; height: 20px; accent-color: var(--action-strong); }
+.lp-gaveta .lp-passos { margin: 0 0 var(--space-8); padding-left: 20px; }
+.lp-gaveta .lp-cartao .lp-dica { margin-bottom: var(--space-8); }

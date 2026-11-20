@@ -339,7 +339,9 @@ function contextoConsumidoresOportunidades(responder) {
     calcularPorMes: () => [], calcularPorUf: () => [], calcularPorModalidade: () => [],
     renderChipsDiagnostico() {}, renderProspeccaoFornecedores() {}, renderBaixaConcorrencia() {},
     formatarValor: String, formatarValorCompacto: String,
+    filtroExtraDaTela: () => ({}), // busca v2 sem filtros extras
   });
+  contexto.window.BuscaExtra = { filtrarExtra: (lista) => lista, dataDoPeriodo: (r) => r.publicacao };
   for (const [inicio, fim] of [
     ["function normalizarUfs(", "function definirUfsNoSelect("],
     ["function normalizar(txt)", "// Tags automáticas do objeto"],

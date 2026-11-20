@@ -3,6 +3,12 @@ const { paginasDaFonte } = require('./_edital_operacional');
 const { clausulasComEscopo, normalizarFonteDocumental } = require('./_referencias_documentais');
 const base = require('./knowledge-defesa.json');
 const { pontosDisponiveis, clausulasSolicitadas, ancorasSolicitadas, validarPontos, fundamentoApoiado, redigirPontos, ambitoIN67Comprovado } = require('./_defesa_pontos');
+const ROTULO_R1 = { esclarecimento: 'Resposta do órgão fornecida pelo usuário — não autenticada', recurso: 'Decisão recorrida fornecida pelo usuário — não autenticada', contrarrazao: 'Razões do recurso da outra empresa fornecidas pelo usuário — não autenticadas' };
+// Recurso e contrarrazão (art. 165 da Lei 14.133): sem cálculo de tempestividade; o prazo vai como texto a conferir.
+const CABECALHO_MINUTA = {
+  recurso: ['Rascunho de razões de recurso — análise documental', 'Prazo: 3 dias úteis da intimação ou da lavratura da ata, com intenção de recorrer manifestada na sessão (Lei 14.133/2021, art. 165, I e § 1º, I). Sem reconsideração em 3 dias úteis, pedir envio à autoridade superior (art. 165, § 2º). [confirmar datas e canal]'],
+  contrarrazao: ['Rascunho de contrarrazões — análise documental', 'Prazo: o mesmo do recurso (3 dias úteis), contado da intimação ou da divulgação da interposição do recurso (Lei 14.133/2021, art. 165, § 4º). [confirmar datas e canal]'],
+};
 const normalizar = texto => texto.normalize('NFC').replace(/\s+/g, ' ').trim();
 
 function schemaDefesa(ctx, body) {
@@ -44,7 +50,8 @@ function prepararContexto(dossie, body) {
   const declarado = [];
   let parcialDeclarado = false;
   for (const [id, documento, valor, limite] of [
-    ['R1', 'Resposta do órgão fornecida pelo usuário — não autenticada', body.respostaOrgao, 3500],
+    // Recurso: R1 é a decisão recorrida; contrarrazão: R1 são as razões do recurso da outra empresa. Mesmo papel de texto declarado.
+    ['R1', ROTULO_R1[body.tipo] || ROTULO_R1.esclarecimento, body.respostaOrgao, 3500],
     ['M1', 'Manifestação anterior fornecida pelo usuário — não verificada', body.manifestacaoAnterior, 2200],
   ]) {
     if (!valor?.trim()) continue;
@@ -201,8 +208,8 @@ function diagnosticarAnalise(texto, ctx, body) {
     ...(!fundamentos.length ? ['Não foi recuperado fundamento específico para conclusão jurídica; este texto permanece documental, sujeito a enquadramento e revisão.'] : [])];
   const analise = { ...redacao, fatos: fatos.map(({ id: _id, ...fato }) => fato), fundamentos, pendencias: [...new Set(pendencias)] };
   analise.minutaTexto = [
-    `${body.tipo === 'impugnacao' ? 'Análise documental — pedido de impugnação não formulado' : 'Rascunho de pedido de esclarecimento'}${body.fase && body.fase !== 'questionamento' ? ' / análise de resposta e manifestação' : ''}`,
-    `Procedimento: ${body.edital.numeroControlePNCP}\nDestinatário e identificação da interessada: [preencher e conferir]\nPrazo e canal: [confirmar antes de utilizar]`,
+    CABECALHO_MINUTA[body.tipo]?.[0] || `${body.tipo === 'impugnacao' ? 'Análise documental — pedido de impugnação não formulado' : 'Rascunho de pedido de esclarecimento'}${body.fase && body.fase !== 'questionamento' ? ' / análise de resposta e manifestação' : ''}`,
+    `Procedimento: ${body.edital.numeroControlePNCP}\nDestinatário e identificação da interessada: [preencher e conferir]\n${CABECALHO_MINUTA[body.tipo]?.[1] || 'Prazo e canal: [confirmar antes de utilizar]'}`,
     `Questão apresentada: ${body.questionamento}\nResultado pretendido: ${body.objetivo || '[completar]'}`,
     `1. Contexto documental\n${analise.fatos.flatMap(f => f.evidencias.map(e => `${e.texto}\n[${e.documento}${e.pagina ? `, página ${e.pagina}` : ''}${e.numero ? `, item ${e.numero}` : ''}]`)).join('\n\n')}`,
     `2. Análise condicionada\n${analise.diagnostico}\nInterpretação alternativa: ${analise.argumentoContrario}`,

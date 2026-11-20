@@ -21,9 +21,17 @@
 //      por rodada, refeito a cada 7 dias; a lista da UASG é pesada e fica em cache na rodada);
 //   6) dados cadastrais da Receita (BrasilAPI/minhareceita) de quem está na fila sem cadastro ou com mais de 30 dias.
 // A análise só fica 'completo' depois que os contratos foram lidos (contratos_lidos_em).
+// Parte 3 (supabase/analise_cnpj_v3.sql), depois do cadastro:
+//   7) marcas e motivos: linhas do CNPJ ainda sem marca_consultada_em, por compra (MAX_COMPRAS_MARCAS_ANALISE_CNPJ=20 por
+//      rodada, divididas entre os CNPJs). Compra da Lei 14.133 no Compras.gov: Pesquisa de Preços por CATMAT + id da compra
+//      (1 chamada por CATMAT; o CATMAT que falta vem dos dados abertos), só dos itens que o CNPJ venceu (a fonte só traz o
+//      vencedor). Pregão até 2023: páginas públicas sem captcha do ComprasNet antigo (lerComprasAntigas, até
+//      MAX_PREGOES_COMPRASNET_ANTIGO por rodada), que trazem marca do vencedor e motivo literal de item cancelado/fracassado.
+//      Toda linha olhada ganha marca_consultada_em (achou ou não) e não é procurada de novo. Não segura o 'completo': a etapa
+//      roda também para os LOTE CNPJs 'completo' pedidos por último (uma consulta pequena cada; vazia quando já acabou).
 const L = require("../netlify/functions/_licitacao_anterior");
 const A = require("../netlify/functions/_analise_cnpj");
-const { lerMesPropostas } = require("./historico_licitacoes");
+const { lerMesPropostas, lerComprasAntigas } = require("./historico_licitacoes");
 const { enriquecerComGov } = require("./esteira_contratos");
 const cp = require("../contrato-publico.js");
 
@@ -39,6 +47,9 @@ const LOTE_MESES = Math.max(LOTE, Number(process.env.LOTE_MESES_ANALISE_CNPJ || 
 const PRIORIDADE_MS = Math.max(0, Number(process.env.PRIORIDADE_HORAS_ANALISE_CNPJ ?? 6)) * 3600000;
 const MAX_PAGINAS_CONTRATOS = Math.max(1, Number(process.env.MAX_PAGINAS_CONTRATOS_ANALISE_CNPJ || 10));
 const MAX_CONTRATOS_GOV = Math.max(0, Number(process.env.MAX_CONTRATOS_GOV_ANALISE_CNPJ ?? 15));
+const MAX_COMPRAS_MARCAS = Math.max(0, Number(process.env.MAX_COMPRAS_MARCAS_ANALISE_CNPJ ?? 20));
+const MAX_ANTIGOS = Math.max(0, Number(process.env.MAX_PREGOES_COMPRASNET_ANTIGO ?? 6));
+const PESQUISA = "https://dadosabertos.compras.gov.br/modulo-pesquisa-preco/1_consultarMaterial";
 const VALIDADE_GOV_MS = 7 * 864e5;
 const VALIDADE_CADASTRO_MS = 30 * 864e5;
 const DADOS_ABERTOS = "https://dadosabertos.compras.gov.br/modulo-contratacoes";
@@ -162,6 +173,83 @@ async function completarCadastros(rest, filas, { fetchPncp, esperar, agora }) {
   return feitos;
 }
 
+// Mesma regra de analise-cnpj-ui.js (venceu): 1º não recusado e não cancelado; sem posição, quem tem homologado.
+function venceu(p) {
+  if (/cancel/i.test(p.situacao_resultado || "") || p.situacao_proposta === "2") return false;
+  const pos = p.ordem_classificacao ?? p.classificacao;
+  return pos === null || pos === undefined ? p.valor_homologado !== null && p.valor_homologado !== undefined : Number(pos) === 1;
+}
+
+// Marca do CNPJ nos itens que venceu, numa compra da Lei 14.133: Pesquisa de Preços por CATMAT + id da compra.
+async function marcasPesquisa(rest, b, cnpj, id, linhas, fetchPncp) {
+  const ganhos = new Set(linhas.filter(venceu).map((p) => p.numero_item));
+  if (!ganhos.size) return [];
+  const itens = await (await rest(`historico_itens?id_compra=eq.${id}&select=numero_item,catmat`)).json();
+  const catmat = new Map(itens.filter((i) => ganhos.has(i.numero_item) && i.catmat).map((i) => [i.numero_item, i.catmat]));
+  const novosCatmats = [];
+  if (catmat.size < ganhos.size) {
+    const cat = await L.catalogoDaCompra(id, { fetchImpl: fetchPncp });
+    for (const n of ganhos) {
+      const c = cat?.get(n);
+      if (!catmat.has(n) && c?.catmat) { catmat.set(n, c.catmat); novosCatmats.push({ id_compra: id, numero_item: n, catmat: c.catmat, ...(c.pdm ? { pdm: c.pdm } : {}) }); }
+    }
+  }
+  if (novosCatmats.length) await L.upsertPorColunas(rest, "historico_itens", "id_compra,numero_item", novosCatmats);
+  const achadas = [];
+  for (const codigo of new Set(catmat.values())) {
+    const q = new URLSearchParams({ tipo: "codigoItemCatalogo", codigo, idCompra: id, pagina: "1", tamanhoPagina: "500", dataResultado: "true" });
+    const r = await b.json(`${PESQUISA}?${q}`);
+    for (const l of r?.resultado || []) {
+      const n = Number(l.numeroItemCompra);
+      if (L.idDaLinhaPesquisa(l) !== id || !ganhos.has(n) || String(l.niFornecedor || "").replace(/\D/g, "") !== cnpj) continue;
+      const marca = L.normalizarMarca(l.marca, l.descricaoItem);
+      if (marca) achadas.push({ numero_item: n, marca, marca_declarada: String(l.marca).replace(/\s+/g, " ").trim().slice(0, 120) });
+    }
+  }
+  return achadas;
+}
+
+async function marcasEMotivos(rest, filas, { fetchPncp, esperar, agora, prazoFinal, b }) {
+  const contagem = { compras: 0, marcas: 0, antigos: 0 };
+  if (!MAX_COMPRAS_MARCAS || !filas.length) return contagem;
+  const porCnpj = Math.max(1, Math.floor(MAX_COMPRAS_MARCAS / filas.length));
+  for (const f of filas) {
+    if (contagem.compras >= MAX_COMPRAS_MARCAS || agora() >= prazoFinal) break;
+    const linhas = await (await rest(`historico_participacoes?fornecedor_ni=eq.${f.cnpj}&marca_consultada_em=is.null` +
+      "&select=id_compra,numero_item,ordem_classificacao,classificacao,situacao_proposta,situacao_resultado,valor_homologado&order=data_resultado.desc.nullslast&limit=500")).json();
+    const porCompra = new Map();
+    for (const p of linhas) porCompra.set(p.id_compra, [...(porCompra.get(p.id_compra) || []), p]);
+    for (const [id, doItem] of [...porCompra].slice(0, Math.min(porCnpj, MAX_COMPRAS_MARCAS - contagem.compras))) {
+      if (agora() >= prazoFinal) break;
+      const d = L.decifrarIdCompra(id);
+      let marcas = [];
+      try {
+        if (d?.lei14133) marcas = await marcasPesquisa(rest, b, f.cnpj, id, doItem, fetchPncp);
+        else if (d?.modalidade === 5) {
+          if (contagem.antigos >= MAX_ANTIGOS) continue; // 4 páginas com pausa de 1,5 s cada: o resto fica para a próxima rodada
+          contagem.antigos++;
+          const res = await lerComprasAntigas({ compras: [{ id_compra: id, plataforma: "ComprasNet (antigo)" }], numeros: new Map([[id, new Set(doItem.map((p) => p.numero_item))]]) },
+            { rest, fetchImpl: fetchPncp, esperar, agora });
+          if (res.compras.length) await L.gravar(rest, res);
+        }
+      } catch (e) {
+        console.warn(`[analise-cnpj] marcas ${id}: ${String(e.message || e).slice(0, 200)}`);
+        if (e instanceof L.SemOrcamento) break;
+        continue; // fonte fora do ar: a linha fica sem marca_consultada_em e volta na próxima rodada
+      }
+      const quando = new Date(agora()).toISOString();
+      const marca = new Map(marcas.map((m) => [m.numero_item, m]));
+      await L.upsertPorColunas(rest, "historico_participacoes", "id_compra,numero_item,fornecedor_chave", doItem.map((p) => {
+        const m = marca.get(p.numero_item);
+        return { id_compra: id, numero_item: p.numero_item, fornecedor_chave: f.cnpj, marca_consultada_em: quando, ...(m ? { marca: m.marca, marca_declarada: m.marca_declarada } : {}) };
+      }));
+      contagem.compras++;
+      contagem.marcas += marcas.length;
+    }
+  }
+  return contagem;
+}
+
 // Fila da rodada: quem um usuário pediu há pouco primeiro (mais recente na frente), depois por ordem de chegada.
 async function filaDaRodada(rest, agora) {
   const desde = new Date(agora() - PRIORIDADE_MS).toISOString();
@@ -176,8 +264,13 @@ async function completarAnalises({ rest, fetchPncp = (...a) => fetch(...a), lerM
   esperar = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
   const { filas, prioritarias } = await filaDaRodada(rest, agora);
   const contagem = { cnpjs: filas.length, compras: 0, meses: 0, linhas: 0, cabecalhos: 0, completos: 0, contratos: 0, contratosGov: 0, cadastros: 0 };
-  if (!filas.length) return contagem;
   const b = L.criarBuscador({ fetchImpl: fetchPncp, orcamento: 100000, esperar, pausaMs: PAUSA_MS });
+  // Marcas e motivos também de quem já fechou (a fila de meses costuma acabar antes): os LOTE completos pedidos por último.
+  const marcas = async (lista) => {
+    try { contagem.marcas = await marcasEMotivos(rest, lista, { fetchPncp, esperar, agora, prazoFinal, b }); } catch (e) { console.warn(`[analise-cnpj] marcas e motivos: ${String(e.message || e).slice(0, 200)}`); }
+  };
+  const completos = async () => (MAX_COMPRAS_MARCAS ? (await rest(`historico_cnpj_consultas?situacao=eq.completo&select=cnpj&order=pedido_em.desc.nullslast&limit=${LOTE}`).then((r) => r.json()).catch(() => [])) || [] : []);
+  if (!filas.length) { await marcas(await completos()); return contagem; }
   // Compras pendentes custam chamadas por compra: só os LOTE primeiros (os prioritários vêm na frente).
   for (const fila of filas.slice(0, LOTE)) {
     if (agora() >= prazoFinal) break;
@@ -190,6 +283,8 @@ async function completarAnalises({ rest, fetchPncp = (...a) => fetch(...a), lerM
   }
   if (agora() < prazoFinal) contagem.contratosGov = await valoresFederais(rest, filas, { fetchPncp, esperar, agora });
   if (agora() < prazoFinal) contagem.cadastros = await completarCadastros(rest, filas, { fetchPncp, esperar, agora });
+  // Banco sem analise_cnpj_v3.sql (coluna marca_consultada_em ausente): a etapa falha sozinha e o resto segue.
+  if (agora() < prazoFinal) await marcas([...filas, ...(await completos())]);
   // Mês mais novo primeiro (é o que muda toda semana); os meses de quem está esperando antes dos demais.
   const mesesDe = (lista) => [...new Set(lista.flatMap((f) => f.meses_pendentes))].sort().reverse();
   const meses = [...new Set([...mesesDe(filas.filter((f) => prioritarias.has(f.cnpj))), ...mesesDe(filas)])];

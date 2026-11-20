@@ -66,7 +66,10 @@ async function executarDefesa(body, { sessao, robo, env = process.env, carregar,
   const erro = (statusCode, mensagem) => ({ statusCode, dados: { erro: mensagem } });
   if (robo) return erro(403, 'A Central de Defesa exige uma sessão de usuário.');
   if (!sessao?.ok || !sessao.userId) return erro(401, 'Faça login para analisar o questionamento.');
-  if (!['esclarecimento', 'impugnacao'].includes(body.tipo) ||
+  // Recurso e contrarrazão reaproveitam a fase posterior: o texto da decisão (ou do recurso adversário) entra como R1.
+  // Mesma chamada, mesma cota e mesmos limites dos outros dois tipos.
+  if (!['esclarecimento', 'impugnacao', 'recurso', 'contrarrazao'].includes(body.tipo) ||
+      (['recurso', 'contrarrazao'].includes(body.tipo) && (!body.fase || body.fase === 'questionamento')) ||
       !/^\d{14}-1-\d{6}\/\d{4}$/.test(body.edital?.numeroControlePNCP || '') ||
       typeof body.hashFonte !== 'string' || !/^[a-f0-9]{64}$/.test(body.hashFonte) ||
       typeof body.questionamento !== 'string' || !body.questionamento.trim() || body.questionamento.length > 3000 ||

@@ -4,6 +4,8 @@
 # horario de Brasilia. Roda de hora em hora (.github/workflows/lembretes-licitacoes.yml) e
 # avisa tudo que ja passou do momento e ainda nao venceu, entao uma rodada perdida nao perde aviso.
 # Envio: ZeptoMail (ZEPTOMAIL_TOKEN, o mesmo do site); sem o token cai no Gmail SMTP do boletim.
+# Tambem envia o aviso "Mudou algo no edital?" (operacao_monitor_mudancas, gravadas por scripts/monitor_processos.js),
+# um e-mail por processo para quem cadastrou o processo, com a mesma reserva antes de enviar.
 # Local/teste: LEMBRETES_SO_REGISTRAR=1 nao envia nem marca nada, so registra no log;
 # SUPABASE_URL aponta para o banco de teste (o padrao e producao).
 import os
@@ -24,6 +26,12 @@ ZEPTOMAIL_URL = "https://api.zeptomail.com/v1.1/email"
 REMETENTE_ZEPTO = "licitaplena@licitaplena.com.br"
 BRASILIA = timezone(timedelta(hours=-3))
 NOME_REMETENTE = "LicitaPlena - Lembretes de Licitação"
+SITE_URL = os.environ.get("SITE_URL") or "https://licitaplena.com.br"
+ASSUNTO_LEMBRETE = "Lembrete: prazo de proposta se aproxima"
+# Mudanca mais velha que isto sem e-mail (robo parado, banco novo): fecha sem enviar, como o lembrete expirado.
+AVISO_MUDANCA_MAX_HORAS = 72
+AVISO_ESCLARECIMENTO = ("Atenção: a resposta a um pedido de esclarecimento vira regra do edital. "
+                        "Leia antes de montar a proposta e os documentos.")
 
 
 def log(msg):
@@ -145,12 +153,12 @@ def montar_corpo_email(nome_destinatario, lembrete):
     return texto, html_corpo
 
 
-def enviar_zeptomail(token, destino_email, nome_destinatario, texto, html_corpo):
+def enviar_zeptomail(token, destino_email, nome_destinatario, texto, html_corpo, assunto=ASSUNTO_LEMBRETE):
     token = re.sub(r"^Zoho-enczapikey\s+", "", token.strip()).strip("\"'").strip()
     corpo = {
         "from": {"address": REMETENTE_ZEPTO, "name": "LicitaPlena"},
         "to": [{"email_address": {"address": destino_email, "name": nome_destinatario}}],
-        "subject": "Lembrete: prazo de proposta se aproxima",
+        "subject": assunto,
         "textbody": texto,
         "htmlbody": html_corpo,
     }
@@ -164,15 +172,19 @@ def enviar_zeptomail(token, destino_email, nome_destinatario, texto, html_corpo)
 
 def enviar_email(destino_email, nome_destinatario, lembrete):
     texto, html_corpo = montar_corpo_email(nome_destinatario, lembrete)
+    enviar_mensagem(destino_email, nome_destinatario, ASSUNTO_LEMBRETE, texto, html_corpo)
+
+
+def enviar_mensagem(destino_email, nome_destinatario, assunto, texto, html_corpo):
     token = os.environ.get("ZEPTOMAIL_TOKEN")
     if token:
-        enviar_zeptomail(token, destino_email, nome_destinatario, texto, html_corpo)
+        enviar_zeptomail(token, destino_email, nome_destinatario, texto, html_corpo, assunto)
         return
     remetente = os.environ["EMAIL_REMETENTE"]
     senha_app = os.environ["EMAIL_SENHA_APP"]
 
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = "Lembrete: prazo de proposta se aproxima"
+    msg["Subject"] = assunto
     msg["From"] = formataddr((str(Header(NOME_REMETENTE, "utf-8")), remetente))
     msg["To"] = destino_email
     msg.attach(MIMEText(texto, "plain", "utf-8"))
@@ -212,6 +224,115 @@ def marcar_como_enviado(lembrete_id, enviado=True):
         corpo={"enviado": True, **({"enviado_em": datetime.now(timezone.utc).isoformat()} if enviado else {})},
         headers_extra={"Prefer": "return=minimal"},
     )
+
+
+# ---------- "Mudou algo no edital?" ----------
+
+def carregar_mudancas_pendentes():
+    return _requisicao_supabase(
+        "/rest/v1/operacao_monitor_mudancas?alerta=eq.true&avisado_em=is.null&order=detectado_em.asc&limit=500"
+        "&select=id,processo_id,empresa_id,tipo,resumo,detectado_em,operacao_processos(objeto,numero,criado_por)"
+    ) or []
+
+
+def _ids_filtro(ids):
+    return "(" + ",".join(urllib.parse.quote(i) for i in ids) + ")"
+
+
+def reservar_mudancas(ids):
+    # PATCH condicional (avisado_em=is.null): so as linhas que esta rodada ganhou voltam; as outras ja foram avisadas.
+    ganhas = _requisicao_supabase(
+        "/rest/v1/operacao_monitor_mudancas?id=in." + _ids_filtro(ids) + "&avisado_em=is.null&select=id",
+        metodo="PATCH",
+        corpo={"avisado_em": datetime.now(timezone.utc).isoformat()},
+        headers_extra={"Prefer": "return=representation"},
+    ) or []
+    return [g["id"] for g in ganhas]
+
+
+def liberar_mudancas(ids):
+    _requisicao_supabase(
+        "/rest/v1/operacao_monitor_mudancas?id=in." + _ids_filtro(ids),
+        metodo="PATCH", corpo={"avisado_em": None}, headers_extra={"Prefer": "return=minimal"},
+    )
+
+
+def _mudanca_recente(m, agora):
+    try:
+        detectado = datetime.fromisoformat(str(m.get("detectado_em")).replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    return agora - detectado <= timedelta(hours=AVISO_MUDANCA_MAX_HORAS)
+
+
+def montar_corpo_mudancas(nome_destinatario, processo, empresa_id, processo_id, mudancas):
+    objeto = (processo or {}).get("objeto") or "Licitação"
+    numero = (processo or {}).get("numero") or ""
+    link = SITE_URL + "/sistema?empresa=" + urllib.parse.quote(empresa_id or "") + "&processo=" + urllib.parse.quote(processo_id or "")
+    tem_esclarecimento = any(m.get("tipo") in ("esclarecimento", "impugnacao") for m in mudancas)
+    linhas = [(m.get("resumo") or "").strip() for m in mudancas]
+    texto = (
+        "Olá, " + nome_destinatario + "!\n\n"
+        "Mudou algo no edital de um processo que você acompanha:\n"
+        "- " + objeto + ((" (" + numero + ")") if numero else "") + "\n\n"
+        + "".join("  - " + linha + "\n" for linha in linhas)
+        + ("\n" + AVISO_ESCLARECIMENTO + "\n" if tem_esclarecimento else "")
+        + "\nAbrir o processo: " + link + "\n"
+    )
+    html_corpo = (
+        "<p>Olá, " + html.escape(nome_destinatario) + "!</p>"
+        "<p>Mudou algo no edital de um processo que você acompanha:</p>"
+        "<p><strong>" + html.escape(objeto) + "</strong>" + ((" (" + html.escape(numero) + ")") if numero else "") + "</p>"
+        "<ul>" + "".join("<li>" + html.escape(linha) + "</li>" for linha in linhas) + "</ul>"
+        + ("<p><strong>" + html.escape(AVISO_ESCLARECIMENTO) + "</strong></p>" if tem_esclarecimento else "")
+        + "<p><a href=\"" + html.escape(link) + "\">Abrir o processo no LicitaPlena</a></p>"
+    )
+    return texto, html_corpo
+
+
+def avisar_mudancas_edital(so_registrar=False, agora=None):
+    agora = agora or datetime.now(timezone.utc)
+    pendentes = carregar_mudancas_pendentes()
+    velhas = [m["id"] for m in pendentes if not _mudanca_recente(m, agora)]
+    if velhas and not so_registrar:
+        reservar_mudancas(velhas)  # fecha sem enviar
+    por_processo = {}
+    for m in pendentes:
+        if m["id"] not in velhas:
+            por_processo.setdefault(m["processo_id"], []).append(m)
+    enviados = 0
+    for processo_id, mudancas in por_processo.items():
+        processo = mudancas[0].get("operacao_processos") or {}
+        cliente = buscar_cliente(processo["criado_por"]) if processo.get("criado_por") else None
+        email = (cliente or {}).get("email")
+        if not email:
+            log("AVISO: processo " + processo_id + " sem e-mail de quem cadastrou; a mudança fica só no sistema.")
+            continue
+        nome = (cliente or {}).get("empresa") or (cliente or {}).get("nome") or "Cliente"
+        if so_registrar:
+            log("[SO REGISTRAR] enviaria " + str(len(mudancas)) + " mudança(s) do processo " + processo_id + " para " + email + ".")
+            enviados += 1
+            continue
+        try:
+            ganhas = set(reservar_mudancas([m["id"] for m in mudancas]))
+        except Exception as e:
+            log("ERRO ao reservar mudanças do processo " + processo_id + ": " + str(e) + " (nada enviado)")
+            continue
+        mudancas = [m for m in mudancas if m["id"] in ganhas]
+        if not mudancas:
+            continue
+        texto, html_corpo = montar_corpo_mudancas(nome, processo, mudancas[0].get("empresa_id"), processo_id, mudancas)
+        try:
+            enviar_mensagem(email, nome, "Mudou algo no edital: " + (processo.get("objeto") or "licitação")[:80], texto, html_corpo)
+            enviados += 1
+            log("Aviso de mudança enviado para " + email + " (processo " + processo_id + ", " + str(len(mudancas)) + " mudança(s)).")
+        except Exception as e:
+            log("ERRO ao enviar aviso do processo " + processo_id + ": " + str(e))
+            try:
+                liberar_mudancas([m["id"] for m in mudancas])
+            except Exception as e2:
+                log("ERRO ao devolver mudanças do processo " + processo_id + " para a fila: " + str(e2))
+    return enviados
 
 
 def main():
@@ -260,6 +381,12 @@ def main():
                 log("ERRO ao devolver lembrete " + lembrete["id"] + " para a fila: " + str(e2))
 
     log("=== Concluído: " + str(enviados) + " lembrete(s) " + ("registrado(s), nada enviado" if so_registrar else "enviado(s)") + " ===")
+    # Falha aqui (tabela ainda não criada, rede) não derruba os lembretes já enviados.
+    try:
+        avisos = avisar_mudancas_edital(so_registrar)
+        log("=== Mudanças de edital: " + str(avisos) + " aviso(s) " + ("registrado(s)" if so_registrar else "enviado(s)") + " ===")
+    except Exception as e:
+        log("ERRO no aviso de mudanças de edital: " + str(e))
 
 
 if __name__ == "__main__":

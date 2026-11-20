@@ -1,7 +1,9 @@
 /* global module */
 // Tela "Robô de lances" do processo (casca comercial, sistema.html). Modo ASSISTIDO: só sugere; quem envia o
 // lance é a pessoa, no portal. Sem leitura da sala por enquanto (extensao-leitura/sala-disputa.mjs não
-// implementado): a tela configura por item e treina no simulador (robo-lances.js + cérebro motor-lances.js).
+// implementado): a tela configura por item, mostra o selo e a sugestão com o que a pessoa copia do portal
+// (abas Em disputa / Aguardando / Encerrados) e treina no simulador (robo-lances.js + cérebro motor-lances.js).
+// Não copiamos do Siga Pregão: "manter item aberto" (lance só para esticar a disputa) nem guardar senha gov.br.
 // Piso = preço-limite calculado em Itens do processo (custo + margem mínima); nunca vem de IA.
 // shortcut: configuração e registro ficam no localStorage deste navegador (como Kanban/filtros do painel);
 // se o registro precisar valer como prova entre computadores, mover para tabela com RLS no Supabase.
@@ -13,14 +15,23 @@
   const I = () => global.LicitaItensProcesso;
 
   // Configuração de um item → parâmetros do simulador, ou erro que diz o que fazer.
+  // piso/inicial chegam em centavos (Itens do processo); com "4 casas" viram décimo de milésimo. diferencaMinima já vem na unidade do item.
+  // Valor de cada redução vazio = diferença mínima do edital (o portal não aceita menos).
   function parametrosItem({ piso, inicial, cfg, diferencaMinima }) {
     if (piso === null || piso === undefined) return { ok: false, erro: 'Sem preço-limite: informe custo e margem mínima em Itens do processo.' };
     if (inicial === null || inicial === undefined) return { ok: false, erro: 'Sem proposta: informe o valor unitário do item.' };
     if (piso > inicial) return { ok: false, erro: 'O preço-limite passa da sua proposta: revise o valor unitário ou as margens.' };
-    const d = R().decremento({ tipo: cfg.tipo, valor: cfg.valor, referencia: inicial, diferencaMinima });
+    const casas = cfg.casas4 ? 4 : 2, k = cfg.casas4 ? 100n : 1n;
+    const vazio = !String(cfg.valor ?? '').trim();
+    if (vazio && typeof diferencaMinima === 'bigint') {
+      return { ok: true, casas, piso: piso * k, inicial: inicial * k, decremento: diferencaMinima, intervalo: R().intervaloMs(cfg.intervalo), aviso: '', doEdital: true };
+    }
+    const d = R().decremento({ tipo: cfg.tipo, valor: cfg.valor, referencia: inicial * k, diferencaMinima, casas });
     if (!d.ok) return d;
-    return { ok: true, piso, inicial, decremento: d.centavos, intervalo: R().intervaloMs(cfg.intervalo), aviso: d.aviso };
+    return { ok: true, casas, piso: piso * k, inicial: inicial * k, decremento: d.centavos, intervalo: R().intervaloMs(cfg.intervalo), aviso: d.aviso };
   }
+  const ABAS = Object.freeze({ disputa: 'Em disputa', aguardando: 'Aguardando disputa', encerrado: 'Encerrados' });
+  const SELOS = Object.freeze({ ganhando: 'GANHANDO', perdendo: 'PERDENDO', empate: 'EMPATE' });
   // Entradas do registro que valem guardar: o que o robô sugeriu, bloqueou e o resultado.
   function entradasRegistro(log, { itemId, rotulo, modo, rodada, em }) {
     return log.filter((e) => ['sugestao', 'bloqueado', 'fim'].includes(e.tipo))
@@ -39,6 +50,8 @@
     config.modo = R().MODOS[config.modo] ? config.modo : 'aberto';
     config.itens = config.itens && typeof config.itens === 'object' ? config.itens : {};
     config.rodada = Number.isInteger(config.rodada) ? config.rodada : 0;
+    config.estrategia = R().ESTRATEGIAS[config.estrategia] ? config.estrategia : 'dentro10';
+    let aba = null; // aba escolhida; sem escolha, a primeira com itens
     let registro = Array.isArray(ler(chaveRegistro, null)) ? ler(chaveRegistro, null) : [];
     const salvarConfig = () => gravar(chave, config);
 
@@ -52,21 +65,25 @@
       return n;
     }
     const el = (s) => alvo.querySelector(s);
-    const reais = (c) => (typeof c === 'bigint' ? R().reais(c) : '—');
+    const reais = (c, casas = 2) => (typeof c === 'bigint' ? R().reais(c, casas) : '—');
     const opcoesModo = Object.entries(R().MODOS).map(([v, t]) => `<option value="${v}">${t}</option>`).join('');
+    const opcoesEstrategia = Object.entries(R().ESTRATEGIAS).map(([v, t]) => `<option value="${v}">${t}${v === 'dentro10' ? ' (recomendado)' : ''}</option>`).join('');
     alvo.innerHTML = `<h2 id="robo-titulo" tabindex="-1">Robô de lances</h2>
       <p class="robo-faixa" data-situacao="atencao"><strong>Modo assistido.</strong> O robô só sugere o próximo lance; quem envia é você, no portal. Ele nunca clica nem envia sozinho.</p>
-      <p class="itens-apoio">Leitura da sala de disputa: <strong>não implementada</strong> — precisa da sala real do Compras.gov.br. Por enquanto, configure os itens e treine no simulador antes da sessão.</p>
+      <p class="itens-apoio">Leitura da sala de disputa: <strong>não implementada</strong>. Durante a sessão, copie do portal o melhor lance e o seu nos itens <strong>Em disputa</strong>: a tela mostra GANHANDO/PERDENDO e sugere o próximo lance. Próximo passo: testar no ambiente de treinamento oficial do Compras.gov.br. Nunca pedimos nem guardamos a senha gov.br.</p>
       <fieldset class="robo-processo"><legend>Regras da disputa (do edital)</legend>
         <div class="robo-grade">
           <div class="itens-campo"><label for="robo-modo">Modo de disputa</label><select id="robo-modo" data-robo-modo>${opcoesModo}</select></div>
           <div class="itens-campo"><label for="robo-diferenca">Diferença mínima entre lances (R$)</label><input id="robo-diferenca" data-robo-diferenca inputmode="decimal" autocomplete="off" placeholder="Ex.: 0,10"></div>
           <div class="itens-campo"><label for="robo-concorrentes">Concorrentes no simulador</label><select id="robo-concorrentes" data-robo-concorrentes>${[1, 2, 3, 4, 5, 6].map((n) => `<option value="${n}">${n}</option>`).join('')}</select></div>
+          <div class="itens-campo robo-estrategia"><label for="robo-estrategia">Estratégia no aberto e fechado</label><select id="robo-estrategia" data-robo-estrategia>${opcoesEstrategia}</select></div>
         </div>
+        <p class="itens-apoio" data-robo-dica-estrategia></p>
         <p class="itens-apoio">Intervalo mínimo usado: 20 s entre os seus lances e 3 s depois do melhor lance de outro fornecedor. O portal pode exigir mais; nunca menos.</p>
       </fieldset>
       <p data-robo-estado role="status" aria-live="polite"></p>
-      <div data-robo-itens class="robo-itens"></div>
+      <div class="robo-abas" role="tablist" aria-label="Itens por situação no portal" data-robo-abas></div>
+      <div data-robo-itens class="robo-itens" role="tabpanel"></div>
       <div class="itens-acoes"><button type="button" class="app-primario" data-robo-simular>Simular disputa</button><button type="button" data-robo-atualizar>Atualizar itens</button></div>
       <section data-robo-resultado class="robo-resultado" aria-labelledby="robo-resultado-titulo" hidden>
         <h3 id="robo-resultado-titulo" tabindex="-1">Resultado da simulação</h3>
@@ -83,36 +100,74 @@
     el('[data-robo-modo]').value = config.modo;
     el('[data-robo-diferenca]').value = config.diferenca || '';
     el('[data-robo-concorrentes]').value = String(config.concorrentes || 3);
+    el('[data-robo-estrategia]').value = config.estrategia;
+    const dicaEstrategia = () => {
+      const p = el('[data-robo-dica-estrategia]');
+      p.textContent = config.modo !== 'aberto_fechado' ? 'A estratégia só vale no modo Aberto e fechado. Nos outros modos o robô cobre o melhor lance até o seu piso.'
+        : config.estrategia === 'dentro10' ? 'Na fase aberta inicial o robô não faz nada. Na fase aleatória (até 10 min) ele só tenta ficar até 10% do 1º colocado, sem buscar o 1º lugar, para ser chamado ao lance fechado. No fim, sugere o lance fechado no seu piso.'
+          : 'O robô cobre o melhor lance a cada rodada até o seu piso, também na fase aleatória.';
+    };
+    dicaEstrategia();
     const estado = (t, tipo = '') => { const p = el('[data-robo-estado]'); p.textContent = t; p.dataset.situacao = tipo; };
-    const diferencaMinima = () => R().centavosDe(config.diferenca);
-    const cfgItem = (id) => ({ ligado: false, tipo: 'reais', valor: '', intervalo: '20', ...(config.itens[id] || {}) });
+    const diferencaMinima = (casas = 2) => R().valorDe(config.diferenca, casas);
+    const cfgItem = (id) => ({ ligado: false, tipo: 'reais', valor: '', intervalo: '20', situacao: 'aguardando', casas4: false, naoAguardar: false, melhorOutro: '', meu: '', ...(config.itens[id] || {}) });
+    const situacaoDe = (id) => (ABAS[cfgItem(id).situacao] ? cfgItem(id).situacao : 'aguardando');
+    const caixa = (campo, rotulo, marcado) => { const c = h('input', { type: 'checkbox', 'data-campo': campo }); c.checked = Boolean(marcado); return h('label', { classe: 'robo-opcao' }, c, ` ${rotulo}`); };
     const rotuloItem = (i) => `Item ${i.identificador || '—'}${i.descricao ? ` · ${String(i.descricao).slice(0, 80)}` : ''}`;
     const dadosItem = (i) => {
       const c = precos.get(i.id);
       return { piso: c?.limite ?? R().centavosDe(i.valorUnitarioMinimo), inicial: R().centavosDe(i.valorUnitario) ?? c?.alvo ?? null };
     };
 
+    function renderAbas() {
+      const contagem = Object.fromEntries(Object.keys(ABAS).map((k) => [k, itens.filter((i) => situacaoDe(i.id) === k).length]));
+      if (!ABAS[aba]) aba = ['disputa', 'aguardando', 'encerrado'].find((k) => contagem[k]) || 'aguardando';
+      el('[data-robo-abas]').replaceChildren(...Object.entries(ABAS).map(([k, t]) => h('button', { type: 'button', role: 'tab', id: `robo-aba-${k}`,
+        'aria-selected': k === aba ? 'true' : 'false', 'data-robo-aba': k, texto: `${t} (${contagem[k]})` })));
+      el('[data-robo-itens]').setAttribute('aria-labelledby', `robo-aba-${aba}`);
+    }
     function renderItens() {
-      const caixa = el('[data-robo-itens]');
-      if (!itens.length) { caixa.replaceChildren(h('p', { classe: 'itens-apoio', texto: 'Nenhum item no processo. Cadastre os itens em Itens do processo.' })); return; }
-      caixa.replaceChildren(...itens.map((i) => {
-        const cfg = cfgItem(i.id), d = dadosItem(i), p = `robo-${i.id}`;
-        const chec = parametrosItem({ ...d, cfg, diferencaMinima: diferencaMinima() });
-        return h('article', { classe: 'robo-item', 'data-robo-item': i.id, 'data-ligado': cfg.ligado ? 'sim' : 'nao' },
-          h('h4', { texto: rotuloItem(i) }),
+      const caixaItens = el('[data-robo-itens]');
+      if (!itens.length) { el('[data-robo-abas]').replaceChildren(); caixaItens.replaceChildren(h('p', { classe: 'itens-apoio', texto: 'Nenhum item no processo. Cadastre os itens em Itens do processo.' })); return; }
+      renderAbas();
+      const daAba = itens.filter((i) => situacaoDe(i.id) === aba);
+      if (!daAba.length) { caixaItens.replaceChildren(h('p', { classe: 'itens-apoio', texto: `Nenhum item em "${ABAS[aba]}". Mude a situação do item no próprio cartão.` })); return; }
+      caixaItens.replaceChildren(...daAba.map((i) => {
+        const cfg = cfgItem(i.id), d = dadosItem(i), p = `robo-${i.id}`, casas = cfg.casas4 ? 4 : 2, dif = diferencaMinima(casas), situacao = situacaoDe(i.id);
+        const chec = parametrosItem({ ...d, cfg, diferencaMinima: dif });
+        const aoVivo = situacao === 'disputa' && chec.ok
+          ? R().sugestaoAoVivo({ modo: config.modo, estrategia: config.estrategia, meu: R().valorDe(cfg.meu, casas), melhorOutro: R().valorDe(cfg.melhorOutro, casas), piso: chec.piso, decremento: chec.decremento, diferencaMinima: dif, casas })
+          : null;
+        const esperar = aoVivo?.valor && !cfg.naoAguardar && config.modo !== 'aberto_fechado' ? ' Aguarde os segundos finais do relógio para enviar.' : '';
+        const campoValor = (campo, rotulo, ajuda) => h('div', { classe: 'itens-campo' }, h('label', { for: `${p}-${campo}`, texto: rotulo }),
+          h('input', { id: `${p}-${campo}`, 'data-campo': campo, inputmode: 'decimal', autocomplete: 'off', placeholder: ajuda, value: cfg[campo] }));
+        const selSituacao = h('select', { id: `${p}-sit`, 'data-campo': 'situacao' }, ...Object.entries(ABAS).map(([v, t]) => h('option', { value: v, texto: t })));
+        selSituacao.value = situacao;
+        const textoDif = typeof dif === 'bigint' ? `mín. do edital: ${reais(dif, casas)}` : (cfg.tipo === 'percentual' ? 'Ex.: 0,5' : 'Ex.: 0,50');
+        return h('article', { classe: 'robo-item', 'data-robo-item': i.id, 'data-ligado': cfg.ligado ? 'sim' : 'nao', 'data-situacao-item': situacao },
+          h('div', { classe: 'robo-item-topo' }, h('h4', { texto: rotuloItem(i) }),
+            aoVivo?.selo ? h('span', { classe: 'robo-selo', 'data-selo': aoVivo.selo, texto: SELOS[aoVivo.selo] }) : null),
           h('dl', { classe: 'robo-valores' },
-            h('div', {}, h('dt', { texto: 'Sua proposta' }), h('dd', { texto: reais(d.inicial) })),
-            h('div', {}, h('dt', { texto: 'Piso (preço-limite)' }), h('dd', { texto: reais(d.piso) }))),
+            h('div', {}, h('dt', { texto: 'Sua proposta' }), h('dd', { texto: reais(chec.ok ? chec.inicial : d.inicial, chec.ok ? casas : 2) })),
+            h('div', {}, h('dt', { texto: 'Lance mínimo (seu piso)' }), h('dd', { texto: reais(chec.ok ? chec.piso : d.piso, chec.ok ? casas : 2) }))),
           h('div', { classe: 'robo-grade' },
-            h('div', { classe: 'itens-campo' }, h('label', { for: `${p}-dec`, texto: 'Decremento por lance' }),
+            h('div', { classe: 'itens-campo' }, h('label', { for: `${p}-sit`, texto: 'Situação no portal' }), selSituacao),
+            h('div', { classe: 'itens-campo' }, h('label', { for: `${p}-dec`, texto: 'Valor de cada redução' }),
               h('div', { classe: 'robo-junto' },
-                h('input', { id: `${p}-dec`, 'data-campo': 'valor', inputmode: 'decimal', autocomplete: 'off', placeholder: cfg.tipo === 'percentual' ? 'Ex.: 0,5' : 'Ex.: 0,50', value: cfg.valor }),
-                (() => { const s = h('select', { 'data-campo': 'tipo', 'aria-label': 'Unidade do decremento' }, h('option', { value: 'reais', texto: 'R$' }), h('option', { value: 'percentual', texto: '%' })); s.value = cfg.tipo; return s; })())),
+                h('input', { id: `${p}-dec`, 'data-campo': 'valor', inputmode: 'decimal', autocomplete: 'off', placeholder: textoDif, value: cfg.valor }),
+                (() => { const s = h('select', { 'data-campo': 'tipo', 'aria-label': 'Unidade da redução' }, h('option', { value: 'reais', texto: 'R$' }), h('option', { value: 'percentual', texto: '%' })); s.value = cfg.tipo; return s; })())),
             h('div', { classe: 'itens-campo' }, h('label', { for: `${p}-int`, texto: 'Intervalo entre seus lances (s)' }),
               h('input', { id: `${p}-int`, 'data-campo': 'intervalo', inputmode: 'numeric', autocomplete: 'off', placeholder: 'mín. 20', value: cfg.intervalo }))),
+          h('div', { classe: 'robo-opcoes' },
+            caixa('casas4', 'Permitir lances com 4 casas decimais', cfg.casas4),
+            caixa('naoAguardar', 'Não aguardar os segundos finais para enviar lances', cfg.naoAguardar)),
+          situacao === 'disputa' ? h('div', { classe: 'robo-ao-vivo' },
+            h('div', { classe: 'robo-grade' }, campoValor('melhorOutro', 'Melhor lance de outro fornecedor (R$)', 'como aparece no portal'), campoValor('meu', 'Meu lance (R$)', 'como aparece no portal')),
+            h('p', { classe: 'robo-sugestao', 'data-robo-sugestao': '', role: 'status', 'aria-live': 'polite', 'data-tem-valor': aoVivo?.valor ? 'sim' : 'nao',
+              texto: aoVivo ? aoVivo.texto + esperar : (chec.ok ? '' : 'Complete a configuração do item para ver a sugestão.') })) : null,
           h('label', { classe: 'robo-ligar' }, (() => { const c = h('input', { type: 'checkbox', 'data-campo': 'ligado' }); c.checked = cfg.ligado; return c; })(), ' Robô ligado neste item'),
           h('p', { classe: 'itens-campo-estado', 'data-situacao': chec.ok ? (chec.aviso ? 'erro' : 'ok') : (cfg.valor || cfg.ligado ? 'erro' : ''), 'aria-live': 'polite',
-            texto: chec.ok ? (chec.aviso || `Pronto: baixa ${reais(chec.decremento)} por lance, até ${reais(chec.piso)}.`) : (cfg.valor || cfg.ligado || d.piso === null ? chec.erro : 'Informe o decremento.') }));
+            texto: chec.ok ? (chec.aviso || `Pronto: baixa ${reais(chec.decremento, casas)} por lance${chec.doEdital ? ' (diferença mínima do edital)' : ''}, até ${reais(chec.piso, casas)}.`) : (cfg.valor || cfg.ligado || d.piso === null ? chec.erro : 'Informe o valor de cada redução ou a diferença mínima do edital.') }));
       }));
     }
     function renderRegistro() {
@@ -150,24 +205,26 @@
     }
 
     function simular() {
-      const modo = config.modo, dif = diferencaMinima(), qtd = Number(config.concorrentes || 3);
+      const modo = config.modo, qtd = Number(config.concorrentes || 3);
       const ligados = itens.filter((i) => cfgItem(i.id).ligado);
       if (!ligados.length) { estado('Ligue o robô em pelo menos um item.', 'erro'); return; }
       config.rodada += 1; salvarConfig();
       const em = new Date().toISOString(), resumo = [], linhas = [];
       for (const i of ligados) {
-        const par = parametrosItem({ ...dadosItem(i), cfg: cfgItem(i.id), diferencaMinima: dif });
+        const cfg = cfgItem(i.id), casas = cfg.casas4 ? 4 : 2, dif = diferencaMinima(casas);
+        const par = parametrosItem({ ...dadosItem(i), cfg, diferencaMinima: dif });
         const rotulo = rotuloItem(i);
         if (!par.ok) { resumo.push(h('li', { 'data-situacao': 'erro', texto: `${rotulo}: ${par.erro}` })); continue; }
         // Semente = rodada + posição do item: a mesma rodada se repete igual, a próxima muda os concorrentes.
         const semente = config.rodada * 1000 + itens.indexOf(i) + 1;
         const concorrentes = R().gerarConcorrentes({ semente, quantidade: qtd, referencia: par.inicial, piso: par.piso });
-        const { log, resultado } = R().simular({ itemId: i.id, modo, piso: par.piso, inicial: par.inicial, decremento: par.decremento, intervalo: par.intervalo, diferencaMinima: dif, concorrentes, semente });
+        const { log, resultado } = R().simular({ itemId: i.id, modo, piso: par.piso, inicial: par.inicial, decremento: par.decremento, intervalo: par.intervalo, diferencaMinima: dif, concorrentes, semente,
+          casas, aguardarFinal: !cfg.naoAguardar, estrategia: config.estrategia });
         resumo.push(h('li', { 'data-situacao': resultado.voceVenceu ? 'ok' : 'atencao' },
           h('strong', { texto: `${rotulo}: ` }),
-          h('span', { texto: resultado.voceVenceu ? `você ficou em 1º com ${reais(resultado.seu)}` : `você ficou em ${resultado.posicao}º com ${reais(resultado.seu)}; melhor ${reais(resultado.melhor)}` }),
+          h('span', { texto: resultado.voceVenceu ? `você ficou em 1º com ${reais(resultado.seu, casas)}` : `você ficou em ${resultado.posicao}º com ${reais(resultado.seu, casas)}; melhor ${reais(resultado.melhor, casas)}` }),
           h('span', { classe: 'itens-apoio', texto: ` · ${resultado.sugestoes} sugestões · ${resultado.prorrogacoes} prorrogações · ${R().relogio(resultado.fimMs)} de disputa` })));
-        for (const e of log) linhas.push(h('tr', { 'data-tipo': e.tipo }, h('td', { texto: R().relogio(e.t) }), h('td', { texto: i.identificador || '—' }), h('td', { texto: e.texto }), h('td', { texto: e.valor === null ? '' : reais(e.valor) })));
+        for (const e of log) linhas.push(h('tr', { 'data-tipo': e.tipo }, h('td', { texto: R().relogio(e.t) }), h('td', { texto: i.identificador || '—' }), h('td', { texto: e.texto }), h('td', { texto: e.valor === null ? '' : reais(e.valor, casas) })));
         registro = registro.concat(entradasRegistro(log, { itemId: i.id, rotulo, modo, rodada: config.rodada, em })).slice(-LIMITE_REGISTRO);
       }
       gravar(chaveRegistro, registro);
@@ -181,7 +238,8 @@
 
     alvo.addEventListener('change', (ev) => {
       const t = ev.target;
-      if (t.dataset.roboModo !== undefined) config.modo = R().MODOS[t.value] ? t.value : 'aberto';
+      if (t.dataset.roboModo !== undefined) { config.modo = R().MODOS[t.value] ? t.value : 'aberto'; dicaEstrategia(); renderItens(); }
+      else if (t.dataset.roboEstrategia !== undefined) { config.estrategia = R().ESTRATEGIAS[t.value] ? t.value : 'dentro10'; dicaEstrategia(); renderItens(); }
       else if (t.dataset.roboDiferenca !== undefined) { config.diferenca = t.value.trim(); renderItens(); }
       else if (t.dataset.roboConcorrentes !== undefined) config.concorrentes = Number(t.value);
       else if (t.dataset.campo) {
@@ -190,15 +248,17 @@
         const cfg = cfgItem(id);
         cfg[t.dataset.campo] = t.type === 'checkbox' ? t.checked : t.value.trim().slice(0, 20);
         config.itens[id] = cfg;
+        // Mudou a situação: o item vai para outra aba; a aba atual continua a mesma.
         renderItens();
-        doc.getElementById(t.id)?.focus?.();
+        (t.id ? doc.getElementById(t.id) : alvo.querySelector(`[data-robo-item="${id}"] [data-campo="${t.dataset.campo}"]`))?.focus?.();
       } else return;
       salvarConfig();
     });
     alvo.addEventListener('click', (ev) => {
       const b = ev.target.closest?.('button');
       if (!b) return;
-      if (b.dataset.roboSimular !== undefined) simular();
+      if (b.dataset.roboAba) { aba = b.dataset.roboAba; renderItens(); el(`#robo-aba-${aba}`)?.focus?.(); }
+      else if (b.dataset.roboSimular !== undefined) simular();
       else if (b.dataset.roboAtualizar !== undefined) void carregar();
       else if (b.dataset.roboLimpar !== undefined) { registro = []; gravar(chaveRegistro, registro); renderRegistro(); }
     });

@@ -96,3 +96,9 @@ test('popup captura tentativa durante await e n�o cancela nova associa��o 
   assert.equal(active,'nova');assert.ok(cancelled.length>0);assert.ok(cancelled.every(id=>id==='antiga'));
   assert.equal(app.elements.adopt.disabled,false);
 });
+
+test('popup descreve o que a extensão faz hoje, sem o texto antigo de protótipo', async () => {
+  const html = await readFile(new URL('./popup.html', import.meta.url), 'utf8');
+  assert.doesNotMatch(html, /Protótipo somente leitura|Sem conexão com o SaaS/);
+  assert.match(html, /Grava o pregão aberto na aba, preenche a proposta no Compras\.gov \(você confere e salva cada item\), acompanha o chat do pregoeiro e envia um diagnóstico/);
+});

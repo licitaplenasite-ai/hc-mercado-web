@@ -44,6 +44,8 @@
     esteira: cliente && globalThis.LicitaChecklistEsteira ? { montar: (o) => globalThis.LicitaChecklistEsteira.montar({ ...o, cliente }) } : null,
     // Licitação anterior do processo: mesma sessão (RLS) do checklist.
     anterior: cliente && globalThis.LicitaLicitacaoAnterior ? { montar: (o) => globalThis.LicitaLicitacaoAnterior.montar({ ...o, cliente }) } : null,
+    // "Mudou algo no edital?" (monitor-processo-ui.js): mesma sessão (RLS).
+    monitor: cliente && globalThis.LicitaMonitorProcesso ? { montar: (o) => globalThis.LicitaMonitorProcesso.montar({ ...o, cliente }) } : null,
     // Robô de lances (modo assistido): configuração e registro no localStorage deste navegador.
     robo: globalThis.LicitaRoboLancesUI ? { montar: (o) => globalThis.LicitaRoboLancesUI.montar({ ...o, storage }) } : null,
     confirmar: (mensagem) => globalThis.confirm(mensagem),
@@ -94,4 +96,6 @@
   });
 
   ctrl.iniciar();
+  // Bloco do Hoje com as mudanças de edital dos últimos 7 dias; o próprio módulo some sem dados ou sem a tabela.
+  if (cliente) void globalThis.LicitaMonitorProcesso?.montarHoje({ alvo: doc.getElementById('hoje-monitor'), cliente, abrir: (e, p) => ctrl.abrirProcesso(e, p) });
 })();

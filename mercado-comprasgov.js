@@ -1,4 +1,4 @@
-/* global module, URLSearchParams */
+/* global module, URLSearchParams, URL, Blob, setTimeout */
 // "Buscar no mercado (Compras.gov)": produtos já licitados com marca declarada, preço homologado, órgão e data.
 // Fonte: /api/comprasgov-marcas-produto (Catálogo CATMAT + Pesquisa de Preços, dados abertos, sem login).
 // Usado no Catálogo de produtos (operacao.html, "Adicionar ao catálogo") e no preço por item (sistema.html, "Usar esta marca").
@@ -101,16 +101,77 @@
     };
   }
 
+  // A fonte tem um campo só de marca ("VAIO FE16", "THINKPAD P16V GEN2"). Com número depois da 1ª palavra, o resto é
+  // modelo; sem número ("Melitta do Brasil", "REPORT / SUZANO") é tudo marca. Modelo rotulado pela fonte prevalece.
+  function marcaModelo(item) {
+    if (!item || !item.marca || item.modelo) return item;
+    const marca = String(item.marca).trim().replace(/\s+/g, ' ');
+    const [primeira, ...resto] = marca.split(' ');
+    if (!resto.length || marca.includes('/') || !/\d/.test(resto.join(' '))) return item;
+    return { ...item, marca: primeira, modelo: resto.join(' ').slice(0, 60) };
+  }
+  // Período em meses contado de hoje (data local), esfera F/E/M e faixa de quantidade. Vazio = sem filtro.
+  function filtrarCompras(itens, { meses = '', esfera = '', qtdMin = '', qtdMax = '' } = {}, hoje = hojeLocal()) {
+    let corte = '';
+    if (Number(meses) > 0) {
+      const [a, m, d] = hoje.split('-').map(Number);
+      const alvo = new Date(a, m - 1 - Number(meses), d);
+      corte = hojeLocal(alvo);
+    }
+    const min = qtdMin === '' ? null : Number(qtdMin), max = qtdMax === '' ? null : Number(qtdMax);
+    return (itens || []).filter((i) => (!corte || String(i.dataResultado || '') >= corte) && (!esfera || i.esfera === esfera)
+      && (min === null || !Number.isFinite(min) || (Number(i.quantidade) || 0) >= min) && (max === null || !Number.isFinite(max) || (Number(i.quantidade) || 0) <= max));
+  }
+  // Agrupa por uma chave e resume preço (unidade dominante do grupo) e último preço. Base das tabelas de modelo e vencedor.
+  function agrupar(itens, chave, nome) {
+    const grupos = new Map();
+    for (const i of itens) { const k = chave(i); if (!k) continue; (grupos.get(k) || grupos.set(k, []).get(k)).push(i); }
+    return [...grupos.entries()].map(([k, lista]) => {
+      lista.sort((a, b) => String(b.dataResultado).localeCompare(String(a.dataResultado)));
+      const unidade = contar(lista, 'unidade')[0]?.[0] || '';
+      return { chave: k, nome: nome(lista[0]), quantidade: lista.length, unidade, resumo: resumoPrecos(unidade ? filtrar(lista, { unidade }) : lista), ultimo: lista[0], itens: lista };
+    }).sort((a, b) => b.quantidade - a.quantidade || a.nome.localeCompare(b.nome, 'pt-BR'));
+  }
+  const resumoModelos = (itens) => agrupar(itens.filter((i) => i.marca && i.modelo), (i) => `${chaveMarca(i.marca)}|${chaveMarca(i.modelo)}`, (i) => `${String(i.marca).toLocaleUpperCase('pt-BR')} ${i.modelo}`);
+  // Vencedor = fornecedor que ganhou o item (a Pesquisa de Preços só traz preço homologado). CNPJ junta grafias do nome.
+  const resumoFornecedores = (itens) => agrupar(itens, (i) => String(i.documentoFornecedor || i.fornecedor || '').replace(/\D/g, '') || String(i.fornecedor || '').trim(), (i) => i.fornecedor || i.documentoFornecedor || 'Não informado')
+    .map((g) => ({ ...g, marcas: marcasDe(g.itens).filter((m) => m.chave !== SEM_MARCA).slice(0, 3).map((m) => m.nome) }));
+  const cnpj = (d) => (/^\d{14}$/.test(String(d || '')) ? String(d).replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') : String(d || ''));
+  // Total da compra em centavos sem float: quantidade inteira vai em BigInt; fracionária (kg, litro) arredonda o produto.
+  function totalCentavos(i) {
+    const c = i.valorUnitarioCentavos, q = Number(i.quantidade);
+    if (!Number.isSafeInteger(c) || !(q > 0)) return null;
+    const t = Number.isInteger(q) ? BigInt(c) * BigInt(q) : BigInt(Math.round(c * q));
+    return t <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(t) : null;
+  }
+  const ESFERAS = { F: 'Federal', E: 'Estadual', M: 'Municipal', D: 'Distrital' };
+  // Célula de texto que começa com = + - @ vira texto no Excel (injeção de fórmula).
+  const celulaSegura = (v) => { const t = v === null || v === undefined ? '' : String(v); return /^[=+\-@\t\r]/.test(t) ? `'${t}` : t; };
+  // Planilha das compras na tela: valores em reais como número (Excel soma), vindo de centavos inteiros.
+  function linhasPlanilha(itens) {
+    const reaisNum = (c) => (c === null || c === undefined ? '' : Number(reais(c)));
+    return [['Data', 'Órgão', 'UF', 'Município', 'Esfera', 'Produto do catálogo', 'Descrição', 'Marca', 'Modelo', 'Fornecedor vencedor', 'CNPJ', 'Quantidade', 'Unidade', 'Valor unitário (R$)', 'Valor total (R$)', 'Link da compra'],
+      ...(itens || []).map((i) => [dataBr(i.dataResultado), i.orgao, i.uf, i.municipio, ESFERAS[i.esfera] || '', i.produtoCatalogo, i.descricaoItem, i.marca, i.modelo, i.fornecedor, cnpj(i.documentoFornecedor),
+        Number(i.quantidade) || '', i.unidadeNome || i.unidade, reaisNum(i.valorUnitarioCentavos), reaisNum(totalCentavos(i)), i.link].map((c) => (typeof c === 'number' ? c : celulaSegura(c))))];
+  }
+
   // Zero compras com consulta que falhou não é "nenhuma compra": a fonte não respondeu (visto no E2E de 19/11/2026).
   function mensagemBusca(total, comMarca, falhas) {
     if (total) return `${total} compra(s) encontradas, ${comMarca} com marca declarada.${falhas ? ' Parte da fonte não respondeu: resultado parcial.' : ''}`;
     return falhas ? 'A fonte pública não respondeu agora. Tente de novo em instantes.' : 'Nenhuma compra para este termo. Tente um nome mais curto (ex.: "detergente").';
   }
 
-  // alvo: elemento vazio. aoUsar(item, resumo) recebe o resultado escolhido e o resumo do filtro atual.
-  function montar({ alvo, doc = global.document, requisitar = (...a) => global.fetch(...a), termo = '', rotuloUsar = 'Usar', aoUsar }) {
-    const estado = { itens: [], atributos: [], cartoes: [], filtro: { produto: '', unidade: '', marca: '' }, buscando: false };
-    const unidadePrincipal = (produto) => contar(porEspecificacao(filtrar(estado.itens, { produto })).base, 'unidade')[0]?.[0] || '';
+  const UFS = 'AC AL AM AP BA CE DF ES GO MA MG MS MT PA PB PE PI PR RJ RN RO RR RS SC SE SP TO'.split(' ');
+  // Páginas de 200 compras carregadas sozinhas ao escolher o produto (a fonte devolve da mais recente para a mais antiga).
+  const PAGINAS_INICIAIS = 3;
+  const milhar = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+
+  // Uma caixa de busca: termo -> produtos do catálogo (chips, o mais provável já escolhido) -> marcas, modelos,
+  // vencedores e compras. alvo: elemento vazio. aoUsar(item, resumo) recebe o resultado escolhido e o resumo do filtro atual.
+  function montar({ alvo, doc = global.document, requisitar = (...a) => global.fetch(...a), termo = '', rotuloUsar = 'Usar', aoUsar, hoje = hojeLocal }) {
+    const estado = { termo: '', uf: '', catalogos: [], pdm: '', porPdm: new Map(), atributos: [], cartoes: [], mostrar: MOSTRAR,
+      filtro: { unidade: '', marca: '', meses: '', esfera: '', qtdMin: '', qtdMax: '' }, buscando: false, geracao: 0, falhas: 0 };
+    Object.defineProperty(estado, 'itens', { get: () => estado.porPdm.get(estado.pdm)?.itens || [] });
     const h = (tag, attrs = {}, ...filhos) => {
       const e = doc.createElement(tag);
       for (const [k, v] of Object.entries(attrs)) { if (v === null || v === undefined || v === false) continue; if (k === 'texto') e.textContent = v; else if (k === 'classe') e.className = v; else e.setAttribute(k, v === true ? '' : String(v)); }
@@ -118,121 +179,245 @@
       return e;
     };
     const id = `mercado-${Math.random().toString(36).slice(2, 8)}`;
-    const campo = h('input', { type: 'search', id: `${id}-termo`, maxlength: 100, autocomplete: 'off', placeholder: 'Ex.: papel A4, caneta esferográfica, detergente' });
+    const campo = h('input', { type: 'search', id: `${id}-termo`, maxlength: 100, autocomplete: 'off', placeholder: 'Ex.: notebook, papel A4, cadeira giratória, café, pneu' });
     campo.value = termo;
     const botao = h('button', { type: 'submit', classe: 'btn primario', texto: 'Buscar' });
     const status = h('p', { classe: 'nota', role: 'status', 'aria-live': 'polite' });
+    const chipsEl = h('div', { classe: 'mercado-chips', role: 'group', 'aria-label': 'Produto do catálogo', hidden: true });
     const filtros = h('div', { classe: 'mercado-filtros', hidden: true });
     const resumoEl = h('div', { classe: 'mercado-resumo', 'aria-live': 'polite' });
     const marcasEl = h('div', { classe: 'mercado-marcas-caixa' });
     const lista = h('div', { classe: 'mercado-compras' });
     const form = h('form', { classe: 'mercado-busca', role: 'search' }, h('label', { for: campo.id, texto: 'Produto' }), h('div', { classe: 'mercado-linha' }, campo, botao));
-    alvo.replaceChildren(form, status, filtros, resumoEl, marcasEl, lista,
-      h('p', { classe: 'nota', texto: 'Fonte: Pesquisa de Preços e Catálogo do Compras.gov (dados abertos). Preço homologado pago pelo órgão: serve de referência, não é o seu custo. Marca e modelo são o que o fornecedor declarou.' }));
+    alvo.replaceChildren(form, status, chipsEl, filtros, resumoEl, marcasEl, lista,
+      h('p', { classe: 'nota', texto: 'Fonte: Pesquisa de Preços e Catálogo do Compras.gov (dados abertos): compras homologadas no Compras.gov, principalmente de órgãos federais e dos estaduais e municipais que usam o sistema. Preço homologado pago pelo órgão: serve de referência, não é o seu custo. Marca e modelo são o que o fornecedor vencedor declarou.' }));
 
+    const pdmAtual = () => estado.catalogos.find((c) => String(c.codigo) === estado.pdm);
+    const unidadePrincipal = () => contar(porEspecificacao(estado.itens).base, 'unidade')[0]?.[0] || '';
     function select(nome, rotulo, opcoes) {
       const s = h('select', { id: `${id}-${nome}`, 'data-filtro': nome });
-      for (const [valor, texto] of opcoes) { const o = h('option', { value: valor, texto }); if (valor === estado.filtro[nome]) o.selected = true; s.append(o); }
+      const atual = nome === 'uf' ? estado.uf : estado.filtro[nome];
+      for (const [valor, texto] of opcoes) { const o = h('option', { value: valor, texto }); if (valor === atual) o.selected = true; s.append(o); }
       return h('div', { classe: 'mercado-campo' }, h('label', { for: s.id, texto: rotulo }), s);
     }
-    // Uma compra da lista. mediana = da unidade da compra, para o selo "fora da curva" (null nas recolhidas).
-    function cartao(i, mediana) {
+    function numero(nome, rotulo) {
+      const e = h('input', { id: `${id}-${nome}`, type: 'number', min: 0, inputmode: 'numeric', 'data-filtro': nome });
+      e.value = estado.filtro[nome];
+      return h('div', { classe: 'mercado-campo' }, h('label', { for: e.id, texto: rotulo }), e);
+    }
+    const td = (rotulo, ...filhos) => h('td', { 'data-rotulo': rotulo }, ...filhos);
+    const tabela = (classe, cabecalho, linhas) => h('div', { classe: 'mercado-tabela' }, h('table', { classe: `mercado-marcas ${classe}`.trim() },
+      h('thead', {}, h('tr', {}, ...cabecalho.map((t) => h('th', { scope: 'col', texto: t })))), h('tbody', {}, ...linhas)));
+    const marcaTexto = (i) => (i.marca ? [String(i.marca).toLocaleUpperCase('pt-BR'), i.modelo].filter(Boolean).join(' · ') : 'Marca não informada');
+    const vencedorTexto = (i) => [i.fornecedor || 'Não informado', i.documentoFornecedor ? cnpj(i.documentoFornecedor) : ''].filter(Boolean).join(' · ');
+    const ultimoTexto = (i) => (i ? `${brl(i.valorUnitarioCentavos)} em ${dataBr(i.dataResultado)}` : '—');
+
+    // Uma compra: quem ganhou, onde, quando, quanto. mediana = da unidade da compra, para o selo "fora da curva" (null nas recolhidas).
+    function linhaCompra(i, mediana) {
       const k = estado.cartoes.push(i) - 1;
       const curva = foraDaCurva(i.valorUnitarioCentavos, mediana);
-      return h('li', { classe: 'mercado-item' },
-        h('strong', { texto: i.marca ? [i.marca, i.modelo].filter(Boolean).join(' · modelo ') : 'Marca não informada' }),
-        curva ? h('span', { classe: 'mercado-selo', texto: curva === 'acima' ? 'Fora da curva: mais de 3× a mediana' : 'Fora da curva: menos de 1/3 da mediana' }) : null,
-        h('p', { classe: 'nota', texto: `Fabricante: ${i.fabricante || 'não informado na fonte'}` }),
-        h('p', { texto: String(i.descricaoItem || '').slice(0, 220) }),
-        h('p', {}, h('strong', { texto: `${brl(i.valorUnitarioCentavos)} por ${i.unidadeNome || i.unidade || 'unidade'}${i.embalagem ? ` (${i.embalagem})` : ''}` }), ` · ${i.orgao || 'Órgão não informado'}${i.uf ? `/${i.uf}` : ''} · ${dataBr(i.dataResultado)}`),
-        h('div', { classe: 'mercado-acoes' },
-          i.link ? h('a', { href: i.link, target: '_blank', rel: 'noopener noreferrer', texto: 'Ver compra na fonte' }) : null,
-          typeof aoUsar === 'function' && i.marca ? h('button', { type: 'button', classe: 'btn', 'data-mercado-usar': String(k), texto: rotuloUsar }) : null));
+      const total = totalCentavos(i);
+      return h('tr', {},
+        // Link na célula da data: sem coluna só para ele, a tabela cabe nos 1280 px do painel.
+        td('Data', dataBr(i.dataResultado), i.link ? h('a', { classe: 'mercado-desc', href: i.link, target: '_blank', rel: 'noopener noreferrer', texto: 'Ver compra' }) : null),
+        td('Órgão', `${i.orgao || 'Órgão não informado'}${i.uf ? `/${i.uf}` : ''}`, i.esfera ? h('span', { classe: 'mercado-desc', texto: ESFERAS[i.esfera] || i.esfera }) : null),
+        td('Marca e modelo', h('strong', { texto: marcaTexto(i) }), h('span', { classe: 'mercado-desc', texto: String(i.descricaoItem || '').slice(0, 110) })),
+        td('Vencedor', vencedorTexto(i)),
+        td('Qtd.', `${i.quantidade ? milhar(i.quantidade) : '—'} ${i.unidade || ''}${i.embalagem ? ` (${i.embalagem})` : ''}`),
+        td('Valor unitário', h('strong', { texto: brl(i.valorUnitarioCentavos) }), curva ? h('span', { classe: 'mercado-selo', texto: curva === 'acima' ? 'Fora da curva: mais de 3× a mediana' : 'Fora da curva: menos de 1/3 da mediana' }) : null),
+        td('Total', total === null ? '—' : brl(total)),
+        typeof aoUsar === 'function' ? td('', i.marca ? h('button', { type: 'button', classe: 'btn', 'data-mercado-usar': String(k), texto: rotuloUsar }) : null) : null);
     }
-    // Tabela por marca antes da lista: clique na marca filtra; o botão usa a mediana da marca como referência.
-    function tabelaMarcas(marcas) {
+    const tabelaCompras = (itens, medianas) => tabela('mercado-compras-tabela', ['Data', 'Órgão', 'Marca e modelo', 'Vencedor', 'Qtd.', 'Valor unitário', 'Total', ...(typeof aoUsar === 'function' ? [''] : [])],
+      itens.map((i) => linhaCompra(i, medianas ? medianas.get(i.unidade) : null)));
+
+    // Marcas (clique filtra; o botão usa a mediana da marca), modelos e empresas vencedoras das compras filtradas.
+    function tabelasResumo(marcas, base) {
       const mostrar = estado.todasMarcas ? marcas : [...marcas.filter((m) => m.chave !== SEM_MARCA).slice(0, MARCAS_INICIAIS), ...marcas.filter((m) => m.chave === SEM_MARCA)];
       estado.marcas = marcas;
-      const td = (rotulo, ...filhos) => h('td', { 'data-rotulo': rotulo }, ...filhos);
-      const linhas = mostrar.map((m) => h('tr', { classe: m.chave === estado.filtro.marca ? 'ativa' : null },
-        td('Marca', h('button', { type: 'button', classe: 'mercado-marca-nome', 'data-mercado-marca': m.chave, 'aria-pressed': String(m.chave === estado.filtro.marca), texto: m.nome })),
-        td('Compras', String(m.quantidade)),
-        td('Mediana', h('strong', { texto: brl(m.resumo.mediana) }), m.unidade ? ` / ${m.unidade}` : ''),
-        td('Faixa', m.resumo.quantidade > 1 ? `${brl(m.resumo.minimo)} – ${brl(m.resumo.maximo)}` : '—'),
-        td('Últimos órgãos', m.locais.join('; ') || '—'),
-        td('Última compra', dataBr(m.ultimaData)),
-        td('', typeof aoUsar === 'function' && m.chave !== SEM_MARCA ? h('button', { type: 'button', classe: 'btn', 'data-mercado-marca-usar': String(marcas.indexOf(m)), texto: rotuloUsar }) : null)));
-      const cab = ['Marca', 'Compras', 'Mediana', 'Faixa (mín–máx)', 'Últimos órgãos', 'Última compra', ''].map((t) => h('th', { scope: 'col', texto: t }));
+      const modelos = resumoModelos(base), vencedores = resumoFornecedores(base);
+      const linhas = mostrar.map((m) => {
+        const mods = modelos.filter((x) => x.chave.startsWith(`${m.chave}|`)).slice(0, 3).map((x) => x.itens[0].modelo);
+        const venc = resumoFornecedores(filtrar(base, { marca: m.chave })).slice(0, 2).map((v) => `${v.nome} (${v.quantidade})`);
+        return h('tr', { classe: m.chave === estado.filtro.marca ? 'ativa' : null },
+          td('Marca', h('button', { type: 'button', classe: 'mercado-marca-nome', 'data-mercado-marca': m.chave, 'aria-pressed': String(m.chave === estado.filtro.marca), texto: m.nome })),
+          td('Compras', String(m.quantidade)),
+          td('Mediana', h('strong', { texto: brl(m.resumo.mediana) }), m.unidade ? ` / ${m.unidade}` : ''),
+          td('Faixa', m.resumo.quantidade > 1 ? `${brl(m.resumo.minimo)} – ${brl(m.resumo.maximo)}` : '—'),
+          td('Último preço', ultimoTexto(m.representante)),
+          td('Modelos', mods.join('; ') || '—'),
+          td('Quem ganhou', venc.join('; ') || '—'),
+          typeof aoUsar !== 'function' ? null : td('', m.chave !== SEM_MARCA ? h('button', { type: 'button', classe: 'btn', 'data-mercado-marca-usar': String(marcas.indexOf(m)), texto: rotuloUsar }) : null));
+      });
       const escondidas = marcas.length - mostrar.length;
-      return [h('h3', { classe: 'mercado-subtitulo', texto: 'Resumo por marca' }),
+      const blocos = [h('h3', { classe: 'mercado-subtitulo', texto: 'Marcas que ganharam' }),
         h('p', { classe: 'nota', texto: 'Ordenado pelo número de compras ganhas. Clique na marca para ver só as compras dela.' }),
-        h('div', { classe: 'mercado-tabela' }, h('table', { classe: 'mercado-marcas' }, h('thead', {}, h('tr', {}, ...cab)), h('tbody', {}, ...linhas))),
+        tabela('', ['Marca', 'Compras', 'Mediana', 'Faixa (mín–máx)', 'Último preço', 'Modelos', 'Quem ganhou (vitórias)', ...(typeof aoUsar === 'function' ? [''] : [])], linhas),
         escondidas > 0 || estado.todasMarcas ? h('button', { type: 'button', classe: 'btn', 'data-mercado-todas': '1', texto: estado.todasMarcas ? 'Mostrar só as principais' : `Ver todas as marcas (+${escondidas})` }) : null];
+      if (modelos.length) blocos.push(h('h3', { classe: 'mercado-subtitulo', texto: 'Modelos mais vendidos' }),
+        tabela('', ['Marca e modelo', 'Compras', 'Mediana', 'Último preço'], modelos.slice(0, 10).map((x) => h('tr', {},
+          td('Marca e modelo', h('strong', { texto: x.nome })), td('Compras', String(x.quantidade)),
+          td('Mediana', `${brl(x.resumo.mediana)}${x.unidade ? ` / ${x.unidade}` : ''}`), td('Último preço', ultimoTexto(x.ultimo))))));
+      if (vencedores.length) blocos.push(h('h3', { classe: 'mercado-subtitulo', texto: 'Empresas vencedoras' }),
+        tabela('', ['Empresa', 'Vitórias', 'Marcas', 'Mediana', 'Última vitória'], vencedores.slice(0, 10).map((v) => h('tr', {},
+          td('Empresa', h('strong', { texto: v.nome }), v.ultimo.documentoFornecedor ? h('span', { classe: 'mercado-desc', texto: cnpj(v.ultimo.documentoFornecedor) }) : null),
+          td('Vitórias', String(v.quantidade)), td('Marcas', v.marcas.join('; ') || '—'),
+          td('Mediana', `${brl(v.resumo.mediana)}${v.unidade ? ` / ${v.unidade}` : ''}`),
+          td('Última vitória', `${dataBr(v.ultimo.dataResultado)} · ${v.ultimo.orgao || ''}${v.ultimo.uf ? `/${v.ultimo.uf}` : ''}`)))));
+      return blocos.filter(Boolean);
     }
-    function desenhar() {
-      const doProduto = filtrar(estado.itens, { produto: estado.filtro.produto });
-      const { base, diferente } = porEspecificacao(filtrar(doProduto, { unidade: estado.filtro.unidade }));
-      const visiveis = filtrar(base, { marca: estado.filtro.marca });
-      const recolhidas = filtrar(diferente, { marca: estado.filtro.marca });
-      const produtos = contar(estado.itens, 'codigoPdm').map(([c, n]) => [String(c), `${estado.itens.find((i) => String(i.codigoPdm) === String(c)).produtoCatalogo} (${n})`]);
-      const unidades = contar(doProduto, 'unidade').map(([u, n]) => [u, `${u} (${n})`]);
-      const marcas = resumoMarcas(base);
-      filtros.hidden = !estado.itens.length;
-      filtros.replaceChildren(select('produto', 'Produto do catálogo', produtos), select('unidade', 'Unidade', [['', 'Todas'], ...unidades]), select('marca', 'Marca', [['', 'Todas as marcas'], ...marcas.map((m) => [m.chave, `${m.nome} (${m.quantidade})`])]));
+
+    function desenharChips() {
+      chipsEl.hidden = !estado.catalogos.length;
+      chipsEl.replaceChildren(h('span', { classe: 'mercado-chips-rotulo', texto: 'Produto do catálogo (nº de compras):' }), ...estado.catalogos.map((c) => h('button', {
+        type: 'button', classe: 'mercado-chip', 'data-mercado-pdm': String(c.codigo), 'aria-pressed': String(String(c.codigo) === estado.pdm),
+        texto: `${c.descricao}${Number.isSafeInteger(c.total) ? ` · ${milhar(c.total)}` : ''}` })));
+    }
+    function desenharResumo(grupo, base, diferente, visiveis, unidades, marcas, medianas) {
       const r = resumoPrecos(visiveis);
       const marcaNome = estado.filtro.marca && estado.filtro.marca !== SEM_MARCA ? marcas.find((m) => m.chave === estado.filtro.marca)?.nome : '';
       estado.resumo = { ...r, marca: marcaNome || '' };
-      const medianas = medianasPorUnidade(base);
+      const pdm = pdmAtual();
+      const datas = estado.itens.map((i) => i.dataResultado).filter(Boolean).sort();
+      resumoEl.append(h('p', { classe: 'nota', texto: `${milhar(estado.itens.length)} compra(s) mais recentes carregadas${pdm && Number.isSafeInteger(pdm.total) ? ` de ${milhar(pdm.total)} no Compras.gov` : ''}${estado.uf ? ` em ${estado.uf}` : ''}${datas.length ? `, de ${dataBr(datas[0])} a ${dataBr(datas.at(-1))}` : ''}.` }));
+      const atributos = estado.atributos.join(', ');
+      if (atributos) resumoEl.append(h('p', { classe: 'nota mercado-especificacao', texto: diferente.length || base.some((i) => i.especificacao)
+        ? `Especificação do termo: ${atributos}. Contas e marcas usam só as compras cuja descrição tem isso; ${diferente.length} com especificação diferente estão recolhidas no fim.`
+        : `Nenhuma compra traz "${atributos}" na descrição: as contas usam todas. Confira a especificação antes de usar o preço.` }));
+      resumoEl.append(h('p', { texto: r.quantidade ? `${r.quantidade} compra(s)${estado.filtro.unidade ? ` por ${estado.filtro.unidade}` : ''}${marcaNome ? ` da marca ${marcaNome}` : ''}:` : 'Nenhuma compra com estes filtros.' }));
+      if (r.quantidade) resumoEl.append(h('dl', { classe: 'mercado-numeros' }, ...[['Mediana (referência)', r.mediana, 'destaque'], ['Mínimo', r.minimo], ['Máximo', r.maximo], ['Média', r.media], ['Último preço', visiveis[0]?.valorUnitarioCentavos]]
+        .map(([t, c, classe]) => h('div', { classe }, h('dt', { texto: t }), h('dd', { texto: brl(c) })))));
       const fora = visiveis.filter((i) => foraDaCurva(i.valorUnitarioCentavos, medianas.get(i.unidade))).length;
-      resumoEl.replaceChildren(); marcasEl.replaceChildren(); estado.cartoes = [];
-      if (estado.itens.length) {
-        const atributos = estado.atributos.join(', ');
-        if (atributos) resumoEl.append(h('p', { classe: 'nota mercado-especificacao', texto: diferente.length || base.some((i) => i.especificacao)
-          ? `Especificação do termo: ${atributos}. Contas e marcas usam só as compras cuja descrição tem isso; ${diferente.length} com especificação diferente estão recolhidas no fim.`
-          : `Nenhuma compra traz "${atributos}" na descrição: as contas usam todas. Confira a especificação antes de usar o preço.` }));
-        resumoEl.append(h('p', { texto: r.quantidade ? `${r.quantidade} compra(s)${estado.filtro.unidade ? ` por ${estado.filtro.unidade}` : ''}${marcaNome ? ` da marca ${marcaNome}` : ''}:` : 'Nenhuma compra com estes filtros.' }));
-        if (r.quantidade) resumoEl.append(h('dl', { classe: 'mercado-numeros' }, ...[['Mediana (referência)', r.mediana, 'destaque'], ['Mínimo', r.minimo], ['Máximo', r.maximo], ['Média', r.media]].map(([t, c, classe]) => h('div', { classe }, h('dt', { texto: t }), h('dd', { texto: brl(c) })))));
-        if (fora) resumoEl.append(h('p', { classe: 'nota', texto: `${fora} compra(s) fora da curva (mais de 3× ou menos de 1/3 da mediana) estão marcadas na lista e distorcem a média: use a mediana.` }));
-        if (!estado.filtro.unidade && unidades.length > 1) resumoEl.append(h('p', { classe: 'nota', texto: 'Há unidades diferentes (unidade, caixa, pacote…). Escolha uma unidade para comparar preço com preço.' }));
-        if (marcas.length) marcasEl.append(...tabelaMarcas(marcas).filter(Boolean));
-      }
-      lista.replaceChildren(h('ul', { classe: 'mercado-lista' }, ...visiveis.slice(0, MOSTRAR).map((i) => cartao(i, medianas.get(i.unidade)))));
-      if (visiveis.length > MOSTRAR) lista.append(h('p', { classe: 'nota', texto: `Mostrando ${MOSTRAR} de ${visiveis.length}. Use os filtros para ver as demais.` }));
+      if (fora) resumoEl.append(h('p', { classe: 'nota', texto: `${fora} compra(s) fora da curva (mais de 3× ou menos de 1/3 da mediana) estão marcadas na lista e distorcem a média: use a mediana.` }));
+      if (!estado.filtro.unidade && unidades.length > 1) resumoEl.append(h('p', { classe: 'nota', texto: 'Há unidades diferentes (unidade, caixa, pacote…). Escolha uma unidade para comparar preço com preço.' }));
+    }
+    function desenhar() {
+      desenharChips();
+      const grupo = estado.porPdm.get(estado.pdm);
+      const { base: baseEsp, diferente: difEsp } = porEspecificacao(filtrarCompras(estado.itens, estado.filtro, hoje()));
+      const base = filtrar(baseEsp, { unidade: estado.filtro.unidade }), diferente = filtrar(difEsp, { unidade: estado.filtro.unidade });
+      const visiveis = filtrar(base, { marca: estado.filtro.marca });
+      const recolhidas = filtrar(diferente, { marca: estado.filtro.marca });
+      const unidades = contar(baseEsp, 'unidade').map(([u, n]) => [u, `${u} (${n})`]);
+      const marcas = resumoMarcas(base);
+      const medianas = medianasPorUnidade(base);
+      estado.visiveis = visiveis;
+      filtros.hidden = !estado.catalogos.length;
+      filtros.replaceChildren(
+        select('uf', 'UF', [['', 'Todas'], ...UFS.map((u) => [u, u])]),
+        select('meses', 'Período', [['', 'Tudo'], ['12', 'Últimos 12 meses'], ['24', 'Últimos 24 meses']]),
+        select('esfera', 'Esfera', [['', 'Todas'], ['F', 'Federal'], ['E', 'Estadual'], ['M', 'Municipal']]),
+        select('unidade', 'Unidade', [['', 'Todas'], ...unidades]),
+        select('marca', 'Marca', [['', 'Todas as marcas'], ...marcas.map((m) => [m.chave, `${m.nome} (${m.quantidade})`])]),
+        numero('qtdMin', 'Quantidade mínima'), numero('qtdMax', 'Quantidade máxima'));
+      resumoEl.replaceChildren(); marcasEl.replaceChildren(); lista.replaceChildren(); estado.cartoes = [];
+      if (!grupo) return;
+      desenharResumo(grupo, base, diferente, visiveis, unidades, marcas, medianas);
+      if (marcas.length) marcasEl.append(...tabelasResumo(marcas, base));
+      lista.append(h('div', { classe: 'mercado-lista-topo' }, h('h3', { classe: 'mercado-subtitulo', texto: 'Compras: quem ganhou, onde e por quanto' }),
+        visiveis.length ? h('button', { type: 'button', classe: 'btn', 'data-mercado-planilha': '1', texto: 'Baixar planilha (Excel)' }) : null));
+      if (visiveis.length) lista.append(tabelaCompras(visiveis.slice(0, estado.mostrar), medianas));
+      if (visiveis.length > estado.mostrar) lista.append(h('button', { type: 'button', classe: 'btn', 'data-mercado-mais-linhas': '1', texto: `Mostrar mais compras (${estado.mostrar} de ${visiveis.length})` }));
+      if (grupo.paginas && grupo.carregadas < grupo.paginas && !grupo.carregando) lista.append(h('button', { type: 'button', classe: 'btn', 'data-mercado-mais': '1', texto: 'Buscar mais 200 compras antigas na fonte' }));
       if (recolhidas.length) lista.append(h('details', { classe: 'mercado-diferentes' }, h('summary', { texto: `Especificação diferente (${recolhidas.length}): descrição sem ${estado.atributos.join(', ')}` }),
-        h('ul', { classe: 'mercado-lista' }, ...recolhidas.slice(0, MOSTRAR).map((i) => cartao(i, null)))));
+        tabelaCompras(recolhidas.slice(0, MOSTRAR), null)));
+    }
+
+    // 200 compras de um produto por chamada (1 subrequisição na fonte). geracao: uma busca nova descarta respostas antigas.
+    async function carregarPagina(codigo, geracao) {
+      const grupo = estado.porPdm.get(codigo); const pdm = estado.catalogos.find((c) => String(c.codigo) === codigo);
+      if (!grupo || grupo.carregando || (grupo.paginas && grupo.carregadas >= grupo.paginas)) return false;
+      grupo.carregando = true;
+      try {
+        const q = new URLSearchParams({ termo: estado.termo, codigoPdm: codigo, pagina: String(grupo.carregadas + 1), produto: pdm?.descricao || '' });
+        if (estado.uf) q.set('uf', estado.uf);
+        const r = await requisitar(`/api/comprasgov-marcas-produto?${q}`, { method: 'GET' });
+        const j = await r.json().catch(() => null);
+        if (geracao !== estado.geracao) return false;
+        if (!r.ok || !j?.ok) throw new Error(j?.erro || 'A fonte pública não respondeu agora.');
+        const novos = (Array.isArray(j.itens) ? j.itens.filter(Boolean) : []).map(marcaModelo);
+        // A 1ª página troca a amostra da busca inicial (as mesmas compras mais recentes, agora 200).
+        grupo.itens = grupo.carregadas ? [...grupo.itens, ...novos] : novos;
+        grupo.carregadas += 1; grupo.paginas = j.paginas || grupo.carregadas;
+        return novos.length > 0;
+      } catch {
+        if (geracao === estado.geracao) estado.falhas += 1;
+        return false;
+      } finally { grupo.carregando = false; }
+    }
+    async function carregarProduto(codigo, paginas = PAGINAS_INICIAIS) {
+      const geracao = estado.geracao;
+      for (let k = 0; k < paginas; k += 1) {
+        status.textContent = `Carregando compras de ${pdmAtual()?.descricao || 'produto'}… ${milhar(estado.itens.length)} até agora.`;
+        desenhar();
+        if (!(await carregarPagina(codigo, geracao)) || geracao !== estado.geracao || codigo !== estado.pdm) break;
+      }
+      if (geracao !== estado.geracao || codigo !== estado.pdm) return;
+      if (!estado.filtro.unidade) estado.filtro.unidade = unidadePrincipal();
+      status.textContent = mensagemBusca(estado.itens.length, estado.itens.filter((i) => i.marca).length, estado.falhas);
+      desenhar();
+    }
+    function escolherProduto(codigo) {
+      estado.pdm = String(codigo); estado.todasMarcas = false; estado.mostrar = MOSTRAR;
+      estado.filtro = { ...estado.filtro, unidade: '', marca: '' };
+      estado.filtro.unidade = unidadePrincipal();
+      return carregarProduto(estado.pdm);
     }
     async function buscar(t) {
       const termoBusca = String(t || '').trim();
       if (termoBusca.length < 2) { status.textContent = 'Digite ao menos 2 letras do produto.'; return; }
       if (estado.buscando) return;
-      estado.buscando = true; botao.disabled = true; status.textContent = 'Buscando no Compras.gov… pode levar alguns segundos.';
+      estado.buscando = true; botao.disabled = true; estado.geracao += 1; status.textContent = 'Buscando no Compras.gov… pode levar alguns segundos.';
       try {
-        const r = await requisitar(`/api/comprasgov-marcas-produto?${new URLSearchParams({ termo: termoBusca })}`, { method: 'GET' });
+        const q = new URLSearchParams({ termo: termoBusca });
+        if (estado.uf) q.set('uf', estado.uf);
+        const r = await requisitar(`/api/comprasgov-marcas-produto?${q}`, { method: 'GET' });
         const j = await r.json().catch(() => null);
         if (!r.ok || !j?.ok) throw new Error(j?.erro || 'A fonte pública não respondeu agora. Tente de novo em instantes.');
-        estado.itens = Array.isArray(j.itens) ? j.itens.filter(Boolean) : [];
+        const itens = (Array.isArray(j.itens) ? j.itens.filter(Boolean) : []).map(marcaModelo);
+        // Resposta sem "catalogos": os produtos saem das próprias compras.
+        const catalogos = Array.isArray(j.catalogos) && j.catalogos.length ? j.catalogos
+          : contar(itens, 'codigoPdm').map(([c, n]) => ({ codigo: c, descricao: itens.find((i) => i.codigoPdm === c).produtoCatalogo, total: n }));
+        estado.termo = termoBusca; estado.catalogos = catalogos; estado.falhas = j.consultasComFalha || 0;
         estado.atributos = Array.isArray(j.atributos) ? j.atributos.map(String) : [];
-        estado.todasMarcas = false;
-        const primeiro = contar(estado.itens, 'codigoPdm')[0];
-        const ordem = estado.itens[0]?.codigoPdm; // a fonte já vem ordenada pelo PDM mais próximo do termo
-        estado.filtro = { produto: String(ordem ?? primeiro?.[0] ?? ''), unidade: '', marca: '' };
-        estado.filtro.unidade = unidadePrincipal(estado.filtro.produto);
-        const comMarca = estado.itens.filter((i) => i.marca).length;
-        status.textContent = mensagemBusca(estado.itens.length, comMarca, j.consultasComFalha);
-        desenhar();
+        estado.porPdm = new Map(catalogos.map((c) => [String(c.codigo), { itens: itens.filter((i) => String(i.codigoPdm) === String(c.codigo)), carregadas: 0, paginas: null }]));
+        if (!catalogos.length) { estado.pdm = ''; status.textContent = mensagemBusca(0, 0, estado.falhas); desenhar(); return; }
+        estado.buscando = false; botao.disabled = false;
+        await escolherProduto(catalogos[0].codigo); // o servidor já põe primeiro o produto principal mais comprado
       } catch (e) {
         status.textContent = e.message || 'Não foi possível buscar agora.';
       } finally { estado.buscando = false; botao.disabled = false; }
     }
+    function baixarPlanilha() {
+      const linhas = linhasPlanilha(estado.visiveis || []);
+      const nome = `licitaplena-precos-${String(estado.termo).normalize('NFD').replace(/[^\w]+/g, '-').toLowerCase().slice(0, 40)}-${hoje()}`;
+      if (global.XLSX) {
+        const planilha = global.XLSX.utils.book_new(); const folha = global.XLSX.utils.aoa_to_sheet(linhas);
+        folha['!cols'] = [11, 40, 4, 18, 10, 26, 60, 18, 22, 40, 20, 10, 12, 14, 14, 50].map((wch) => ({ wch }));
+        global.XLSX.utils.book_append_sheet(planilha, folha, 'Compras'); global.XLSX.writeFile(planilha, `${nome}.xlsx`); return;
+      }
+      // Sem o SheetJS (catálogo, preço por item): CSV com BOM e ";" abre direto no Excel em pt-BR.
+      const celula = (c) => { const t = typeof c === 'number' ? String(c).replace('.', ',') : String(c); return /[;"\r\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+      const url = URL.createObjectURL(new Blob([`${String.fromCharCode(0xfeff)}${linhas.map((l) => l.map(celula).join(';')).join('\r\n')}`], { type: 'text/csv;charset=utf-8' }));
+      const a = Object.assign(doc.createElement('a'), { href: url, download: `${nome}.csv` }); a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
     form.addEventListener('submit', (ev) => { ev.preventDefault(); void buscar(campo.value); });
+    chipsEl.addEventListener('click', (ev) => {
+      const b = ev.target?.closest?.('[data-mercado-pdm]');
+      if (b && b.dataset.mercadoPdm !== estado.pdm) void escolherProduto(b.dataset.mercadoPdm);
+    });
     filtros.addEventListener('change', (ev) => {
       const nome = ev.target?.dataset?.filtro; if (!nome) return;
-      estado.filtro[nome] = ev.target.value;
-      if (nome === 'produto') { estado.filtro.unidade = unidadePrincipal(ev.target.value); estado.filtro.marca = ''; }
+      // UF vai para a fonte: com o estado filtrado lá, as 600 compras carregadas alcançam datas mais antigas.
+      if (nome === 'uf') { estado.uf = ev.target.value; void buscar(estado.termo); return; }
+      estado.filtro[nome] = ev.target.value; estado.mostrar = MOSTRAR;
       if (nome === 'unidade') estado.filtro.marca = '';
       desenhar();
     });
     lista.addEventListener('click', (ev) => {
+      if (ev.target?.closest?.('[data-mercado-planilha]')) { baixarPlanilha(); return; }
+      if (ev.target?.closest?.('[data-mercado-mais-linhas]')) { estado.mostrar += MOSTRAR; desenhar(); return; }
+      if (ev.target?.closest?.('[data-mercado-mais]')) { void carregarProduto(estado.pdm, 1); return; }
       const b = ev.target?.closest?.('[data-mercado-usar]'); if (!b) return;
       const item = estado.cartoes?.[Number(b.dataset.mercadoUsar)];
       if (item) aoUsar(item, estado.resumo);
@@ -249,7 +434,8 @@
     return { buscar, campo, estado };
   }
 
-  const api = { termoDoItem, mensagemBusca, resumoPrecos, marcasDe, filtrar, porEspecificacao, foraDaCurva, resumoMarcas, SEM_MARCA, produtoParaCatalogo, brl, montar };
+  const api = { termoDoItem, mensagemBusca, resumoPrecos, marcasDe, filtrar, porEspecificacao, foraDaCurva, resumoMarcas, SEM_MARCA, produtoParaCatalogo, brl, montar,
+    marcaModelo, filtrarCompras, resumoModelos, resumoFornecedores, totalCentavos, linhasPlanilha, reais, dataBr, cnpj };
   global.MercadoComprasGov = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(globalThis);

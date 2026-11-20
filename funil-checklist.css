@@ -1,0 +1,76 @@
+/* Funil: filtros, favoritas, contador do checklist, visão em lista e Arquivados (funil-checklist-ui.js).
+   Só tokens do Design System (ds-tokens.css); claro e escuro vêm deles. */
+.kanban-quadro[hidden] { display: none; }
+.funil-filtros { display: grid; gap: var(--space-8); margin-bottom: var(--space-12); }
+.funil-abas { display: inline-flex; flex-wrap: wrap; gap: var(--space-4); }
+.funil-aba, .funil-favoritas, .funil-limpar {
+  min-height: 36px; padding: 0 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-control);
+  background: var(--surface-default); color: var(--text-primary); font: var(--text-body); cursor: pointer;
+}
+.funil-aba[aria-pressed="true"], .funil-favoritas[aria-pressed="true"] { background: var(--action-tint); border-color: var(--action-strong); color: var(--action-text); font-weight: 600; }
+.funil-limpar { border-color: transparent; color: var(--action-text); background: none; }
+.funil-campos { display: flex; flex-wrap: wrap; align-items: end; gap: var(--space-8); }
+.funil-campos[hidden] { display: none; }
+.funil-campo { display: grid; gap: var(--space-4); font: var(--text-label); color: var(--text-secondary); min-width: 0; }
+.funil-campo input, .funil-campo select {
+  min-height: 36px; box-sizing: border-box; padding: 6px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-control);
+  background: var(--surface-default); color: var(--text-primary); font: var(--text-body); max-width: 100%;
+}
+.funil-campo-texto { flex: 1 1 220px; }
+.funil-campo-texto input { width: 100%; }
+.funil-aba:focus-visible, .funil-favoritas:focus-visible, .funil-limpar:focus-visible, .funil-estrela:focus-visible,
+.funil-contador:focus-visible, .funil-link:focus-visible, .funil-campo input:focus-visible, .funil-campo select:focus-visible {
+  outline: 2px solid var(--focus-ring); outline-offset: 2px;
+}
+
+.funil-estrela { background: none; border: none; padding: 0 2px; font-size: 18px; line-height: 1; cursor: pointer; color: var(--text-secondary); }
+.funil-estrela[aria-pressed="true"] { color: var(--attention-text); }
+.funil-contador {
+  display: inline-flex; align-items: center; gap: 4px; margin-top: 8px; padding: 3px 8px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--border-default); background: var(--surface-sunken); color: var(--text-primary); font: var(--text-label);
+}
+.funil-contador.completo { background: var(--success-bg); border-color: var(--success-border); color: var(--success-text); }
+.kanban-card-topo .funil-estrela { flex: 0 0 auto; }
+
+.funil-checklist-dialogo { overflow-y: auto; }
+.funil-checklist-dialogo .funil-topo-acoes { display: flex; gap: var(--space-8); flex-wrap: wrap; justify-content: flex-end; }
+.funil-grupo { margin-top: var(--space-16); }
+.funil-grupo h4 { margin: 0 0 var(--space-4); font: var(--text-body); font-weight: 600; display: flex; justify-content: space-between; gap: var(--space-8); }
+.funil-barra { height: 4px; border-radius: 999px; background: var(--surface-sunken); overflow: hidden; }
+.funil-barra span { display: block; height: 100%; background: var(--success-text); }
+.funil-tarefas { list-style: none; margin: var(--space-8) 0 0; padding: 0; display: grid; gap: var(--space-4); }
+.funil-tarefa { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); padding: 6px 0; border-bottom: 1px solid var(--border-default); font: var(--text-body); }
+.funil-tarefa label { display: flex; align-items: flex-start; gap: var(--space-8); flex: 1 1 240px; cursor: pointer; }
+.funil-tarefa input[type="checkbox"] { flex: 0 0 auto; width: 18px; height: 18px; margin-top: 2px; accent-color: var(--action-strong); }
+.funil-tarefa.feita label { color: var(--text-secondary); }
+.funil-tarefa-nome { flex: 1 1 200px; min-height: 36px; padding: 6px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface-default); color: var(--text-primary); font: var(--text-body); }
+.funil-auto { font: var(--text-label); color: var(--success-text); background: var(--success-bg); border-radius: 999px; padding: 2px 8px; }
+.funil-link { background: none; border: none; padding: 0; color: var(--action-text); font: var(--text-label); text-decoration: underline; cursor: pointer; }
+.funil-remover { background: none; border: 1px solid var(--border-default); border-radius: var(--radius-control); min-height: 32px; padding: 0 10px; color: var(--error-text); cursor: pointer; }
+.funil-nova { display: flex; flex-wrap: wrap; gap: var(--space-8); align-items: center; margin-top: var(--space-8); }
+.funil-nova input { flex: 1 1 200px; min-height: 36px; padding: 6px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface-default); color: var(--text-primary); font: var(--text-body); }
+.funil-fraco { color: var(--text-secondary); font: var(--text-label); }
+
+.funil-tabela { width: 100%; border-collapse: collapse; background: var(--surface-default); border: 1px solid var(--border-default); border-radius: var(--radius-card); font: var(--text-body); }
+.funil-tabela th { text-align: left; font: var(--text-label); color: var(--text-secondary); background: var(--surface-sunken); padding: 8px 10px; }
+.funil-tabela td { padding: 8px 10px; border-top: 1px solid var(--border-default); vertical-align: top; }
+.funil-tabela .funil-contador { margin-top: 0; }
+.visualmente-oculto { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.funil-arquivados-ajuda { margin: 0 0 var(--space-8); }
+.funil-arquivados { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-8); grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); }
+.funil-arquivado { padding: var(--space-12); border: 1px solid var(--border-default); border-radius: var(--radius-card); background: var(--surface-default); }
+.funil-arquivado p { margin: 0 0 var(--space-4); }
+.funil-arquivado-acoes { display: flex; flex-wrap: wrap; gap: var(--space-8); margin-top: var(--space-8); }
+.funil-arquivado-acoes a.btn-imprimir { display: inline-flex; align-items: center; text-decoration: none; }
+
+@media (max-width: 640px) {
+  .funil-campo { flex: 1 1 calc(50% - var(--space-8)); }
+  .funil-campo input, .funil-campo select { width: 100%; }
+  .funil-tabela, .funil-tabela tbody, .funil-tabela tr, .funil-tabela td { display: block; width: 100%; box-sizing: border-box; }
+  .funil-tabela thead { display: none; }
+  .funil-tabela tr { border-top: 1px solid var(--border-default); padding: var(--space-8) 0; }
+  .funil-tabela td { border: none; padding: 2px 10px; }
+  .funil-tabela td[data-rotulo]::before { content: attr(data-rotulo) ": "; font: var(--text-label); color: var(--text-secondary); }
+  .funil-tabela td[data-rotulo="Licitação"]::before { content: none; }
+}

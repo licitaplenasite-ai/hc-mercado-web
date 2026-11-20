@@ -19,6 +19,7 @@
 <link rel="stylesheet" href="licitacao-anterior.css">
 <link rel="stylesheet" href="mercado-comprasgov.css">
 <link rel="stylesheet" href="robo-lances.css">
+<link rel="stylesheet" href="monitor-processo.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" crossorigin="anonymous"></script>
 <script src="supabase-config.js"></script>
 </head>
@@ -48,9 +49,11 @@
   </button>
   <a href="/sistema" class="ativo" aria-current="page" title="Hoje"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-house"></use></svg></span><span class="nav-label">Hoje</span></a>
   <a href="painel.html#boletim" title="Boletim"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-clipboard-text"></use></svg></span><span class="nav-label">Boletim</span></a>
+  <a href="painel.html#calendario" title="Calendário"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-calendar"></use></svg></span><span class="nav-label">Calendário</span></a>
   <a href="painel.html#oportunidades" title="Encontrar Licitações"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-magnifying-glass"></use></svg></span><span class="nav-label">Encontrar Licitações</span></a>
   <a href="painel.html#diagnostico" title="Inteligência de Mercado"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-chart-bar"></use></svg></span><span class="nav-label">Inteligência de Mercado</span></a>
   <a href="prospeccao.html" title="Prospecção"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-chart-bar"></use></svg></span><span class="nav-label">Prospecção</span></a>
+  <a href="painel.html#licitacao-anterior" title="Licitação anterior"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-clock-counter-clockwise"></use></svg></span><span class="nav-label">Licitação anterior</span></a>
   <a href="painel.html#empresa" title="Analisar concorrente"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-buildings"></use></svg></span><span class="nav-label">Analisar concorrente</span></a>
   <a href="painel.html#transparencia" title="Convênios e Emendas Federais"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-handshake"></use></svg></span><span class="nav-label">Convênios e Emendas Federais</span></a>
   <a href="painel.html#precos" title="Pesquisa de Preços"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-coins"></use></svg></span><span class="nav-label">Pesquisa de Preços</span></a>
@@ -59,6 +62,7 @@
   <a href="painel.html#kanban" title="Funil"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-folders"></use></svg></span><span class="nav-label">Funil</span></a>
   <a href="processos.html" title="Processos"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-folder-open"></use></svg></span><span class="nav-label">Processos</span></a>
   <a href="operacao.html" title="Minhas empresas e documentos"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-files"></use></svg></span><span class="nav-label">Minhas empresas e documentos</span></a>
+  <a href="extensao.html" title="Extensão"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-puzzle-piece"></use></svg></span><span class="nav-label">Extensão</span></a>
   <a href="painel.html#juridico" title="Jurídico &amp; Dúvidas"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-scales"></use></svg></span><span class="nav-label">Jurídico &amp; Dúvidas</span></a>
   <a href="painel.html#status" title="Status"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-circle"></use></svg></span><span class="nav-label">Status</span></a>
 </nav>
@@ -68,6 +72,7 @@
     <h1 id="hoje-titulo" class="app-titulo" tabindex="-1">Hoje</h1>
     <p id="hoje-estado" class="app-apoio" role="status" aria-live="polite"></p>
     <div id="hoje-alertas" class="hoje-alertas" hidden></div>
+    <div id="hoje-monitor" class="hoje-alertas" hidden></div>
     <div id="hoje-lista" class="hoje-lista"></div>
     <section id="sem-empresa" class="app-cartao" aria-labelledby="sem-empresa-titulo" hidden>
       <h2 id="sem-empresa-titulo" class="app-subtitulo">Cadastre sua empresa</h2>
@@ -98,6 +103,7 @@
     <div id="contexto-portal" hidden></div>
     <div id="identificacao" tabindex="-1"></div>
     <section id="checklist-esteira" class="app-cartao" aria-label="Checklist do edital" hidden></section>
+    <section id="monitor-processo" class="app-cartao" aria-label="Mudou algo no edital?" hidden></section>
     <section id="licitacao-anterior" class="app-cartao" aria-label="Licitação anterior" hidden></section>
     <section id="itens-processo" class="app-cartao itens-processo" aria-label="Itens do processo" hidden></section>
     <section id="robo-lances" class="app-cartao" aria-labelledby="robo-titulo" hidden></section>
@@ -118,11 +124,13 @@
 <script src="catalogo-produtos.js"></script>
 <script src="catalogo-usar-ui.js"></script>
 <script src="mercado-comprasgov.js"></script>
+<script src="item-mercado-ui.js"></script>
 <script src="portal-cliente-ui.js"></script>
 <script src="declaracoes-modelos.js"></script>
 <script src="checklist-esteira-ui.js"></script>
 <script src="sancoes-ui.js"></script>
 <script src="licitacao-anterior-ui.js"></script>
+<script src="monitor-processo-ui.js"></script>
 <script src="motor-lances.js"></script>
 <script src="robo-lances.js"></script>
 <script src="robo-lances-ui.js"></script>
@@ -132,5 +140,7 @@
 <script src="app-comercial-controlador.js"></script>
 <script src="app-comercial.js"></script>
 <script src="menu-lateral.js"></script>
+<script src="ajuda-ui.js" defer></script>
+<script src="avisos-celular.js" defer></script>
 </body>
 </html>

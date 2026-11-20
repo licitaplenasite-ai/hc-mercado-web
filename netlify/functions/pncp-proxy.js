@@ -40,10 +40,24 @@ exports.handler = async (event) => {
     // A busca do PNCP costuma responder pouco depois dos 14 s em horários de pico.
     // Encerrar antes disso fazia o Boletim cair no cache mesmo com a API ainda ativa.
     const t = setTimeout(() => ctrl.abort(), 15000);
-    const resp = await fetch(destino.toString(), {
-      headers: { Accept: "application/json", "User-Agent": USER_AGENT_NAVEGADOR },
-      signal: ctrl.signal,
-    });
+    // Redirect seguido à mão e só dentro de https://pncp.gov.br: com o redirect automático, um
+    // Location do PNCP apontando para outro host levaria o proxy até lá (SSRF; teste de ataque 19/11, M5).
+    let url = destino.toString(), resp;
+    for (let saltos = 0; ; saltos++) {
+      resp = await fetch(url, {
+        headers: { Accept: "application/json", "User-Agent": USER_AGENT_NAVEGADOR },
+        signal: ctrl.signal,
+        redirect: "manual",
+      });
+      const local = resp.status >= 300 && resp.status < 400 && resp.headers.get("location");
+      if (!local) break;
+      const proximo = new URL(local, url);
+      if (saltos >= 3 || proximo.protocol !== "https:" || proximo.hostname !== HOST_PERMITIDO) {
+        clearTimeout(t);
+        return { statusCode: 502, headers, body: JSON.stringify({ erro: "O PNCP redirecionou para fora de pncp.gov.br." }) };
+      }
+      url = proximo.toString();
+    }
     clearTimeout(t);
     const texto = await resp.text();
     return { statusCode: resp.status, headers, body: texto || JSON.stringify({}) };

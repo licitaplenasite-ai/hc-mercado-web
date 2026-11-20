@@ -23,14 +23,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "20"
       - run: npm ci
       - run: npm run build:cloudflare
       # Roda na raiz: o Wrangler lê wrangler.toml (nodejs_compat) e compila functions/ junto.
-      - uses: cloudflare/wrangler-action@v3
+      - uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3.15.0
         with:
           apiToken: ${{ secrets.CLOUDFLARE_PAGES_TOKEN }}
           # ID da conta licitaplena.site@gmail.com na Cloudflare; não é segredo.

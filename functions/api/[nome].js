@@ -60,6 +60,10 @@ import * as analiseCnpj from "../../netlify/functions/analise-cnpj.js";
 import * as monteBuscaIa from "../../netlify/functions/monte-busca-ia.js";
 // Conferência CBS/IBS com a calculadora oficial da Receita (logado; 2 subrequisições, falha fechada).
 import * as conferirCbsIbs from "../../netlify/functions/conferir-cbs-ibs.js";
+// Encontrar fornecedor com IA: logado, 20 perguntas/dia, 1 leitura no Supabase + até 3 BrasilAPI + 1 chamada à IA.
+import * as fornecedorIa from "../../netlify/functions/fornecedor-ia.js";
+// Aviso no celular (Web Push): inscrição do aparelho e preferências (logado; 1-3 subrequisições, 60/dia).
+import * as avisosCelular from "../../netlify/functions/avisos-celular.js";
 
 const ROTAS = {
   "vinculo-compra-portal": vinculoCompraPortal,
@@ -78,6 +82,8 @@ const ROTAS = {
   prospeccao: m26,
   "analise-cnpj": analiseCnpj,
   "monte-busca-ia": monteBuscaIa,
+  "fornecedor-ia": fornecedorIa,
+  "avisos-celular": avisosCelular,
   "conferir-cbs-ibs": conferirCbsIbs,
   "decisao-oportunidade": m17,
   "empresa-identificacao": m16,

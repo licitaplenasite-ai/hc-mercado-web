@@ -102,7 +102,7 @@ test('retornos reais do novo protocolo atravessam o handler com fonte e aviso ve
     assert.equal(r.resposta.statusCode, 200);
     assert.match(r.corpo.resposta, /leitura.*parcial/i);
     if (real.caso === 'horarios') { assert.match(r.corpo.resposta, /08:00/); assert.match(r.corpo.resposta, /9:00/); assert.match(r.corpo.resposta, /\[Edital.pdf, página 3\]/); }
-    else assert.match(r.corpo.resposta, /Não localizei.*não comprova que ela inexista/);
+    else assert.match(r.corpo.resposta, /Não encontrei no edital.*não comprova que ela inexista/);
   }
 });
 test("fonte alterada desde o resumo exige atualização sem consumir cota", async () => {

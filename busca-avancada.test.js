@@ -85,3 +85,9 @@ test("momento do aviso: hora de Brasília e antecedência em dias", () => {
   assert.equal(new Date(B.momentoDoAviso("2026-11-21T01:00:00Z", 1, 8)).toISOString(), "2026-11-19T11:00:00.000Z");
   assert.equal(B.momentoDoAviso("lixo", 1, 8), null);
 });
+
+test("limparFiltro guarda os campos da busca v2 e só aceita true nas chaves", () => {
+  const f = B.limparFiltro({ palavrasRaw: "café", limitar: "torrado", modalidade: "pregao", portal: "BLL", periodoPor: "abertura", mePp: true, excluirSrp: "sim", jornal: true });
+  assert.deepEqual(f, { palavrasRaw: "café", modalidade: "pregao", portal: "BLL", limitar: "torrado", periodoPor: "abertura", mePp: true, jornal: true });
+  assert.equal(B.limparFiltro({ palavrasRaw: "x", periodoPor: "outro" }).periodoPor, undefined);
+});

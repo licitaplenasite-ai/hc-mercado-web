@@ -1,0 +1,29 @@
+# gitleaks: regras padrão + exceções conferidas à mão em 19/11/2026 (varredura do histórico inteiro).
+# Toda exceção diz por que não é segredo. Nunca liberar uma chave real aqui: chave real vaza, troca-se a chave.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Valores públicos por design: chave publishable/anon do Supabase (vai ao navegador) e site key do captcha"
+regexTarget = "line"
+regexes = [
+  '''data-sitekey=''',
+  '''SUPABASE_ANON_KEY\s*=''',
+  '''sb_publishable_''',
+]
+
+[[allowlists]]
+description = "Falsos positivos: nomes de arquivo .sql, UUID de usuário de teste, placeholder SEU_TOKEN em documentação"
+regexTarget = "line"
+regexes = [
+  '''testar_\w+\.sql''',
+  '''auth\.users where id=''',
+  '''Bearer SEU_''',
+]
+
+[[allowlists]]
+description = "Material de terceiros e evidências de QA (hashes de arquivo, exemplos de skill), sem credencial"
+paths = [
+  '''^\.claude/skills/''',
+  '''^docs/qa/kit-persistente-20261030/''',
+]

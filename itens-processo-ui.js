@@ -469,6 +469,7 @@
         usarEstado: h('span', { classe: 'itens-campo-estado', 'aria-live': 'polite' }),
         fonteEstado: h('p', { classe: 'itens-apoio', role: 'status', 'aria-live': 'polite' }),
         mercado: h('div', { classe: 'itens-mercado', hidden: true }),
+        itemMercado: h('div', { classe: 'itens-mercado', hidden: true }),
       };
       n.custo.value = virgula(i.custoUnitario);
       n.lance.value = lances.get(i.id) || '';
@@ -499,7 +500,29 @@
         });
         caixa.append(b);
       }
-      return caixa.childElementCount ? h('div', {}, caixa, n.fonteEstado, n.mercado) : null;
+      // "Ver mercado deste item" (item-mercado-ui.js): Histórico, Concorrência, Marcas e Preços pelo CATMAT do item.
+      const IM = global.LicitaItemMercado;
+      if (IM) {
+        const b = h('button', { type: 'button', 'aria-expanded': 'false', texto: 'Ver mercado deste item' });
+        b.addEventListener('click', () => {
+          n.itemMercado.hidden = !n.itemMercado.hidden; b.setAttribute('aria-expanded', String(!n.itemMercado.hidden));
+          if (n.itemMercado.hidden || n.itemMercado.childElementCount) return;
+          IM.montar({ alvo: n.itemMercado, doc, item: { descricao: i.descricao, codigoCatalogo: i.codigoCatalogo }, ...(buscarMercado ? { requisitar: buscarMercado } : {}),
+            aoUsarPreco: (centavos) => usarPrecoMercado(i, centavos) });
+        });
+        caixa.append(b);
+      }
+      return caixa.childElementCount ? h('div', {}, caixa, n.fonteEstado, n.mercado, n.itemMercado) : null;
+    }
+    // "Usar preço": a mediana entra no valor unitário pelo formulário do item (mesmo caminho do "Usar no valor unitário"); a pessoa confere e salva.
+    function usarPrecoMercado(i, centavos) {
+      const n = nos.get(i.id);
+      if (ocupado || (edicao && edicao !== i.id)) { marcar(n?.fonteEstado, 'Termine ou cancele a edição aberta antes de usar o preço.', 'erro'); return; }
+      if (edicao !== i.id) editar(i.id);
+      form.elements.valorUnitario.value = MC.reais(centavos);
+      atualizarTotal();
+      marcar(n?.fonteEstado, `Mediana do mercado (${MC.brl(centavos)}) no valor unitário do formulário do item, no topo: confira e clique em Salvar item. É referência do que o governo pagou, não o seu custo.`, 'ok');
+      el('#itens-titulo')?.focus?.();
     }
     // Marca e modelo entram pelo formulário do item (mesmo caminho de "Editar" + "Salvar item"): a pessoa confere antes de gravar.
     // Fabricante não tem campo no formulário; vai pela planilha de itens (coluna fabricante).

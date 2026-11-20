@@ -19,7 +19,7 @@ const SECOES = ['Identificação da Licitação', 'Informações da Sessão Púb
   'Informações sobre entrega e execução', 'Prazos importantes', 'Critérios da Proposta e Julgamento', 'Resumo dos Itens', 'Documentos de habilitação exigidos',
   'Atestado de capacidade técnica', 'Legislação', 'Anexos e declarações', 'Outras informações relevantes', 'Condições de pagamento', 'Penalidades e multas',
   'Possíveis questionamentos', 'Análise crítica', 'Análise e Considerações do Licitante'];
-const BOTOES = ['Baixar Edital Completo', 'Enviar Checklist por E-mail', 'Gerar Checklist .docx', 'Imprimir Checklist'];
+const BOTOES = ['Baixar Edital Completo', 'Enviar ao cliente', 'Gerar Checklist .docx', 'Imprimir Checklist'];
 
 async function servico(metodo, caminho, corpo, extra = {}) {
   const r = await fetch(chaves.API_URL + caminho, { method: metodo, body: corpo === undefined ? undefined : JSON.stringify(corpo),

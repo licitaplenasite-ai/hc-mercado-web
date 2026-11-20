@@ -166,9 +166,15 @@ Limitações honestas:
 
 Testes: `node --test extensao-leitura/acompanhar-chat.test.mjs` (21 casos: detecção, destaques, sem duplicar, parada, reconexão, sem rede, worker, manifesto). Ícone da notificação: `icone.png`.
 
+**Aviso no processo do CRM (20/11/2026, sem mudar a extensão):** com "Gravar no LicitaPlena" ligado, cada mensagem nova vai para `pregoes_gravados_mensagens` (via `/api/pregao-gravado`). O robô `scripts/monitor_processos.js` (a cada hora, `.github/workflows/monitor-processos.yml`) lê dessa tabela as mensagens da compra do processo (`id_compra` = `compra=` do link do PNCP/Compras.gov) gravadas depois da última conferência e cria uma mudança `tipo='chat'`, `fonte='extensao'` em `operacao_monitor_mudancas`. Ela aparece em "Mudou algo no edital?" no processo (`monitor-processo-ui.js`), no "Hoje", no selo do cartão do Funil e no e-mail (`scripts/lembretes_licitacoes.py`). Atraso: até 1 h do robô + até 1 h do e-mail. A extensão continua sem clique automático, sem rede própria e sem captcha; sem "gravar", nada chega ao CRM (só o aviso local do navegador).
+
 ## Sala de disputa (robô de lances) — só interface
 
 `sala-disputa.mjs` documenta o contrato do futuro leitor da sala de disputa (melhor valor, meu valor, situação, etapa, tempo restante por item) e devolve sempre `{ ok: false }` com "não implementado — precisa da sala real". Não está ligado ao popup nem ao worker, não pede permissão nova e não clica, preenche ou navega. O robô de lances do LicitaPlena é **assistido**: sugere o lance na tela do processo e a pessoa envia no portal. Pesquisa e pendências: `_historico/robo-lances-20261120.md` (pasta do projeto, fora do repositório).
+
+Enquanto o leitor não existe, a tela do robô (`robo-lances-ui.js`) já trabalha com o que a pessoa copia do portal: abas **Em disputa / Aguardando disputa / Encerrados**, selo **GANHANDO / PERDENDO / EMPATE** por item, lance mínimo = piso, valor de cada redução preenchido com a diferença mínima do edital, 4 casas decimais, "não aguardar os segundos finais" e, no aberto e fechado, a estratégia "ficar até 10% do 1º e só dar o lance fechado no fim" (`robo-lances.js`, também no simulador). Quando `lerSala` existir, ele só preenche esses mesmos campos; nada muda na regra.
+
+**Próximo passo (com o dono): testar no ambiente de treinamento oficial do Compras.gov.br**, que tem contas de fornecedor de teste (fornec1, fornec2…) e pregões de treino. Roteiro: (1) o dono entra no ambiente de treinamento com a conta de teste, no navegador dele; (2) abre a sala de disputa de um item de treino; (3) com a extensão em modo diagnóstico, envia o HTML da sala (melhor valor, meu valor, situação, relógio) para mapear os seletores; (4) só então `lerSala` é implementado e testado contra essas páginas salvas. Regras que continuam valendo: o LicitaPlena **não envia lance** (a pessoa clica no portal), **não pede nem guarda a senha gov.br** (a extensão usa a sessão que já está aberta no navegador do cliente) e não roda em segundo plano. Envio automático de lance só depois desse teste e de parecer jurídico.
 
 ## Modo diagnóstico (0.4.0)
 

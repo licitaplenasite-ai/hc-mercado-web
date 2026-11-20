@@ -1,0 +1,10 @@
+# Pastas que não são código do LicitaPlena (dependências, saída de build, dados, ferramentas locais).
+node_modules/
+publico/
+dist/
+data/
+vault-obsidian/
+graphify-out/
+.claude/
+.agents/
+.superpowers/

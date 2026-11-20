@@ -1,0 +1,41 @@
+name: Monitor dos processos (mudou algo no edital?)
+
+# Confere no PNCP (e no Compras.gov dados abertos, só para achar o número) o que mudou em cada processo acompanhado
+# no CRM e grava em operacao_monitor_mudancas (scripts/monitor_processos.js). O e-mail sai na rodada seguinte do
+# workflow "Lembretes de licitação" (scripts/lembretes_licitacoes.py), que reserva antes de enviar.
+# De hora em hora no minuto 23 (UTC), fora do :00 dos lembretes e do :37 da esteira. Não escreve no repositório.
+concurrency:
+  group: monitor-processos
+  cancel-in-progress: false
+
+on:
+  schedule:
+    - cron: "23 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      # Sem npm ci: o robô só usa módulos do Node e scripts/supabase_dados.js.
+      - name: Conferir mudanças dos processos
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          LOTE_MONITOR: "15"
+          LIMITE_MINUTOS_MONITOR: "8"
+        run: node scripts/monitor_processos.js
+      # Aviso no celular logo depois de gravar as mudanças (scripts/avisos_celular.js). Sem as chaves VAPID sai sem erro.
+      - name: Avisos no celular
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          VAPID_CHAVE_PUBLICA: ${{ secrets.VAPID_CHAVE_PUBLICA }}
+          VAPID_CHAVE_PRIVADA: ${{ secrets.VAPID_CHAVE_PRIVADA }}
+        run: node scripts/avisos_celular.js

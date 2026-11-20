@@ -108,3 +108,44 @@ test("quadro Contrato: escapa texto externo e mostra os dois alertas", () => {
   assert.doesNotMatch(html, /<script>/);
   assert.match(cp.htmlQuadroContrato([], "2026-11-18", { esc, dinheiro: String, data: String }), /Ainda não há contrato/);
 });
+
+test("fases: centavos BigInt sem erro de float e formato em reais", () => {
+  assert.equal(cp.centavos(0.1 + 0.2), 30n);
+  assert.equal(cp.centavos("1.078.599,60"), 107859960n);
+  assert.equal(cp.centavos(null), null);
+  assert.equal(cp.reaisDeCentavos(107859960n), "R$ 1.078.599,60");
+});
+
+test("fases: fonte oficial e lançamento manual ficam com o MAIOR, sem somar duas vezes", () => {
+  const publicos = [{ valor_global: 1000, valor_empenhado: 600, valor_liquidado: 300, valor_pago: 200, vigencia_fim: "2027-01-31",
+    faturas: [{ valor: 300 }, { valor: 50, cancelada: true }] }];
+  const empenhos = [{ valor: 600, status: "emitido" }, { valor: 999, status: "cancelado" }]; // mesmo empenho digitado; cancelado não conta
+  const eventos = [{ tipo: "entrega", valor: 450 }, { tipo: "nota", valor: 100 }, { tipo: "recebimento", valor: 100 }];
+  const r = cp.fasesExecucao({ publicos, empenhos, eventos, contratos: [{ valor: 1000, vigencia_fim: "2026-12-11" }] });
+  const v = (k) => [r.fases[k].valor, r.fases[k].fonte];
+  assert.deepEqual(v("potencial"), [100000n, "oficial"]);
+  assert.deepEqual(v("empenhado"), [60000n, "oficial"]);
+  assert.deepEqual(v("entregue"), [45000n, "lancado"]); // entregou antes da liquidação sair
+  assert.deepEqual(v("faturado"), [30000n, "oficial"]); // nota cancelada fora
+  assert.deepEqual(v("recebido"), [20000n, "oficial"]);
+  assert.deepEqual([r.fases.empenhado.percentual, r.fases.recebido.percentual], [60, 20]);
+  assert.equal(r.vigenciaFim, "2027-01-31");
+  assert.equal(r.finalizado, false);
+});
+
+test("fases: sem contrato, potencial vem do homologado; empenho antigo 'pago' conta como entregue e recebido", () => {
+  const r = cp.fasesExecucao({ empenhos: [{ valor: 500, status: "pago" }, { valor: 200, status: "entregue" }], homologado: 700 });
+  assert.deepEqual([r.fases.potencial.valor, r.fases.potencial.fonte], [70000n, "resultado"]);
+  assert.deepEqual([r.fases.entregue.valor, r.fases.recebido.valor, r.fases.faturado.valor], [70000n, 50000n, null]);
+  assert.equal(cp.fasesExecucao({ eventos: [{ tipo: "recebimento", valor: 700 }], homologado: 700 }).finalizado, true);
+  const vazio = cp.fasesExecucao({});
+  assert.deepEqual([vazio.fases.potencial.valor, vazio.fases.recebido.percentual, vazio.temExecucao], [null, 0, false]);
+});
+
+test("fases: totais somam em centavos e o percentual nunca passa de 100", () => {
+  const a = cp.fasesExecucao({ contratos: [{ valor: 100 }], eventos: [{ tipo: "recebimento", valor: 150 }] });
+  const b = cp.fasesExecucao({ contratos: [{ valor: 0.3 }], empenhos: [{ valor: 0.1, status: "emitido" }, { valor: 0.2, status: "emitido" }] });
+  assert.equal(a.fases.recebido.percentual, 100);
+  const t = cp.totaisFases([a, b]);
+  assert.deepEqual([t.potencial.valor, t.empenhado.valor, t.recebido.valor], [10030n, 30n, 15000n]);
+});

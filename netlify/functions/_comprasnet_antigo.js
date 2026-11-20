@@ -4,6 +4,8 @@
 //   ata2.asp                           página do pregão -> acha o prgcod
 //   FornecedorResultadoDecreto.asp     vencedores por item/grupo: valores, MARCA, fabricante, modelo, descrição ofertada
 //   termojulg.asp?Acao=A               adjudicação por item: situação, vencedor, lance, motivo de cancelamento, recurso
+//   avisos2/avisos4, VisualizarRecursosPregao/Termojulg2: esclarecimentos, impugnações, recursos e decisões (banco de
+//                                      peças, scripts/coletar_pecas_juridicas.js); conferido sem captcha em 19/11/2026
 // NUNCA abre AtaEletronico.asp: ela só abre com captcha de imagem, e o próprio portal diz que o captcha existe "para
 // evitar a consulta por programas automáticos". Essa parte só entra pela extensão, com a pessoa na frente.
 // Cortesia com o portal: pausa mínima de 1,5 s entre páginas (inclusive entre pregões), timeout, teto de bytes e
@@ -139,7 +141,7 @@ function criarLeitor({ fetchImpl = (...a) => fetch(...a), esperar = (ms) => new 
     get usadas() { return orcamento - restante; },
     async pagina(caminho, opcoes = {}) {
       // Defesa em profundidade: só as páginas deste módulo; a ata com captcha jamais.
-      if (/AtaEletronico/i.test(caminho) || !/^\/(ata4|ata2|FornecedorResultadoDecreto|termojulg)\.asp(\?|$)/i.test(caminho)) throw new ErroComprasNet("Página fora da lista permitida.");
+      if (/AtaEletronico/i.test(caminho) || !/^\/(ata4|ata2|FornecedorResultadoDecreto|termojulg|avisos2|avisos4|VisualizarRecursosPregao|Termojulg2)\.asp(\?|$)/i.test(caminho)) throw new ErroComprasNet("Página fora da lista permitida.");
       if (restante <= 0) throw new ErroComprasNet("Orçamento de páginas do ComprasNet esgotado.");
       restante -= 1;
       if (ultimo !== null) { const falta = pausa - (agora() - ultimo); if (falta > 0) await esperar(falta); }
@@ -176,4 +178,4 @@ async function lerPregaoAntigo(ref, leitor = criarLeitor()) {
   return { prgcod, data: achado.data, url: linkPregaoAntigo({ uasg, numero, ano }), itens: juntar(termo, fornecedores), fornecedores };
 }
 
-module.exports = { lerPregaoAntigo, linkPregaoAntigo, criarLeitor, lerLista, lerPrgcod, lerFornecedores, lerTermo, juntar, numeroBr, ErroComprasNet, PAUSA_MINIMA_MS, BASE, UA };
+module.exports = { decodificar, lerPregaoAntigo, linkPregaoAntigo, criarLeitor, lerLista, lerPrgcod, lerFornecedores, lerTermo, juntar, numeroBr, ErroComprasNet, PAUSA_MINIMA_MS, BASE, UA };

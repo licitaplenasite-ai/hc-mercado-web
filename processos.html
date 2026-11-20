@@ -86,6 +86,24 @@ input::placeholder,textarea::placeholder{color:var(--text-secondary);opacity:1}
 .modal-corpo{background:var(--surface-raised);border-color:var(--border-default);border-radius:var(--radius-modal);box-shadow:var(--shadow-overlay)}
 @media(max-width:820px){header{padding:8px 12px}}
 @media(max-width:480px){.topo h1{font-size:24px;line-height:32px}.acoes .btn.tema-icone{display:inline-flex}}
+/* Contratos em fases (aba Empenhos e execução): Potencial → Empenhado → Entregue → Faturado → Recebido. Só tokens do DS. */
+#aba-empenhos .card+.card{margin-top:16px}
+.fases-filtro{display:flex;gap:8px;flex-wrap:wrap}
+.fases-filtro button{min-height:40px;padding:0 12px;border:1px solid var(--border-default);border-radius:var(--radius-control);background:var(--surface-default);color:var(--text-secondary);font:500 14px/20px var(--font-sans);cursor:pointer}
+.fases-filtro button[aria-pressed="true"]{border-color:var(--action-strong);background:var(--action-tint);color:var(--text-primary);font-weight:600}
+.fases-resumo{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:16px 0}
+.fase{display:grid;gap:2px;padding:12px 16px;border:1px solid var(--border-default);border-radius:var(--radius-card);background:var(--surface-default);min-width:0}
+.fase span{font:var(--text-label);color:var(--text-secondary)}.fase b{font:600 20px/28px var(--font-sans);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}.fase small{color:var(--text-secondary)}
+.fase[data-fase="recebido"]{border-color:var(--success-border);background:var(--success-bg)}.fase[data-fase="recebido"] b,.valor-recebido{color:var(--success-text)}
+.caminho{position:relative;height:10px;min-width:140px;margin:6px 0 4px;border:1px solid var(--border-default);border-radius:999px;background:var(--surface-sunken);overflow:hidden}
+.caminho span{position:absolute;left:0;top:0;bottom:0;border-radius:999px}
+.caminho [data-fase="empenhado"],.fases-legenda [data-fase="empenhado"]{background:var(--info-border)}.caminho [data-fase="entregue"],.fases-legenda [data-fase="entregue"]{background:var(--brand-blue)}
+.caminho [data-fase="faturado"],.fases-legenda [data-fase="faturado"]{background:var(--action-strong)}.caminho [data-fase="recebido"],.fases-legenda [data-fase="recebido"]{background:var(--success-text)}
+.fases-legenda{display:flex;flex-wrap:wrap;gap:4px 16px;margin:8px 0 0;color:var(--text-secondary);font:var(--text-label)}.fases-legenda i{display:inline-block;width:10px;height:10px;border-radius:999px;margin-right:6px;vertical-align:-1px}
+.fases-detalhe summary{cursor:pointer;color:var(--action-text);font:var(--text-label);min-height:24px}.fases-detalhe ul{margin:6px 0 0;padding-left:18px;color:var(--text-secondary)}
+.tabela-fases td{vertical-align:top}.tabela-fases td:nth-child(3){min-width:180px}
+@media(max-width:640px){.tabela-fases{min-width:0}.tabela-fases tbody{display:block}.tabela-fases thead{display:none}.tabela-fases tr,.tabela-fases td{display:block}.tabela-fases tr{padding:8px 0;border-bottom:1px solid var(--border-default)}.tabela-fases td{border:0;padding:4px 12px}.tabela-fases td:nth-child(3){min-width:0}}
+#execucao-iniciar h3{margin:20px 0 4px;font:600 16px/24px var(--font-sans)}.iniciar-execucao{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.iniciar-execucao small{display:block;color:var(--text-secondary)}
 </style>
 </head>
 <body>
@@ -98,9 +116,11 @@ input::placeholder,textarea::placeholder{color:var(--text-secondary);opacity:1}
   </button>
   <a href="/sistema" title="Hoje"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-house"></use></svg></span><span class="nav-label">Hoje</span></a>
   <a href="painel.html#boletim" title="Boletim"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-clipboard-text"></use></svg></span><span class="nav-label">Boletim</span></a>
+  <a href="painel.html#calendario" title="Calendário"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-calendar"></use></svg></span><span class="nav-label">Calendário</span></a>
   <a href="painel.html#oportunidades" title="Encontrar Licitações"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-magnifying-glass"></use></svg></span><span class="nav-label">Encontrar Licitações</span></a>
   <a href="painel.html#diagnostico" title="Inteligência de Mercado"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-chart-bar"></use></svg></span><span class="nav-label">Inteligência de Mercado</span></a>
   <a href="prospeccao.html" title="Prospecção"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-chart-bar"></use></svg></span><span class="nav-label">Prospecção</span></a>
+  <a href="painel.html#licitacao-anterior" title="Licitação anterior"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-clock-counter-clockwise"></use></svg></span><span class="nav-label">Licitação anterior</span></a>
   <a href="painel.html#empresa" title="Analisar concorrente"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-buildings"></use></svg></span><span class="nav-label">Analisar concorrente</span></a>
   <a href="painel.html#transparencia" title="Convênios e Emendas Federais"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-handshake"></use></svg></span><span class="nav-label">Convênios e Emendas Federais</span></a>
   <a href="painel.html#precos" title="Pesquisa de Preços"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-coins"></use></svg></span><span class="nav-label">Pesquisa de Preços</span></a>
@@ -109,6 +129,7 @@ input::placeholder,textarea::placeholder{color:var(--text-secondary);opacity:1}
   <a href="painel.html#kanban" title="Funil"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-folders"></use></svg></span><span class="nav-label">Funil</span></a>
   <a href="processos.html" class="ativo" aria-current="page" title="Processos"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-folder-open"></use></svg></span><span class="nav-label">Processos</span></a>
   <a href="operacao.html" title="Minhas empresas e documentos"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-files"></use></svg></span><span class="nav-label">Minhas empresas e documentos</span></a>
+  <a href="extensao.html" title="Extensão"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-puzzle-piece"></use></svg></span><span class="nav-label">Extensão</span></a>
   <a href="painel.html#juridico" title="Jurídico &amp; Dúvidas"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-scales"></use></svg></span><span class="nav-label">Jurídico &amp; Dúvidas</span></a>
   <a href="painel.html#status" title="Status"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-circle"></use></svg></span><span class="nav-label">Status</span></a>
 </nav>
@@ -120,7 +141,7 @@ input::placeholder,textarea::placeholder{color:var(--text-secondary);opacity:1}
   <div class="abas"><button class="aba ativa" data-aba="funil">Funil de processos</button><button class="aba" data-aba="prazos">Prazos e sessão</button><button class="aba" data-aba="empenhos">Empenhos e execução</button></div>
   <section id="aba-funil" class="painel ativo"><div class="card"><div class="cabecalho-card"><div><h2>Carteira de licitações</h2><p>Abra um processo para acompanhar a sessão, os itens e o resultado.</p></div><button class="btn" id="btn-atualizar">Atualizar</button></div><div class="filtros"><input id="busca" placeholder="Busque por objeto, órgão ou número"><select id="filtro-status"><option value="">Todos os estágios</option><option value="triagem">Triagem</option><option value="preparacao">Preparação</option><option value="proposta_enviada">Proposta enviada</option><option value="sessao">Sessão</option><option value="habilitacao">Habilitação</option><option value="recurso">Recurso</option><option value="homologado">Homologado</option><option value="contratado">Contratado</option><option value="perdido">Perdido</option></select></div><div id="lista-processos" class="grade"></div></div></section>
   <section id="aba-prazos" class="painel"><div class="card"><div class="cabecalho-card"><div><h2>Agenda dos processos</h2><p>Use o edital como fonte final para validar cada prazo.</p></div></div><div id="lista-prazos"></div></div></section>
-  <section id="aba-empenhos" class="painel"><div class="card"><div class="cabecalho-card"><div><h2>Execução e empenhos</h2><p>Controle o que foi emitido, entregue, recebido e pago.</p></div></div><div class="tabela-wrap"><table class="tabela"><thead><tr><th>Empenho</th><th>Processo</th><th>Valor / saldo</th><th>Entrega</th><th>Status</th></tr></thead><tbody id="lista-empenhos"></tbody></table></div></div></section>
+  <section id="aba-empenhos" class="painel"><div class="card" id="execucao-card"><div class="cabecalho-card"><div><h2>Contratos em fases</h2><p>Do potencial ao recebido. Usa os valores oficiais do Contratos.gov.br quando existem; o que a fonte ainda não mostrou, registre aqui.</p></div><div class="fases-filtro" role="group" aria-label="Situação dos contratos"><button type="button" data-filtro-execucao="andamento" aria-pressed="true">Em andamento (<span id="n-andamento">0</span>)</button><button type="button" data-filtro-execucao="finalizado" aria-pressed="false">Finalizados (<span id="n-finalizado">0</span>)</button></div></div><div id="execucao-resumo" class="fases-resumo"></div><div id="execucao-lista"></div><div id="execucao-iniciar"></div></div><div class="card"><div class="cabecalho-card"><div><h2>Empenhos registrados</h2><p>Controle o que foi emitido, entregue, recebido e pago.</p></div></div><div class="tabela-wrap"><table class="tabela"><thead><tr><th>Empenho</th><th>Processo</th><th>Valor / saldo</th><th>Entrega</th><th>Status</th></tr></thead><tbody id="lista-empenhos"></tbody></table></div></div></section>
 </main>
 </div>
 
@@ -141,6 +162,7 @@ input::placeholder,textarea::placeholder{color:var(--text-secondary);opacity:1}
 
 <div id="modal-prazo" class="modal"><form id="form-prazo" class="modal-corpo"><h2 id="titulo-form-prazo">Novo prazo do processo</h2><input name="id" type="hidden"><input name="processo_id" type="hidden"><div class="form-grade"><div><label>Categoria</label><select name="categoria"><option value="esclarecimento">Esclarecimento</option><option value="impugnacao">Impugnação</option><option value="proposta">Proposta</option><option value="sessao">Sessão</option><option value="diligencia">Diligência</option><option value="recurso">Recurso</option><option value="assinatura">Assinatura</option><option value="entrega">Entrega</option><option value="outro">Outro</option></select></div><div><label>Vencimento</label><input name="vencimento" type="datetime-local" required></div><div class="inteiro"><label>Título</label><input name="titulo" required maxlength="180"></div><div><label>Responsável</label><input name="responsavel" maxlength="120"></div><div class="inteiro"><label>Observações</label><textarea name="observacoes" rows="3" maxlength="2000"></textarea></div></div><div class="modal-rodape"><button type="button" class="btn" data-fechar="modal-prazo">Cancelar</button><button class="btn primario">Salvar prazo</button></div></form></div>
 
+<div id="modal-execucao" class="modal"><form id="form-execucao" class="modal-corpo"><h2>Registrar na execução</h2><input name="processo_id" type="hidden"><p class="nota" id="execucao-processo"></p><p class="nota">Use quando a fonte oficial ainda não mostrou. Se o Contratos.gov.br trouxer um valor maior na mesma fase, vale o oficial; nada é somado duas vezes.</p><div class="form-grade"><div><label for="ex-tipo">O que aconteceu</label><select id="ex-tipo" name="tipo"><option value="empenho">Novo empenho</option><option value="entrega">Entrega</option><option value="nota">Nota fiscal (faturado)</option><option value="recebimento">Recebimento (pagamento)</option></select></div><div><label for="ex-data">Data</label><input id="ex-data" name="ocorrido_em" type="date" required></div><div><label for="ex-valor">Valor (R$)</label><input id="ex-valor" name="valor" type="number" min="0.01" step="0.01" required></div><div><label for="ex-ref" id="ex-ref-rotulo">Número do empenho</label><input id="ex-ref" name="referencia" maxlength="100" required></div><div class="inteiro"><label for="ex-obs">Observações</label><textarea id="ex-obs" name="observacoes" rows="2" maxlength="2000"></textarea></div></div><div class="modal-rodape"><button type="button" class="btn" data-fechar="modal-execucao">Cancelar</button><button class="btn primario">Registrar</button></div></form></div>
 <div id="modal-empenho" class="modal"><form id="form-empenho" class="modal-corpo"><h2 id="titulo-form-empenho">Novo empenho</h2><input name="id" type="hidden"><input name="processo_id" type="hidden"><div class="form-grade"><div><label>Número</label><input name="numero" required maxlength="100"></div><div><label>Emissão</label><input name="emitido_em" type="date"></div><div><label>Valor</label><input name="valor" required type="number" min="0" step="0.01"></div><div><label>Saldo atual</label><input name="saldo" type="number" min="0" step="0.01"></div><div><label>Entrega prevista</label><input name="entrega_prevista" type="date"></div><div><label>Status</label><select name="status"><option value="emitido">Emitido</option><option value="em_execucao">Em execução</option><option value="entregue">Entregue</option><option value="recebido">Recebido</option><option value="pago">Pago</option><option value="cancelado">Cancelado</option></select></div><div class="inteiro"><label>Observações</label><textarea name="observacoes" rows="3" maxlength="2000"></textarea></div></div><div class="modal-rodape"><button type="button" class="btn" data-fechar="modal-empenho">Cancelar</button><button class="btn primario">Salvar empenho</button></div></form></div>
 
 <script>
@@ -177,8 +199,8 @@ input::placeholder,textarea::placeholder{color:var(--text-secondary);opacity:1}
     const cabecalho=`<button type="button" class="btn" data-alternar-itens="${processo.id}" aria-expanded="${aberto}">${aberto?"▾ Fechar":"▸ Abrir"} itens oficiais${dados?` · página ${pagina}`:""}</button>`;
     if(!aberto){alvo.innerHTML=cabecalho;return;}
     const erro=falhasItens.get(processo.id);
-    const conteudo=consultasItens.has(processo.id)?'<p class="nota">Carregando esta página de itens do PNCP…</p>':erro?`<p class="nota">${esc(erro)} <button type="button" class="btn" data-retry-itens="${processo.id}">Tentar novamente</button></p>`:dados?`<div class="itens-lista">${itens.length?itens.map((item,indice)=>`<div class="linha-registro"><strong>Item ${esc(item.numero)}</strong><small>${esc(item.descricao||"Sem descrição")} · ${esc(item.quantidade??"—")} ${esc(item.unidade||"")}</small>${registrados.has(String(item.numero))?`<span class="tag">Item cadastrado</span><button type="button" class="btn" data-acompanhar-item="${indice}">Conferir origem PNCP</button>`:`<button type="button" class="btn" data-acompanhar-item="${indice}">Importar item com origem PNCP</button>`}</div>`).join(""):'<p class="nota">Nenhum item nesta página.</p>'}</div><div class="acoes-bloco"><button type="button" class="btn" data-pagina-itens="${pagina-1}" ${pagina===1?"disabled":""}>Anterior</button><span>Página ${pagina} · ${itens.length} itens</span><button type="button" class="btn" data-pagina-itens="${pagina+1}" ${dados.proximaPagina?"":"disabled"}>Próxima</button><label class="ir-item">Ir ao item nº <input type="number" id="numero-item-busca" min="1" step="1" placeholder="Ex.: 900"></label><button type="button" class="btn" data-buscar-item>Ir</button></div>`:'<p class="nota">Abra a lista para consultar os itens.</p>';
-    alvo.innerHTML=`${cabecalho}<p class="nota">Itens do PNCP, 100 por página. Importe um item com origem rastreável; depois informe sua oferta, marca e modelo no cadastro. Cadastro manual permanece disponível; a lista pode ser fechada a qualquer momento.</p>${conteudo}`;
+    const conteudo=consultasItens.has(processo.id)?'<p class="nota">Carregando esta página de itens do PNCP…</p>':erro?`<p class="nota">${esc(erro)} <button type="button" class="btn" data-retry-itens="${processo.id}">Tentar novamente</button></p>`:dados?`<div class="itens-lista">${itens.length?itens.map((item,indice)=>`<div class="linha-registro"><strong>Item ${esc(item.numero)}</strong><small>${esc(item.descricao||"Sem descrição")} · ${esc(item.quantidade??"—")} ${esc(item.unidade||"")}</small>${registrados.has(String(item.numero))?`<span class="tag">Item cadastrado</span><button type="button" class="btn" data-acompanhar-item="${indice}">Conferir origem PNCP</button>`:`<button type="button" class="btn" data-acompanhar-item="${indice}">Importar item com origem PNCP</button>`}</div>`).join(""):'<p class="nota">Nenhum item nesta página.</p>'}</div>${dados.busca?`<div class="acoes-bloco"><span>${itens.length} ${itens.length===1?"item":"itens"} com “${esc(dados.busca)}” em ${dados.paginasLidas} ${dados.paginasLidas===1?"página":"páginas"}${dados.incompleta?" (parei no limite de "+LIMITE_PAGINAS_BUSCA_ITENS+" páginas; refine a busca)":""}</span><button type="button" class="btn" data-limpar-busca-itens>Limpar busca</button></div>`:`<div class="acoes-bloco"><button type="button" class="btn" data-pagina-itens="${pagina-1}" ${pagina===1?"disabled":""}>Anterior</button><span>Página ${pagina} · ${itens.length} itens</span><button type="button" class="btn" data-pagina-itens="${pagina+1}" ${dados.proximaPagina?"":"disabled"}>Próxima</button><label class="ir-item">Ir ao item nº <input type="number" id="numero-item-busca" min="1" step="1" placeholder="Ex.: 900"></label><button type="button" class="btn" data-buscar-item>Ir</button></div>`}`:'<p class="nota">Abra a lista para consultar os itens.</p>';
+    alvo.innerHTML=`${cabecalho}<p class="nota">Itens do PNCP, 100 por página. Importe um item com origem rastreável; depois informe sua oferta, marca e modelo no cadastro. Cadastro manual permanece disponível; a lista pode ser fechada a qualquer momento.</p><form class="acoes-bloco" data-busca-itens><label class="ir-item">Buscar nos itens <input type="search" id="texto-item-busca" maxlength="80" placeholder="Ex.: papel A4" value="${esc(dados?.busca||"")}"></label><button type="submit" class="btn">Buscar em todas as páginas</button></form>${conteudo}`;
   }
   async function carregarItensOficiais(processo,pagina=1){
     if(consultasItens.has(processo.id))return;
@@ -203,6 +225,34 @@ input::placeholder,textarea::placeholder{color:var(--text-secondary);opacity:1}
     }catch(erro){console.warn("Itens oficiais indisponíveis:",erro);falhasItens.set(processo.id,`Não foi possível consultar os itens: ${erro.message}.`);}
     finally{consultasItens.delete(processo.id);if($("modal-dossie").classList.contains("aberto")&&$("modal-dossie").dataset.processoId===processo.id)renderizarItensOficiais(processo);}
   }
+  // Busca por palavra em todas as páginas do PNCP (edital grande tem milhares de itens). Reaproveita as páginas já lidas.
+  const LIMITE_PAGINAS_BUSCA_ITENS=30;
+  const semAcento=v=>String(v||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
+  async function buscarTextoItens(processo,termo){
+    const pncp=LicitaOperacaoEdital.idPncp(processo);
+    if(!pncp||consultasItens.has(processo.id))return;
+    const [cnpj,,sequenciaAno]=pncp.split("-");const [sequencial,ano]=sequenciaAno.split("/");
+    const alvo=semAcento(termo);const achados=[];let paginasLidas=0,incompleta=false;
+    consultasItens.add(processo.id);falhasItens.delete(processo.id);renderizarItensOficiais(processo);
+    try{
+      for(let pagina=1;;pagina++){
+        if(pagina>LIMITE_PAGINAS_BUSCA_ITENS){incompleta=true;break;}
+        const chave=`${processo.id}:${pagina}`;let dados=paginasItens.get(chave);
+        if(!dados){
+          const resposta=await fetch(`/api/pncp-itens?cnpj=${cnpj}&ano=${ano}&sequencial=${sequencial}&pagina=${pagina}`);
+          if(!resposta.ok)throw new Error(`PNCP indisponível (${resposta.status})`);
+          dados=await resposta.json();
+          if(dados.erro||!Array.isArray(dados.itens))throw new Error(dados.erro||"Resposta de itens inválida");
+          paginasItens.set(chave,dados);
+        }
+        paginasLidas++;
+        achados.push(...dados.itens.filter(item=>semAcento(item.descricao).includes(alvo)));
+        if(!dados.proximaPagina)break;
+      }
+      itensOficiais.set(processo.id,{itens:achados,busca:termo,paginasLidas,incompleta});
+    }catch(erro){console.warn("Busca nos itens indisponível:",erro);falhasItens.set(processo.id,`Não foi possível buscar nos itens: ${erro.message}.`);}
+    finally{consultasItens.delete(processo.id);if($("modal-dossie").dataset.processoId===processo.id)renderizarItensOficiais(processo);}
+  }
   sb.auth.onAuthStateChange((_evento,sessao)=>{const usuario=sessao?.user?.id||null;if(usuarioSessao!==undefined&&usuario!==usuarioSessao){++geracaoCarregamento;processoPendente=null;fechar("modal-dossie");}usuarioSessao=usuario;});
   async function autenticar(){const {data:{session}}=await sb.auth.getSession();usuarioSessao=session?.user?.id||null;if(!session){location.replace("login.html?voltar=/processos");return false;}const {data:cliente}=await sb.from("clientes").select("status").eq("id",session.user.id).maybeSingle();if(!cliente||cliente.status!=="aprovado"){await sb.auth.signOut();location.replace("login.html?voltar=/processos");return false;}return true;}
   async function iniciar(){if(!await autenticar())return;const {data:orgId,error}=await sb.rpc("bootstrap_operacao");if(error){aviso("Processos precisa da migração do Supabase. Execute supabase/operacao_licitacoes.sql e recarregue.","erro");return;}estado.orgId=orgId;await carregarEmpresas();}
@@ -222,7 +272,7 @@ input::placeholder,textarea::placeholder{color:var(--text-secondary);opacity:1}
     let falha=[p,d].find(x=>x.error);
     if(falha){aviso("Não foi possível carregar o dossiê. Confira a migração operacao_acompanhamento.sql: "+falha.error.message,"erro");return;}
     estado.processos=p.data||[];estado.documentos=d.data||[];
-    estado.detalhesCarregados=false;estado.erroDetalhes=false;estado.prazos=[];estado.empenhos=[];estado.itens=[];estado.ocorrencias=[];estado.contratos=[];estado.anexos=[];estado.contratosPublicos=[];estado.esteiraResultado=[];
+    estado.detalhesCarregados=false;estado.erroDetalhes=false;estado.prazos=[];estado.empenhos=[];estado.itens=[];estado.ocorrencias=[];estado.contratos=[];estado.anexos=[];estado.contratosPublicos=[];estado.execucaoEventos=[];estado.esteiraResultado=[];
     renderizar();
     const ids=estado.processos.map(processo=>processo.id);
     if(!ids.length){estado.detalhesCarregados=true;renderizar();abrirOrigemPendente();return;}
@@ -239,7 +289,7 @@ input::placeholder,textarea::placeholder{color:var(--text-secondary);opacity:1}
     if(estado.empresaId!==empresaId||geracao!==geracaoCarregamento||usuario!==usuarioSessao)return;
     falha=[pr,e,itens,ocorrencias,contratos,anexos].find(x=>x.error);
     if(falha){estado.erroDetalhes=true;renderizar();if($("modal-dossie").classList.contains("aberto"))abrirDossie($("modal-dossie").dataset.processoId);aviso("Não foi possível carregar o acompanhamento. Confira a migração operacao_acompanhamento.sql: "+falha.error.message,"erro");return;}
-    [estado.contratosPublicos,estado.esteiraResultado]=await Promise.all([opcional("operacao_contratos_publicos"),opcional("operacao_esteira_tarefas",q=>q.eq("etapa","resultado"))]);
+    [estado.contratosPublicos,estado.execucaoEventos,estado.esteiraResultado]=await Promise.all([opcional("operacao_contratos_publicos"),opcional("operacao_execucao_eventos"),opcional("operacao_esteira_tarefas",q=>q.eq("etapa","resultado"))]);
     if(estado.empresaId!==empresaId||geracao!==geracaoCarregamento||usuario!==usuarioSessao)return;
     estado.prazos=pr.data||[];estado.empenhos=e.data||[];
     estado.itens=itens.data||[];estado.ocorrencias=ocorrencias.data||[];estado.contratos=contratos.data||[];estado.anexos=anexos.data||[];
@@ -273,7 +323,7 @@ input::placeholder,textarea::placeholder{color:var(--text-secondary);opacity:1}
     const marcador=estado.erroDetalhes?"—":"…";
     $("m-ativos").textContent=ativos;$("m-ganhos").textContent=estado.detalhesCarregados?ganhos:marcador;$("m-prazos").textContent=estado.detalhesCarregados?vencidos:marcador;
     $("m-homologado").textContent=estado.detalhesCarregados?dinheiro(homologado):marcador;$("m-saldo").textContent=estado.detalhesCarregados?dinheiro(saldo):marcador;
-    renderizarProcessos();renderizarPrazos();renderizarEmpenhos();
+    renderizarProcessos();renderizarPrazos();renderizarEmpenhos();renderizarExecucao();
   }
   function renderizarProcessos(){
     const busca=$("busca").value.toLocaleLowerCase("pt-BR"), status=$("filtro-status").value;
@@ -288,6 +338,59 @@ input::placeholder,textarea::placeholder{color:var(--text-secondary);opacity:1}
     const empresa=estado.empresas.find(e=>e.id===estado.empresaId)?.razao_social;
     $("lista-prazos").querySelectorAll(".evento").forEach((no,i)=>{const p=lista[i],processo=processos.get(p.processo_id);const botao=window.AgendaIcs?.montarBotao(document,{id:p.id,titulo:p.titulo,inicio:p.vencimento,processo:[processo.numero,processo.objeto].filter(Boolean).join(" · "),empresa,empresaId:processo.empresa_id,processoId:processo.id});if(botao)no.append(botao);});}
   function renderizarEmpenhos(){if(!estado.detalhesCarregados){$("lista-empenhos").innerHTML=`<tr><td colspan="5" class="vazio">${estado.erroDetalhes?"Empenhos indisponíveis. Confira o aviso no topo.":"Carregando empenhos…"}</td></tr>`;return;}const processos=new Map(estado.processos.map(p=>[p.id,p]));const lista=estado.empenhos.filter(e=>processos.has(e.processo_id));$("lista-empenhos").innerHTML=lista.length?lista.map(e=>`<tr><td><strong>${esc(e.numero)}</strong><br><span class="nota">${data(e.emitido_em)}</span></td><td>${esc(processos.get(e.processo_id).objeto)}</td><td>${dinheiro(e.valor)}<br><span class="nota">Saldo: ${dinheiro(e.saldo ?? e.valor)}</span></td><td>${data(e.entrega_prevista)}</td><td><span class="tag ${e.status}">${esc(rotuloStatus(e.status))}</span></td></tr>`).join(""):`<tr><td colspan="5" class="vazio">Nenhum empenho cadastrado.</td></tr>`;}
+  // Contratos em fases (Siga Pregão, item 19): Potencial → Empenhado → Entregue → Faturado → Recebido. Regras e dinheiro
+  // (centavos BigInt, maior valor entre oficial e lançado) em contrato-publico.js (fasesExecucao); aqui só a tela.
+  let filtroExecucao="andamento";
+  const FONTE_FASE={oficial:"fonte oficial (Contratos.gov.br/PNCP)",lancado:"registrado por você",situacao:"pela situação do empenho",resultado:"valor homologado no resultado"};
+  const hojeLocal=()=>new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10); // data do relógio do usuário, não UTC
+  const pct=v=>`${String(v).replace(".",",")}%`;
+  function linhasExecucao(){
+    const cp=window.ContratoPublico,doProcesso=(lista,id)=>(lista||[]).filter(x=>x.processo_id===id);
+    return estado.processos.filter(p=>p.status!=="arquivado").map(p=>{
+      const resultado=resultadoDoProcesso(p);
+      const ganho=["vitoria_total","vitoria_parcial","vitoria_sem_detalhamento"].includes(resultado.situacao)||["homologado","contratado"].includes(p.status);
+      return {p,ganho,...cp.fasesExecucao({contratos:doProcesso(estado.contratos,p.id),publicos:doProcesso(estado.contratosPublicos,p.id),empenhos:doProcesso(estado.empenhos,p.id),eventos:doProcesso(estado.execucaoEventos,p.id),homologado:resultado.valor})};
+    }).filter(l=>l.temExecucao||l.ganho);
+  }
+  function linhaExecucao(l){
+    const cp=window.ContratoPublico,din=cp.reaisDeCentavos,f=l.fases,etapas=["empenhado","entregue","faturado","recebido"];
+    const vig=l.vigenciaFim?cp.textoVigencia(cp.situacaoContrato({vigencia_fim:l.vigenciaFim},hojeLocal()).vigencia):"";
+    const resumo=etapas.map(k=>`${cp.FASES[k]} ${pct(f[k].percentual)}`).join(" · ");
+    const detalhes=Object.entries(cp.FASES).map(([k,t])=>`<li>${t}: <b>${din(f[k].valor)}</b> · ${f[k].fonte?FONTE_FASE[f[k].fonte]:"sem registro"}</li>`).join("");
+    return `<tr data-execucao="${l.p.id}"><td><button type="button" class="link" data-abrir-processo="${l.p.id}">${esc(l.p.objeto)}</button><br><span class="nota">${esc([l.p.numero,l.p.orgao].filter(Boolean).join(" · "))}</span><details class="fases-detalhe"><summary>Ver fases e fontes</summary><ul>${detalhes}</ul></details></td>`
+      +`<td>${l.vigenciaFim?`${data(l.vigenciaFim)}<br><span class="nota">${esc(vig)}</span>`:'<span class="nota">Sem vigência</span>'}</td>`
+      +`<td><div class="caminho" role="img" aria-label="${esc(resumo)} do potencial">${etapas.map(k=>`<span data-fase="${k}" style="width:${f[k].percentual}%"></span>`).join("")}</div><span class="nota">${esc(resumo)}</span></td>`
+      +`<td><b class="valor-recebido">${din(f.recebido.valor??0n)}</b><br><span class="nota">de ${din(f.potencial.valor)}</span></td><td><b>${pct(f.recebido.percentual)}</b></td>`
+      +`<td><button type="button" class="btn" data-registrar-execucao="${l.p.id}">Registrar</button></td></tr>`;
+  }
+  function renderizarExecucao(){
+    const alvo=$("execucao-lista");if(!alvo)return;
+    if(!estado.detalhesCarregados){$("execucao-resumo").innerHTML="";$("execucao-iniciar").innerHTML="";alvo.innerHTML=`<p class="vazio">${estado.erroDetalhes?"Execução indisponível. Confira o aviso no topo.":"Carregando contratos…"}</p>`;return;}
+    const cp=window.ContratoPublico,din=cp.reaisDeCentavos,linhas=linhasExecucao(),comExecucao=linhas.filter(l=>l.temExecucao);
+    const grupos={andamento:comExecucao.filter(l=>!l.finalizado),finalizado:comExecucao.filter(l=>l.finalizado)};
+    $("n-andamento").textContent=grupos.andamento.length;$("n-finalizado").textContent=grupos.finalizado.length;
+    document.querySelectorAll("[data-filtro-execucao]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.filtroExecucao===filtroExecucao)));
+    const lista=grupos[filtroExecucao],t=cp.totaisFases(lista);
+    $("execucao-resumo").innerHTML=Object.entries(cp.FASES).map(([k,nome])=>`<div class="fase" data-fase="${k}"><span>${nome}</span><b>${din(t[k].valor)}</b><small>${k==="potencial"?`${din(t.potencial.valor-t.recebido.valor>0n?t.potencial.valor-t.recebido.valor:0n)} a receber`:`${pct(t[k].percentual)} do potencial`}</small></div>`).join("");
+    alvo.innerHTML=lista.length?`<div class="tabela-wrap"><table class="tabela tabela-fases"><thead><tr><th>Contrato</th><th>Vigência</th><th>Caminho do potencial</th><th>Recebido</th><th>Do potencial</th><th>Ação</th></tr></thead><tbody>${lista.map(linhaExecucao).join("")}</tbody></table></div><p class="fases-legenda">${["empenhado","entregue","faturado","recebido"].map(k=>`<span><i data-fase="${k}"></i>${cp.FASES[k]}</span>`).join("")}</p>`
+      :`<p class="vazio">${filtroExecucao==="finalizado"?"Nenhum contrato recebido por completo ainda.":"Nenhum contrato em execução. Quando ganhar, use Iniciar execução abaixo."}</p>`;
+    const prontos=linhas.filter(l=>!l.temExecucao);
+    $("execucao-iniciar").innerHTML=prontos.length?`<h3>Ganhos sem execução iniciada</h3>${prontos.map(l=>`<div class="linha-registro iniciar-execucao"><div><strong>${esc(l.p.objeto)}</strong><small>${esc([l.p.numero,l.p.orgao].filter(Boolean).join(" · "))}${l.fases.potencial.valor!=null?` · potencial ${din(l.fases.potencial.valor)}`:""}</small></div><button type="button" class="btn primario" data-iniciar-execucao="${l.p.id}">Iniciar execução</button></div>`).join("")}`:"";
+  }
+  const ROTULO_REFERENCIA={empenho:"Número do empenho",entrega:"Referência da entrega (opcional)",nota:"Número da nota fiscal",recebimento:"Referência do pagamento (opcional)"};
+  function ajustarFormExecucao(){const tipo=$("ex-tipo").value;$("ex-ref-rotulo").textContent=ROTULO_REFERENCIA[tipo];$("ex-ref").required=tipo==="empenho"||tipo==="nota";}
+  async function salvarExecucao(ev){
+    ev.preventDefault();const formulario=ev.currentTarget,f=new FormData(formulario),p=estado.processos.find(x=>x.id===f.get("processo_id"));if(!p)return;
+    const tipo=f.get("tipo"),valor=numero(f.get("valor")),referencia=String(f.get("referencia")||"").trim()||null,observacoes=String(f.get("observacoes")||"").trim()||null;
+    if(!valor){aviso("Informe um valor maior que zero.","erro");return;}
+    if(!ROTULO_REFERENCIA[tipo]){aviso("Escolha o que aconteceu.","erro");return;}
+    if(tipo==="empenho"&&!referencia){aviso("Informe o número do empenho.","erro");return;}
+    const {error}=tipo==="empenho"
+      ?await sb.from("operacao_empenhos").insert({organizacao_id:estado.orgId,processo_id:p.id,numero:referencia,emitido_em:f.get("ocorrido_em")||null,valor,status:"emitido",observacoes})
+      :await sb.from("operacao_execucao_eventos").insert({organizacao_id:estado.orgId,processo_id:p.id,tipo,ocorrido_em:f.get("ocorrido_em"),valor,referencia,observacoes});
+    if(error){aviso("Não foi possível registrar: "+(/operacao_execucao_eventos/.test(error.message)?"aplique supabase/operacao_execucao_fases.sql no Supabase.":error.message),"erro");return;}
+    formulario.reset();fechar("modal-execucao");await carregarTudo();aviso("Registrado na execução do contrato.","info");
+  }
   function abrirDossie(id){
     const p=estado.processos.find(x=>x.id===id);if(!p)return;
     const origem=linkSeguro(p.url_origem);
@@ -389,7 +492,15 @@ input::placeholder,textarea::placeholder{color:var(--text-secondary);opacity:1}
   $("btn-novo-processo").onclick=()=>{$("form-processo").reset();$("titulo-form-processo").textContent="Novo processo";abrir("modal-processo");};
   $("btn-salvar-pdf").onclick=()=>{const frame=$("relatorio-frame");if(!frame.contentDocument?.title?.startsWith("Relatório operacional")){aviso("Aguarde a prévia do relatório ficar pronta.","erro");return;}try{frame.contentWindow.focus();frame.contentWindow.print();}catch(erro){aviso("Não foi possível iniciar a impressão: "+erro.message,"erro");}};
   $("btn-atualizar").onclick=carregarTudo;$("busca").oninput=renderizarProcessos;$("filtro-status").onchange=renderizarProcessos;
-  $("form-processo").addEventListener("submit",salvarProcesso);$("form-prazo").addEventListener("submit",salvarPrazo);$("form-empenho").addEventListener("submit",salvarEmpenho);
+  $("form-processo").addEventListener("submit",salvarProcesso);$("form-prazo").addEventListener("submit",salvarPrazo);$("form-empenho").addEventListener("submit",salvarEmpenho);$("form-execucao").addEventListener("submit",salvarExecucao);$("ex-tipo").addEventListener("change",ajustarFormExecucao);
+  $("aba-empenhos").addEventListener("click",e=>{
+    const filtro=e.target.closest("[data-filtro-execucao]"),abrirP=e.target.closest("[data-abrir-processo]"),registrar=e.target.closest("[data-registrar-execucao]"),iniciarEx=e.target.closest("[data-iniciar-execucao]");
+    if(filtro){filtroExecucao=filtro.dataset.filtroExecucao==="finalizado"?"finalizado":"andamento";renderizarExecucao();return;}
+    if(abrirP){abrirDossie(abrirP.dataset.abrirProcesso);return;}
+    if(registrar){const p=estado.processos.find(x=>x.id===registrar.dataset.registrarExecucao);if(!p)return;const form=$("form-execucao");form.reset();form.processo_id.value=p.id;form.ocorrido_em.value=hojeLocal();$("execucao-processo").textContent=p.objeto;ajustarFormExecucao();abrir("modal-execucao");$("ex-tipo").focus();return;}
+    // Iniciar execução: abre o "Registrar contrato" já com o processo ganho, situação vigente e o valor homologado.
+    if(iniciarEx){const p=estado.processos.find(x=>x.id===iniciarEx.dataset.iniciarExecucao);if(!p)return;const form=$("form-contrato"),r=resultadoDoProcesso(p);form.reset();form.elements.namedItem("id").value="";form.elements.namedItem("processo_id").value=p.id;form.elements.namedItem("situacao").value="vigente";if(r.valor!=null)form.elements.namedItem("valor").value=Number(r.valor).toFixed(2);abrir("modal-contrato");form.elements.namedItem("numero").focus();}
+  });
   document.querySelectorAll("[data-fechar]").forEach(b=>b.onclick=()=>fechar(b.dataset.fechar));
   document.querySelectorAll(".modal").forEach(m=>m.addEventListener("click",e=>{if(e.target===m)fechar(m.id);}));
   document.querySelectorAll(".aba").forEach(b=>b.onclick=()=>{document.querySelectorAll(".aba").forEach(x=>x.classList.remove("ativa"));document.querySelectorAll(".painel").forEach(x=>x.classList.remove("ativo"));b.classList.add("ativa");$("aba-"+b.dataset.aba).classList.add("ativo");});
@@ -405,6 +516,7 @@ input::placeholder,textarea::placeholder{color:var(--text-secondary);opacity:1}
       renderizarItensOficiais(processo);return;
     }
     if(e.target.closest("[data-retry-itens]")){void carregarItensOficiais(processo,paginaAtualItens.get(id)||1);return;}
+    if(e.target.closest("[data-limpar-busca-itens]")){itensOficiais.delete(id);void carregarItensOficiais(processo,1);return;}
     const paginaBotao=e.target.closest("[data-pagina-itens]");
     if(paginaBotao){void carregarItensOficiais(processo,Number(paginaBotao.dataset.paginaItens));return;}
     if(e.target.closest("[data-buscar-item]")){
@@ -428,6 +540,16 @@ input::placeholder,textarea::placeholder{color:var(--text-secondary);opacity:1}
     finally{acompanhar.disabled=false;}
   });
   acompanhamento.vincular();iniciar();
+  // Fora do trecho do clique (scripts/importacao_pncp.test.js recorta até acompanhamento.vincular()).
+  $("d-conteudo").addEventListener("submit",e=>{
+    if(!e.target.closest("[data-busca-itens]"))return;
+    e.preventDefault();
+    const processo=estado.processos.find(item=>item.id===$("modal-dossie").dataset.processoId);
+    const termo=$("texto-item-busca")?.value.trim()||"";
+    if(!processo)return;
+    if(termo.length<2){aviso("Digite ao menos 2 letras para buscar nos itens.","erro");return;}
+    void buscarTextoItens(processo,termo);
+  });
 })();
 </script>
 <script>
@@ -440,6 +562,8 @@ input::placeholder,textarea::placeholder{color:var(--text-secondary);opacity:1}
 })();
 </script>
 <script src="menu-lateral.js"></script>
+<script src="ajuda-ui.js" defer></script>
+<script src="avisos-celular.js" defer></script>
 </body>
 </html>
 

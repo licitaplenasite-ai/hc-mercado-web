@@ -6,7 +6,7 @@ const {MAX_BYTES:PLANILHA_BYTES}=require('../../planilha-itens.js');
 // Listagem com Response crua: o fallback do banco antigo precisa ler o código do erro.
 const requestBruto=event=>(path,op)=>restItens(event.headers?.authorization||event.headers?.Authorization||'',path,op);
 const ACOES_ITENS={salvarItem:salvarItemProcesso,salvarPrecoItem,salvarPremissas,lerPremissas,salvarReferencia,importarPlanilha};
-const {cabecalhosPadrao,exigirUsuarioLogado}=require('./_auth');
+const {cabecalhosPadrao,exigirUsuarioLogado,verificarLimiteDiario}=require('./_auth');
 const {createHash}=require('node:crypto');
 const {falhar,validarConfirmacao}=require('./_empresa_identificacao');
 const {carregarContextoIdentificacao}=require('./_empresa_identificacao_contexto');
@@ -81,6 +81,8 @@ function criarHandler({carregarEvidenciaPortal=async()=>null,ponteLeitura=null}=
  let body;
  try{
  const auth=await exigirUsuarioLogado(event);if(!auth.ok)return responder(auth.status,{erro:auth.erro});
+ // Plano: recurso "proposta" (supabase/planos_e_recursos.sql). Teto alto: o objetivo é o plano, não a cota.
+ const plano=await verificarLimiteDiario(auth.userId,'kit-documentos',3000);if(!plano.ok)return responder(plano.status,{erro:plano.erro});
  // Planilha de até 2 MB chega como texto JSON; as demais ações seguem o envelope do kit.
  const bytes=typeof event.body==='string'?Buffer.byteLength(event.body,'utf8'):Infinity;
  if(bytes>PLANILHA_BYTES*2)falhar('Solicitação inválida.');

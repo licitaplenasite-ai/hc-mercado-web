@@ -34,3 +34,21 @@
 #robo-lances tr[data-tipo="sugestao"] td { font-weight: 600; color: var(--action-text); }
 #robo-lances tr[data-tipo="bloqueado"] td, #robo-lances tr[data-tipo="recusado"] td { color: var(--attention-text); }
 #robo-lances tr[data-tipo="concorrente"] td { color: var(--text-secondary); }
+/* Abas por situação do item (Em disputa / Aguardando / Encerrados), selo GANHANDO/PERDENDO/EMPATE e sugestão ao vivo.
+   Situação sempre em texto no selo, além da cor; só tokens do DS. */
+.robo-abas { display: flex; flex-wrap: wrap; gap: var(--space-4); border-bottom: 1px solid var(--border-default); }
+.robo-abas:empty { display: none; }
+.robo-abas [role="tab"] { min-height: 44px; padding: 0 var(--space-12); border: 0; border-bottom: 2px solid transparent; background: none; color: var(--text-secondary); font: var(--text-body); font-weight: 500; cursor: pointer; }
+.robo-abas [role="tab"]:hover { color: var(--text-primary); }
+.robo-abas [role="tab"][aria-selected="true"] { color: var(--text-primary); font-weight: 600; border-bottom-color: var(--action-strong); }
+.robo-item-topo { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); }
+.robo-selo { padding: 2px var(--space-8); border-radius: 999px; border: 1px solid var(--border-default); font: var(--text-label); font-weight: 600; letter-spacing: .02em; white-space: nowrap; }
+.robo-selo[data-selo="ganhando"] { border-color: var(--success-border); background: var(--success-bg); color: var(--success-text); }
+.robo-selo[data-selo="perdendo"] { border-color: var(--error-border); background: var(--error-bg); color: var(--error-text); }
+.robo-selo[data-selo="empate"] { border-color: var(--attention-border); background: var(--attention-bg); color: var(--attention-text); }
+.robo-opcoes { display: flex; flex-wrap: wrap; gap: var(--space-4) var(--space-16); }
+.robo-opcao { display: inline-flex; align-items: center; gap: var(--space-8); min-height: 44px; font: var(--text-body); }
+.robo-opcao input { width: 20px; height: 20px; flex: none; }
+.robo-ao-vivo { display: grid; gap: var(--space-8); padding: var(--space-12); border-radius: var(--radius-control); background: var(--surface-sunken); }
+.robo-sugestao { font: var(--text-body); }
+.robo-sugestao[data-tem-valor="sim"] { color: var(--action-text); font-weight: 600; }

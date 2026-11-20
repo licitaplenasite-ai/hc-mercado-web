@@ -123,3 +123,51 @@ test('mensagemBusca: zero compras com consulta que falhou pede para tentar de no
   assert.equal(M.mensagemBusca(5, 3, 0), '5 compra(s) encontradas, 3 com marca declarada.');
   assert.match(M.mensagemBusca(5, 3, 2), /resultado parcial/);
 });
+
+test('marcaModelo: número depois da 1ª palavra vira modelo; marca de várias palavras e "/" ficam inteiras', () => {
+  assert.deepEqual([M.marcaModelo(item(1, { marca: 'VAIO FE16' }))].map((i) => [i.marca, i.modelo]), [['VAIO', 'FE16']]);
+  assert.equal(M.marcaModelo(item(1, { marca: 'THINKPAD P16V GEN2' })).modelo, 'P16V GEN2');
+  assert.deepEqual([M.marcaModelo(item(1, { marca: 'Melitta do Brasil' }))].map((i) => [i.marca, i.modelo]), [['Melitta do Brasil', undefined]]);
+  assert.equal(M.marcaModelo(item(1, { marca: 'REPORT / SUZANO 75' })).marca, 'REPORT / SUZANO 75');
+  assert.equal(M.marcaModelo(item(1, { marca: 'BIC', modelo: 'Cristal' })).modelo, 'Cristal'); // rotulado pela fonte prevalece
+  assert.equal(M.marcaModelo(item(1, { marca: null })).marca, null);
+});
+
+test('filtrarCompras: período em meses a partir de hoje, esfera e faixa de quantidade', () => {
+  const lista = [item(1, { dataResultado: '2026-11-01', esfera: 'F', quantidade: 5 }), item(2, { dataResultado: '2025-12-01', esfera: 'M', quantidade: 50 }), item(3, { dataResultado: '2024-06-01', esfera: 'E', quantidade: 500 })];
+  const hoje = '2026-11-19';
+  assert.equal(M.filtrarCompras(lista, {}, hoje).length, 3);
+  assert.deepEqual(M.filtrarCompras(lista, { meses: '12' }, hoje).map((i) => i.valorUnitarioCentavos), [1, 2]);
+  assert.deepEqual(M.filtrarCompras(lista, { meses: '24' }, hoje).map((i) => i.valorUnitarioCentavos), [1, 2]);
+  assert.equal(M.filtrarCompras(lista, { meses: '12' }, '2026-12-02').length, 1); // 01/12/2025 saiu da janela
+  assert.deepEqual(M.filtrarCompras(lista, { esfera: 'M' }, hoje).map((i) => i.valorUnitarioCentavos), [2]);
+  assert.deepEqual(M.filtrarCompras(lista, { qtdMin: '10', qtdMax: '100' }, hoje).map((i) => i.valorUnitarioCentavos), [2]);
+  assert.equal(M.filtrarCompras(lista, { qtdMin: 'abc' }, hoje).length, 3); // valor inválido não filtra
+});
+
+test('resumoModelos e resumoFornecedores: agrupam sem diferença de caixa, por CNPJ, com último preço', () => {
+  const lista = [
+    item(500000, { marca: 'Dell', modelo: 'Latitude 3440', documentoFornecedor: '11222333000181', fornecedor: 'ALFA LTDA', dataResultado: '2026-10-01' }),
+    item(520000, { marca: 'DELL', modelo: 'latitude 3440', documentoFornecedor: '11222333000181', fornecedor: 'Alfa Ltda.', dataResultado: '2026-11-01' }),
+    item(400000, { marca: 'Lenovo', modelo: null, documentoFornecedor: '99888777000100', fornecedor: 'BETA', dataResultado: '2026-09-01' }),
+  ];
+  const [mod] = M.resumoModelos(lista);
+  assert.equal(M.resumoModelos(lista).length, 1); // Lenovo sem modelo não entra
+  assert.deepEqual([mod.quantidade, mod.resumo.mediana, mod.ultimo.valorUnitarioCentavos], [2, 510000, 520000]);
+  const [alfa, beta] = M.resumoFornecedores(lista);
+  assert.deepEqual([alfa.quantidade, alfa.marcas, beta.quantidade], [2, ['DELL'], 1]);
+});
+
+test('totalCentavos e linhasPlanilha: total sem float, valores em reais e célula com fórmula neutralizada', () => {
+  assert.equal(M.totalCentavos(item(397280, { quantidade: 5 })), 1986400);
+  assert.equal(M.totalCentavos(item(1050, { quantidade: 2.5 })), 2625);
+  assert.equal(M.totalCentavos(item(100, { quantidade: null })), null);
+  assert.equal(M.totalCentavos(item(Number.MAX_SAFE_INTEGER, { quantidade: 3 })), null);
+  const [cab, linha] = M.linhasPlanilha([item(397280, { quantidade: 5, dataResultado: '2026-11-17', esfera: 'F', fornecedor: '=HYPERLINK("x")', documentoFornecedor: '62958500000198' })]);
+  assert.equal(cab.length, linha.length);
+  assert.equal(linha[0], '17/11/2026');
+  assert.equal(linha[4], 'Federal');
+  assert.equal(linha[9], "'=HYPERLINK(\"x\")");
+  assert.equal(linha[10], '62.958.500/0001-98');
+  assert.deepEqual([linha[13], linha[14]], [3972.8, 19864]);
+});

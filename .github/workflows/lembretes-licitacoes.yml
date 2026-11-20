@@ -36,3 +36,11 @@ jobs:
           EMAIL_SENHA_APP: ${{ secrets.EMAIL_SENHA_APP }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: python scripts/lembretes_licitacoes.py
+
+      # Prazos e certidões no celular (scripts/avisos_celular.js; node já vem no ubuntu-latest). Sem as chaves VAPID sai sem erro.
+      - name: Avisos no celular
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          VAPID_CHAVE_PUBLICA: ${{ secrets.VAPID_CHAVE_PUBLICA }}
+          VAPID_CHAVE_PRIVADA: ${{ secrets.VAPID_CHAVE_PRIVADA }}
+        run: node scripts/avisos_celular.js

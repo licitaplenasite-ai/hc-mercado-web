@@ -526,29 +526,16 @@
   .bloco-separado { margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--border-default); }
   .bloco-separado-titulo { margin: 0 0 4px; font: var(--text-section); color: var(--text-primary); }
 
-  /* Pesquisa de Preços em passos numerados; o passo alcançado ganha número cheio e peso (não só cor). */
-  .pp-passos { list-style: none; display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0 0 16px; padding: 0; }
-  .pp-passo { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); font-size: 13px; }
-  .pp-passo span {
-    display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px;
-    border: 1px solid var(--border-strong); border-radius: 999px; font-weight: 600; font-variant-numeric: tabular-nums;
-  }
-  .pp-passo[data-passo="1"],
-  #precos:has(#pp-categorias table) .pp-passo[data-passo="2"],
-  #precos:has(#pp-itens table) .pp-passo[data-passo="3"],
-  #precos:has(#pp-resultado .pp-mediana) .pp-passo[data-passo="4"] { color: var(--text-primary); font-weight: 600; }
-  .pp-passo[data-passo="1"] span,
-  #precos:has(#pp-categorias table) .pp-passo[data-passo="2"] span,
-  #precos:has(#pp-itens table) .pp-passo[data-passo="3"] span,
-  #precos:has(#pp-resultado .pp-mediana) .pp-passo[data-passo="4"] span { background: var(--action-strong); border-color: var(--action-strong); color: var(--action-on); }
-  .pp-passo-titulo { margin: 16px 0 4px; font: 600 14px/22px var(--font-sans); color: var(--text-primary); }
-  .pp-mediana {
-    display: grid; gap: 4px; margin: 0 0 12px; padding: 16px; border: 1px solid var(--info-border);
-    border-left: 3px solid var(--action-strong); border-radius: var(--radius-card); background: var(--info-bg);
-  }
-  .pp-mediana-rotulo { font: var(--text-label); color: var(--text-secondary); }
-  .pp-mediana-valor { font: 600 32px/40px var(--font-sans); font-variant-numeric: tabular-nums; color: var(--text-primary); }
-  .pp-mediana-ajuda { font-size: 13px; line-height: 20px; color: var(--text-secondary); }
+  /* Pesquisa de Preços v2 (uma caixa de busca, mercado-comprasgov.css; aguarda aprovação): botões e notas no padrão do painel. */
+  .pp-mercado .btn { min-height: 36px; padding: 0 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-control);
+    background: var(--surface-default); color: var(--text-primary); font: 500 14px/16px var(--font-sans); cursor: pointer; }
+  .pp-mercado .btn:hover:not(:disabled) { background: var(--surface-sunken); }
+  .pp-mercado .btn.primario { min-height: 40px; padding: 0 16px; border-color: transparent; background: var(--action-strong); color: var(--action-on); }
+  .pp-mercado .btn.primario:hover:not(:disabled) { background: var(--action-strong-hover); }
+  .pp-mercado .btn:disabled { opacity: .6; cursor: wait; }
+  .pp-mercado .nota { margin: 6px 0; font-size: 13px; line-height: 20px; color: var(--text-secondary); }
+  .pp-mercado .mercado-linha input { min-height: 40px; }
+  .pp-mercado .mercado-marcas th, .pp-mercado .mercado-marcas td { background: transparent; }
   #status-cartoes .cartao .valor { white-space: normal; overflow: visible; text-overflow: clip; }
 
   /* ---- 16. Acabamento de Status, Funil, calendário e Minha conta (E6, aguarda aprovação) ---- */

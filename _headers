@@ -20,6 +20,11 @@
   ! Cache-Control
   Cache-Control: public, max-age=300, stale-while-revalidate=3600
 
+# Pacote da extensão (publico/extensao/*.zip, montado por scripts/montar_publico.js): baixa como arquivo.
+/extensao/*
+  Content-Type: application/zip
+  Content-Disposition: attachment
+
 # Portal do cliente (cliente.html, aberto por /cliente#t=<token>): página pública sem script/estilo inline,
 # então tem CSP própria e bem mais estreita que a do site. "/cliente*" já cobre /cliente e /cliente.html
 # (um segundo bloco igual duplicaria os valores). Desanexa CSP, Referrer-Policy e Cache-Control herdados de /*.

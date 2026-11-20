@@ -119,9 +119,11 @@ input::placeholder,textarea::placeholder{color:var(--text-secondary);opacity:1}
   </button>
   <a href="/sistema" title="Hoje"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-house"></use></svg></span><span class="nav-label">Hoje</span></a>
   <a href="painel.html#boletim" title="Boletim"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-clipboard-text"></use></svg></span><span class="nav-label">Boletim</span></a>
+  <a href="painel.html#calendario" title="Calendário"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-calendar"></use></svg></span><span class="nav-label">Calendário</span></a>
   <a href="painel.html#oportunidades" title="Encontrar Licitações"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-magnifying-glass"></use></svg></span><span class="nav-label">Encontrar Licitações</span></a>
   <a href="painel.html#diagnostico" title="Inteligência de Mercado"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-chart-bar"></use></svg></span><span class="nav-label">Inteligência de Mercado</span></a>
   <a href="prospeccao.html" title="Prospecção"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-chart-bar"></use></svg></span><span class="nav-label">Prospecção</span></a>
+  <a href="painel.html#licitacao-anterior" title="Licitação anterior"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-clock-counter-clockwise"></use></svg></span><span class="nav-label">Licitação anterior</span></a>
   <a href="painel.html#empresa" title="Analisar concorrente"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-buildings"></use></svg></span><span class="nav-label">Analisar concorrente</span></a>
   <a href="painel.html#transparencia" title="Convênios e Emendas Federais"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-handshake"></use></svg></span><span class="nav-label">Convênios e Emendas Federais</span></a>
   <a href="painel.html#precos" title="Pesquisa de Preços"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-coins"></use></svg></span><span class="nav-label">Pesquisa de Preços</span></a>
@@ -130,12 +132,13 @@ input::placeholder,textarea::placeholder{color:var(--text-secondary);opacity:1}
   <a href="painel.html#kanban" title="Funil"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-folders"></use></svg></span><span class="nav-label">Funil</span></a>
   <a href="processos.html" title="Processos"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-folder-open"></use></svg></span><span class="nav-label">Processos</span></a>
   <a href="operacao.html" class="ativo" aria-current="page" title="Minhas empresas e documentos"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-files"></use></svg></span><span class="nav-label">Minhas empresas e documentos</span></a>
+  <a href="extensao.html" title="Extensão"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-puzzle-piece"></use></svg></span><span class="nav-label">Extensão</span></a>
   <a href="painel.html#juridico" title="Jurídico &amp; Dúvidas"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-scales"></use></svg></span><span class="nav-label">Jurídico &amp; Dúvidas</span></a>
   <a href="painel.html#status" title="Status"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-circle"></use></svg></span><span class="nav-label">Status</span></a>
 </nav>
 <div class="nav-gaveta-fundo" id="nav-gaveta-fundo" hidden></div>
 <main>
-  <div class="topo"><div><h1>Minhas empresas e documentos</h1><p>Documentos, prazos e prontidão: controle privado por empresa, com certidões, responsáveis e alertas de vencimento.</p><p class="nota" id="cota-empresas">Verificando empresas disponíveis...</p></div><div class="empresa-select"><label for="empresa-atual">Empresa ativa</label><select id="empresa-atual"></select></div></div>
+  <div class="topo"><div><h1>Minhas empresas e documentos</h1><p>Documentos, prazos e prontidão: controle privado por empresa, com certidões, responsáveis e alertas de vencimento.</p><p class="nota" id="cota-empresas">Verificando empresas disponíveis...</p><p class="nota" id="plano-conta" hidden></p></div><div class="empresa-select"><label for="empresa-atual">Empresa ativa</label><select id="empresa-atual"></select></div></div>
   <div id="aviso" class="aviso"></div>
   <section class="metricas"><div class="metrica ok"><span>Documentos válidos</span><b id="m-validos">—</b><span>com validade regular</span></div><div class="metrica alerta"><span>Vencem em até 30 dias</span><b id="m-proximos">—</b><span>alerta configurável: 30, 15, 7, 3 e 1 dia</span></div><div class="metrica vencido"><span>Documentos vencidos</span><b id="m-vencidos">—</b><span>pedem renovação</span></div><div class="metrica"><span>Prontidão da empresa</span><b id="m-prontidao">—</b><span>documentos essenciais válidos</span></div></section>
   <div class="abas"><button class="aba" data-aba="identificacao">Dados da empresa</button><button class="aba ativa" data-aba="documentos">Documentos e certidões</button><button class="aba" data-aba="catalogo">Catálogo de produtos</button><button class="aba" data-aba="agenda">Agenda operacional</button><button class="aba" data-aba="relatorio">Prontidão e relatório</button></div>
@@ -203,14 +206,42 @@ input::placeholder,textarea::placeholder{color:var(--text-secondary);opacity:1}
       estado.limiteCnpjs === null ? `${usadas} empresa${usadas === 1 ? "" : "s"} ativa${usadas === 1 ? "" : "s"} · acesso administrativo sem limite` :
       Number.isInteger(estado.limiteCnpjs) ? `${usadas} de ${estado.limiteCnpjs} empresa${estado.limiteCnpjs === 1 ? "" : "s"} ativa${estado.limiteCnpjs === 1 ? "" : "s"}` :
       `${usadas} empresa${usadas === 1 ? "" : "s"} ativa${usadas === 1 ? "" : "s"} · cota indisponível`;
-    $("cota-empresas").textContent = texto;
+    const plano = estado.plano;
+    $("cota-empresas").textContent = plano?.nome ? `Plano ${plano.nome} · ${texto}` : texto;
     $("cota-empresas-modal").textContent = texto;
+    // Plano de 1 CNPJ com 1 empresa: sem seletor e sem "Adicionar empresa" (o banco recusa o 2º CNPJ de qualquer jeito).
+    const umaEmpresa = estado.limiteCnpjs === 1 && usadas <= 1;
+    document.querySelector(".empresa-select").style.display = umaEmpresa ? "none" : "";
+    if (!estado.acessoEmpresaId) $("btn-nova-empresa").style.display = umaEmpresa ? "none" : "";
   }
+  // Plano da conta (meu_plano, supabase/planos_e_recursos.sql); sem o SQL aplicado, volta ao limite antigo.
   async function carregarLimiteCnpjs() {
-    const { data, error } = await sb.rpc("limite_cnpjs_operacao");
-    if (error) { estado.limiteCnpjs = undefined; atualizarCotaEmpresas(); return; }
-    estado.limiteCnpjs = data === null ? null : Number(data);
+    const plano = await sb.rpc("meu_plano");
+    if (!plano.error && plano.data) {
+      estado.plano = plano.data;
+      estado.limiteCnpjs = plano.data.max_cnpjs === null ? null : Number(plano.data.max_cnpjs);
+      mostrarPlano();
+    } else {
+      const { data, error } = await sb.rpc("limite_cnpjs_operacao");
+      estado.limiteCnpjs = error ? undefined : data === null ? null : Number(data);
+    }
     atualizarCotaEmpresas();
+  }
+  function mostrarPlano() {
+    const p = estado.plano, el = $("plano-conta");
+    const partes = [];
+    if (p.em_teste && p.teste_ate) partes.push(`Teste grátis até ${new Date(p.teste_ate).toLocaleDateString("pt-BR")}.`);
+    if (p.plano === "gratis" && p.plano_contratado !== "gratis") partes.push("Seu teste ou assinatura terminou: a conta está no plano Grátis. Seus dados continuam guardados.");
+    if (p.plano_solicitado) partes.push(`Pedido de plano ${esc((p.planos_disponiveis || []).find(x => x.codigo === p.plano_solicitado)?.nome || p.plano_solicitado)} enviado: a equipe vai confirmar com você.`);
+    const podePedir = p.eh_titular && p.plano !== "dono" && (p.em_teste || p.plano === "gratis") && !p.plano_solicitado;
+    el.innerHTML = esc(partes.join(" ")) + (podePedir ? ` <label for="plano-pedido" style="display:inline">Quero o plano</label> <select id="plano-pedido">${(p.planos_disponiveis || []).map(x => `<option value="${esc(x.codigo)}"${x.codigo === p.plano_contratado ? " selected" : ""}>${esc(x.nome)}${x.preco_mensal_centavos ? ` · R$ ${(x.preco_mensal_centavos / 100).toLocaleString("pt-BR")}/mês` : ""}</option>`).join("")}</select> <button type="button" class="btn" id="btn-pedir-plano">Pedir plano</button>` : "");
+    el.hidden = !el.innerHTML.trim();
+    if (podePedir) $("btn-pedir-plano").onclick = async () => {
+      const { error } = await sb.rpc("solicitar_plano", { p_plano: $("plano-pedido").value });
+      if (error) { aviso("Não foi possível enviar o pedido: " + error.message, "erro"); return; }
+      aviso("Pedido enviado. A equipe do LicitaPlena vai confirmar com você.", "info");
+      await carregarLimiteCnpjs();
+    };
   }
   function statusDoc(d) { if (!d.vencimento) return ["pendente", "Sem vencimento"]; const dias = Math.ceil((new Date(`${d.vencimento}T12:00:00`) - hoje()) / 86400000); if (dias < 0) return ["vencido", "Vencido"]; if (dias <= 30) return ["proximo", `Vence em ${dias} dia${dias === 1 ? "" : "s"}`]; return ["valido", "Válido"]; }
   async function autenticar() {
@@ -394,5 +425,7 @@ input::placeholder,textarea::placeholder{color:var(--text-secondary);opacity:1}
 })();
 </script>
 <script src="menu-lateral.js"></script>
+<script src="ajuda-ui.js" defer></script>
+<script src="avisos-celular.js" defer></script>
 </body>
 </html>
