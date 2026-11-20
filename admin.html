@@ -298,7 +298,6 @@
       <button data-status="planos" id="tab-planos" style="display:none;">Planos</button>
       <button data-status="uso">Uso</button>
       <button data-status="financeiro" id="tab-financeiro" style="display:none;">Financeiro</button>
-      <button data-status="indicacoes" id="tab-indicacoes" style="display:none;">Indicações</button>
       <button data-status="boletim">Boletim</button>
       <button data-status="equipe" id="tab-equipe" style="display:none;">Equipe</button>
       <button data-status="acessos" id="tab-acessos" style="display:none;">Acessos por empresa</button>
@@ -365,38 +364,6 @@
       </div>
       <div class="cartao-lista">
         <div class="tabela-rolavel" id="conteudo-pagamentos"><div class="carregando">Carregando cobranças...</div></div>
-      </div>
-    </div>
-    <div id="secao-indicacoes" style="display:none;">
-      <div class="cartao-lista" style="padding:20px 24px;margin-bottom:20px;">
-        <h3 style="margin-top:0;">Regras do Indique e ganhe <span class="badge pendente">aguarda aprovação</span></h3>
-        <p class="nota-equipe">Valem para as próximas comissões; as já criadas guardam o percentual da época. O desconto do indicado ainda é manual: aplique no valor ao registrar o pagamento dele no Financeiro. Regras para o cliente: indique-regras.html (minuta, aguarda revisão do advogado).</p>
-        <form id="form-regras-indicacao" class="form-equipe grade-form">
-          <div><label for="ri-percentual">Comissão (%)</label><input id="ri-percentual" type="text" inputmode="decimal" required></div>
-          <div><label for="ri-meses">Por quantas mensalidades</label><input id="ri-meses" type="text" inputmode="numeric" required></div>
-          <div><label for="ri-garantia">Garantia antes de liberar (dias)</label><input id="ri-garantia" type="text" inputmode="numeric" required></div>
-          <div><label for="ri-saque">Saque mínimo (R$)</label><input id="ri-saque" type="text" inputmode="decimal" required></div>
-          <div><label for="ri-desconto">Desconto do indicado (%)</label><input id="ri-desconto" type="text" inputmode="decimal" required></div>
-          <div><label for="ri-desconto-meses">Desconto em quantas mensalidades</label><input id="ri-desconto-meses" type="text" inputmode="numeric" required></div>
-          <div><label for="ri-link">Link vale por (dias)</label><input id="ri-link" type="text" inputmode="numeric" required></div>
-          <div class="checkbox-linha"><input type="checkbox" id="ri-ativo"><label for="ri-ativo">Programa ligado</label></div>
-          <div><button type="submit" class="btn-adicionar">Salvar regras</button></div>
-        </form>
-        <div id="resultado-regras-indicacao" role="status" style="margin-top:12px;"></div>
-      </div>
-      <div class="cartao-lista" style="padding:20px 24px;margin-bottom:20px;">
-        <h3 style="margin-top:0;">Comissões</h3>
-        <p class="nota-equipe">Pague por Pix na sua conta, fora do sistema, e marque aqui com o identificador da transferência. Só comissões liberadas (fora da garantia) podem ser marcadas. Não anote CPF nem chave Pix aqui.</p>
-        <div class="tabela-rolavel" id="conteudo-comissoes"><div class="carregando">Carregando comissões...</div></div>
-        <form id="form-pagar-comissoes" class="form-equipe grade-form" style="margin-top:12px;">
-          <div><label for="pc-referencia">Referência do Pix (ex.: id da transferência)</label><input id="pc-referencia" type="text" maxlength="200" required></div>
-          <div><button type="submit" class="btn-adicionar">Marcar selecionadas como pagas</button></div>
-        </form>
-        <div id="resultado-comissoes" role="status" style="margin-top:12px;"></div>
-      </div>
-      <div class="cartao-lista" style="padding:20px 24px;">
-        <h3 style="margin-top:0;">Indicações</h3>
-        <div class="tabela-rolavel" id="conteudo-indicacoes"><div class="carregando">Carregando indicações...</div></div>
       </div>
     </div>
     <div id="secao-boletim" style="display:none;">
@@ -745,7 +712,6 @@
     // Planos e Financeiro: só o proprietário (o banco confere de novo, com 2 fatores).
     document.getElementById("tab-planos").style.display = adminAtual && adminAtual.role === "owner" ? "" : "none";
     document.getElementById("tab-financeiro").style.display = adminAtual && adminAtual.role === "owner" ? "" : "none";
-    document.getElementById("tab-indicacoes").style.display = adminAtual && adminAtual.role === "owner" ? "" : "none";
   }
 
   // Chave "config_admin" em public.dados_robo (mesma tabela chave->jsonb usada pelo
@@ -1387,77 +1353,8 @@
     await carregarAcessosEmpresa();
   });
 
-  // Indique e ganhe (supabase/indicacoes.sql). A comissão nasce sozinha quando o pagamento do indicado é confirmado no
-  // Financeiro (e, depois, pelo webhook do Asaas no mesmo aplicar_pagamento_confirmado).
-  const NOMES_COMISSAO = { pendente: "Na garantia", liberada: "Liberada", paga: "Paga", cancelada: "Cancelada" };
-  const NOMES_INDICACAO = { cadastrado: "Cadastrado", cliente: "Pagante", bloqueada: "Bloqueada" };
-  const CLASSE_COMISSAO = { pendente: "teste", liberada: "pendente", paga: "ativo", cancelada: "gratis" };
-  const numeroBr = (v) => Number(String(v).trim().replace(/\./g, "").replace(",", "."));
-  async function carregarIndicacoes() {
-    const { data, error } = await sb.rpc("admin_indicacoes");
-    const alvoC = document.getElementById("conteudo-comissoes"), alvoI = document.getElementById("conteudo-indicacoes");
-    if (error) { alvoC.innerHTML = alvoI.innerHTML = '<div class="vazio">Indicações indisponíveis: ' + escapeHtml(error.message) + '</div>'; return; }
-    const r = data.regras;
-    const campos = { "ri-percentual": r.percentual, "ri-meses": r.meses_comissao, "ri-garantia": r.dias_garantia, "ri-saque": (r.saque_minimo_centavos / 100).toFixed(2).replace(".", ","),
-      "ri-desconto": r.desconto_indicado_percentual, "ri-desconto-meses": r.desconto_indicado_meses, "ri-link": r.dias_validade_link };
-    for (const [id, v] of Object.entries(campos)) document.getElementById(id).value = String(v).replace(".", ",");
-    document.getElementById("ri-ativo").checked = r.ativo;
-    alvoC.innerHTML = data.comissoes.length ? `<table><thead><tr><th></th><th>Indicador (contato para o Pix)</th><th>Indicado</th><th>Valor</th><th>Situação</th><th>Datas</th><th>Ações</th></tr></thead><tbody>${data.comissoes.map((c) => `<tr>
-      <td>${c.situacao === "liberada" ? `<input type="checkbox" data-comissao="${escapeHtml(c.id)}" aria-label="Selecionar comissão">` : ""}</td>
-      <td>${escapeHtml(c.indicador || "-")}<br><span class="sub">${escapeHtml(c.indicador_email || "")} ${escapeHtml(c.indicador_telefone || "")}</span></td>
-      <td>${escapeHtml(c.indicado || "-")}</td><td>${reais(c.valor_centavos)}<br><span class="sub">${String(c.percentual).replace(".", ",")}% de ${reais(c.base_centavos)} · ${c.meses} ${c.meses === 1 ? "mês" : "meses"}</span></td>
-      <td><span class="badge ${CLASSE_COMISSAO[c.situacao] || "gratis"}">${NOMES_COMISSAO[c.situacao] || escapeHtml(c.situacao)}</span>${c.saque_pedido_em && c.situacao === "liberada" ? '<br><span class="sub">pediu o Pix em ' + dataBr(c.saque_pedido_em) + "</span>" : ""}</td>
-      <td><span class="sub">${c.situacao === "paga" ? "paga em " + dataBr(c.paga_em) + " · " + escapeHtml(c.paga_referencia || "") : c.situacao === "cancelada" ? escapeHtml(c.motivo_cancelamento || "") : "libera em " + dataBr(c.libera_em)}</span></td>
-      <td><div class="acoes">${["pendente", "liberada"].includes(c.situacao) ? `<button type="button" class="btn-rejeitar" data-cancelar-comissao="${escapeHtml(c.id)}">Cancelar</button>` : ""}</div></td></tr>`).join("")}</tbody></table>`
-      : '<div class="vazio">Nenhuma comissão ainda. Ela aparece quando um indicado paga.</div>';
-    alvoI.innerHTML = data.indicacoes.length ? `<table><thead><tr><th>Indicador</th><th>Indicado</th><th>Situação</th><th>Desde</th><th>Ações</th></tr></thead><tbody>${data.indicacoes.map((i) => `<tr>
-      <td>${escapeHtml(i.indicador || "-")}<br><span class="sub">${escapeHtml(i.indicador_email || "")} · código ${escapeHtml(i.codigo)}</span></td>
-      <td>${escapeHtml(i.indicado || "-")}<br><span class="sub">${escapeHtml(i.indicado_email || "")}${i.situacao !== "bloqueada" && i.pagamentos < r.desconto_indicado_meses && Number(r.desconto_indicado_percentual) > 0 ? " · aplicar desconto de " + String(r.desconto_indicado_percentual).replace(".", ",") + "%" : ""}</span></td>
-      <td><span class="badge ${i.situacao === "bloqueada" ? "rejeitado" : i.situacao === "cliente" ? "ativo" : "teste"}">${NOMES_INDICACAO[i.situacao] || escapeHtml(i.situacao)}</span>${i.motivo ? '<br><span class="sub">' + escapeHtml(i.motivo) + "</span>" : ""}</td>
-      <td>${dataBr(i.criado_em)}</td>
-      <td><div class="acoes">${i.situacao !== "bloqueada" ? `<button type="button" class="btn-aprovar" data-registrar-pagamento="${escapeHtml(i.indicado_id)}">Registrar pagamento do cliente</button>` : ""}</div></td></tr>`).join("")}</tbody></table>`
-      : '<div class="vazio">Ninguém se cadastrou por link de indicação ainda.</div>';
-    alvoC.querySelectorAll("[data-cancelar-comissao]").forEach((b) => b.addEventListener("click", async () => {
-      const motivo = prompt("Motivo do cancelamento (aparece para o indicador):");
-      if (!motivo) return;
-      b.disabled = true;
-      const { error: erro } = await sb.rpc("admin_cancelar_comissao", { p_id: b.dataset.cancelarComissao, p_motivo: motivo });
-      if (erro) { alert("Não foi possível: " + erro.message); b.disabled = false; return; }
-      await carregarIndicacoes();
-    }));
-    // Mesmo formulário do Financeiro, já com a conta do indicado e "Já recebido" marcado.
-    alvoI.querySelectorAll("[data-registrar-pagamento]").forEach((b) => b.addEventListener("click", async () => {
-      // Troca de aba sem o clique (o clique recarrega o Financeiro em paralelo e apagaria a conta escolhida).
-      document.querySelectorAll(".tabs button").forEach((t) => t.classList.toggle("ativo", t.dataset.status === "financeiro"));
-      for (const nome of Object.keys(SECOES)) document.getElementById("secao-" + nome).style.display = nome === "financeiro" ? "block" : "none";
-      await carregarFinanceiro();
-      document.getElementById("pag-conta").value = b.dataset.registrarPagamento;
-      document.getElementById("pag-pago").checked = true;
-      document.getElementById("pag-referencia").focus();
-    }));
-  }
-  document.getElementById("form-regras-indicacao").addEventListener("submit", async (ev) => {
-    ev.preventDefault();
-    const resultado = document.getElementById("resultado-regras-indicacao"), v = (id) => numeroBr(document.getElementById(id).value);
-    const dados = { percentual: v("ri-percentual"), meses_comissao: v("ri-meses"), dias_garantia: v("ri-garantia"), saque_minimo_centavos: Math.round(v("ri-saque") * 100),
-      desconto_indicado_percentual: v("ri-desconto"), desconto_indicado_meses: v("ri-desconto-meses"), dias_validade_link: v("ri-link"), ativo: document.getElementById("ri-ativo").checked };
-    if (Object.values(dados).some((x) => typeof x === "number" && !Number.isFinite(x))) { resultado.textContent = "Confira os números."; return; }
-    const { error } = await sb.rpc("admin_salvar_regras_indicacao", { p_dados: dados });
-    resultado.textContent = error ? "Não foi possível salvar: " + error.message : "Regras salvas.";
-    if (!error) await carregarIndicacoes();
-  });
-  document.getElementById("form-pagar-comissoes").addEventListener("submit", async (ev) => {
-    ev.preventDefault();
-    const form = ev.currentTarget, resultado = document.getElementById("resultado-comissoes");
-    const ids = [...document.querySelectorAll("#conteudo-comissoes [data-comissao]:checked")].map((c) => c.dataset.comissao);
-    if (!ids.length) { resultado.textContent = "Selecione as comissões liberadas que você pagou."; return; }
-    const { data, error } = await sb.rpc("admin_pagar_comissoes", { p_ids: ids, p_referencia: document.getElementById("pc-referencia").value.trim() });
-    resultado.textContent = error ? "Não foi possível: " + error.message : `${data.pagas} comissão(ões) marcada(s) como paga(s).`;
-    if (!error) { form.reset(); await carregarIndicacoes(); }
-  });
-
   const SECOES = { visao: carregarVisaoGeral, clientes: renderizarLista, planos: carregarPlanos, uso: carregarUso, financeiro: carregarFinanceiro,
-    indicacoes: carregarIndicacoes, boletim: carregarLogsBoletim, equipe: carregarEquipe, acessos: carregarAcessosEmpresa };
+    boletim: carregarLogsBoletim, equipe: carregarEquipe, acessos: carregarAcessosEmpresa };
   document.querySelectorAll(".tabs button").forEach((btn) => {
     btn.addEventListener("click", () => {
       document.querySelectorAll(".tabs button").forEach((b) => b.classList.remove("ativo"));

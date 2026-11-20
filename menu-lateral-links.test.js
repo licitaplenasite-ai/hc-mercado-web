@@ -5,7 +5,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 
-const paginas = ['painel', 'sistema', 'operacao', 'processos', 'prospeccao', 'bdi', 'sinapi', 'quadros', 'indique'];
+const paginas = ['painel', 'sistema', 'operacao', 'processos', 'prospeccao', 'bdi', 'sinapi', 'quadros'];
 
 for (const p of paginas) {
   test(`menu lateral de ${p}.html tem Prospecção e Calculadora de BDI`, () => {
@@ -29,7 +29,7 @@ const rotulos = (p) => {
 
 test('todas as páginas têm o mesmo conjunto e ordem de itens no menu (o painel só soma o Dashboard)', () => {
   const referencia = rotulos('sistema');
-  for (const item of ['Hoje', 'Calendário', 'Licitação anterior', 'Processos', 'Extensão', 'Indique e ganhe']) assert.ok(referencia.includes(item), item);
+  for (const item of ['Hoje', 'Calendário', 'Licitação anterior', 'Processos', 'Extensão']) assert.ok(referencia.includes(item), item);
   for (const p of paginas) {
     const lista = rotulos(p).filter((r) => r !== 'Dashboard').map((r) => (r === 'Status das Ferramentas' ? 'Status' : r));
     assert.deepEqual(lista, referencia, p);
