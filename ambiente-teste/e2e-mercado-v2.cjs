@@ -154,6 +154,28 @@ async function main() {
       return linha;
     });
 
+    await passo('chave Tabela/Gráfico, botão G e mapa (clique na UF filtra)', p, async () => {
+      await abrirAba(p, 'marcas');
+      const g = p.locator('#mk-aba-conteudo a.mk-g').first();
+      const href = await g.getAttribute('href');
+      exigir(href === 'https://www.google.com/search?q=GRAMPOLINE%20grampo%20e2emk' && await g.getAttribute('target') === '_blank' && /noopener/.test(await g.getAttribute('rel')), 'G: ' + href);
+      await p.click('#mk-aba-conteudo [data-mk-modo="grafico"]');
+      const barras = await p.locator('#mk-aba-conteudo .mk-hbarra').count();
+      exigir(barras === 1 && /GRAMPOLINE/.test(await texto(p, '.mk-hbarras')), 'gráfico de marcas: ' + barras);
+      await abrirAba(p, 'empresas');
+      exigir(await p.locator('#mk-aba-conteudo .mk-hbarra').count() === 2, 'gráfico vale para as outras abas');
+      await p.click('#mk-aba-conteudo [data-mk-modo="tabela"]');
+      exigir(await p.locator('#mk-quem-ganha a.mk-g').count() === 2, 'G ao lado de cada empresa');
+      await abrirAba(p, 'estados');
+      await p.waitForSelector('#mk-mapa path[data-mk-valor="AM"]', { timeout: 20000 });
+      await p.locator('#mk-aba-conteudo').screenshot({ path: path.join(PRINTS, 'v4-mapa-ficticio-am.png') });
+      await p.dispatchEvent('#mk-mapa path[data-mk-valor="AM"]', 'click');
+      await p.waitForFunction(() => document.querySelector('#mk-aba-conteudo')?.dataset.aba === 'correspondencias', null, { timeout: 10000 });
+      exigir(/estado AM/.test(await texto(p, '.mk-filtro')) && await linhas(p) === 7, 'filtro por UF');
+      await p.click('[data-mk-limpar]');
+      return `G: ${href} | gráfico: ${barras} barra | mapa: clique em AM filtrou 7 compras`;
+    });
+
     await passo('Contratação futura: item do PCA com o termo', p, async () => {
       await abrirAba(p, 'futura');
       const linha = await texto(p, '#mk-aba-conteudo tbody');
@@ -234,10 +256,43 @@ async function main() {
         await p.evaluate(() => document.getElementById('mk-angulos-caixa').scrollIntoView({ block: 'start' }));
         await p.screenshot({ path: path.join(PRINTS, `papel-a4-${i + 1}-${id}.png`) });
       }
+      // v4: mapa, gráficos e botão G com dado real.
+      await p.setViewportSize({ width: 1280, height: 1500 });
+      const print = async (nome) => {
+        await p.evaluate(() => document.getElementById('mk-angulos-caixa').scrollIntoView({ block: 'start' }));
+        await p.screenshot({ path: path.join(PRINTS, nome) });
+      };
+      await abrirAba(p, 'estados');
+      await p.waitForSelector('#mk-mapa svg', { timeout: 20000 });
+      await print('v4-papel-a4-estados-mapa.png');
+      for (const id of ['estados', 'orgaos', 'empresas', 'marcas', 'catalogo']) {
+        await abrirAba(p, id);
+        if (await p.locator('#mk-aba-conteudo[data-modo="tabela"]').count()) await p.click('#mk-aba-conteudo [data-mk-modo="grafico"]');
+        await print(`v4-papel-a4-grafico-${id}.png`);
+      }
+      await abrirAba(p, 'marcas');
+      await p.click('#mk-aba-conteudo [data-mk-modo="tabela"]');
+      await print('v4-papel-a4-marcas-botao-g.png');
       await p.setViewportSize({ width: 1280, height: 900 });
       const js = errosJs(p); exigir(!js.length, 'erros de console: ' + js.join(' | '));
       exigir(!/Marcas \(0\)/.test(titulos.join(' ')), 'papel A4 sem marca: ' + titulos.join(' | '));
       return `${titulos.join(' · ')}; avisos: ${(await p.locator('#mk-resultado .aviso').allInnerTexts()).join(' / ').slice(0, 200) || 'nenhum'}`;
+    });
+
+    await passo('"Trazer mais 200 compras" da Pesquisa de Preços (papel A4 ao vivo)', p, async () => {
+      const antes = Number((await texto(p, '#mk-angulos [data-mk-aba="correspondencias"]')).replace(/\D/g, ''));
+      const lidas = async () => Number((await texto(p, '#mk-mais .dica-clique')).split(' compra')[0].replace(/\D/g, ''));
+      const lidasAntes = await lidas();
+      await p.click('#mk-trazer-mais');
+      await p.waitForFunction((n) => Number((document.querySelector('#mk-mais .dica-clique')?.innerText || '').split(' compra')[0].replace(/\D/g, '')) > n, lidasAntes, { timeout: 60000 });
+      const depois = Number((await texto(p, '#mk-angulos [data-mk-aba="correspondencias"]')).replace(/\D/g, ''));
+      exigir(depois > antes, `correspondências não cresceram: ${antes} -> ${depois}`);
+      await p.setViewportSize({ width: 1280, height: 1500 });
+      await p.evaluate(() => document.getElementById('mk-angulos-caixa').scrollIntoView({ block: 'start' }));
+      await p.screenshot({ path: path.join(PRINTS, 'v4-papel-a4-trazer-mais.png') });
+      await p.setViewportSize({ width: 1280, height: 900 });
+      const js = errosJs(p); exigir(!js.length, 'erros de console: ' + js.join(' | '));
+      return `lidas ${lidasAntes} -> ${await lidas()}; correspondências ${antes} -> ${depois}; ${(await texto(p, '#mk-angulos')).slice(0, 160)}`;
     });
   } finally {
     await limpar().catch((e) => console.log('limpeza:', e.message));

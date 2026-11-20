@@ -164,6 +164,25 @@
     });
   }
 
+  // Gráfico de barras horizontais (chave Tabela/Gráfico): os maiores primeiro, tamanho em % do maior.
+  function barras(itens, rotuloDe, valorDe, limite = 20) {
+    const lista = itens.map((i) => ({ rotulo: rotuloDe(i), valor: Number(valorDe(i)) || 0 })).filter((b) => b.valor > 0)
+      .sort((a, b) => b.valor - a.valor).slice(0, limite);
+    const maior = lista[0]?.valor || 1;
+    return lista.map((b) => ({ ...b, pct: Math.max(1, Math.round((b.valor / maior) * 100)) }));
+  }
+
+  // Botão "G": busca no Google pela marca (ou empresa) + o produto, para achar o fabricante ou o contato.
+  const linkGoogle = (nome, termo) => `https://www.google.com/search?q=${encodeURIComponent(texto(`${nome || ''} ${termo || ''}`))}`;
+
+  // "Trazer mais" da Pesquisa de Preços: uma página (200 compras) por clique, do produto do catálogo mais comprado
+  // para o seguinte. Depois de ler a página `pagina` (de `paginas`) do catálogo `indice`, devolve a próxima ou null.
+  function proximaPagina(atual, paginas, totalCatalogos) {
+    if (!atual) return null;
+    if (paginas && atual.pagina < paginas) return { indice: atual.indice, pagina: atual.pagina + 1 };
+    return atual.indice + 1 < totalCatalogos ? { indice: atual.indice + 1, pagina: 1 } : null;
+  }
+
   // CSV para o Excel brasileiro: ponto e vírgula, aspas quando precisa, número com vírgula decimal.
   function paraCsv(cabecalho, linhas) {
     const celula = (v) => {
@@ -226,7 +245,7 @@
   }
 
   const api = { deContrato, deResultado, deAta, dePrecoAoVivo, juntar, quemGanha, quemCompra, quantoSePaga, porMes, resumo,
-    correspondencias, porEstado, porCatalogo, porMarca, todasAsPalavras, paraCsv };
+    correspondencias, porEstado, porCatalogo, porMarca, todasAsPalavras, paraCsv, barras, linkGoogle, proximaPagina };
   global.MercadoPesquisa = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(globalThis);

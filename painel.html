@@ -1123,6 +1123,21 @@
   .mk-tabela tr.mk-clicavel { cursor: pointer; }
   .mk-tabela tr.mk-clicavel:hover td { background: rgba(37, 99, 235, .06); }
   .mk-barra-uf-celula { width: 30%; min-width: 80px; }
+  .mk-chave { display: flex; gap: 6px; margin: 0 0 10px; }
+  .mk-chave .ativo { background: var(--azul); color: #fff; border-color: transparent; }
+  .mk-mais { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 0 0 10px; }
+  .mk-mapa .mapa-uf-svg { width: 100%; max-width: 420px; height: auto; display: block; margin: 4px auto; }
+  .mk-mapa .mapa-uf-estado[data-mk-filtro] { cursor: pointer; }
+  .mk-mapa .mapa-uf-estado[data-mk-filtro]:hover { opacity: .7; }
+  .mapa-uf-legenda { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12px; color: var(--texto-fraco); margin-bottom: 14px; }
+  .mapa-uf-legenda-barra { width: 120px; height: 10px; border-radius: 5px; background: linear-gradient(90deg, var(--fundo-fraco), var(--azul)); }
+  .mk-hbarras { display: grid; gap: 6px; margin: 4px 0 8px; }
+  .mk-hbarra { display: grid; grid-template-columns: minmax(90px, 32%) 1fr auto; gap: 10px; align-items: center; font-size: 13px; }
+  .mk-hbarra-rotulo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mk-hbarra-trilho { height: 14px; background: var(--fundo-fraco); border-radius: 7px; overflow: hidden; }
+  .mk-hbarra-cheia { display: block; height: 100%; background: linear-gradient(90deg, var(--azul), var(--azul-escuro)); border-radius: 7px; }
+  .mk-hbarra-valor { white-space: nowrap; color: var(--texto-fraco); font-size: 12px; }
+  .mk-g { display: inline-block; margin-left: 4px; padding: 0 5px; border: 1px solid var(--borda); border-radius: 4px; font-size: 11px; font-weight: 700; text-decoration: none; line-height: 16px; }
   .mk-barra-uf { display: block; height: 10px; border-radius: 5px; background: linear-gradient(90deg, var(--azul), var(--azul-escuro)); }
   @media (max-width: 620px) { .mk-busca .campo, .mk-busca .btn-buscar { width: 100%; } }
 
@@ -8478,7 +8493,7 @@
       const resposta = await fetchComSessao(`/api/comprasgov-marcas-produto?${parametros}`);
       const dados = await resposta.json();
       if (!resposta.ok || !dados.ok) return { erro: true, itens: [] };
-      return { erro: false, itens: Array.isArray(dados.itens) ? dados.itens : [] };
+      return { erro: false, itens: Array.isArray(dados.itens) ? dados.itens : [], catalogos: Array.isArray(dados.catalogos) ? dados.catalogos : [] };
     } catch (erro) {
       console.warn("[comprasgov-marcas-produto] falha na consulta:", erro);
       return { erro: true, itens: [] };
@@ -8509,12 +8524,50 @@
     ["empresas", "Empresas"], ["marcas", "Marcas"], ["futura", "Contratação futura"],
   ];
   const MK_MAX_LINHAS = 300;
-  let mkAtual = null; // { termo, uf, dias, vendas, avisos, filtro, aba, pca }
+  // Teto de compras lidas da Pesquisa de Preços ao vivo: 200 na busca + "Trazer mais" de 200 em 200 (1 página por clique,
+  // 1 subrequisição na function: cabe nos 10 ms de CPU do Cloudflare e conta no limite por usuário).
+  const MK_MAX_VIVO = 1000;
+  // Abas com a chave Tabela/Gráfico.
+  const MK_COM_GRAFICO = new Set(["catalogo", "estados", "orgaos", "empresas", "marcas"]);
+  const MK_FILTRO_NOME = { marca: "marca", catalogo: "código", uf: "estado" };
+  let mkAtual = null; // { termo, uf, dias, vendas, avisos, filtro, aba, modo, pca, vivo }
   const mkData = (d) => (/^\d{4}-\d{2}-\d{2}/.test(d || "") ? d.slice(0, 10).split("-").reverse().join("/") : "-");
   const mkMoeda = (v) => (v ? formatarValor(v) : "-");
   const mkLink = (url, texto = "ver") => (url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${texto}</a>` : "-");
   const mkQtd = (n) => (n ? Number(n).toLocaleString("pt-BR") : "-");
   const mkPct = (x) => `${(x * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
+  const mkG = (nome, termo) => (nome ? ` <a class="mk-g" href="${escapeHtml(window.MercadoPesquisa.linkGoogle(nome, termo))}" target="_blank" rel="noopener noreferrer" title="Buscar ${escapeHtml(nome)} no Google">G</a>` : "");
+  function mkGrafico(lista, formatar) {
+    if (!lista.length) return '<p class="dica-clique">Sem dados para o gráfico.</p>';
+    return `<div class="mk-hbarras" role="img" aria-label="Gráfico de barras">${lista.map((b) => `<div class="mk-hbarra"><span class="mk-hbarra-rotulo" title="${escapeHtml(b.rotulo)}">${escapeHtml(b.rotulo)}</span><span class="mk-hbarra-trilho"><span class="mk-hbarra-cheia" style="width:${b.pct}%"></span></span><span class="mk-hbarra-valor">${escapeHtml(formatar(b.valor))}</span></div>`).join("")}</div><p class="dica-clique">Os 20 maiores. A tabela completa está em Tabela.</p>`;
+  }
+
+  // Mapa do Brasil (Estados): mesmo desenho leve da versão antiga (@svg-maps/brazil pelo CDN já liberado no CSP).
+  // Se o CDN falhar, o mapa some e a tabela continua.
+  let mkMapaBrasil = null;
+  async function mkCarregarMapa() {
+    if (mkMapaBrasil) return mkMapaBrasil;
+    try {
+      mkMapaBrasil = (await import("https://cdn.jsdelivr.net/npm/@svg-maps/brazil@2.0.0/index.js")).default;
+    } catch (e) {
+      console.warn("[mercado] mapa do Brasil indisponível:", e);
+    }
+    return mkMapaBrasil;
+  }
+  async function mkDesenharMapa(estados) {
+    const alvo = document.getElementById("mk-mapa");
+    const mapa = await mkCarregarMapa();
+    if (!alvo || !mapa || !Array.isArray(mapa.locations)) return;
+    const porUf = new Map(estados.map((e) => [e.uf, e]));
+    const maior = Math.max(1, ...estados.map((e) => e.valor));
+    alvo.innerHTML = `<svg viewBox="${escapeHtml(mapa.viewBox)}" class="mapa-uf-svg" role="img" aria-label="Mapa do Brasil colorido pelo valor comprado em cada estado">${mapa.locations.map((loc) => {
+      const sigla = loc.id.toUpperCase();
+      const e = porUf.get(sigla);
+      const cor = e ? `rgba(46,141,255,${Math.max(0.15, e.valor / maior).toFixed(2)})` : "var(--fundo-fraco)";
+      const rotulo = e ? `${loc.name} (${sigla}): ${formatarValor(e.valor)} em ${e.compras} compra(s). Clique para ver as compras.` : `${loc.name} (${sigla}): sem compra nesta pesquisa`;
+      return `<path d="${loc.path}" fill="${cor}" stroke="var(--borda)" stroke-width="1" class="mapa-uf-estado"${e ? ` data-mk-filtro="uf" data-mk-valor="${escapeHtml(sigla)}" data-mk-rotulo="${escapeHtml(sigla)}"` : ""}><title>${escapeHtml(rotulo)}</title></path>`;
+    }).join("")}</svg><div class="mapa-uf-legenda"><span>menos</span><span class="mapa-uf-legenda-barra"></span><span>mais valor</span></div>`;
+  }
 
   function mkMontarAbas(a) {
     const M = window.MercadoPesquisa;
@@ -8529,7 +8582,7 @@
     const nada = (msg) => `<p class="dica-clique">${msg}</p>`;
     const corte = (n) => (n > MK_MAX_LINHAS ? nada(`Mostrando ${MK_MAX_LINHAS} de ${n.toLocaleString("pt-BR")}. Use <strong>Baixar planilha</strong> para ver todas.`) : "");
     const maiorUf = Math.max(1, ...estados.map((e) => e.valor));
-    const filtroHtml = a.filtro ? `<div class="mk-filtro">Só as compras de ${a.filtro.campo === "marca" ? "marca" : "código"} <strong>${escapeHtml(a.filtro.rotulo)}</strong> <button type="button" class="btn-filtro-rapido" data-mk-limpar>Mostrar todas</button></div>` : "";
+    const filtroHtml = a.filtro ? `<div class="mk-filtro">Só as compras de ${MK_FILTRO_NOME[a.filtro.campo] || ""} <strong>${escapeHtml(a.filtro.rotulo)}</strong> <button type="button" class="btn-filtro-rapido" data-mk-limpar>Mostrar todas</button></div>` : "";
     const pca = a.pca || { estado: "carregando" };
     return {
       correspondencias: {
@@ -8537,12 +8590,13 @@
         cab: ["Descrição", "Órgão", "UF", "Data", "Quantidade", "Unidade", "Preço unitário", "Valor total", "Marca", "Vencedor", "Fonte"],
         linhas: corresp.map((v) => [v.item, v.orgao, v.uf, mkData(v.data), v.quantidade || "", v.unidade, v.valorUnitario || "", v.valorTotal || "", v.marca, v.fornecedor, v.link || v.fonte]),
         html: () => `${filtroHtml}<p class="dica-clique">Cada item comprado que bate com a pesquisa, do mais novo para o mais antigo.</p>${corresp.length ? mkTabela(["Descrição", "Órgão", "UF", "Data", "Qtd.", "Unid.", "Preço unit.", "Valor total", "Marca", "Vencedor", "Fonte"],
-          corresp.slice(0, MK_MAX_LINHAS).map((v) => `<tr><td class="mk-desc">${escapeHtml(v.item || "-")}<br><small>${escapeHtml(v.fonte)}</small></td><td>${escapeHtml(v.orgao || "-")}</td><td>${escapeHtml(v.uf || "-")}</td><td>${mkData(v.data)}</td><td class="num">${mkQtd(v.quantidade)}</td><td>${escapeHtml(v.unidade || "-")}</td><td class="num"><strong>${mkMoeda(v.valorUnitario)}</strong></td><td class="num">${mkMoeda(v.valorTotal)}</td><td>${escapeHtml(v.marca || "-")}</td><td>${escapeHtml(v.fornecedor || "-")}</td><td>${mkLink(v.link)}</td></tr>`)) + corte(corresp.length) : nada("Nenhuma compra com esse filtro.")}`,
+          corresp.slice(0, MK_MAX_LINHAS).map((v) => `<tr><td class="mk-desc">${escapeHtml(v.item || "-")}<br><small>${escapeHtml(v.fonte)}</small></td><td>${escapeHtml(v.orgao || "-")}</td><td>${escapeHtml(v.uf || "-")}</td><td>${mkData(v.data)}</td><td class="num">${mkQtd(v.quantidade)}</td><td>${escapeHtml(v.unidade || "-")}</td><td class="num"><strong>${mkMoeda(v.valorUnitario)}</strong></td><td class="num">${mkMoeda(v.valorTotal)}</td><td>${escapeHtml(v.marca || "-")}${mkG(v.marca, a.termo)}</td><td>${escapeHtml(v.fornecedor || "-")}</td><td>${mkLink(v.link)}</td></tr>`)) + corte(corresp.length) : nada("Nenhuma compra com esse filtro.")}`,
       },
       catalogo: {
         total: catalogo.length,
         cab: ["Código CATMAT/CATSER", "Item do catálogo", "Compras", "Unidade", "Preço médio"],
         linhas: catalogo.map((c) => [c.codigo, c.nome, c.compras, c.unidade, c.medio || ""]),
+        grafico: () => mkGrafico(M.barras(catalogo, (c) => `${c.codigo} — ${c.nome}`, (c) => c.compras), (n) => `${n} compra(s)`),
         html: () => `<p class="dica-clique">Códigos do catálogo do governo (CATMAT/CATSER) usados nas compras. Clique numa linha para ver só as compras daquele código.</p>${catalogo.length ? mkTabela(["Código", "Item do catálogo", "Compras", "Preço médio", ""],
           catalogo.map((c) => `<tr class="mk-clicavel" data-mk-filtro="catalogo" data-mk-valor="${escapeHtml(c.codigo)}" data-mk-rotulo="${escapeHtml(`${c.codigo} — ${c.nome}`)}"><td><strong>${escapeHtml(c.codigo)}</strong></td><td>${escapeHtml(c.nome)}</td><td class="num">${c.compras}</td><td class="num">${mkMoeda(c.medio)}${c.unidade ? ` <small>/ ${escapeHtml(c.unidade)}</small>` : ""}</td><td><button type="button" class="btn-filtro-rapido">Ver compras</button></td></tr>`)) : nada("As compras encontradas não informam o código do catálogo (contratos do PNCP não trazem). Use uma palavra de produto, como \"papel A4\".")}
           <div class="mk-bloco" id="mk-quanto-paga"><h3>Preço por item e unidade</h3><p class="dica-clique">Preço por unidade que os órgãos pagaram. O link abre a compra com o menor preço.</p>${precos.length ? mkTabela(["Item", "Unidade", "Compras", "Preço médio", "Menor", "Maior", "Fonte"],
@@ -8552,13 +8606,16 @@
         total: estados.length,
         cab: ["UF", "Compras", "Valor", "Preço médio", "Unidade"],
         linhas: estados.map((e) => [e.uf, e.compras, e.valor, e.medio || "", e.unidade]),
-        html: () => `<p class="dica-clique">Onde mais se compra: compras, valor e preço médio por estado (preço na unidade mais comum de cada estado).</p>${estados.length ? mkTabela(["Estado", "Compras", "Valor", "Preço médio", ""],
+        grafico: () => mkGrafico(M.barras(estados, (e) => e.uf, (e) => e.valor), formatarValor),
+        topo: () => '<div id="mk-mapa" class="mk-mapa"></div>',
+        html: () => `<p class="dica-clique">Onde mais se compra: compras, valor e preço médio por estado (preço na unidade mais comum de cada estado). Clique num estado do mapa para ver as compras dele.</p>${estados.length ? mkTabela(["Estado", "Compras", "Valor", "Preço médio", ""],
           estados.map((e) => `<tr><td><strong>${escapeHtml(e.uf)}</strong></td><td class="num">${e.compras}</td><td class="num">${escapeHtml(formatarValor(e.valor))}</td><td class="num">${mkMoeda(e.medio)}${e.unidade ? ` <small>/ ${escapeHtml(e.unidade)}</small>` : ""}</td><td class="mk-barra-uf-celula"><span class="mk-barra-uf" style="width:${Math.max(2, Math.round((e.valor / maiorUf) * 100))}%"></span></td></tr>`)) : nada("As compras encontradas não informam o estado.")}`,
       },
       orgaos: {
         total: orgaos.length,
         cab: ["Órgão", "UF", "Compras", "Valor", "Empresas que venderam", "Última compra"],
         linhas: orgaos.map((o) => [o.orgao, o.uf, o.compras, o.valor, o.empresas, mkData(o.ultima)]),
+        grafico: () => mkGrafico(M.barras(orgaos, (o) => o.orgao, (o) => o.valor), formatarValor),
         html: () => `<p class="dica-clique">Quem compra: órgãos que mais gastaram com este produto ou serviço.</p><div id="mk-quem-compra">${orgaos.length ? mkTabela(["Órgão", "UF", "Compras", "Valor", "Empresas", "Última compra"],
           orgaos.slice(0, MK_MAX_LINHAS).map((o) => `<tr><td>${escapeHtml(o.orgao)}</td><td>${escapeHtml(o.uf || "-")}</td><td class="num">${o.compras}</td><td class="num">${escapeHtml(formatarValor(o.valor))}</td><td class="num">${o.empresas}</td><td class="num">${mkData(o.ultima)}</td></tr>`)) + corte(orgaos.length) : nada("As compras encontradas não informam o órgão.")}</div>`,
       },
@@ -8566,15 +8623,17 @@
         total: empresas.length,
         cab: ["Empresa", "CNPJ", "Vitórias", "Participação", "Valor"],
         linhas: empresas.map((f) => [f.fornecedor, f.documento, f.vitorias, mkPct(f.participacao), f.valor]),
+        grafico: () => mkGrafico(M.barras(empresas, (f) => f.fornecedor || f.documento, (f) => f.vitorias), (n) => `${n} vitória(s)`),
         html: () => `<p class="dica-clique">Quem ganha: cada contrato ou item ganho conta como uma vitória. Participação = parte das vitórias. <button type="button" class="btn-filtro-rapido" data-abrir-fornecedor-ia="${escapeHtml(a.termo)}">Encontrar fornecedor com IA</button></p><div id="mk-quem-ganha">${empresas.length ? mkTabela(["Empresa", "Vitórias", "Participação", "Valor", ""],
-          empresas.slice(0, MK_MAX_LINHAS).map((f) => `<tr><td>${escapeHtml(f.fornecedor || "Não informado")}${f.documento ? `<br><small>${escapeHtml(f.documento)}</small>` : ""}</td><td class="num">${f.vitorias}</td><td class="num">${mkPct(f.participacao)}</td><td class="num">${escapeHtml(formatarValor(f.valor))}</td><td>${/^\d{14}$/.test(f.documento) ? `<button type="button" class="btn-imprimir mk-analisar" data-mk-cnpj="${escapeHtml(f.documento)}">Analisar empresa</button>` : ""}</td></tr>`)) + corte(empresas.length) : nada("Sem empresa identificada nas compras encontradas.")}</div>`,
+          empresas.slice(0, MK_MAX_LINHAS).map((f) => `<tr><td>${escapeHtml(f.fornecedor || "Não informado")}${mkG(f.fornecedor, "")}${f.documento ? `<br><small>${escapeHtml(f.documento)}</small>` : ""}</td><td class="num">${f.vitorias}</td><td class="num">${mkPct(f.participacao)}</td><td class="num">${escapeHtml(formatarValor(f.valor))}</td><td>${/^\d{14}$/.test(f.documento) ? `<button type="button" class="btn-imprimir mk-analisar" data-mk-cnpj="${escapeHtml(f.documento)}">Analisar empresa</button>` : ""}</td></tr>`)) + corte(empresas.length) : nada("Sem empresa identificada nas compras encontradas.")}</div>`,
       },
       marcas: {
         total: marcas.length,
         cab: ["Marca", "Vezes que ganhou", "Preço médio", "Unidade", "Órgãos que aceitaram", "Exemplos de órgãos", "Empresas que venderam", "Valor"],
         linhas: marcas.map((m) => [m.marca, m.vezes, m.medio || "", m.unidade, m.orgaos, m.orgaosNomes.join(" | "), m.empresas, m.valor]),
+        grafico: () => mkGrafico(M.barras(marcas, (m) => m.marca, (m) => m.vezes), (n) => `${n} vez(es)`),
         html: () => `<p class="dica-clique">Marca declarada pela empresa vencedora em cada item. Clique numa marca para ver as compras dela.${semMarca ? ` ${semMarca.toLocaleString("pt-BR")} compra(s) sem marca informada ficaram de fora.` : ""}</p>${marcas.length ? mkTabela(["Marca", "Vezes", "Preço médio", "Órgãos que aceitaram", "Exemplos de órgãos", "Empresas", ""],
-          marcas.map((m) => `<tr class="mk-clicavel" data-mk-filtro="marca" data-mk-valor="${escapeHtml(m.marca)}" data-mk-rotulo="${escapeHtml(m.marca)}"><td><strong>${escapeHtml(m.marca)}</strong></td><td class="num">${m.vezes}</td><td class="num">${mkMoeda(m.medio)}${m.unidade ? ` <small>/ ${escapeHtml(m.unidade)}</small>` : ""}</td><td class="num">${m.orgaos}</td><td class="mk-desc"><small>${escapeHtml(m.orgaosNomes.join("; ") || "-")}</small></td><td class="num">${m.empresas}</td><td><button type="button" class="btn-filtro-rapido">Ver compras</button></td></tr>`)) : nada("Nenhuma marca declarada nas compras encontradas. A marca vem da Pesquisa de Preços do Compras.gov (compras federais com item do catálogo); contratos do PNCP não trazem marca.")}`,
+          marcas.map((m) => `<tr class="mk-clicavel" data-mk-filtro="marca" data-mk-valor="${escapeHtml(m.marca)}" data-mk-rotulo="${escapeHtml(m.marca)}"><td><strong>${escapeHtml(m.marca)}</strong>${mkG(m.marca, a.termo)}</td><td class="num">${m.vezes}</td><td class="num">${mkMoeda(m.medio)}${m.unidade ? ` <small>/ ${escapeHtml(m.unidade)}</small>` : ""}</td><td class="num">${m.orgaos}</td><td class="mk-desc"><small>${escapeHtml(m.orgaosNomes.join("; ") || "-")}</small></td><td class="num">${m.empresas}</td><td><button type="button" class="btn-filtro-rapido">Ver compras</button></td></tr>`)) : nada("Nenhuma marca declarada nas compras encontradas. A marca vem da Pesquisa de Preços do Compras.gov (compras federais com item do catálogo); contratos do PNCP não trazem marca.")}`,
       },
       futura: {
         total: pca.estado === "ok" ? pca.linhas.length : null,
@@ -8598,8 +8657,46 @@
     if (!caixa || !mkAtual) return;
     const abas = mkMontarAbas(mkAtual);
     caixa.querySelector("#mk-angulos").innerHTML = MK_ABAS.map(([id, nome]) => `<button type="button" class="btn-subaba${id === mkAtual.aba ? " ativo" : ""}" data-mk-aba="${id}">${nome} (${abas[id].total === null ? "…" : abas[id].total.toLocaleString("pt-BR")})</button>`).join("");
-    caixa.querySelector("#mk-aba-conteudo").innerHTML = abas[mkAtual.aba].html();
-    caixa.querySelector("#mk-aba-conteudo").dataset.aba = mkAtual.aba;
+    const aba = abas[mkAtual.aba];
+    const comGrafico = MK_COM_GRAFICO.has(mkAtual.aba);
+    const chave = comGrafico ? `<div class="mk-chave" role="group" aria-label="Ver como">${["tabela", "grafico"].map((m) => `<button type="button" class="btn-filtro-rapido${mkAtual.modo === m ? " ativo" : ""}" data-mk-modo="${m}" aria-pressed="${mkAtual.modo === m}">${m === "tabela" ? "Tabela" : "Gráfico"}</button>`).join("")}</div>` : "";
+    const conteudo = caixa.querySelector("#mk-aba-conteudo");
+    conteudo.innerHTML = `${chave}${aba.topo ? aba.topo() : ""}${comGrafico && mkAtual.modo === "grafico" ? aba.grafico() : aba.html()}`;
+    conteudo.dataset.aba = mkAtual.aba;
+    conteudo.dataset.modo = comGrafico ? mkAtual.modo : "";
+    if (mkAtual.aba === "estados") mkDesenharMapa(window.MercadoPesquisa.porEstado(mkAtual.vendas));
+    const vivo = mkAtual.vivo;
+    caixa.querySelector("#mk-mais").innerHTML = vivo && vivo.lidas
+      ? `<span class="dica-clique">${vivo.lidas.toLocaleString("pt-BR")} compra(s) lidas da Pesquisa de Preços do Compras.gov${vivo.total ? ` de ${vivo.total.toLocaleString("pt-BR")} no catálogo` : ""}.</span>${vivo.proxima && vivo.lidas < MK_MAX_VIVO ? ' <button type="button" class="btn-imprimir" id="mk-trazer-mais">Trazer mais 200 compras</button>' : ""}`
+      : "";
+  }
+
+  // "Trazer mais": uma página (200 compras) da Pesquisa de Preços por clique; as abas são recalculadas com tudo junto.
+  async function mkTrazerMais(botao) {
+    const atual = mkAtual;
+    const vivo = atual && atual.vivo;
+    if (!vivo || !vivo.proxima || vivo.carregando) return;
+    vivo.carregando = true;
+    botao.disabled = true;
+    botao.textContent = "Trazendo...";
+    const { indice, pagina } = vivo.proxima;
+    const cat = vivo.catalogos[indice];
+    try {
+      const p = new URLSearchParams({ termo: atual.termo, codigoPdm: String(cat.codigo), produto: cat.descricao || "", pagina: String(pagina) });
+      if (atual.uf) p.set("uf", atual.uf);
+      const resposta = await fetchComSessao(`/api/comprasgov-marcas-produto?${p}`);
+      const dados = await resposta.json().catch(() => ({}));
+      if (!resposta.ok || !dados.ok) throw new Error(dados.erro || `A Pesquisa de Preços não respondeu (${resposta.status}).`);
+      const M = window.MercadoPesquisa;
+      const desdeIso = new Date(Date.now() - atual.dias * 864e5).toISOString().slice(0, 10);
+      atual.vendas = M.juntar([atual.vendas, (dados.itens || []).map(M.dePrecoAoVivo)], desdeIso);
+      vivo.lidas += (dados.itens || []).length;
+      vivo.proxima = M.proximaPagina(vivo.proxima, dados.paginas, vivo.catalogos.length);
+    } catch (e) {
+      atual.avisos = [String((e && e.message) || e)];
+    }
+    vivo.carregando = false;
+    if (mkAtual === atual) renderPesquisaMercado(document.getElementById("mk-resultado"), atual);
   }
 
   function renderPesquisaMercado(alvo, { termo, uf, dias, vendas, avisos }) {
@@ -8607,7 +8704,7 @@
     const local = uf ? `em ${uf}` : "no Brasil";
     const cabecalho = `<p class="mk-recorte">Resultado para <strong>${escapeHtml(termo)}</strong> ${escapeHtml(local)}, últimos ${escapeHtml(String(dias))} dias.</p>${avisos.map((a) => `<div class="aviso">${escapeHtml(a)}</div>`).join("")}`;
     if (!vendas.length) {
-      alvo.innerHTML = `${cabecalho}<div class="estado-vazio"><p class="estado-vazio-titulo">Nenhuma compra encontrada</p><p>Tente uma palavra mais curta (ex.: "papel" em vez de "papel sulfite A4 75g"), outro estado ou um período maior.</p></div><div id="mk-angulos-caixa"><div id="mk-angulos" hidden></div><div id="mk-aba-conteudo"></div></div>`;
+      alvo.innerHTML = `${cabecalho}<div class="estado-vazio"><p class="estado-vazio-titulo">Nenhuma compra encontrada</p><p>Tente uma palavra mais curta (ex.: "papel" em vez de "papel sulfite A4 75g"), outro estado ou um período maior.</p></div><div id="mk-angulos-caixa"><div id="mk-mais" hidden></div><div id="mk-angulos" hidden></div><div id="mk-aba-conteudo"></div></div>`;
       return;
     }
     const r = M.resumo(vendas);
@@ -8621,7 +8718,7 @@
     </div>
       <div class="mk-bloco"><h3>Compras por mês</h3>${mkGraficoMeses(M.porMes(vendas))}</div>
       <div class="mk-bloco" id="mk-angulos-caixa"><div class="mk-angulos-topo"><h3>Ângulos de análise</h3><button type="button" class="btn-imprimir" id="mk-csv">Baixar planilha (CSV) desta aba</button></div>
-        <div class="mk-angulos" id="mk-angulos" role="tablist"></div><div id="mk-aba-conteudo"></div></div>
+        <div class="mk-mais" id="mk-mais"></div><div class="mk-angulos" id="mk-angulos" role="tablist"></div><div id="mk-aba-conteudo"></div></div>
       <p class="dica-clique">Fontes: contratos e atas de registro de preço do PNCP e resultados homologados do Compras.gov já coletados, mais a Pesquisa de Preços do Compras.gov consultada agora (é dela que vêm a marca e o código do catálogo). Contratação futura: PCA do PNCP. Um mesmo processo pode aparecer em mais de uma fonte; use os totais como ordem de grandeza.</p>`;
     mkDesenharAbas();
   }
@@ -8703,7 +8800,13 @@
       if (aoVivo.erro) avisos.push("A Pesquisa de Preços do Compras.gov não respondeu agora; os preços e as marcas mostram só o que já estava guardado.");
       // A contagem é estimativa do Postgres ("planned"): só avisa corte quando a amostra realmente encheu.
       if (contratos.truncado && contratos.registros.length >= 1000) avisos.push(`Foram achados mais de ${contratos.registros.length.toLocaleString("pt-BR")} contratos; a tela usa os mais recentes. Para um retrato mais fiel, escolha um estado ou um período menor.`);
-      mkAtual = { termo, uf, dias, vendas, avisos, filtro: null, aba: mkAtual && MK_ABAS.some(([id]) => id === mkAtual.aba) ? mkAtual.aba : "correspondencias", pca: null };
+      const catalogos = aoVivo.catalogos || [];
+      mkAtual = { termo, uf, dias, vendas, avisos, filtro: null, aba: mkAtual && MK_ABAS.some(([id]) => id === mkAtual.aba) ? mkAtual.aba : "correspondencias",
+        modo: (mkAtual && mkAtual.modo) || "tabela", pca: null,
+        // A busca já leu a 1ª página (200 divididas entre os produtos). Com um produto só, ela é a página 1 inteira: começa
+        // na 2. Com vários, a página 1 inteira do mais comprado ainda traz compras novas (as repetidas somem no juntar).
+        vivo: { lidas: aoVivo.itens.length, catalogos, total: catalogos.reduce((s, c) => s + (Number(c.total) || 0), 0),
+          proxima: catalogos.length ? { indice: 0, pagina: catalogos.length === 1 ? 2 : 1 } : null } };
       renderPesquisaMercado(alvo, mkAtual);
       mkCarregarContratacaoFutura(mkAtual);
     } catch (e) {
@@ -8724,10 +8827,14 @@
       document.getElementById("emp-buscar").click();
       return;
     }
-    if (!mkAtual) return;
+    if (!mkAtual || ev.target.closest("a")) return; // link (G, fonte) abre sozinho, sem filtrar a linha
+    const mais = ev.target.closest("#mk-trazer-mais");
+    if (mais) return mkTrazerMais(mais);
+    const modo = ev.target.closest("[data-mk-modo]");
     const aba = ev.target.closest("[data-mk-aba]");
     const linha = ev.target.closest("[data-mk-filtro]");
-    if (aba) mkAtual.aba = aba.dataset.mkAba;
+    if (modo) mkAtual.modo = modo.dataset.mkModo;
+    else if (aba) mkAtual.aba = aba.dataset.mkAba;
     // Clique numa marca ou num código do catálogo: abre as Correspondências só com aquelas compras.
     else if (linha) {
       mkAtual.filtro = { campo: linha.dataset.mkFiltro, valor: linha.dataset.mkValor, rotulo: linha.dataset.mkRotulo };

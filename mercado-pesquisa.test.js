@@ -115,3 +115,21 @@ test("todasAsPalavras: PCA buscado por uma palavra só fica com as linhas que t�
 test("paraCsv usa ponto e vírgula, aspas quando precisa e vírgula decimal", () => {
   assert.equal(M.paraCsv(["Marca", "Preço"], [["A; B", 1.5], ['Diz "x"', 2]]), 'Marca;Preço\r\n"A; B";1,5\r\n"Diz ""x""";2');
 });
+
+test("barras: maiores primeiro, em % do maior, sem zeros e com limite", () => {
+  const r = M.barras([{ n: "A", v: 50 }, { n: "B", v: 200 }, { n: "C", v: 0 }, { n: "D", v: 1 }], (i) => i.n, (i) => i.v, 2);
+  assert.deepEqual(r, [{ rotulo: "B", valor: 200, pct: 100 }, { rotulo: "A", valor: 50, pct: 25 }]);
+  assert.deepEqual(M.barras([], (i) => i, (i) => i), []);
+});
+
+test("linkGoogle junta marca e produto com encodeURIComponent", () => {
+  assert.equal(M.linkGoogle("Report & Cia", "papel A4"), "https://www.google.com/search?q=Report%20%26%20Cia%20papel%20A4");
+});
+
+test("proximaPagina: segue as páginas do catálogo e passa para o próximo; acaba em null", () => {
+  assert.deepEqual(M.proximaPagina({ indice: 0, pagina: 1 }, 3, 2), { indice: 0, pagina: 2 });
+  assert.deepEqual(M.proximaPagina({ indice: 0, pagina: 3 }, 3, 2), { indice: 1, pagina: 1 });
+  assert.equal(M.proximaPagina({ indice: 1, pagina: 1 }, 1, 2), null);
+  assert.deepEqual(M.proximaPagina({ indice: 0, pagina: 1 }, null, 2), { indice: 1, pagina: 1 }, "fonte sem total de páginas: não insiste no mesmo");
+  assert.equal(M.proximaPagina(null, 5, 5), null);
+});
