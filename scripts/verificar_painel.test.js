@@ -20,7 +20,7 @@ test("resumo dos filtros não depende de helper declarado em script posterior", 
   const path = require("node:path");
   const html = fs.readFileSync(path.join(__dirname, "..", "painel.html"), "utf8");
   const inicio = html.indexOf('const CHAVE = "hc_oportunidades_filtros_colapsado"');
-  const fim = html.indexOf("// Histórico de Compras segue", inicio);
+  const fim = html.indexOf("</script>", inicio);
   const bloco = html.slice(inicio, fim);
   assert.ok(inicio >= 0 && fim > inicio);
   assert.doesNotMatch(bloco, /ufsDoSelect\(/);
@@ -332,12 +332,7 @@ function contextoConsumidoresOportunidades(responder) {
     definirNotaResultadoOportunidades() {}, idOportunidade: (r) => r.numeroControlePNCP,
     buscarOportunidadesAbertas: async () => ({ encontrados: [], falhaConexao: false }), buscarExtrasSistemaS: async () => [],
     renderizarPainelBoletim: (alvo, resultados, aviso) => { alvo.innerHTML = aviso; contexto.resultadosRadar = resultados; },
-    salvarFiltroDiagnostico() {}, carregarMeta: async () => ({ atualizadoEm: "2026-10-28T00:00:00Z", retencaoDias: 730 }),
-    consultarContratosSupabase: async () => ({ registros: [], erro: false, truncado: false }),
-    carregarMercadoSegmentos: async () => null, carregarResumoInteligenciaMercado: async () => null,
-    mostrarResumoInicialDiagnostico() {}, calcularConcorrentes: () => [], calcularOrgaos: () => [],
-    calcularPorMes: () => [], calcularPorUf: () => [], calcularPorModalidade: () => [],
-    renderChipsDiagnostico() {}, renderProspeccaoFornecedores() {}, renderBaixaConcorrencia() {},
+    carregarMeta: async () => ({ atualizadoEm: "2026-10-28T00:00:00Z", retencaoDias: 730 }),
     formatarValor: String, formatarValorCompacto: String,
     filtroExtraDaTela: () => ({}), // busca v2 sem filtros extras
   });
@@ -347,33 +342,31 @@ function contextoConsumidoresOportunidades(responder) {
     ["function normalizar(txt)", "// Tags automáticas do objeto"],
     ["const CAMPOS_DETALHE_PNCP", "async function carregarMeta("],
     ["async function buscarOportunidades({", 'document.getElementById("op-buscar").addEventListener'],
-    ["function renderDiagnostico()", "// Salva o último filtro do Diagnóstico"],
-    ['document.getElementById("dg-buscar").addEventListener', "// ---------- Histórico de Compras"],
   ]) {
     const de = html.indexOf(inicio), ate = html.indexOf(fim, de);
     assert.ok(de >= 0 && ate > de);
     vm.runInContext(html.slice(de, ate), contexto);
   }
-  elemento("op-palavras").value = elemento("dg-segmento").value = "material";
-  elemento("op-uf").value = elemento("dg-uf").value = "SP";
-  elemento("dg-dias").value = "30";
+  elemento("op-palavras").value = "material";
+  elemento("op-uf").value = "SP";
   return { contexto, elemento };
 }
 
-for (const tela of ["Radar", "diagnóstico"]) test(`${tela} consulta a UF antes do corte nacional e respeita a troca de UF`, async () => {
+// A Inteligência de Mercado nova (20/11/2026) não usa oportunidades abertas: o teste fica só no Radar.
+test("Radar consulta a UF antes do corte nacional e respeita a troca de UF", async () => {
   const linhas = Array.from({ length: 20001 }, (_, i) => ({ dado: { numeroControlePNCP: `am-${i}`, objeto: "material", uf: "AM" } }));
   linhas.push({ dado: { numeroControlePNCP: "sp", objeto: "material", uf: "SP" } });
   const { contexto, elemento } = contextoConsumidoresOportunidades(({ inicio, fim, uf }) => ({
     data: linhas.filter((r) => !uf || uf.includes(r.dado.uf)).slice(inicio, fim + 1), error: null,
   }));
-  const buscar = () => tela === "Radar" ? contexto.buscarOportunidades() : elemento("dg-buscar").eventos.click();
-  const registros = () => tela === "Radar" ? contexto.resultadosRadar || [] : contexto.estado.diagnostico.oportunidadesAbertas;
-  const alvo = elemento(tela === "Radar" ? "op-resultado" : "dg-resultado");
+  const buscar = () => contexto.buscarOportunidades();
+  const registros = () => contexto.resultadosRadar || [];
+  const alvo = elemento("op-resultado");
   await buscar();
   assert.doesNotMatch(alvo.innerHTML, /Erro ao/);
   assert.equal(JSON.stringify(registros().map((r) => r.numeroControlePNCP)), '["sp"]');
   assert.doesNotMatch(alvo.innerHTML, /limitad[ao].*20\.000/i);
-  elemento("op-uf").value = elemento("dg-uf").value = "AM";
+  elemento("op-uf").value = "AM";
   await buscar();
   assert.equal(registros().length, 20000);
   assert.ok(registros().every((r) => r.uf === "AM"));

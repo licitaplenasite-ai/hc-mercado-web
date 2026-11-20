@@ -47,6 +47,7 @@
 <script src="portal-origem.js"></script>
 <script src="busca-extra.js"></script>
 <script src="baixa-concorrencia.js"></script>
+<script src="mercado-pesquisa.js"></script>
 <script src="busca-extra-ui.js" defer></script>
 <script>
   // Guarda de acesso: só entra quem tiver login aprovado. Roda antes do resto da página carregar.
@@ -652,7 +653,6 @@
   .ficha-lista li { padding: 5px 0; border-bottom: 1px solid var(--borda); }
   .ficha-lista li:last-child { border-bottom: none; }
   .ficha-lista .socio-qualif, .ficha-lista .cnae-codigo { color: var(--texto-fraco); font-size: 12px; }
-  .ficha-rapida-cnpj { margin-top: 12px; }
 
   /* ---- Acordeão de painéis (Análise administrativa / Participações / Sanções / Aspectos estratégicos) ---- */
   .acc { border: 1px solid var(--borda); border-radius: 8px; margin-bottom: 12px; overflow: hidden; background: var(--fundo-fraco); }
@@ -1055,32 +1055,6 @@
   .msg-ia.msg-carregando { color: var(--texto-fraco); font-style: italic; }
   .msg-ia.msg-erro { border-color: var(--vermelho); color: var(--vermelho-texto); }
 
-  /* ---- Diagnóstico de Mercado: layout em duas colunas (filtros na lateral) ---- */
-  .layout-mercado { display: grid; grid-template-columns: 260px 1fr; gap: 24px; align-items: start; }
-  .filtros-lateral {
-    /* top soma a altura do header (agora sticky) + os 16px de respiro originais —
-       senão esse painel ficaria grudado por baixo do header ao rolar. */
-    position: sticky; top: calc(var(--altura-header) + 16px);
-    background: linear-gradient(160deg, var(--cartao-claro), var(--cartao));
-    border: 1px solid var(--borda);
-    border-radius: var(--raio);
-    box-shadow: var(--sombra);
-    padding: 20px;
-    display: flex; flex-direction: column; gap: 14px;
-  }
-  .filtros-lateral-titulo {
-    margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px;
-    color: var(--texto-fraco); border-bottom: 1px solid var(--borda); padding-bottom: 10px;
-  }
-  .filtros-lateral .campo { flex: none; min-width: 0; }
-  /* ---- Filtros do Diagnóstico de Mercado: recolhível (evita ocupar a lateral inteira
-     o tempo todo — usuário abre, ajusta os filtros e recolhe pra ganhar espaço de tela,
-     mesma ideia do botão de recolher da sidebar principal, ver #nav-colapsar-btn). ---- */
-  .filtros-lateral-cabecalho {
-    display: flex; align-items: center; justify-content: space-between; gap: 8px;
-    border-bottom: 1px solid var(--borda); padding-bottom: 10px; margin-bottom: 2px;
-  }
-  .filtros-lateral-cabecalho .filtros-lateral-titulo { border-bottom: none; padding-bottom: 0; margin: 0; }
   .filtros-lateral-colapsar-btn {
     background: var(--fundo-fraco); border: 1px solid var(--borda); color: var(--texto-fraco);
     width: 26px; height: 26px; border-radius: 6px; cursor: pointer; font-size: 13px; flex-shrink: 0;
@@ -1088,16 +1062,6 @@
     transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
   }
   .filtros-lateral-colapsar-btn:hover { color: var(--texto); border-color: var(--azul); }
-  /* Quando os filtros são recolhidos, a coluna da grade também encolhe (senão sobra um
-     vão em branco do tamanho da coluna original de 260px, já que grid-template-columns
-     não segue o width do próprio filho automaticamente) — o conteúdo ganha o espaço de
-     volta de verdade, não só o aside fica mais fino. */
-  .layout-mercado.filtros-colapsadas { grid-template-columns: 56px 1fr; }
-  .filtros-lateral.colapsada { width: 56px; padding: 16px 10px; align-items: center; }
-  .filtros-lateral.colapsada > *:not(.filtros-lateral-cabecalho) { display: none; }
-  .filtros-lateral.colapsada .filtros-lateral-cabecalho { flex-direction: column; gap: 10px; border-bottom: none; padding-bottom: 0; }
-  .filtros-lateral.colapsada .filtros-lateral-titulo { display: none; }
-  .filtros-lateral.colapsada .filtros-lateral-colapsar-btn { transform: scaleX(-1); }
   /* Filtros horizontais (como Encontrar Licitações) usam o mesmo princípio: depois de
      aplicar a busca, o cliente pode recolher o formulário e concentrar a tela no resultado. */
   .painel-filtros-recolhivel-cabecalho {
@@ -1119,37 +1083,11 @@
   .painel-filtros-recolhivel.painel-filtros-colapsado .painel-filtros-recolhivel-cabecalho { border-bottom: none; padding-bottom: 0; }
   .conteudo-mercado { min-width: 0; }
   .conteudo-mercado h2:first-of-type { margin-top: 0; }
-  .mapa-uf-svg { width: 100%; max-width: 460px; height: auto; display: block; margin: 4px auto 8px; }
-  .mapa-uf-estado { cursor: pointer; transition: opacity 0.15s ease; }
-  .mapa-uf-estado:hover { opacity: 0.7; }
-  .mapa-uf-legenda { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12px; color: var(--texto-fraco); margin-bottom: 18px; }
-  .mapa-uf-legenda-barra { width: 120px; height: 10px; border-radius: 5px; background: linear-gradient(90deg, var(--fundo-fraco), var(--azul)); }
-  .angulos-analise { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 22px; }
-  .angulo-card {
-    display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
-    background: var(--cartao); border: 1px solid var(--borda); border-radius: var(--raio);
-    padding: 14px 16px; cursor: pointer; text-align: left; font-family: inherit;
-    transition: border-color 0.15s ease, transform 0.1s ease;
-  }
-  .angulo-card:hover { border-color: var(--azul); transform: translateY(-1px); }
-  .angulo-icone { color: var(--azul); font-size: 20px; }
-  .angulo-icone svg { width: 20px; height: 20px; }
-  .angulo-titulo { font-weight: 600; font-size: 13.5px; color: var(--texto); }
-  .angulo-desc { font-size: 12px; color: var(--texto-fraco); }
-  .angulo-desabilitado { cursor: default; opacity: 0.55; }
-  .angulo-desabilitado:hover { border-color: var(--borda); transform: none; }
   .dg-exploracao-acao { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:16px 0 6px; }
   .dg-exploracao-acao .dica-clique { margin:0; }
-  .dg-exploracao-detalhada { margin-top:24px; }
 
-  @media (max-width: 820px) {
-    .layout-mercado { grid-template-columns: 1fr; }
-    .filtros-lateral { position: static; }
-  }
-
-  /* ---- Sub-navegação interna da Inteligência de Mercado (Visão Geral / Baixa Concorrência /
-     Histórico de Compras / Prospecção IA) — variante maior do .btn-filtro-rapido, pra parecer
-     aba de verdade em vez de chip de filtro. ---- */
+  /* ---- Sub-navegação interna da Inteligência de Mercado (Pesquisa de mercado / Baixa concorrência / Licitação anterior)
+     — variante maior do .btn-filtro-rapido, pra parecer aba de verdade em vez de chip de filtro. ---- */
   .dg-subabas {
     display: flex; gap: 8px; flex-wrap: wrap;
     border-bottom: 1px solid var(--borda); padding-bottom: 16px; margin-bottom: 20px;
@@ -1163,24 +1101,22 @@
   .btn-subaba.ativo { background: linear-gradient(135deg, var(--azul), var(--azul-escuro)); color: #fff; border-color: transparent; }
   .dg-subaba-painel { display: none; }
   .dg-subaba-painel.ativo { display: block; }
-  .historico-compras-layout { display: grid; grid-template-columns: minmax(230px, 300px) minmax(0, 1fr); gap: 20px; align-items: start; }
-  .historico-compras-layout.filtros-colapsadas { grid-template-columns: 56px minmax(0, 1fr); }
-  .historico-compras-resumo { margin-bottom: 20px; }
-  .historico-compras-tabela td:first-child { white-space: nowrap; }
-  .hc-trilha { display: flex; align-items: center; gap: 7px; color: var(--texto-fraco); font-size: 13px; margin: 0 0 10px; flex-wrap: wrap; }
-  .hc-trilha strong { color: var(--texto); }
-  .hc-painel-exploracao { display: grid; grid-template-columns: repeat(2, minmax(220px, 1fr)); gap: 12px; margin: 20px 0; }
-  .hc-acao-explorar { text-align: left; padding: 16px; border: 1px solid var(--borda); border-radius: var(--raio); background: var(--cartao-claro); color: var(--texto); cursor: pointer; transition: border-color .15s ease, transform .15s ease, background .15s ease; }
-  .hc-acao-explorar:hover { border-color: var(--azul); background: var(--fundo-elevado-hover); transform: translateY(-1px); }
-  .hc-acao-explorar strong, .hc-acao-explorar span { display: block; }
-  .hc-acao-explorar strong { font-size: 14px; margin-bottom: 5px; }
-  .hc-acao-explorar span { color: var(--texto-fraco); font-size: 12px; line-height: 1.45; }
-  .hc-dossie { margin-top: 14px; }
-  @media (max-width: 820px) {
-    .historico-compras-layout { grid-template-columns: 1fr; }
-    .historico-compras-layout.filtros-colapsadas { grid-template-columns: 1fr; }
-    .hc-painel-exploracao { grid-template-columns: 1fr; }
-  }
+  /* ---- Pesquisa de mercado (modelo Siga Pregão): busca em uma linha, cartões, gráfico por mês e 3 tabelas ---- */
+  .mk-busca { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 20px; }
+  .mk-busca .campo { margin: 0; }
+  .mk-campo-termo { flex: 1 1 280px; }
+  .mk-busca .btn-buscar { height: 42px; min-width: 140px; }
+  .mk-recorte { margin: 0 0 14px; color: var(--texto-fraco); }
+  .mk-bloco { margin: 26px 0; }
+  .mk-bloco h3 { margin: 0 0 4px; font-size: 16px; }
+  .mk-tabela-caixa { overflow-x: auto; }
+  .mk-tabela td.num, .mk-tabela th:nth-child(n+2) { text-align: right; white-space: nowrap; }
+  .mk-tabela small { color: var(--texto-fraco); }
+  .mk-grafico { display: flex; align-items: flex-end; gap: 8px; min-height: 190px; padding: 8px 0; overflow-x: auto; }
+  .mk-barra { flex: 1 0 44px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; }
+  .mk-barra-coluna { width: 100%; max-width: 38px; background: linear-gradient(180deg, var(--azul), var(--azul-escuro)); border-radius: 5px 5px 0 0; }
+  .mk-barra-valor, .mk-barra-rotulo { font-size: 10px; color: var(--texto-fraco); white-space: nowrap; }
+  @media (max-width: 620px) { .mk-busca .campo, .mk-busca .btn-buscar { width: 100%; } }
 
   /* Mini-gráfico de barras "Licitações por mês" (equivalente simplificado ao gráfico do ConLicitação) */
   .mini-grafico { display: flex; align-items: flex-end; gap: 8px; height: 160px; padding: 10px 4px 0; }
@@ -1220,7 +1156,6 @@
     .barra-item .barra-meta small, tr.linha-clicavel td .link-pncp { }
     header, nav, .filtros-lateral, .btn-imprimir, .rodape { display: none !important; }
     main { max-width: 100% !important; padding: 0 !important; margin: 0 !important; }
-    .layout-mercado { display: block !important; }
     section { display: none !important; }
     section.ativa { display: block !important; }
     .cartao, table, .acc, .aviso, .mini-grafico, .barra-item {
@@ -1309,45 +1244,6 @@
   }
   .anotacao-licitacao:focus, .select-status-licitacao:focus { outline: none; border-color: var(--azul); }
   .boletim-cabecalho { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
-
-  /* ---- Pesquisa de marcas: consulta compacta, ranking e dossiê sob demanda ---- */
-  .marcas-pesquisa { max-width: 1240px; }
-  .marcas-pesquisa-topo { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; padding:2px 0 20px; border-bottom:1px solid var(--borda); }
-  .marcas-pesquisa-topo h2 { margin:0 0 6px; }
-  .marcas-pesquisa-topo p { margin:0; max-width:690px; color:var(--texto-fraco); line-height:1.5; font-size:13px; }
-  .marcas-fonte { display:flex; align-items:center; gap:7px; color:var(--texto-fraco); white-space:nowrap; font-size:12px; padding-top:7px; }
-  .marcas-fonte::before { content:""; width:8px; height:8px; border-radius:50%; background:var(--verde); box-shadow:0 0 0 4px color-mix(in srgb, var(--verde) 14%, transparent); }
-  .marcas-consulta { display:grid; grid-template-columns:minmax(260px, 1fr) auto; gap:12px; align-items:end; padding:20px 0; }
-  .marcas-consulta .campo { margin:0; }
-  .marcas-consulta .btn-buscar { min-width:180px; height:44px; }
-  .marcas-vazio { border:1px dashed var(--borda); border-radius:var(--raio); padding:24px; background:var(--fundo-fraco); color:var(--texto-fraco); font-size:13px; line-height:1.55; }
-  .marcas-resumo { display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:14px 16px; border:1px solid var(--borda); border-radius:var(--raio); background:var(--fundo-fraco); margin-bottom:14px; }
-  .marcas-resumo strong { color:var(--texto); }
-  .marca-kpis { display:flex; gap:8px; flex-wrap:wrap; margin-left:auto; }
-  .marca-kpi { padding:5px 10px; border-radius:999px; background:var(--cartao); border:1px solid var(--borda); color:var(--texto-fraco); font-size:12px; }
-  .marca-kpi strong { color:var(--azul); }
-  .marcas-ranking { border:1px solid var(--borda); border-radius:var(--raio); overflow:hidden; background:var(--cartao); }
-  .marcas-ranking-cab, .marca-ranking-linha { display:grid; grid-template-columns:52px minmax(180px,1.4fr) 100px minmax(170px,1fr) 150px 44px; gap:14px; align-items:center; }
-  .marcas-ranking-cab { padding:10px 16px; background:var(--fundo-fraco); color:var(--texto-fraco); font-size:10px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; }
-  .marca-ranking-linha { width:100%; text-align:left; padding:13px 16px; border:0; border-top:1px solid var(--borda); background:var(--cartao); color:var(--texto); font:inherit; cursor:pointer; }
-  .marca-ranking-linha:hover, .marca-ranking-linha.ativa { background:var(--fundo-elevado-hover); }
-  .marca-ranking-linha.ativa { box-shadow:inset 3px 0 0 var(--azul); }
-  .marca-rank { width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; border-radius:50%; background:color-mix(in srgb, var(--azul) 11%, var(--cartao)); color:var(--azul); font-size:12px; font-weight:800; }
-  .marca-nome { font-weight:750; font-size:14px; display:block; }
-  .marca-produto { color:var(--texto-fraco); font-size:12px; display:block; margin-top:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .marca-numero { color:var(--azul); font-weight:750; }
-  .marca-fornecedor, .marca-local { color:var(--texto-fraco); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .marca-abrir { color:var(--azul); font-size:20px; text-align:right; }
-  .marca-dossie { margin-top:14px; padding:20px; border:1px solid color-mix(in srgb, var(--azul) 30%, var(--borda)); border-radius:var(--raio); background:linear-gradient(135deg, color-mix(in srgb, var(--azul) 5%, var(--cartao)), var(--cartao) 48%); }
-  .marca-dossie-topo { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:18px; }
-  .marca-dossie-topo h3 { margin:0 0 4px; font-size:18px; }
-  .marca-dossie-topo p { margin:0; color:var(--texto-fraco); font-size:12px; }
-  .marca-dossie-grid { display:grid; grid-template-columns:repeat(4, minmax(130px, 1fr)); gap:12px; }
-  .marca-dossie-grid div { padding:12px; border-radius:8px; background:var(--cartao); border:1px solid var(--borda); }
-  .marca-dossie-grid dt { color:var(--texto-fraco); font-size:10px; font-weight:700; letter-spacing:.4px; text-transform:uppercase; margin:0 0 5px; }
-  .marca-dossie-grid dd { margin:0; font-size:13px; line-height:1.4; }
-  @media (max-width: 920px) { .marcas-ranking-cab { display:none; } .marca-ranking-linha { grid-template-columns:38px 1fr auto; } .marca-ranking-linha > :nth-child(3), .marca-ranking-linha > :nth-child(4), .marca-ranking-linha > :nth-child(5) { display:none; } .marca-dossie-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
-  @media (max-width: 620px) { .marcas-pesquisa-topo, .marcas-consulta { display:flex; flex-direction:column; } .marcas-consulta, .marcas-consulta .campo, .marcas-consulta .btn-buscar { width:100%; } .marcas-resumo { align-items:flex-start; } .marca-kpis { margin-left:0; } .marca-dossie-grid { grid-template-columns:1fr; } }
 
   /* ---- Banner de limite diário / upsell (inspirado no aviso de cota do Effecti) ----
      Faixa retangular SÓLIDA, não um cartão flutuante: zero margin, largura 100%, cantos com
@@ -2125,115 +2021,42 @@
     <div class="boletim-cabecalho">
       <div>
         <h2 style="margin:0;"><svg class='icone-ph'><use href='#ph-chart-line-up'></use></svg> Inteligência de Mercado</h2>
-        <p class="dica-clique" style="margin:4px 0 0;">Comece pelo sinal de mercado, aprofunde no histórico e abra o dossiê do órgão, fornecedor ou processo para decidir o próximo movimento.</p>
+        <p class="dica-clique" style="margin:4px 0 0;">Digite o que você vende e veja quem ganha, quanto o governo paga e quem compra.</p>
       </div>
     </div>
     <div class="dg-subabas" id="dg-subabas">
-      <button type="button" class="btn-subaba" data-subaba="visao-geral">Visão Geral</button>
-      <button type="button" class="btn-subaba" data-subaba="baixa-concorrencia">Baixa Concorrência</button>
-      <button type="button" class="btn-subaba" data-subaba="historico-compras">Histórico de Compras</button>
-      <button type="button" class="btn-subaba" data-subaba="licitacao-anterior">Licitação Anterior</button>
-      <button type="button" class="btn-subaba" data-subaba="prospeccao-ia">Prospecção de Fornecedores (IA)</button>
+      <button type="button" class="btn-subaba" data-subaba="pesquisa">Pesquisa de mercado</button>
+      <button type="button" class="btn-subaba" data-subaba="baixa-concorrencia">Baixa concorrência</button>
+      <button type="button" class="btn-subaba" data-subaba="licitacao-anterior">Licitação anterior</button>
     </div>
 
-    <div class="dg-subaba-painel" data-subaba-painel="visao-geral">
-    <div class="layout-mercado secao-conteudo-principal">
-      <aside class="filtros-lateral" id="dg-filtros-lateral">
-        <div class="filtros-lateral-cabecalho">
-          <h3 class="filtros-lateral-titulo">Filtros</h3>
-          <button type="button" id="dg-filtros-colapsar-btn" class="filtros-lateral-colapsar-btn" title="Recolher filtros">«</button>
+    <div class="dg-subaba-painel" data-subaba-painel="pesquisa">
+      <form class="mk-busca" id="mk-form">
+        <div class="campo mk-campo-termo">
+          <label for="mk-termo">Produto ou serviço</label>
+          <input id="mk-termo" placeholder="Ex.: papel A4, caneta, limpeza predial" autocomplete="off">
         </div>
         <div class="campo">
-          <label for="dg-segmento">Segmento (palavras-chave)</label>
-          <input id="dg-segmento" placeholder="Ex: fotovoltaico, energia solar">
+          <label for="mk-uf">Estado</label>
+          <select id="mk-uf" class="select-uf"></select>
         </div>
         <div class="campo">
-          <label for="dg-uf">UF de referência</label>
-          <select id="dg-uf" class="select-uf"></select>
-        </div>
-        <div class="campo">
-          <label for="dg-municipio">Município</label>
-          <div class="select-com-limpar">
-            <select id="dg-municipio" class="select-municipio"></select>
-            <button type="button" class="btn-limpar-select" data-limpa="dg-municipio" title="Limpar município selecionado">✕</button>
-          </div>
-        </div>
-        <div class="campo">
-          <label for="dg-orgao-filtro">Órgão contém</label>
-          <input id="dg-orgao-filtro" placeholder="Ex: Prefeitura, Ministério...">
-        </div>
-        <div class="campo">
-          <label for="dg-dias">Período de análise</label>
-          <select id="dg-dias">
-            <option value="3">Últimos 3 dias</option>
-            <option value="7">Últimos 7 dias</option>
-            <option value="15">Últimos 15 dias</option>
-            <option value="30" selected>Últimos 30 dias</option>
-            <option value="60">Últimos 2 meses</option>
+          <label for="mk-dias">Período</label>
+          <select id="mk-dias">
             <option value="90">Últimos 3 meses</option>
             <option value="180">Últimos 6 meses</option>
-            <option value="365">Últimos 12 meses</option>
+            <option value="365" selected>Últimos 12 meses</option>
             <option value="730">Últimos 24 meses</option>
           </select>
         </div>
-        <button class="btn-buscar" id="dg-buscar" style="width:100%;">Gerar diagnóstico</button>
-        <button type="button" class="btn-imprimir" id="dg-usar-boletim" style="width:100%;margin-top:8px;"><svg class='icone-ph'><use href='#ph-clipboard-text'></use></svg> Usar meu filtro do boletim</button>
-        <p class="dica-clique" id="dg-usar-boletim-status" role="status" aria-live="polite" style="margin:6px 0 0;"></p>
-        <p class="dica-clique" style="margin-top:14px;">O histórico é acumulado dia a dia por um robô — quanto mais tempo o site estiver no ar, mais fundo o período de 24 meses vai cobrir de verdade.</p>
-      </aside>
-      <div class="conteudo-mercado">
-        <div class="dg-topo-acoes">
-          <div id="dg-chips" class="chips"></div>
-          <button id="dg-imprimir" class="btn-imprimir" title="Gerar PDF/impressão deste diagnóstico"><svg class='icone-ph'><use href='#ph-printer'></use></svg> Imprimir / Gerar PDF</button>
-        </div>
-        <div id="dg-resultado"><div class="estado-vazio"><p class="estado-vazio-titulo">Quem compra o que você vende, e quem costuma ganhar?</p><p>Escreva o segmento (ex.: limpeza, material hospitalar), escolha o estado e clique em <strong>Gerar diagnóstico</strong>. Se já tem boletim, use <strong>Usar meu filtro do boletim</strong> para analisar o mesmo mercado.</p><p>O diagnóstico mostra o volume contratado no período, os concorrentes que já venceram contratos e as oportunidades abertas agora.</p></div></div>
-        <div id="dg-detalhe"></div>
-      </div>
-    </div>
+        <button type="submit" class="btn-buscar" id="mk-buscar">Pesquisar</button>
+      </form>
+      <div id="mk-resultado"><div class="estado-vazio"><p class="estado-vazio-titulo">Quem compra o que você vende, quanto paga e quem costuma ganhar?</p><p>Escreva o produto ou serviço (ex.: <strong>papel A4</strong>) e clique em <strong>Pesquisar</strong>. Estado e período são opcionais.</p></div></div>
     </div>
 
     <div class="dg-subaba-painel" data-subaba-painel="baixa-concorrencia">
-      <div class="conteudo-mercado">
-        <div class="dg-topo-acoes"><span></span><button class="btn-imprimir btn-imprimir-generico" title="Gerar PDF/impressão desta tela"><svg class='icone-ph'><use href='#ph-printer'></use></svg> Imprimir / Gerar PDF</button></div>
-        <div id="dg-bc-licitantes" class="bc-licitantes"></div>
-        <div id="dg-baixa-concorrencia-resultado"></div>
-        <div id="dg-baixa-concorrencia-detalhe"></div>
-      </div>
-    </div>
-
-    <div class="dg-subaba-painel" data-subaba-painel="historico-compras">
-      <div class="historico-compras-layout">
-        <aside class="filtros-lateral" id="hc-filtros-lateral">
-          <div class="filtros-lateral-cabecalho">
-            <h3 class="filtros-lateral-titulo">Consultar histórico</h3>
-            <button type="button" id="hc-filtros-colapsar-btn" class="filtros-lateral-colapsar-btn" title="Recolher filtros">«</button>
-          </div>
-          <div class="campo">
-            <label for="hc-objeto">Objeto ou produto</label>
-            <input id="hc-objeto" placeholder="Ex: equipamento hospitalar">
-          </div>
-          <div class="campo">
-            <label for="hc-uf">UF de referência</label>
-            <select id="hc-uf" class="select-uf"></select>
-          </div>
-          <div class="campo">
-            <label for="hc-dias">Período</label>
-            <select id="hc-dias">
-              <option value="30">Últimos 30 dias</option>
-              <option value="90">Últimos 3 meses</option>
-              <option value="180">Últimos 6 meses</option>
-              <option value="365" selected>Últimos 12 meses</option>
-              <option value="730">Últimos 24 meses</option>
-            </select>
-          </div>
-          <button class="btn-buscar" id="hc-buscar" style="width:100%;">Consultar histórico</button>
-          <p class="dica-clique" style="margin-top:14px;">A consulta usa a base histórica já coletada. Resultados sem data de assinatura também podem aparecer, porque algumas fontes não informam esse campo.</p>
-        </aside>
-        <div class="conteudo-mercado">
-          <div class="dg-topo-acoes"><div id="hc-chips" class="chips"></div><button class="btn-imprimir btn-imprimir-generico" title="Gerar PDF/impressão desta tela"><svg class='icone-ph'><use href='#ph-printer'></use></svg> Imprimir / Gerar PDF</button></div>
-          <div id="hc-resultado" class="historico-compras-resumo"></div>
-        </div>
-      </div>
+      <p class="dica-clique" style="margin:0 0 12px;">Itens do produto pesquisado que ficaram desertos ou tiveram só 1, 2 ou 3 empresas disputando.</p>
+      <div id="dg-bc-licitantes" class="bc-licitantes"></div>
     </div>
 
     <div class="dg-subaba-painel" data-subaba-painel="licitacao-anterior">
@@ -2242,15 +2065,10 @@
         <div id="dg-licitacao-anterior"></div>
       </div>
     </div>
-
-    <div class="dg-subaba-painel" data-subaba-painel="prospeccao-ia">
-      <div class="aviso" style="display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:16px;"><span>Descreva um produto e a IA traz 3 fornecedores por vez, com aderência e contato público.</span><button type="button" class="btn-filtro-rapido" data-abrir-fornecedor-ia="">Encontrar fornecedor com IA</button></div>
-      <div id="dg-prospeccao-resultado" class="conteudo-mercado"><div class="aviso">Gere um diagnóstico de mercado para encontrar fornecedores que já venceram contratos no seu segmento.</div></div>
-    </div>
   </section>
 
 <script>
-  // Sub-navegação interna da Inteligência de Mercado: 4 abas dentro da mesma section,
+  // Sub-navegação interna da Inteligência de Mercado: 3 abas dentro da mesma section,
   // só uma visível por vez (nada de scroll gigante com tudo junto). Aba ativa persiste
   // em localStorage e volta a mesma ao reabrir a seção.
   (function () {
@@ -2266,7 +2084,7 @@
       paineis.forEach((p) => p.classList.toggle("ativo", p.dataset.subabaPainel === id));
     }
 
-    let atual = "visao-geral";
+    let atual = "pesquisa";
     try {
       const salva = localStorage.getItem(CHAVE);
       if (salva && validos.has(salva)) atual = salva;
@@ -2277,7 +2095,6 @@
       btn.addEventListener("click", () => {
         const id = btn.dataset.subaba;
         ativar(id);
-        if (id === "prospeccao-ia" && typeof renderProspeccaoFornecedores === "function") renderProspeccaoFornecedores();
         try { localStorage.setItem(CHAVE, id); } catch (e) { /* segue sem persistir */ }
       });
     });
@@ -2306,33 +2123,6 @@
 </script>
 
 <script>
-  // Recolher/expandir os filtros do Diagnóstico de Mercado — mesma ideia da sidebar
-  // principal (ver hc_sidebar_colapsada acima): lembra a escolha entre sessões.
-  (function () {
-    const aside = document.getElementById("dg-filtros-lateral");
-    const btn = document.getElementById("dg-filtros-colapsar-btn");
-    if (!aside || !btn) return;
-    const CHAVE = "hc_diagnostico_filtros_colapsado";
-
-    const layout = aside.closest(".layout-mercado");
-
-    function aplicar(colapsada) {
-      aside.classList.toggle("colapsada", colapsada);
-      if (layout) layout.classList.toggle("filtros-colapsadas", colapsada);
-      btn.title = colapsada ? "Expandir filtros" : "Recolher filtros";
-    }
-
-    let colapsada = false;
-    try { colapsada = localStorage.getItem(CHAVE) === "1"; } catch (e) { /* localStorage indisponível */ }
-    aplicar(colapsada);
-
-    btn.addEventListener("click", () => {
-      colapsada = !colapsada;
-      aplicar(colapsada);
-      try { localStorage.setItem(CHAVE, colapsada ? "1" : "0"); } catch (e) { /* segue sem persistir */ }
-    });
-  })();
-
   // Encontrar Licitações mantém os filtros principais acessíveis sem deixá-los ocupar a
   // tela inteira depois que a busca foi configurada. A preferência é por navegador, assim
   // como as demais escolhas de interface do painel.
@@ -2384,31 +2174,6 @@
     });
   })();
 
-  // Histórico de Compras segue o mesmo padrão de filtros recolhíveis da Visão Geral.
-  // O estado é independente para o usuário poder deixar uma ferramenta aberta e outra fechada.
-  (function () {
-    const aside = document.getElementById("hc-filtros-lateral");
-    const btn = document.getElementById("hc-filtros-colapsar-btn");
-    if (!aside || !btn) return;
-    const CHAVE = "hc_historico_filtros_colapsado";
-    const layout = aside.closest(".historico-compras-layout");
-
-    function aplicar(colapsada) {
-      aside.classList.toggle("colapsada", colapsada);
-      if (layout) layout.classList.toggle("filtros-colapsadas", colapsada);
-      btn.title = colapsada ? "Expandir filtros" : "Recolher filtros";
-    }
-
-    let colapsada = false;
-    try { colapsada = localStorage.getItem(CHAVE) === "1"; } catch (e) { /* localStorage indisponível */ }
-    aplicar(colapsada);
-
-    btn.addEventListener("click", () => {
-      colapsada = !colapsada;
-      aplicar(colapsada);
-      try { localStorage.setItem(CHAVE, colapsada ? "1" : "0"); } catch (e) { /* segue sem persistir */ }
-    });
-  })();
 </script>
 
   <section id="empresa">
@@ -6574,120 +6339,6 @@
     }
   }
 
-  // Recalcula o ranking de empresas vencedoras a partir de uma lista de atas já filtrada
-  // (por segmento/UF/período) — assim o ranking sempre reflete exatamente o filtro atual
-  // em vez do agregado bruto de todos os segmentos que o robô coletou.
-  function calcularEmpresasMercado(atasFiltradas) {
-    const agora = Date.now();
-    const empresas = new Map();
-    for (const ata of atasFiltradas) {
-      if (!ata.enriquecida || !Array.isArray(ata.itens)) continue;
-      const vigente = !ata.cancelado && ata.vigenciaFim && new Date(ata.vigenciaFim).getTime() >= agora;
-      for (const item of ata.itens) {
-        for (const v of item.vencedores || []) {
-          if (!v.cnpj) continue;
-          if (!empresas.has(v.cnpj)) {
-            empresas.set(v.cnpj, {
-              cnpj: v.cnpj,
-              nome: v.nome || v.cnpj,
-              ufs: new Set(),
-              atasVigentes: [],
-              atasEncerradas: [],
-              valorTotalVigente: 0,
-              valorTotalHistorico: 0,
-              itensGanhos: 0,
-            });
-          }
-          const emp = empresas.get(v.cnpj);
-          if (v.nome) emp.nome = v.nome;
-          if (ata.ufOrgao) emp.ufs.add(ata.ufOrgao);
-          emp.itensGanhos += 1;
-          emp.valorTotalHistorico += v.valorTotal || 0;
-          const refEntry = {
-            numeroControlePNCPAta: ata.numeroControlePNCPAta,
-            orgao: ata.orgao,
-            uf: ata.ufOrgao,
-            municipio: ata.municipioOrgao,
-            objeto: ata.objeto,
-            item: item.descricao,
-            valorTotal: v.valorTotal,
-            quantidade: v.quantidade,
-            vigenciaInicio: ata.vigenciaInicio,
-            vigenciaFim: ata.vigenciaFim,
-            cancelado: ata.cancelado,
-          };
-          if (vigente) {
-            emp.valorTotalVigente += v.valorTotal || 0;
-            emp.atasVigentes.push(refEntry);
-          } else {
-            emp.atasEncerradas.push(refEntry);
-          }
-        }
-      }
-    }
-    return Array.from(empresas.values())
-      .map((e) => ({ ...e, ufs: Array.from(e.ufs) }))
-      .sort((a, b) => b.valorTotalHistorico - a.valorTotalHistorico);
-  }
-
-  // Mesma lógica de calcularEmpresasMercado, mas agrupando por marca do produto em vez de
-  // por fornecedor — só existe marca quando o robô conseguiu casar o item com a API pública
-  // de Pesquisa de Preço do Compras.gov.br (cobertura parcial: só órgãos federais/distritais
-  // com item catalogado cujo fornecedor informou marca).
-  function calcularMarcasMercado(atasFiltradas) {
-    const agora = Date.now();
-    const marcas = new Map();
-    for (const ata of atasFiltradas) {
-      if (!ata.enriquecida || !Array.isArray(ata.itens)) continue;
-      const vigente = !ata.cancelado && ata.vigenciaFim && new Date(ata.vigenciaFim).getTime() >= agora;
-      for (const item of ata.itens) {
-        for (const v of item.vencedores || []) {
-          if (!v.marca) continue;
-          if (!marcas.has(v.marca)) {
-            marcas.set(v.marca, {
-              marca: v.marca,
-              fornecedores: new Map(),
-              ufs: new Set(),
-              atasVigentes: [],
-              atasEncerradas: [],
-              valorTotalVigente: 0,
-              valorTotalHistorico: 0,
-              itensGanhos: 0,
-            });
-          }
-          const mar = marcas.get(v.marca);
-          if (v.cnpj) mar.fornecedores.set(v.cnpj, v.nome || v.cnpj);
-          if (ata.ufOrgao) mar.ufs.add(ata.ufOrgao);
-          mar.itensGanhos += 1;
-          mar.valorTotalHistorico += v.valorTotal || 0;
-          const refEntry = {
-            numeroControlePNCPAta: ata.numeroControlePNCPAta,
-            orgao: ata.orgao,
-            uf: ata.ufOrgao,
-            municipio: ata.municipioOrgao,
-            objeto: ata.objeto,
-            item: item.descricao,
-            fornecedor: v.nome || v.cnpj,
-            valorTotal: v.valorTotal,
-            quantidade: v.quantidade,
-            vigenciaInicio: ata.vigenciaInicio,
-            vigenciaFim: ata.vigenciaFim,
-            cancelado: ata.cancelado,
-          };
-          if (vigente) {
-            mar.valorTotalVigente += v.valorTotal || 0;
-            mar.atasVigentes.push(refEntry);
-          } else {
-            mar.atasEncerradas.push(refEntry);
-          }
-        }
-      }
-    }
-    return Array.from(marcas.values())
-      .map((m) => ({ ...m, ufs: Array.from(m.ufs), fornecedores: Array.from(m.fornecedores.values()) }))
-      .sort((a, b) => b.valorTotalHistorico - a.valorTotalHistorico);
-  }
-
   // Faz fetch com timeout próprio: a API do PNCP às vezes fica lenta e trava
   // uma requisição por 60-70s+, o que sozinho já estoura o orçamento de tempo
   // do escaneamento. Com isso, cada página desiste em no máx. `timeoutMs` e
@@ -6872,42 +6523,6 @@
       paginasVarridas += 1;
       for (const item of itens) {
         if (soDigitos(item.niFornecedor) === cnpj) encontrados.push(normalizarContrato(item));
-      }
-      pagina += 1;
-    }
-    return { encontrados, paginasVarridas, totalPaginas, parcial, falhaConexao };
-  }
-
-  // Escaneia contratos históricos do PNCP dentro de um orçamento de tempo (navegador)
-  async function buscarContratos(dataInicial, dataFinal, palavras, inicioMs, tempoLimiteMs) {
-    const encontrados = [];
-    let pagina = 1;
-    let totalPaginas = 1;
-    let paginasVarridas = 0;
-    let parcial = false;
-    let falhaConexao = false;
-
-    while (pagina <= totalPaginas) {
-      if (Date.now() - inicioMs > tempoLimiteMs) { parcial = true; break; }
-      const url = `/api/pncp-proxy?url=${encodeURIComponent(`https://pncp.gov.br/api/consulta/v1/contratos?dataInicial=${dataInicial}&dataFinal=${dataFinal}&pagina=${pagina}&tamanhoPagina=100`)}`;
-      let resp;
-      try {
-        resp = await fetchComTimeout(url, { headers: { Accept: "application/json" } }, 18000);
-      } catch (e) { falhaConexao = true; break; }
-      if (!resp.ok) {
-        if (resp.status === 429) { await new Promise((r) => setTimeout(r, 500)); continue; }
-        falhaConexao = true;
-        break;
-      }
-      const texto = await resp.text();
-      if (!texto) break;
-      const dados = JSON.parse(texto);
-      const itens = dados.data || [];
-      totalPaginas = dados.totalPaginas || 1;
-      paginasVarridas += 1;
-      for (const item of itens) {
-        const objeto = item.objetoContrato || item.objetoCompra || "";
-        if (bateComSegmento(objeto, palavras)) encontrados.push(normalizarContrato(item));
       }
       pagina += 1;
     }
@@ -8749,912 +8364,20 @@
     if (!opJaBuscado) restaurarOportunidades();
   });
 
-  // ---------- Diagnóstico ----------
+  // ---------- Inteligência de Mercado: pesquisa simples (modelo do Siga Pregão) ----------
+  // Uma busca (produto/serviço + estado e período opcionais) e quatro respostas: quem ganha, quanto se paga,
+  // quem compra e quanto se compra por mês. A conta fica em mercado-pesquisa.js (testada); aqui só busca e desenha.
+  // Substituiu, em 20/11/2026, o "Diagnóstico de Mercado" com filtros laterais, baixa concorrência, histórico de
+  // compras e prospecção em abas separadas: o dono achou confuso e pediu uma tela só, igual à do Siga.
 
-  function calcularConcorrentes(encontrados) {
-    const fornecedores = {};
-    for (const c of encontrados) {
-      const valor = c.valor || 0;
-      const cnpj = c.cnpjFornecedor || "sem-cnpj";
-      const nome = c.nomeFornecedor || cnpj;
-      if (!fornecedores[cnpj]) fornecedores[cnpj] = { nome, cnpj, valor: 0, contratos: 0, ufs: new Set() };
-      fornecedores[cnpj].valor += valor;
-      fornecedores[cnpj].contratos += 1;
-      if (c.uf) fornecedores[cnpj].ufs.add(c.uf);
-    }
-    return Object.values(fornecedores)
-      .sort((a, b) => b.valor - a.valor)
-      .slice(0, 10)
-      .map((f) => ({ ...f, ufs: Array.from(f.ufs), valorFormatado: formatarValor(f.valor) }));
-  }
-
-  // Ranking de órgãos compradores na amostra (espelha o bloco "Órgão Público" do ConLicitação)
-  function calcularOrgaos(encontrados) {
-    const orgaos = {};
-    for (const c of encontrados) {
-      const valor = c.valor || 0;
-      const nome = c.orgao || "Órgão não informado";
-      if (!orgaos[nome]) orgaos[nome] = { nome, valor: 0, contratos: 0, ufs: new Set() };
-      orgaos[nome].valor += valor;
-      orgaos[nome].contratos += 1;
-      if (c.uf) orgaos[nome].ufs.add(c.uf);
-    }
-    return Object.values(orgaos)
-      .sort((a, b) => b.valor - a.valor)
-      .slice(0, 10)
-      .map((o) => ({ ...o, ufs: Array.from(o.ufs), valorFormatado: formatarValor(o.valor) }));
-  }
-
-  // Agrupa por mês/ano de assinatura — alimenta o mini-gráfico "Licitações por mês"
-  // (equivalente simplificado ao gráfico de barras do ConLicitação).
-  function calcularPorMes(encontrados) {
-    const meses = {};
-    for (const c of encontrados) {
-      if (!c.dataAssinatura) continue;
-      const d = new Date(c.dataAssinatura);
-      if (isNaN(d)) continue;
-      const chave = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      if (!meses[chave]) meses[chave] = { chave, valor: 0, contratos: 0 };
-      meses[chave].valor += c.valor || 0;
-      meses[chave].contratos += 1;
-    }
-    const nomesMes = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
-    return Object.values(meses)
-      .sort((a, b) => a.chave.localeCompare(b.chave))
-      .slice(-24)
-      .map((m) => {
-        const [ano, mes] = m.chave.split("-");
-        return { ...m, rotulo: `${nomesMes[Number(mes) - 1]}/${ano.slice(2)}`, valorFormatado: formatarValor(m.valor) };
-      });
-  }
-
-  // Ranking de licitações por UF na amostra (equivalente ao bloco "Licitações por região" do ConLicitação).
-  function calcularPorUf(encontrados) {
-    const ufs = {};
-    for (const c of encontrados) {
-      const uf = c.uf || "Não informado";
-      if (!ufs[uf]) ufs[uf] = { uf, valor: 0, contratos: 0 };
-      ufs[uf].valor += c.valor || 0;
-      ufs[uf].contratos += 1;
-    }
-    return Object.values(ufs)
-      .sort((a, b) => b.valor - a.valor)
-      .slice(0, 15)
-      .map((u) => ({ ...u, valorFormatado: formatarValor(u.valor) }));
-  }
-
-  // Breakdown de licitações publicadas por modalidade de contratação (pregão eletrônico,
-  // dispensa, concorrência etc.) — usa a tabela oportunidades_abertas do Supabase, que já é
-  // coletada nacionalmente (todas as UFs) pelo robô com modalidadeNome por registro. Prioriza o valor
-  // homologado (contratação já decidida) e cai pro valor estimado quando ainda não homologou
-  // (licitação em andamento) — assim toda licitação entra com algum valor de referência.
-  function calcularPorModalidade(registros) {
-    const modalidades = {};
-    for (const r of registros) {
-      const nome = r.modalidadeNome || "Não informado";
-      const valor = Number(r.valorTotalHomologado ?? r.valorTotalEstimado ?? 0) || 0;
-      if (!modalidades[nome]) modalidades[nome] = { modalidade: nome, valor: 0, licitacoes: 0 };
-      modalidades[nome].valor += valor;
-      modalidades[nome].licitacoes += 1;
-    }
-    return Object.values(modalidades)
-      .sort((a, b) => b.licitacoes - a.licitacoes)
-      .map((m) => ({ ...m, valorFormatado: formatarValor(m.valor) }));
-  }
-
-  function renderChipsDiagnostico() {
-    const chipsEl = document.getElementById("dg-chips");
-    const d = estado.diagnostico;
-    if (!d) { chipsEl.innerHTML = ""; return; }
-    let html = "";
-    html += `<div class="chip">Segmento: ${escapeHtml(d.palavras.join(", "))}</div>`;
-    if (d.uf) html += `<div class="chip">UF: ${escapeHtml(d.uf)}</div>`;
-    if (d.fornecedorSelecionado) {
-      html += `<div class="chip">Fornecedor: ${escapeHtml(d.fornecedorSelecionado.nome)} <button id="dg-chip-limpar" title="Remover filtro">✕</button></div>`;
-    }
-    if (d.orgaoSelecionado) {
-      html += `<div class="chip">Órgão: ${escapeHtml(d.orgaoSelecionado.nome)} <button id="dg-chip-limpar-orgao" title="Remover filtro">✕</button></div>`;
-    }
-    if (d.mercado && d.mercado.empresaSelecionada) {
-      const emp = d.mercado.empresas.find((e) => e.cnpj === d.mercado.empresaSelecionada.cnpj);
-      html += `<div class="chip">Empresa (mercado): ${escapeHtml(emp ? emp.nome : d.mercado.empresaSelecionada.cnpj)} <button id="dg-chip-limpar-empresa-mercado" title="Remover filtro">✕</button></div>`;
-    }
-    if (d.mercado && d.mercado.marcaSelecionada) {
-      html += `<div class="chip">Marca: ${escapeHtml(d.mercado.marcaSelecionada.marca)} <button id="dg-chip-limpar-marca" title="Remover filtro">✕</button></div>`;
-    }
-    chipsEl.innerHTML = html;
-    const btnLimpar = document.getElementById("dg-chip-limpar");
-    if (btnLimpar) {
-      btnLimpar.addEventListener("click", () => {
-        estado.diagnostico.fornecedorSelecionado = null;
-        document.getElementById("dg-detalhe").innerHTML = "";
-        renderChipsDiagnostico();
-        renderDiagnostico();
-      });
-    }
-    const btnLimparOrgao = document.getElementById("dg-chip-limpar-orgao");
-    if (btnLimparOrgao) {
-      btnLimparOrgao.addEventListener("click", () => {
-        estado.diagnostico.orgaoSelecionado = null;
-        document.getElementById("dg-detalhe").innerHTML = "";
-        renderChipsDiagnostico();
-        renderDiagnostico();
-      });
-    }
-    const btnLimparEmpresaMercado = document.getElementById("dg-chip-limpar-empresa-mercado");
-    if (btnLimparEmpresaMercado) {
-      btnLimparEmpresaMercado.addEventListener("click", () => {
-        estado.diagnostico.mercado.empresaSelecionada = null;
-        document.getElementById("dg-detalhe").innerHTML = "";
-        renderChipsDiagnostico();
-        renderDiagnostico();
-      });
-    }
-    const btnLimparMarca = document.getElementById("dg-chip-limpar-marca");
-    if (btnLimparMarca) {
-      btnLimparMarca.addEventListener("click", () => {
-        estado.diagnostico.mercado.marcaSelecionada = null;
-        document.getElementById("dg-detalhe").innerHTML = "";
-        renderChipsDiagnostico();
-        renderDiagnostico();
-      });
-    }
-  }
-
-  // Um dossiê é uma nova camada de navegação, não conteúdo anexado no fim do ranking.
-  // Assim o usuário investiga órgão, fornecedor, empresa ou marca sem perder o contexto
-  // nem transformar a página do diagnóstico numa esteira de tabelas.
-  function abrirDossieDiagnostico(rotulo, conteudo) {
-    const d = estado.diagnostico;
-    const alvo = document.getElementById("dg-resultado");
-    if (!d || !alvo) return null;
-    alvo.innerHTML = `<div class="hc-trilha"><button type="button" class="hc-voltar" id="dg-voltar-angulo">‹ Voltar para ${escapeHtml({ estados: "Estados", orgaos: "Órgãos", empresas: "Empresas", correspondencias: "Oportunidades", marcas: "Marcas" }[d.anguloAtivo] || "Visão geral")}</button><span>Inteligência de mercado › ${escapeHtml(rotulo)}</span></div><section class="hc-painel-exploracao"><div id="dg-detalhe">${conteudo}</div></section>`;
-    alvo.querySelector("#dg-voltar-angulo")?.addEventListener("click", () => {
-      renderDiagnostico();
-      alvo.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-    alvo.scrollIntoView({ behavior: "smooth", block: "start" });
-    return alvo.querySelector("#dg-detalhe");
-  }
-
-  async function renderDetalheFornecedor(cnpj) {
-    const d = estado.diagnostico;
-    const registros = d.encontrados.filter((c) => (c.cnpjFornecedor || "sem-cnpj") === cnpj);
-    const fornecedor = d.concorrentes.find((f) => f.cnpj === cnpj);
-    d.fornecedorSelecionado = fornecedor || { cnpj, nome: cnpj };
-    renderChipsDiagnostico();
-
-    let html = `<h2>Contratos individuais — ${escapeHtml(d.fornecedorSelecionado.nome)}</h2>`;
-    html += `<div id="dg-ficha-cnpj" class="ficha-rapida-cnpj"><div class="carregando">Consultando dados cadastrais do CNPJ...</div></div>`;
-    html += `<p><a class="link-pncp" href="#" id="dg-ir-empresa">→ Cruzar histórico completo por segmento na aba Analisar Empresa</a></p>`;
-    html += "<table><tr><th>Objeto</th><th>Órgão</th><th>UF</th><th>Valor</th><th>Data</th><th>PNCP</th></tr>";
-    for (const r of registros) {
-      const valor = formatarValor(r.valor);
-      const link = linkPncpContrato(r.numeroControlePNCP);
-      html += `<tr>
-        <td>${escapeHtml(r.objeto || "-")}</td>
-        <td>${escapeHtml(r.orgao || "-")}</td>
-        <td>${escapeHtml(r.uf || "-")}</td>
-        <td>${escapeHtml(valor)}</td>
-        <td>${escapeHtml(String(r.dataAssinatura || "-"))}</td>
-        <td>${link ? `<a class="link-pncp" href="${escapeHtml(link)}" target="_blank" rel="noopener">Ver no PNCP <svg class='icone-ph'><use href='#ph-arrow-square-out'></use></svg></a>` : "-"}</td>
-      </tr>`;
-    }
-    html += "</table>";
-    abrirDossieDiagnostico(`Fornecedor: ${d.fornecedorSelecionado.nome}`, html);
-
-    const irEmpresa = document.getElementById("dg-ir-empresa");
-    if (irEmpresa) {
-      irEmpresa.addEventListener("click", (ev) => {
-        ev.preventDefault();
-        document.querySelector('nav button[data-alvo="empresa"]').click();
-        document.getElementById("emp-cnpj").value = cnpj;
-      });
-    }
-
-    // Busca a ficha cadastral completa (CNPJ válido de 14 dígitos, sem o placeholder "sem-cnpj")
-    const alvoFicha = document.getElementById("dg-ficha-cnpj");
-    if (!alvoFicha) return;
-    if (!cnpj || soDigitos(cnpj).length !== 14) {
-      alvoFicha.innerHTML = "";
-      return;
-    }
-    try {
-      const resp = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${soDigitos(cnpj)}`);
-      if (!resp.ok) {
-        alvoFicha.innerHTML = '<div class="aviso">Não foi possível obter os dados cadastrais desse CNPJ agora.</div>';
-        return;
-      }
-      const ficha = await resp.json();
-      alvoFicha.innerHTML = montarFichaCadastral(ficha) + '<div class="ficha-secao" id="dg-sancoes-secao"><h4>Sanções</h4><p class="carregando">Consultando sanções (CEIS/CNEP)...</p></div>';
-      const sancoes = await carregarSancoes(soDigitos(cnpj));
-      const painelSancoes = document.getElementById("dg-sancoes-secao");
-      if (painelSancoes) painelSancoes.innerHTML = "<h4>Sanções</h4>" + montarHtmlSancoes(sancoes);
-    } catch (e) {
-      alvoFicha.innerHTML = '<div class="aviso">Erro ao consultar dados cadastrais deste CNPJ.</div>';
-    }
-  }
-
-  function renderDetalheOrgao(nomeOrgao) {
-    const d = estado.diagnostico;
-    const registros = d.encontrados.filter((c) => (c.orgao || "Órgão não informado") === nomeOrgao);
-    d.orgaoSelecionado = { nome: nomeOrgao };
-    renderChipsDiagnostico();
-
-    let html = `<h2>Contratos deste órgão — ${escapeHtml(nomeOrgao)}</h2>`;
-    html += "<table><tr><th>Objeto</th><th>Fornecedor</th><th>UF</th><th>Valor</th><th>Data</th><th>PNCP</th></tr>";
-    for (const r of registros) {
-      const valor = formatarValor(r.valor);
-      const link = linkPncpContrato(r.numeroControlePNCP);
-      const cnpjForn = r.cnpjFornecedor || "sem-cnpj";
-      html += `<tr>
-        <td>${escapeHtml(r.objeto || "-")}</td>
-        <td><a href="#" class="link-pncp fornecedor-clicavel" data-cnpj="${escapeHtml(cnpjForn)}">${escapeHtml(r.nomeFornecedor || cnpjForn)} <svg class='icone-ph'><use href='#ph-arrow-square-out'></use></svg></a></td>
-        <td>${escapeHtml(r.uf || "-")}</td>
-        <td>${escapeHtml(valor)}</td>
-        <td>${escapeHtml(String(r.dataAssinatura || "-"))}</td>
-        <td>${link ? `<a class="link-pncp" href="${escapeHtml(link)}" target="_blank" rel="noopener">Ver no PNCP <svg class='icone-ph'><use href='#ph-arrow-square-out'></use></svg></a>` : "-"}</td>
-      </tr>`;
-    }
-    html += "</table>";
-    html += '<div class="dica-clique">Clique no nome do fornecedor para ver os contratos dele que estão na base e a ficha cadastral.</div>';
-    const alvoDetalhe = abrirDossieDiagnostico(`Órgão: ${nomeOrgao}`, html);
-    if (!alvoDetalhe) return;
-
-    alvoDetalhe.querySelectorAll(".fornecedor-clicavel").forEach((a) => {
-      a.addEventListener("click", (ev) => {
-        ev.preventDefault();
-        renderDetalheFornecedor(a.dataset.cnpj);
-      });
-    });
-  }
-
-  // Detalha uma empresa do painel "Empresas atuantes no mercado" (atas de registro de
-  // preço): mostra separadamente os contratos/atas ainda vigentes e os já encerrados, com
-  // os itens que ela ganhou em cada um — é a visão "quais licitações essa empresa já
-  // ganhou nesse segmento, quais valem hoje e quais não valem mais" que o cliente pediu.
-  function renderDetalheEmpresaMercado(cnpj) {
-    const d = estado.diagnostico;
-    const m = d.mercado;
-    const empresa = m.empresas.find((e) => e.cnpj === cnpj);
-    if (!empresa) return;
-    m.empresaSelecionada = { cnpj };
-    renderChipsDiagnostico();
-
-    const linhaAta = (a) => `<tr>
-      <td>${escapeHtml(a.objeto || "-")}</td>
-      <td>${escapeHtml(a.item || "-")}</td>
-      <td>${escapeHtml(a.orgao || "-")}</td>
-      <td>${escapeHtml(a.uf || "-")}${a.municipio ? " / " + escapeHtml(a.municipio) : ""}</td>
-      <td>${escapeHtml(formatarValor(a.valorTotal))}</td>
-      <td>${escapeHtml(String(a.vigenciaInicio || "-"))} a ${escapeHtml(String(a.vigenciaFim || "-"))}${a.cancelado ? " (cancelada)" : ""}</td>
-    </tr>`;
-
-    let html = `<h2>${escapeHtml(empresa.nome)} <span class="cnpj">(${escapeHtml(empresa.cnpj)})</span></h2>`;
-    html += `<div class="cartoes">
-      <div class="cartao"><h3>Valor total histórico (segmento)</h3><div class="valor">${escapeHtml(formatarValor(empresa.valorTotalHistorico))}</div></div>
-      <div class="cartao"><h3>Valor em atas vigentes hoje</h3><div class="valor">${escapeHtml(formatarValor(empresa.valorTotalVigente))}</div></div>
-      <div class="cartao"><h3>Itens ganhos</h3><div class="valor">${empresa.itensGanhos}</div></div>
-      <div class="cartao"><h3>UFs onde atua</h3><div class="valor" style="font-size:16px;">${escapeHtml(empresa.ufs.join(", ") || "-")}</div></div>
-    </div>`;
-
-    html += `<h3>Contratos/atas vigentes hoje (${empresa.atasVigentes.length})</h3>`;
-    if (empresa.atasVigentes.length === 0) {
-      html += "<p>Nenhuma ata vigente encontrada pra essa empresa nesse segmento na amostra coletada.</p>";
-    } else {
-      html += "<table><tr><th>Objeto</th><th>Item</th><th>Órgão</th><th>UF/Município</th><th>Valor</th><th>Vigência</th></tr>";
-      for (const a of empresa.atasVigentes) html += linhaAta(a);
-      html += "</table>";
-    }
-
-    html += `<h3>Contratos/atas encerrados ou cancelados (${empresa.atasEncerradas.length})</h3>`;
-    if (empresa.atasEncerradas.length === 0) {
-      html += "<p>Nenhum histórico encerrado encontrado pra essa empresa nesse segmento na amostra coletada.</p>";
-    } else {
-      html += "<table><tr><th>Objeto</th><th>Item</th><th>Órgão</th><th>UF/Município</th><th>Valor</th><th>Vigência</th></tr>";
-      for (const a of empresa.atasEncerradas) html += linhaAta(a);
-      html += "</table>";
-    }
-
-    html += '<div class="dica-clique">Esses dados vêm das atas de registro de preço vinculadas a esse CNPJ nos segmentos monitorados. Use a aba "Analisar Empresa" pra ver também os contratos assinados diretamente (fora de ata) desse CNPJ.</div>';
-
-    abrirDossieDiagnostico(`Empresa: ${empresa.nome}`, html);
-  }
-
-  // Detalha uma marca de produto (mesmo padrão de renderDetalheEmpresaMercado, agrupado
-  // por marca em vez de por CNPJ) — mostra quem fabrica/vende essa marca e em quais atas.
-  function renderDetalheMarca(marca) {
-    const d = estado.diagnostico;
-    const m = d.mercado;
-    const marcaObj = m.marcas.find((x) => x.marca === marca);
-    if (!marcaObj) return;
-    m.marcaSelecionada = { marca };
-    renderChipsDiagnostico();
-
-    const linhaAta = (a) => `<tr>
-      <td>${escapeHtml(a.objeto || "-")}</td>
-      <td>${escapeHtml(a.item || "-")}</td>
-      <td>${escapeHtml(a.fornecedor || "-")}</td>
-      <td>${escapeHtml(a.orgao || "-")}</td>
-      <td>${escapeHtml(a.uf || "-")}${a.municipio ? " / " + escapeHtml(a.municipio) : ""}</td>
-      <td>${escapeHtml(formatarValor(a.valorTotal))}</td>
-    </tr>`;
-
-    let html = `<h2>Marca: ${escapeHtml(marcaObj.marca)}</h2>`;
-    html += `<div class="cartoes">
-      <div class="cartao"><h3>Valor total histórico (segmento)</h3><div class="valor">${escapeHtml(formatarValor(marcaObj.valorTotalHistorico))}</div></div>
-      <div class="cartao"><h3>Valor em atas vigentes hoje</h3><div class="valor">${escapeHtml(formatarValor(marcaObj.valorTotalVigente))}</div></div>
-      <div class="cartao"><h3>Itens ganhos</h3><div class="valor">${marcaObj.itensGanhos}</div></div>
-      <div class="cartao"><h3>Fornecedores que vendem essa marca</h3><div class="valor" style="font-size:16px;">${escapeHtml(marcaObj.fornecedores.join(", ") || "-")}</div></div>
-    </div>`;
-
-    html += `<h3>Contratos/atas vigentes hoje (${marcaObj.atasVigentes.length})</h3>`;
-    if (marcaObj.atasVigentes.length === 0) {
-      html += "<p>Nenhuma ata vigente encontrada pra essa marca nesse segmento na amostra coletada.</p>";
-    } else {
-      html += "<table><tr><th>Objeto</th><th>Item</th><th>Fornecedor</th><th>Órgão</th><th>UF/Município</th><th>Valor</th></tr>";
-      for (const a of marcaObj.atasVigentes) html += linhaAta(a);
-      html += "</table>";
-    }
-
-    html += `<h3>Contratos/atas encerrados ou cancelados (${marcaObj.atasEncerradas.length})</h3>`;
-    if (marcaObj.atasEncerradas.length === 0) {
-      html += "<p>Nenhum histórico encerrado encontrado pra essa marca nesse segmento na amostra coletada.</p>";
-    } else {
-      html += "<table><tr><th>Objeto</th><th>Item</th><th>Fornecedor</th><th>Órgão</th><th>UF/Município</th><th>Valor</th></tr>";
-      for (const a of marcaObj.atasEncerradas) html += linhaAta(a);
-      html += "</table>";
-    }
-
-    html += '<div class="dica-clique">Marca só aparece quando o robô consegue casar o item com a API pública de Pesquisa de Preço do Compras.gov.br — cobertura parcial (só órgãos federais/distritais com item catalogado cujo fornecedor informou marca).</div>';
-
-    abrirDossieDiagnostico(`Marca: ${marcaObj.marca}`, html);
-  }
-
-  // ---------- Mapa de concentração por UF (Visão Geral) ----------
-  // Carrega o desenho do mapa do Brasil (paths por estado) via CDN só na primeira vez que
-  // precisar — pacote leve e estático (@svg-maps/brazil), sem depender de D3/topojson.
-  // Se o CDN falhar (rede instável), a seção do mapa simplesmente não aparece; o resto do
-  // diagnóstico (tabela por UF etc.) continua funcionando normalmente.
-  let _mapaBrasilCache = null;
-  async function carregarMapaBrasil() {
-    if (_mapaBrasilCache) return _mapaBrasilCache;
-    try {
-      const mod = await import("https://cdn.jsdelivr.net/npm/@svg-maps/brazil@2.0.0/index.js");
-      _mapaBrasilCache = mod.default;
-    } catch (e) {
-      console.error("[mapa-uf] falha ao carregar mapa do Brasil:", e);
-      _mapaBrasilCache = null;
-    }
-    return _mapaBrasilCache;
-  }
-
-  async function renderMapaUf(porUf) {
-    const alvo = document.getElementById("dg-mapa-uf");
-    if (!alvo) return;
-    const mapa = await carregarMapaBrasil();
-    if (!mapa || !Array.isArray(mapa.locations)) { alvo.innerHTML = ""; return; }
-    const valores = {};
-    let max = 1;
-    for (const u of (porUf || [])) {
-      const sigla = (u.uf || "").toLowerCase();
-      valores[sigla] = u.valor || 0;
-      if (u.valor > max) max = u.valor;
-    }
-    const paths = mapa.locations.map((loc) => {
-      const v = valores[loc.id] || 0;
-      const intensidade = v > 0 ? Math.max(0.15, v / max) : 0;
-      const preenchimento = v > 0 ? `rgba(46,141,255,${intensidade.toFixed(2)})` : "var(--fundo-fraco)";
-      const sigla = loc.id.toUpperCase();
-      const rotulo = v > 0 ? `${loc.name} (${sigla}): ${formatarValor(v)}` : `${loc.name} (${sigla}): sem dado nesse filtro`;
-      return `<path d="${loc.path}" data-uf="${escapeHtml(sigla)}" fill="${preenchimento}" stroke="var(--borda)" stroke-width="1" class="mapa-uf-estado"><title>${escapeHtml(rotulo)}</title></path>`;
-    }).join("");
-    alvo.innerHTML = `<svg viewBox="${escapeHtml(mapa.viewBox)}" class="mapa-uf-svg" role="img" aria-label="Mapa do Brasil colorido pela concentração de mercado por estado">${paths}</svg>`;
-    alvo.querySelectorAll(".mapa-uf-estado").forEach((el) => {
-      el.addEventListener("click", () => {
-        const uf = el.dataset.uf;
-        const sel = document.getElementById("dg-uf");
-        if (sel) sel.value = uf;
-        const btn = document.getElementById("dg-buscar");
-        if (btn) btn.click();
-      });
-    });
-  }
-
-  // ---------- Baixa Concorrência (sub-aba da Inteligência de Mercado) ----------
-  // Reaproveita exatamente as mesmas atas já carregadas pela Visão Geral (mesmo
-  // segmento/UF/período) — não faz nova consulta ao Supabase nem ao PNCP. Dois sinais,
-  // do mais forte pro mais fraco: (1) item com situação Deserta/Fracassada/Anulada/
-  // Revogada no PNCP = ninguém venceu, sinal direto de baixa disputa (só passa a
-  // aparecer pra atas processadas depois da mudança no robô que passou a guardar isso —
-  // cobertura cresce aos poucos); (2) item com só 1 empresa vencedora entre as já
-  // coletadas = sinal mais fraco, porque o PNCP não expõe quantas empresas participaram
-  // e perderam, só quem venceu.
-  const SITUACOES_SEM_VENCEDOR_TERMOS_CLIENTE = ["Deserto", "Fracassado", "Anulado", "Revogado", "Cancelado"];
-  // Mesmo bug/correção do robô (scripts/atualizar_dados.js): o PNCP pode devolver a situação
-  // como valor único combinado (ex: "Anulado/Revogado/Cancelado") em vez de um termo isolado —
-  // comparação exata com Set.has() perdia esses casos. Checagem por substring resolve.
-  function situacaoSemVencedorCliente(situacao) {
-    if (!situacao) return false;
-    return SITUACOES_SEM_VENCEDOR_TERMOS_CLIENTE.some((termo) => situacao.includes(termo));
-  }
-
-  function calcularBaixaConcorrencia(atasFiltradas) {
-    const linhas = [];
-    for (const ata of (atasFiltradas || [])) {
-      if (!ata.enriquecida || !Array.isArray(ata.itens)) continue;
-      for (const item of ata.itens) {
-        const vencedores = item.vencedores || [];
-        const semVencedor = vencedores.length === 0 && situacaoSemVencedorCliente(item.situacao);
-        const vencedorUnico = vencedores.length === 1;
-        if (!semVencedor && !vencedorUnico) continue;
-        linhas.push({
-          ata, item,
-          tipo: semVencedor ? "deserto-fracassado" : "vencedor-unico",
-          situacao: item.situacao || (vencedorUnico ? "1 empresa venceu" : "-"),
-        });
-      }
-    }
-    return linhas;
-  }
-
-  // Guarda a lista completa (não só os 200 primeiros renderizados) por tipo, pra
-  // renderDetalheBaixaConcorrencia conseguir achar a linha clicada pelo índice.
-  let _bcLinhasAtual = {};
-
-  function montarTabelaBaixaConcorrencia(linhas, tipo) {
-    // Marca do produto: só existe quando o robô conseguiu casar o item com a API pública de
-    // Pesquisa de Preço do Compras.gov.br (só cobre itens de órgãos federais/distritais com
-    // código de catálogo — cobertura parcial, cresce aos poucos conforme o robô reprocessa).
-    let html = "<table><tr><th>Objeto do item</th><th>Marca</th><th>Ata / órgão</th><th>UF/Município</th><th>Situação</th></tr>";
-    linhas.slice(0, 200).forEach((l, idx) => {
-      const vencedor = (l.item.vencedores || [])[0];
-      const marca = vencedor && vencedor.marca ? vencedor.marca : "Não identificada na fonte";
-      html += `<tr class="linha-clicavel" data-bc-tipo="${escapeHtml(tipo)}" data-bc-idx="${idx}">
-        <td>${escapeHtml(l.item.descricao || "-")}</td>
-        <td>${escapeHtml(marca)}</td>
-        <td>${escapeHtml(l.ata.objeto || "-")}<br><small>${escapeHtml(l.ata.orgao || "-")}</small></td>
-        <td>${escapeHtml(l.ata.ufOrgao || "-")}${l.ata.municipioOrgao ? " / " + escapeHtml(l.ata.municipioOrgao) : ""}</td>
-        <td>${escapeHtml(l.situacao || "-")}</td>
-      </tr>`;
-    });
-    html += "</table>";
-    if (linhas.length > 200) html += `<p class="dica-clique">Mostrando os primeiros 200 de ${linhas.length.toLocaleString("pt-BR")} encontrados.</p>`;
-    return html;
-  }
-
-  // Detalha uma linha de baixa concorrência: descrição completa do item, situação, dados
-  // da ata/órgão, link pro edital no PNCP e, quando houver, o vencedor único (nome, CNPJ,
-  // marca, valores). Sem vencedor, explica que a ausência já É o próprio sinal.
-  function renderDetalheBaixaConcorrencia(tipo, idx) {
-    const l = (_bcLinhasAtual[tipo] || [])[idx];
-    if (!l) return;
-    const vencedor = (l.item.vencedores || [])[0];
-    const link = linkPncp(l.ata.numeroControlePNCPCompra);
-    let html = `<div class="dg-topo-acoes"><button type="button" class="btn-imprimir" id="bc-voltar-resultados">← Voltar aos sinais encontrados</button><span></span></div>
-      <h2>Detalhe do item</h2><dl>
-      <div><dt>Item</dt><dd>${escapeHtml(l.item.descricao || "-")}</dd></div>
-      <div><dt>Situação</dt><dd>${escapeHtml(l.situacao || "-")}</dd></div>
-      <div><dt>Objeto da licitação/ata</dt><dd>${escapeHtml(l.ata.objeto || "-")}</dd></div>
-      <div><dt>Órgão</dt><dd>${escapeHtml(l.ata.orgao || "-")}</dd></div>
-      <div><dt>UF/Município</dt><dd>${escapeHtml(l.ata.ufOrgao || "-")}${l.ata.municipioOrgao ? " / " + escapeHtml(l.ata.municipioOrgao) : ""}</dd></div>
-      <div><dt>Vigência da ata</dt><dd>${escapeHtml(String(l.ata.vigenciaInicio || "-"))} a ${escapeHtml(String(l.ata.vigenciaFim || "-"))}${l.ata.cancelado ? " (cancelada)" : ""}</dd></div>
-      <div><dt>Nº controle PNCP</dt><dd>${escapeHtml(l.ata.numeroControlePNCPCompra || l.ata.numeroControlePNCPAta || "-")}</dd></div>
-      <div><dt>Link</dt><dd>${link ? `<a class="link-pncp" href="${escapeHtml(link)}" target="_blank" rel="noopener">Abrir edital no PNCP <svg class='icone-ph'><use href='#ph-arrow-square-out'></use></svg></a>` : "-"}</dd></div>
-    </dl>`;
-    if (vencedor) {
-      html += `<h3>Vencedor único</h3><dl>
-        <div><dt>Fornecedor</dt><dd>${escapeHtml(vencedor.nome || "-")}</dd></div>
-        <div><dt>CNPJ</dt><dd>${escapeHtml(vencedor.cnpj || "-")}</dd></div>
-        <div><dt>Marca</dt><dd>${escapeHtml(vencedor.marca || "-")}</dd></div>
-        <div><dt>Valor unitário</dt><dd>${escapeHtml(formatarValor(vencedor.valorUnitario))}</dd></div>
-        <div><dt>Valor total</dt><dd>${escapeHtml(formatarValor(vencedor.valorTotal))}</dd></div>
-        <div><dt>Quantidade</dt><dd>${escapeHtml(String(vencedor.quantidade || "-"))}</dd></div>
-      </dl>`;
-    } else {
-      html += '<div class="aviso">Nenhuma empresa venceu esse item (deserto/fracassado/anulado/revogado/cancelado) — a própria ausência de vencedor já é o sinal de baixa concorrência.</div>';
-    }
-    // Todo sinal precisa ser auditável. Explicita de onde cada campo veio para que o
-    // licitante consiga decidir, conferir no portal oficial e não trate inferência como fato.
-    html += `<h3>Origem e rastreabilidade</h3><dl>
-      <div><dt>Fonte do processo</dt><dd>PNCP — Portal Nacional de Contratações Públicas</dd></div>
-      <div><dt>Registro analisado</dt><dd>Ata de registro de preços vinculada à compra acima</dd></div>
-      <div><dt>Sinal de concorrência</dt><dd>${escapeHtml(l.tipo === "deserto-fracassado" ? "Situação sem vencedor registrada no PNCP" : "Um único vencedor identificado na ata coletada")}</dd></div>
-      <div><dt>Procedência da marca</dt><dd>${escapeHtml(vencedor && vencedor.marca ? "Resultado do item; cobertura depende de enriquecimento com Compras.gov.br quando disponível" : "Marca não identificada na fonte para este item")}</dd></div>
-    </dl>`;
-    if (vencedor && vencedor.cnpj) {
-      html += `<p style="margin:16px 0 0;"><button type="button" class="btn-buscar" id="bc-analisar-fornecedor">Analisar fornecedor e histórico <svg class='icone-ph'><use href='#ph-arrow-right'></use></svg></button></p>`;
-    }
-    // Troca a lista pelo detalhe focado. O padrão evita a tela longa e confusa que
-    // ocorria ao anexar a ficha inteira abaixo de duas tabelas extensas.
-    const alvo = document.getElementById("dg-baixa-concorrencia-resultado");
-    if (!alvo) return;
-    alvo.innerHTML = html;
-    alvo.querySelector("#bc-voltar-resultados").addEventListener("click", renderBaixaConcorrencia);
-    const btnFornecedor = alvo.querySelector("#bc-analisar-fornecedor");
-    if (btnFornecedor) {
-      btnFornecedor.addEventListener("click", () => {
-        // Leva o usuário com o CNPJ já preenchido ao dossiê completo, evitando uma nova
-        // busca manual e mantendo o encadeamento item → fornecedor → contratos.
-        document.querySelector('nav button[data-alvo="empresa"]').click();
-        document.getElementById("emp-cnpj").value = vencedor.cnpj;
-        document.getElementById("emp-segmento").value = l.item.descricao || "";
-        document.getElementById("emp-buscar").click();
-      });
-    }
-    alvo.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
-
-  function renderBaixaConcorrencia() {
-    const alvo = document.getElementById("dg-baixa-concorrencia-resultado");
-    if (!alvo) return;
-    const alvoDetalhe = document.getElementById("dg-baixa-concorrencia-detalhe");
-    if (alvoDetalhe) alvoDetalhe.innerHTML = "";
-    const d = estado.diagnostico;
-    if (!d || !d.mercado || !Array.isArray(d.mercado.atas)) {
-      alvo.innerHTML = '<div class="aviso">Gere um diagnóstico na aba <strong>Visão Geral</strong> primeiro (mesmo segmento/UF/período) — esta aba reaproveita os mesmos dados, sem nova consulta.</div>';
-      return;
-    }
-    // Abas Desertos / 1 / 2 / 3 licitantes (baixa-concorrencia.js): histórico de pregões; só relê quando as palavras mudam.
-    const bcLicitantes = document.getElementById("dg-bc-licitantes");
-    const chaveBc = (d.palavras || []).join("|");
-    if (bcLicitantes && window.BaixaConcorrencia && bcLicitantes.dataset.palavras !== chaveBc) {
-      bcLicitantes.dataset.palavras = chaveBc;
-      window.BaixaConcorrencia.montar({ alvo: bcLicitantes, cliente: window.__sbClient, palavras: d.palavras || [] });
-    }
-    const linhas = calcularBaixaConcorrencia(d.mercado.atas);
-    if (linhas.length === 0) {
-      alvo.innerHTML = '<div class="aviso">Nenhum sinal de baixa concorrência encontrado ainda nesse segmento/UF/período. A cobertura cresce conforme o robô reprocessa mais atas — tente um período maior ou volte em alguns dias.</div>';
-      return;
-    }
-    const desertos = linhas.filter((l) => l.tipo === "deserto-fracassado");
-    const unicos = linhas.filter((l) => l.tipo === "vencedor-unico");
-    const vencedoresUnicosComMarca = unicos.filter((l) => (l.item.vencedores || [])[0]?.marca).length;
-    _bcLinhasAtual = { "deserto-fracassado": desertos, "vencedor-unico": unicos };
-    let html = '<div class="aviso" style="border-color:var(--aviso-neutro-borda);color:var(--aviso-neutro-texto);">Baseado nos mesmos filtros da Visão Geral. "Deserto/Fracassado" é o sinal mais forte (ninguém venceu o item); "vencedor único" é mais fraco (só uma empresa venceu — o PNCP não expõe quantas participaram e perderam).</div>';
-    if (unicos.length > 0) {
-      html += `<p class="dica-clique" style="margin:10px 0 16px;">Marcas identificadas: <strong>${vencedoresUnicosComMarca}</strong> de ${unicos.length} itens com vencedor único. A marca vem do Compras.gov.br quando o item possui catálogo, UASG e fornecedor identificáveis; os demais continuam explicitamente marcados como indisponíveis.</p>`;
-    }
-    if (desertos.length > 0) {
-      html += `<h2>Itens desertos ou fracassados (${desertos.length}) — ninguém venceu</h2>`;
-      html += montarTabelaBaixaConcorrencia(desertos, "deserto-fracassado");
-    }
-    if (unicos.length > 0) {
-      html += `<h2>Itens com vencedor único (${unicos.length}) — só uma empresa venceu</h2>`;
-      html += montarTabelaBaixaConcorrencia(unicos, "vencedor-unico");
-    }
-    alvo.innerHTML = html;
-    alvo.querySelectorAll("tr.linha-clicavel[data-bc-tipo]").forEach((tr) => {
-      tr.addEventListener("click", () => {
-        renderDetalheBaixaConcorrencia(tr.dataset.bcTipo, Number(tr.dataset.bcIdx));
-      });
-    });
-  }
-
-  // Prospecção reaproveita a mesma evidência do diagnóstico, sem alegar contato
-  // ou capacidade comercial que a fonte não comprovou: são fornecedores que já
-  // venceram contratos no segmento/recorte escolhido. O próximo clique sempre
-  // leva ao dossiê completo do CNPJ, em vez de abrir mais dados na mesma tela.
-  function renderProspeccaoFornecedores() {
-    const alvo = document.getElementById("dg-prospeccao-resultado");
-    if (!alvo) return;
-    const d = estado.diagnostico;
-    if (!d || !Array.isArray(d.concorrentes)) {
-      alvo.innerHTML = '<div class="aviso">Gere um diagnóstico de mercado primeiro. A prospecção usará o mesmo segmento, período e UF para não misturar mercados diferentes.</div>';
-      return;
-    }
-    const fornecedores = d.concorrentes.filter((f) => f.cnpj && f.cnpj !== "sem-cnpj");
-    if (fornecedores.length === 0) {
-      alvo.innerHTML = `<div class="aviso">Ainda não há fornecedores identificados para "${escapeHtml(d.palavras.join(", "))}"${d.uf ? " em " + escapeHtml(d.uf) : ""} no período selecionado. Refine o termo ou amplie o período para buscar mais evidências.</div>`;
-      return;
-    }
-    alvo.innerHTML = `<div class="boletim-cabecalho"><div><h2 style="margin:0;">Fornecedores já vencedores</h2><p class="dica-clique" style="margin:4px 0 0;">${fornecedores.length} empresa(s) encontrada(s) em contratos de "${escapeHtml(d.palavras.join(", "))}"${d.uf ? " no recorte " + escapeHtml(d.uf) : ""}. Abra o dossiê antes de qualquer abordagem.</p></div></div>
-      <div class="caixa-interna"><table><thead><tr><th>Fornecedor</th><th>Contratos</th><th>Valor contratado</th><th>Atuação</th><th></th></tr></thead><tbody>${fornecedores.map((f, i) => `<tr><td><strong>${escapeHtml(f.nome)}</strong><br><small>${escapeHtml(f.cnpj)}</small></td><td>${Number(f.contratos || 0).toLocaleString("pt-BR")}</td><td>${escapeHtml(f.valorFormatado || formatarValor(f.valor || 0))}</td><td>${escapeHtml((f.ufs || []).join(", ") || "Não informada")}</td><td><button type="button" class="btn-filtro-rapido dg-prospeccao-dossie" data-fornecedor="${i}">Abrir dossiê</button></td></tr>`).join("")}</tbody></table></div>
-      <p class="dica-clique">Fonte: contratos assinados coletados do PNCP. O dossiê mostra histórico e cruzamentos antes de qualquer decisão comercial.</p>`;
-    alvo.querySelectorAll(".dg-prospeccao-dossie").forEach((btn) => btn.addEventListener("click", () => {
-      const fornecedor = fornecedores[Number(btn.dataset.fornecedor)];
-      if (!fornecedor) return;
-      document.querySelector('nav button[data-alvo="empresa"]').click();
-      document.getElementById("emp-cnpj").value = fornecedor.cnpj;
-      document.getElementById("emp-segmento").value = d.palavras.join(", ");
-      document.getElementById("emp-buscar").click();
-    }));
-  }
-
-  function renderDiagnostico() {
-    const d = estado.diagnostico;
-    const alvo = document.getElementById("dg-resultado");
-    if (!d) { alvo.innerHTML = ""; return; }
-    const anguloAtivo = d.anguloAtivo || null;
-
-    let html = "";
-
-    if (d.fonte && d.fonte.tipo === "cache") {
-      html += `<div class="aviso" style="border-color:var(--aviso-neutro-borda);color:var(--aviso-neutro-texto);">Dados atualizados automaticamente em ${escapeHtml(new Date(d.fonte.atualizadoEm).toLocaleString("pt-BR"))} (robô coleta todo dia, últimos ${d.fonte.diasHistoricoCache} dias). A consulta usa essa base já coletada, sem esperar o PNCP responder.</div>`;
-    }
-
-    if (d.amostra && d.amostra.falhaConexao) {
-      // Mensagem varia conforme a fonte: quando vem do cache (Supabase), a falha é na
-      // NOSSA consulta ao banco, não no PNCP público — culpar o PNCP aqui era enganoso e
-      // batia de frente com o aviso de "resposta instantânea, sem depender do PNCP ao
-      // vivo" exibido logo acima. Já tentamos de novo automaticamente uma vez antes de
-      // chegar até aqui (ver consultarContratosSupabase); se ainda assim falhou, é
-      // instabilidade pontual da nossa própria consulta.
-      if (d.fonte && d.fonte.tipo === "cache") {
-        html += '<div class="aviso"><strong>Não conseguimos consultar todos os dados agora</strong> (instabilidade pontual na nossa base). Os números abaixo podem estar zerados ou incompletos por causa disso — não significa necessariamente que não há mercado. Tente gerar o diagnóstico de novo em alguns instantes.</div>';
-      } else {
-        html += '<div class="aviso"><strong>A API pública do PNCP não respondeu direito nesta consulta</strong> (está lenta ou instável no momento). Os números abaixo podem estar zerados ou incompletos por causa disso — não significa necessariamente que não há mercado. Tente gerar o diagnóstico de novo em alguns instantes.</div>';
-      }
-    } else if (d.amostra && d.amostra.parcial && d.fonte && d.fonte.tipo === "cache") {
-      html += `<div class="aviso">Coleta diária incompleta: o robô conseguiu varrer apenas ${d.amostra.paginasVarridas} de ${d.amostra.totalPaginasDisponiveis} página(s) disponíveis nesta última execução (o PNCP ficou instável/fora do ar durante parte da coleta). Isso está sendo repetido automaticamente todo dia — os números abaixo tendem a ficar mais completos nas próximas atualizações.</div>`;
-    } else if (d.amostra && d.amostra.parcial) {
-      html += `<div class="aviso">Amostra parcial: o navegador escaneou ${d.amostra.paginasVarridas} de ${d.amostra.totalPaginasDisponiveis} páginas disponíveis no período, dentro do limite de tempo (45s) para não travar a página. Para um histórico mais completo, use a versão desktop ou reduza o período.</div>`;
-    }
-
-    if (d.amostra && d.amostra.consultaTruncada) {
-      html += `<div class="aviso">Amostra grande demais pra esse filtro: mostrando os ${d.amostra.totalRetornado.toLocaleString("pt-BR")} contratos mais recentes de um total de ${d.amostra.totalCorrespondente.toLocaleString("pt-BR")} que batem com essa busca no período. Os rankings e a série mensal abaixo refletem só essa amostra recente — reduza o período ou refine as palavras-chave pra ver o quadro completo.</div>`;
-    }
-
-    if (d.amostra && d.amostra.ufOportunidadesFalhouHoje) {
-      html += `<div class="aviso">A coleta de oportunidades abertas para ${escapeHtml(d.uf || "")} falhou na última execução do robô (o PNCP não respondeu para esse estado). Ela será tentada novamente na próxima atualização diária.</div>`;
-    }
-    if (d.amostra && d.amostra.limiteOportunidadesAtingido) {
-      html += `<div class="aviso">Consulta à base salva limitada a ${LIMITE_OPORTUNIDADES_SUPABASE.toLocaleString("pt-BR")} registros. Algumas oportunidades podem não aparecer.</div>`;
-    }
-
-    let totalNacional = 0, totalRegional = 0;
-    for (const c of (d.encontradosNacional || d.encontrados)) {
-      totalNacional += c.valor || 0;
-    }
-    for (const c of d.encontrados) {
-      if (d.uf) totalRegional += c.valor || 0;
-    }
-
-    html += `<div class="caixa-interna">
-      <div class="cartoes" style="margin-bottom:0;">
-        <div class="cartao"><h3>Mercado nacional (amostra, ${escapeHtml(String(d.periodo.dias))} dia(s))</h3><div class="valor" title="${escapeHtml(formatarValor(totalNacional))}">${escapeHtml(formatarValorCompacto(totalNacional))}</div></div>
-        ${d.uf ? `<div class="cartao"><h3>Mercado em ${escapeHtml(d.uf)}</h3><div class="valor" title="${escapeHtml(formatarValor(totalRegional))}">${escapeHtml(formatarValorCompacto(totalRegional))}</div></div>` : ""}
-        <div class="cartao"><h3>Concorrentes identificados</h3><div class="valor">${d.concorrentes.length}</div></div>
-        <div class="cartao"><h3>Oportunidades abertas agora</h3><div class="valor">${d.oportunidadesAbertas.length}</div></div>
-        ${d.mercado && d.mercado.empresas.length > 0 ? `<div class="cartao"><h3>Empresas com ata vigente no segmento${d.uf ? " (" + escapeHtml(d.uf) + ")" : ""}</h3><div class="valor">${d.mercado.empresas.filter((e) => e.atasVigentes.length > 0).length}</div></div>` : ""}
-      </div>
-    </div>`;
-
-    // Ângulos de análise: cada card abre somente o recorte escolhido. A visão geral
-    // continua curta; rankings, tabelas e mapas não são empilhados sem que o usuário
-    // peça aquele assunto.
-    html += `<h2>Ângulos de análise</h2>
-    <div class="angulos-analise">
-      <button type="button" class="angulo-card" data-alvo-angulo="dg-secao-estados"><span class="angulo-icone"><svg class='icone-ph'><use href='#ph-map-pin'></use></svg></span><span class="angulo-titulo">Estados</span><span class="angulo-desc">Onde o mercado está concentrado</span></button>
-      <button type="button" class="angulo-card" data-alvo-angulo="dg-secao-orgaos"><span class="angulo-icone"><svg class='icone-ph'><use href='#ph-bank'></use></svg></span><span class="angulo-titulo">Órgãos</span><span class="angulo-desc">Quem mais compra nesse segmento</span></button>
-      <button type="button" class="angulo-card" data-alvo-angulo="dg-secao-empresas"><span class="angulo-icone"><svg class='icone-ph'><use href='#ph-buildings'></use></svg></span><span class="angulo-titulo">Empresas</span><span class="angulo-desc">Quem já vence esse mercado</span></button>
-      <button type="button" class="angulo-card" data-alvo-angulo="dg-secao-correspondencias"><span class="angulo-icone"><svg class='icone-ph'><use href='#ph-magnifying-glass'></use></svg></span><span class="angulo-titulo">Correspondências</span><span class="angulo-desc">Oportunidades abertas agora</span></button>
-      <button type="button" class="angulo-card" data-alvo-angulo="dg-secao-marcas"><span class="angulo-icone"><svg class='icone-ph'><use href='#ph-package'></use></svg></span><span class="angulo-titulo">Marcas</span><span class="angulo-desc">Quem fabrica o que se vende</span></button>
-      <button type="button" class="angulo-card angulo-desabilitado" disabled title="Previsão de contratação futura — no roadmap"><span class="angulo-icone"><svg class='icone-ph'><use href='#ph-chart-line-up'></use></svg></span><span class="angulo-titulo">Contratação futura</span><span class="angulo-desc">Em breve</span></button>
-    </div>
-    ${anguloAtivo ? `<div class="hc-trilha"><button type="button" class="hc-voltar" id="dg-voltar-visao">‹ Visão geral</button><span>Inteligência de mercado › ${escapeHtml({ estados: "Estados", orgaos: "Órgãos", empresas: "Empresas", correspondencias: "Oportunidades", marcas: "Marcas" }[anguloAtivo] || "Análise")}</span></div><div class="dg-exploracao-detalhada" id="dg-exploracao-detalhada">` : '<p class="dica-clique" style="margin:14px 0 0;">Escolha um ângulo para aprofundar apenas aquela pergunta, sem transformar a visão geral em uma página longa.</p>'}`;
-
-    if (anguloAtivo === "empresas" && d.mercado) {
-      const m = d.mercado;
-      if (!m.atualizadoEm) {
-        html += '<div class="aviso">O robô ainda não coletou atas de registro de preço (empresas vencedoras por segmento) — essa parte do diagnóstico fica disponível assim que a primeira coleta rodar.</div>';
-      } else if (m.empresas.length === 0) {
-        html += `<div class="aviso">Ainda não encontramos atas de registro de preço pra "${escapeHtml(d.palavras.join(", "))}"${d.uf ? " em " + escapeHtml(d.uf) : ""} na coleta atual. O robô varre atas de TODOS os segmentos (não só uma lista fixa), aos poucos, item por item — se esse mercado existir no PNCP, ele tende a aparecer aqui nas próximas atualizações diárias. O ranking de concorrentes acima (baseado em contratos assinados) já cobre qualquer palavra-chave desde já.</div>`;
-      } else {
-        if (m.parcial) {
-          html += '<div class="aviso">Coleta de atas ainda em andamento (o robô processa aos poucos, item por item, pra não estourar os limites da API do PNCP) — o ranking abaixo tende a crescer nas próximas atualizações diárias.</div>';
-        }
-        html += `<h2>Empresas atuantes no mercado${d.uf ? " — " + escapeHtml(d.uf) : ""} (por atas de registro de preço) — clique para detalhar</h2>`;
-        if (m.empresas.length === 0) {
-          html += "<p>Nenhuma empresa com ata de registro de preço encontrada ainda para esse segmento/UF na amostra coletada.</p>";
-        } else {
-          const maxEmp = m.empresas[0].valorTotalHistorico || 1;
-          for (const e of m.empresas) {
-            const largura = Math.round((e.valorTotalHistorico / maxEmp) * 100);
-            const selecionada = m.empresaSelecionada && m.empresaSelecionada.cnpj === e.cnpj;
-            html += `<div class="barra-item${selecionada ? " selecionado" : ""}" data-cnpj-mercado="${escapeHtml(e.cnpj)}">
-              <div class="barra-label">${escapeHtml(e.nome)} <span class="cnpj">(${escapeHtml(e.cnpj)})</span></div>
-              <div class="barra-fundo"><div class="barra-preenchida" style="width:${largura}%" title="${escapeHtml(formatarValor(e.valorTotalHistorico))}">${escapeHtml(formatarValorCompacto(e.valorTotalHistorico))}</div></div>
-              <div class="barra-meta">${e.atasVigentes.length} ata(s) vigente(s) · ${e.atasEncerradas.length} encerrada(s) · ${e.itensGanhos} item(ns) ganho(s) · UFs: ${escapeHtml(e.ufs.join(", ") || "-")} · <small>clique para detalhar</small></div>
-            </div>`;
-          }
-        }
-
-        html += `<h2>Atas de registro de preço vigentes${d.uf ? " — " + escapeHtml(d.uf) : ""}</h2>`;
-        const atasVigentesLista = m.atas.filter((a) => a.enriquecida && !a.cancelado && a.vigenciaFim && new Date(a.vigenciaFim).getTime() >= Date.now());
-        if (atasVigentesLista.length === 0) {
-          html += "<p>Nenhuma ata vigente encontrada ainda para esse segmento/UF na amostra coletada.</p>";
-        } else {
-          html += "<table><tr><th>Objeto</th><th>Órgão</th><th>UF/Município</th><th>Vigência até</th></tr>";
-          for (const a of atasVigentesLista) {
-            html += `<tr>
-              <td>${escapeHtml(a.objeto || "-")}</td>
-              <td>${escapeHtml(a.orgao || "-")}</td>
-              <td>${escapeHtml(a.ufOrgao || "-")}${a.municipioOrgao ? " / " + escapeHtml(a.municipioOrgao) : ""}</td>
-              <td>${escapeHtml(String(a.vigenciaFim || "-"))}</td>
-            </tr>`;
-          }
-          html += "</table>";
-        }
-      }
-    }
-
-    if (anguloAtivo === "estados" && d.porUf && d.porUf.length > 0) {
-      html += '<h2 id="dg-secao-estados">Concentração geográfica do mercado</h2><div id="dg-mapa-uf"></div><div class="mapa-uf-legenda"><span>Menos</span><span class="mapa-uf-legenda-barra"></span><span>Mais</span></div>';
-      html += "<h2>Licitações por UF (valor contratado na amostra)</h2>";
-      const maxUf = d.porUf[0].valor || 1;
-      for (const u of d.porUf) {
-        const largura = Math.round((u.valor / maxUf) * 100);
-        html += `<div class="barra-item">
-          <div class="barra-label">${escapeHtml(u.uf)}</div>
-          <div class="barra-fundo"><div class="barra-preenchida" style="width:${largura}%" title="${escapeHtml(u.valorFormatado)}">${escapeHtml(formatarValorCompacto(u.valor))}</div></div>
-          <div class="barra-meta">${u.contratos} contrato(s)</div>
-        </div>`;
-      }
-    }
-
-    if (anguloAtivo === "empresas") html += "<h2 id=\"dg-secao-empresas\">Principais concorrentes (por valor contratado na amostra) — clique para ver os contratos</h2>";
-    if (anguloAtivo === "empresas") {
-    if (d.concorrentes.length === 0) {
-      html += "<p>Nenhum contrato do segmento encontrado na amostra do período.</p>";
-    } else {
-      const max = d.concorrentes[0].valor || 1;
-      for (const c of d.concorrentes) {
-        const largura = Math.round((c.valor / max) * 100);
-        const selecionado = d.fornecedorSelecionado && d.fornecedorSelecionado.cnpj === c.cnpj;
-        html += `<div class="barra-item${selecionado ? " selecionado" : ""}" data-cnpj="${escapeHtml(c.cnpj)}">
-          <div class="barra-label">${escapeHtml(c.nome)} <span class="cnpj">(${escapeHtml(c.cnpj)})</span></div>
-          <div class="barra-fundo"><div class="barra-preenchida" style="width:${largura}%" title="${escapeHtml(c.valorFormatado)}">${escapeHtml(formatarValorCompacto(c.valor))}</div></div>
-          <div class="barra-meta">UFs: ${escapeHtml(c.ufs.join(", ") || "-")} · ${c.contratos} contrato(s) · <small>clique para detalhar</small></div>
-        </div>`;
-      }
-    }
-    }
-
-    if (anguloAtivo === "orgaos") html += "<h2 id=\"dg-secao-orgaos\">Principais órgãos compradores (por valor contratado na amostra) — clique para ver os contratos</h2>";
-    if (anguloAtivo === "orgaos") {
-    if (d.orgaos.length === 0) {
-      html += "<p>Nenhum contrato do segmento encontrado na amostra do período.</p>";
-    } else {
-      const maxOrgao = d.orgaos[0].valor || 1;
-      for (const o of d.orgaos) {
-        const largura = Math.round((o.valor / maxOrgao) * 100);
-        const selecionado = d.orgaoSelecionado && d.orgaoSelecionado.nome === o.nome;
-        html += `<div class="barra-item${selecionado ? " selecionado" : ""}" data-orgao="${escapeHtml(o.nome)}">
-          <div class="barra-label">${escapeHtml(o.nome)}</div>
-          <div class="barra-fundo"><div class="barra-preenchida" style="width:${largura}%" title="${escapeHtml(o.valorFormatado)}">${escapeHtml(formatarValorCompacto(o.valor))}</div></div>
-          <div class="barra-meta">UFs: ${escapeHtml(o.ufs.join(", ") || "-")} · ${o.contratos} contrato(s) · <small>clique para detalhar</small></div>
-        </div>`;
-      }
-    }
-    }
-
-    if (anguloAtivo === "marcas") {
-      const consultaMarca = d.marcasPesquisa || {};
-      html += `<div class="marcas-pesquisa" id="dg-secao-marcas">
-        <div class="marcas-pesquisa-topo"><div><h2>Marcas por produto</h2><p>Descubra as marcas declaradas, os fornecedores que as venderam e onde apareceram. Escolha uma marca para abrir apenas o dossiê que interessa.</p></div><div class="marcas-fonte">Dados oficiais do Compras.gov</div></div>
-        <div class="marcas-consulta"><div class="campo"><label for="dg-marcas-termo">Produto ou descrição do item</label><input id="dg-marcas-termo" value="${escapeHtml(consultaMarca.termo || d.palavras.join(", "))}" placeholder="Ex.: caneta, ar-condicionado, lixeira"></div><button type="button" class="btn-buscar" id="dg-marcas-buscar">Pesquisar marcas</button></div>
-        <div id="dg-marcas-resultados">${consultaMarca.aviso ? `<div class="aviso">${escapeHtml(consultaMarca.aviso)}</div>` : '<div class="marcas-vazio">Pesquise um produto para gerar um ranking de marcas. A plataforma usa somente marcas declaradas na fonte oficial e mostra fornecedor, local e recorrência ao abrir o dossiê.</div>'}</div></div>`;
-    }
-
-    if (anguloAtivo === "correspondencias") html += "<h2 id=\"dg-secao-correspondencias\">Oportunidades abertas agora " + (d.uf ? "em " + escapeHtml(d.uf) : "") + "</h2>";
-    if (anguloAtivo === "correspondencias") {
-    if (d.oportunidadesAbertas.length === 0) {
-      html += "<p>Nenhuma oportunidade aberta encontrada no momento para esse segmento/UF.</p>";
-    } else {
-      // Um objeto de licitação pode ter centenas de caracteres. Em tabela ele vira uma
-      // coluna estreita e deixa grandes vazios; em cards, a leitura segue a ordem real
-      // de decisão: objeto, órgão, prazo e próxima ação.
-      html += '<div class="lista-boletim">';
-      d.oportunidadesAbertas.forEach((o, i) => {
-        html += `<article class="boletim-card">
-          <div class="boletim-topo"><span class="boletim-numero">${i + 1}</span><strong>Oportunidade aberta</strong></div>
-          <div class="boletim-corpo">
-            <p class="boletim-objeto">${escapeHtml(o.objeto || "Objeto não informado")}</p>
-            <dl class="boletim-meta">
-              <div><dt>Órgão comprador</dt><dd>${escapeHtml(o.orgao || "Não informado")}</dd></div>
-              <div><dt>Encerramento</dt><dd>${escapeHtml(formatarPrazoPropostas(o.encerramento))}</dd></div>
-            </dl>
-            <div class="boletim-rodape"><button type="button" class="btn-filtro-rapido dg-op-detalhe" data-idx-op="${i}">Abrir dossiê</button>${o.link ? `<a class="link-pncp" href="${escapeHtml(o.link)}" target="_blank" rel="noopener">Ver no PNCP <svg class='icone-ph'><use href='#ph-arrow-square-out'></use></svg></a>` : ""}</div>
-          </div>
-        </article>`;
-      });
-      html += "</div>";
-      html += '<div class="dica-clique">Abra somente a oportunidade que quiser investigar; o dossiê mantém o caminho de volta a esta lista.</div>';
-    }
-
-    }
-    if (anguloAtivo) html += "</div>";
-    alvo.innerHTML = html;
-    renderBaixaConcorrencia();
-
-    alvo.querySelectorAll(".angulo-card[data-alvo-angulo]").forEach((el) => {
-      el.addEventListener("click", () => {
-        d.anguloAtivo = el.dataset.alvoAngulo.replace("dg-secao-", "");
-        renderDiagnostico();
-        document.getElementById("dg-exploracao-detalhada")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
-    });
-
-    alvo.querySelector("#dg-voltar-visao")?.addEventListener("click", () => {
-      d.anguloAtivo = null;
-      renderDiagnostico();
-      alvo.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-    if (anguloAtivo === "estados") renderMapaUf(d.porUf);
-
-    alvo.querySelector("#dg-marcas-buscar")?.addEventListener("click", async () => {
-      const termo = alvo.querySelector("#dg-marcas-termo")?.value.trim();
-      const painelMarcas = alvo.querySelector("#dg-marcas-resultados");
-      const botao = alvo.querySelector("#dg-marcas-buscar");
-      if (!termo || !painelMarcas || !botao) return;
-      botao.disabled = true;
-      painelMarcas.innerHTML = '<div class="carregando">Consultando catálogo e resultados homologados oficiais para esse produto...</div>';
-      const resposta = await consultarMarcasPorProdutoOficial(termo, d.uf);
-      if (resposta.erro) {
-        d.marcasPesquisa = { termo, aviso: "Não foi possível consultar catálogo e resultados homologados agora. Tente novamente em alguns instantes." };
-        renderDiagnostico();
-        return;
-      }
-      const marcasAgrupadas = Object.values(resposta.itens.reduce((acumulado, item) => {
-        const chave = String(item.marca || "").trim().toLocaleLowerCase("pt-BR");
-        if (!chave) return acumulado;
-        if (!acumulado[chave]) acumulado[chave] = { ...item, ocorrencias: 0, fornecedores: new Set() };
-        acumulado[chave].ocorrencias += 1;
-        if (item.fornecedor) acumulado[chave].fornecedores.add(item.fornecedor);
-        return acumulado;
-      }, {})).sort((a, b) => a.ordemCatalogo - b.ordemCatalogo || b.ocorrencias - a.ocorrencias || a.marca.localeCompare(b.marca, "pt-BR"));
-      d.marcasPesquisa = { termo, aviso: marcasAgrupadas.length ? "" : "Nenhuma marca declarada foi encontrada na fonte oficial para esse produto" + (d.uf ? ` em ${d.uf}` : "") + ". Tente outra descrição ou remova a UF." };
-      if (!marcasAgrupadas.length) { renderDiagnostico(); return; }
-      const marcasVisiveis = marcasAgrupadas.slice(0, 30);
-      const fornecedoresUnicos = new Set(resposta.itens.map((item) => item.fornecedor).filter(Boolean)).size;
-      painelMarcas.innerHTML = `<div class="marcas-resumo"><div><strong>${escapeHtml(termo)}</strong> · ranking de marcas declaradas</div><div class="marca-kpis"><span class="marca-kpi"><strong>${marcasAgrupadas.length}</strong> marcas</span><span class="marca-kpi"><strong>${fornecedoresUnicos}</strong> fornecedores</span><span class="marca-kpi"><strong>${resposta.itens.length}</strong> registros</span>${d.uf ? `<span class="marca-kpi">UF <strong>${escapeHtml(d.uf)}</strong></span>` : ""}</div></div><div class="marcas-ranking"><div class="marcas-ranking-cab"><span>#</span><span>Marca / produto</span><span>Ocorrências</span><span>Fornecedores</span><span>Último local</span><span></span></div>${marcasVisiveis.map((item, indice) => `<button type="button" class="marca-ranking-linha" data-marca-ranking="${indice}"><span class="marca-rank">${indice + 1}</span><span><strong class="marca-nome">${escapeHtml(item.marca)}</strong><small class="marca-produto">${escapeHtml(item.produtoCatalogo || "Produto catalogado")}</small></span><span class="marca-numero">${escapeHtml(String(item.ocorrencias))}</span><span class="marca-fornecedor">${escapeHtml([...item.fornecedores].slice(0, 2).join(" · ") || "Não informado")}</span><span class="marca-local">${escapeHtml([item.municipio, item.uf].filter(Boolean).join(" · ") || "Não informado")}</span><span class="marca-abrir">›</span></button>`).join("")}</div><div id="dg-marca-dossie"></div>${marcasAgrupadas.length > marcasVisiveis.length ? `<p class="dica-clique">Mostrando as ${marcasVisiveis.length} marcas mais recorrentes. Refine o produto para uma leitura ainda mais precisa.</p>` : ""}`;
-      painelMarcas.querySelectorAll(".marca-ranking-linha").forEach((linha) => linha.addEventListener("click", () => {
-        const indice = Number(linha.dataset.marcaRanking); const item = marcasVisiveis[indice]; const dossie = painelMarcas.querySelector("#dg-marca-dossie");
-        if (!item || !dossie) return;
-        painelMarcas.querySelectorAll(".marca-ranking-linha").forEach((el) => el.classList.toggle("ativa", el === linha));
-        dossie.innerHTML = `<section class="marca-dossie"><div class="marca-dossie-topo"><div><h3>${escapeHtml(item.marca)}</h3><p>Marca declarada na fonte oficial · ${escapeHtml(item.produtoCatalogo || "Produto catalogado")}</p></div><button type="button" class="btn-imprimir" id="dg-marca-fechar">Fechar dossiê</button></div><dl class="marca-dossie-grid"><div><dt>Fornecedores identificados</dt><dd>${escapeHtml([...item.fornecedores].join(" · ") || item.documentoFornecedor || "Não informado")}</dd></div><div><dt>Ocorrências</dt><dd>${escapeHtml(String(item.ocorrencias))} resultado(s) declarados</dd></div><div><dt>Último órgão / local</dt><dd>${escapeHtml([item.orgao, item.municipio, item.uf].filter(Boolean).join(" · ") || "Não informado")}</dd></div><div><dt>Último resultado</dt><dd>${escapeHtml(formatarDataIso(item.dataResultado))} · ${escapeHtml(item.valorUnitario ? formatarValor(item.valorUnitario) : "Preço não informado")}</dd></div></dl><p class="dica-clique" style="margin:14px 0 0;">PDM ${escapeHtml(String(item.codigoPdm || "-"))} · Fonte: ${escapeHtml(resposta.fonte)}.</p></section>`;
-        dossie.querySelector("#dg-marca-fechar")?.addEventListener("click", () => { dossie.innerHTML = ""; linha.classList.remove("ativa"); });
-        dossie.scrollIntoView({ behavior: "smooth", block: "nearest" });
-      }));
-      botao.disabled = false;
-    });
-
-    alvo.querySelectorAll(".barra-item[data-cnpj]").forEach((el) => {
-      el.addEventListener("click", () => renderDetalheFornecedor(el.dataset.cnpj));
-    });
-
-    alvo.querySelectorAll(".barra-item[data-orgao]").forEach((el) => {
-      el.addEventListener("click", () => renderDetalheOrgao(el.dataset.orgao));
-    });
-
-    alvo.querySelectorAll(".barra-item[data-cnpj-mercado]").forEach((el) => {
-      el.addEventListener("click", () => renderDetalheEmpresaMercado(el.dataset.cnpjMercado));
-    });
-
-    alvo.querySelectorAll(".barra-item[data-marca]").forEach((el) => {
-      el.addEventListener("click", () => renderDetalheMarca(el.dataset.marca));
-    });
-
-    alvo.querySelectorAll(".dg-op-detalhe[data-idx-op]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const o = d.oportunidadesAbertas[Number(btn.dataset.idxOp)];
-        if (!o) return;
-        abrirDossieDiagnostico("Oportunidade aberta", `<h2>Oportunidade aberta</h2><dl class="boletim-meta"><div><dt>Objeto completo</dt><dd>${escapeHtml(o.objeto || "-")}</dd></div><div><dt>Órgão</dt><dd>${escapeHtml(o.orgao || "-")}</dd></div><div><dt>Data fim de recebimento de propostas</dt><dd>${escapeHtml(formatarPrazoPropostas(o.encerramento))}</dd></div><div><dt>Nº controle PNCP</dt><dd>${escapeHtml(o.numeroControlePNCP || "-")}</dd></div></dl>${o.link ? `<p><a class="link-pncp" href="${escapeHtml(o.link)}" target="_blank" rel="noopener">Abrir edital no PNCP <svg class='icone-ph'><use href='#ph-arrow-square-out'></use></svg></a></p>` : ""}`);
-      });
-    });
-  }
-
-  // Salva o último filtro do Diagnóstico de Mercado — mesmo padrão do Boletim e do
-  // Encontrar Licitações: restaura e rebusca sozinho ao reabrir a página, sem o usuário
-  // precisar preencher tudo de novo.
-  function salvarFiltroDiagnostico(segmentoRaw, uf, municipio, orgaoFiltro, dias) {
-    try { localStorage.setItem("hc_diagnostico_filtro", JSON.stringify({ segmentoRaw, uf, municipio, orgaoFiltro, dias })); } catch (e) {}
+  function salvarFiltroDiagnostico(termo, uf, dias) {
+    try { localStorage.setItem("hc_mercado_pesquisa", JSON.stringify({ termo, uf, dias })); } catch (e) { /* segue sem lembrar */ }
   }
   function lerFiltroDiagnostico() {
-    try { const b = localStorage.getItem("hc_diagnostico_filtro"); return b ? JSON.parse(b) : null; } catch (e) { return null; }
+    try { const b = localStorage.getItem("hc_mercado_pesquisa"); return b ? JSON.parse(b) : null; } catch (e) { return null; }
   }
   let dgJaBuscado = false;
+  let mkBuscaSeq = 0;
 
   // Consulta a tabela "contratos" no Supabase com os filtros já resolvidos no servidor
   // (data mínima + palavras-chave), no lugar de baixar o arquivo estático inteiro (que
@@ -9662,35 +8385,6 @@
   // antes: registros sem dataAssinatura sempre entravam, independente do filtro de dias.
   const cacheConsultasContratos = new Map();
   const CACHE_CONTRATOS_TTL_MS = 5 * 60 * 1000;
-  async function carregarResumoInteligenciaMercado(palavras, dias, uf) {
-    try {
-      await aguardarSupabaseAutenticado();
-      const { data, error } = await window.__sbClient.rpc("resumo_inteligencia_mercado", {
-        p_termos: palavras,
-        p_dias: dias,
-        p_uf: uf || null,
-      });
-      if (error || !data) return null;
-      return Array.isArray(data) ? data[0] : data;
-    } catch (e) {
-      // A função é opcional durante a implantação inicial; a tela preserva o fluxo atual
-      // até a migração ser executada no banco.
-      return null;
-    }
-  }
-  function mostrarResumoInicialDiagnostico(alvo, resumo, dias, uf, token) {
-    if (!resumo || alvo.dataset.dgCarga !== token) return;
-    const nacional = Number(resumo.valor_nacional || 0);
-    const recorte = Number(resumo.valor_recorte || 0);
-    alvo.innerHTML = `<div class="caixa-interna">
-      <div class="cartoes" style="margin-bottom:0;">
-        <div class="cartao"><h3>Mercado nacional (${escapeHtml(String(dias))} dia(s))</h3><div class="valor" title="${escapeHtml(formatarValor(nacional))}">${escapeHtml(formatarValorCompacto(nacional))}</div></div>
-        ${uf ? `<div class="cartao"><h3>Mercado em ${escapeHtml(uf)}</h3><div class="valor" title="${escapeHtml(formatarValor(recorte))}">${escapeHtml(formatarValorCompacto(recorte))}</div></div>` : ""}
-        <div class="cartao"><h3>Contratos no recorte</h3><div class="valor">${Number(resumo.contratos_recorte || 0).toLocaleString("pt-BR")}</div></div>
-        <div class="cartao"><h3>Concorrentes identificados</h3><div class="valor">${Number(resumo.concorrentes_recorte || 0).toLocaleString("pt-BR")}</div></div>
-      </div>
-    </div><div class="carregando">Resumo pronto. Carregando os detalhes para aprofundar a análise...</div>`;
-  }
   async function consultarContratosSupabase({ palavras, dias, cnpjFornecedor, uf, limite = 1000 }) {
     await aguardarSupabaseAutenticado();
     const chaveCache = JSON.stringify({ palavras: palavras || [], dias: dias || null, cnpjFornecedor: cnpjFornecedor || null, uf: uf || null, limite });
@@ -9699,12 +8393,11 @@
       return entradaCache.resultado;
     }
     // A contagem exata obriga o Postgres a percorrer toda a base antes de devolver os
-    // registros. Para o diagnóstico ela só serve como indicador de recorte, portanto a
+    // registros. Aqui ela só serve como indicador de recorte, portanto a
     // estimativa do planejador elimina essa espera sem afetar os contratos exibidos.
     // Cada registro inclui o JSON bruto do contrato. Pedir milhares deles de uma vez
     // fazia a API devolver dezenas de MB e, em navegadores normais, podia estourar o
-    // tempo/resposta antes de mostrar qualquer resultado. O resumo agregado vem pela
-    // RPC abaixo; aqui precisamos só de uma amostra rica para os aprofundamentos.
+    // tempo/resposta antes de mostrar qualquer resultado.
     const limiteSeguro = Math.min(Math.max(Number(limite) || 1000, 1), 1000);
     let query = window.__sbClient.from("contratos").select("dado", { count: "planned" }).limit(limiteSeguro);
     if (typeof dias === "number" && dias > 0) {
@@ -9715,9 +8408,7 @@
       query = query.eq("cnpj_fornecedor", cnpjFornecedor);
     }
     // Filtra UF no servidor em vez de no cliente: antes o pedido de "só AM" baixava até
-    // "limite" linhas NACIONAIS pra só depois descartar quase tudo — desperdiçava banda e
-    // podia fazer contratos relevantes daquele estado nem chegarem a aparecer, porque o
-    // corte de "limite" já tinha acontecido antes do filtro de UF.
+    // "limite" linhas NACIONAIS pra só depois descartar quase tudo.
     if (uf) {
       query = query.eq("uf", uf);
     }
@@ -9727,14 +8418,11 @@
     }
     // Ordena pelos mais recentes ANTES do corte de "limite" — sem isso, qual fatia de um
     // resultado maior que "limite" volta é arbitrária (ordem física do Postgres), o que
-    // enviesava silenciosamente rankings e série mensal pra segmentos amplos, sem o usuário
-    // saber que a amostra tinha sido truncada de forma não-determinística.
+    // enviesava silenciosamente rankings e série mensal pra segmentos amplos.
     query = query.order("data_assinatura", { ascending: false, nullsFirst: false });
     let { data, error, count } = await query;
     if (error) {
-      // Uma tentativa de retentativa antes de desistir — falha de rede pontual no Supabase
-      // não deveria zerar um cartão inteiro (isso já aconteceu: "Mercado nacional" mostrava
-      // R$0,00 mesmo com a consulta por UF, feita logo em seguida, retornando dados normalmente).
+      // Uma retentativa antes de desistir: falha de rede pontual no Supabase não deve zerar a tela.
       console.warn("[contratos] erro na consulta, tentando de novo uma vez:", error);
       await new Promise((r) => setTimeout(r, 800));
       ({ data, error, count } = await query);
@@ -9750,14 +8438,11 @@
     return resultado;
   }
 
-  // Resultados homologados do Compras.gov são deliberadamente uma fonte separada dos
-  // contratos PNCP: o mesmo processo pode aparecer nas duas bases em momentos distintos.
-  // Mantê-los separados evita somar duas vezes o mercado e deixa explícita a procedência.
+  // Resultados homologados do Compras.gov guardados pelo robô (preço unitário por item, com o vencedor).
   async function consultarResultadosHomologadosComprasGov({ palavras, dias, uf, limite = 500 }) {
     try {
       await aguardarSupabaseAutenticado();
-      const estadoPromise = carregarBlobSupabase("comprasgov_resultados_estado");
-      let query = window.__sbClient.from("comprasgov_resultados").select("dado", { count: "planned" }).limit(limite);
+      let query = window.__sbClient.from("comprasgov_resultados").select("dado").limit(limite);
       if (typeof dias === "number" && dias > 0) {
         const limiteDataIso = new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
         query = query.gte("data_resultado", limiteDataIso);
@@ -9765,20 +8450,19 @@
       if (uf) query = query.eq("uf", uf);
       const termos = (palavras || []).map(sanitizarParaIlike).filter(Boolean);
       if (termos.length > 0) query = query.or(termos.map((t) => `descricao_item.ilike.%${t}%`).join(","));
-      const { data, error, count } = await query.order("data_resultado", { ascending: false, nullsFirst: false });
+      const { data, error } = await query.order("data_resultado", { ascending: false, nullsFirst: false });
       if (error) {
         console.warn("[comprasgov-resultados] erro na consulta:", error);
-        return { registros: [], erro: true, totalCorrespondente: null, truncado: false, estado: await estadoPromise };
+        return { registros: [], erro: true };
       }
-      const registros = (data || []).map((linha) => linha.dado).filter(Boolean);
-      const totalCorrespondente = typeof count === "number" ? count : registros.length;
-      return { registros, erro: false, totalCorrespondente, truncado: totalCorrespondente > registros.length, estado: await estadoPromise };
+      return { registros: (data || []).map((linha) => linha.dado).filter(Boolean), erro: false };
     } catch (e) {
       console.warn("[comprasgov-resultados] falha na consulta:", e);
-      return { registros: [], erro: true, totalCorrespondente: null, truncado: false, estado: null };
+      return { registros: [], erro: true };
     }
   }
 
+  // Pesquisa de Preços do Compras.gov ao vivo (proxy sem custo; exige login de cliente aprovado e tem teto de uso).
   async function consultarMarcasPorProdutoOficial(termo, uf) {
     try {
       const parametros = new URLSearchParams({ termo });
@@ -9786,569 +8470,14 @@
       const resposta = await fetchComSessao(`/api/comprasgov-marcas-produto?${parametros}`);
       const dados = await resposta.json();
       if (!resposta.ok || !dados.ok) return { erro: true, itens: [] };
-      return { erro: false, itens: Array.isArray(dados.itens) ? dados.itens : [], fonte: dados.fonte || "Compras.gov", consultasComFalha: dados.consultasComFalha || 0 };
+      return { erro: false, itens: Array.isArray(dados.itens) ? dados.itens : [] };
     } catch (erro) {
       console.warn("[comprasgov-marcas-produto] falha na consulta:", erro);
       return { erro: true, itens: [] };
     }
   }
 
-  // Inteligência de Mercado com o mesmo mercado do Boletim (palavras + 1º estado), sem redigitar.
-  document.getElementById("dg-usar-boletim").addEventListener("click", async () => {
-    const status = document.getElementById("dg-usar-boletim-status");
-    await window.__filtroBoletimPronto;
-    const filtro = lerFiltroBoletim();
-    if (!filtro || !filtro.palavrasRaw) {
-      status.textContent = "Você ainda não montou seu boletim. Monte-o na tela Boletim ou digite o segmento acima.";
-      return;
-    }
-    status.textContent = "";
-    document.getElementById("dg-segmento").value = filtro.palavrasRaw;
-    const campoUf = document.getElementById("dg-uf");
-    campoUf.value = normalizarUfs(filtro.ufs || filtro.uf)[0] || "";
-    campoUf.dispatchEvent(new Event("change"));
-    document.getElementById("dg-buscar").click();
-  });
-
-  document.getElementById("dg-buscar").addEventListener("click", async () => {
-    dgJaBuscado = true;
-    const segmentoRaw = document.getElementById("dg-segmento").value.trim();
-    const uf = document.getElementById("dg-uf").value.trim().toUpperCase();
-    const municipioFiltro = document.getElementById("dg-municipio").value.trim().toLowerCase();
-    const orgaoFiltro = document.getElementById("dg-orgao-filtro").value.trim().toLowerCase();
-    const dias = parseInt(document.getElementById("dg-dias").value, 10);
-    const alvo = document.getElementById("dg-resultado");
-    const btn = document.getElementById("dg-buscar");
-
-    if (!segmentoRaw) {
-      alvo.innerHTML = '<div class="aviso">Informe ao menos uma palavra-chave de segmento.</div>';
-      return;
-    }
-    salvarFiltroDiagnostico(segmentoRaw, uf, document.getElementById("dg-municipio").value, document.getElementById("dg-orgao-filtro").value, document.getElementById("dg-dias").value);
-    const palavras = segmentoRaw.split(",").map((p) => p.trim()).filter(Boolean);
-
-    btn.disabled = true;
-    const tokenCarga = `${Date.now()}-${Math.random()}`;
-    alvo.dataset.dgCarga = tokenCarga;
-    document.getElementById("dg-chips").innerHTML = "";
-    document.getElementById("dg-detalhe").innerHTML = "";
-    alvo.innerHTML = '<div class="carregando">Carregando diagnóstico...</div>';
-
-    try {
-      let encontrados, paginasVarridas, totalPaginas, parcial, falhaConexao, fonte;
-      let consultaTruncada = false, totalCorrespondente = null, totalRetornado = null;
-
-      // Metadados e fontes auxiliares são independentes da consulta de contratos. Iniciar
-      // tudo junto reduz o tempo percebido até o relatório sem aumentar chamadas à API.
-      const metaContratosPromise = carregarMeta("data/contratos_meta.json");
-      const cacheOpPromise = carregarOportunidadesSupabase(uf ? [uf] : [], false);
-      const cacheMercadoPromise = carregarMercadoSegmentos(palavras, uf || null);
-      const resumoPromise = carregarResumoInteligenciaMercado(palavras, dias, uf);
-      resumoPromise.then((resumo) => {
-        if (btn.disabled) mostrarResumoInicialDiagnostico(alvo, resumo, dias, uf, tokenCarga);
-      });
-      const metaContratos = await metaContratosPromise;
-      if (metaContratos) {
-        const res = await consultarContratosSupabase({ palavras, dias });
-        encontrados = res.registros;
-        paginasVarridas = metaContratos.paginasVarridas;
-        totalPaginas = metaContratos.totalPaginasDisponiveis;
-        parcial = metaContratos.parcial;
-        falhaConexao = res.erro;
-        fonte = {
-          tipo: "cache",
-          atualizadoEm: metaContratos.atualizadoEm,
-          diasHistoricoCache: metaContratos.retencaoDias,
-        };
-        consultaTruncada = res.truncado;
-        totalCorrespondente = res.totalCorrespondente;
-        totalRetornado = res.registros.length;
-      } else {
-        alvo.innerHTML = '<div class="carregando">Dados em cache ainda não disponíveis — escaneando o PNCP ao vivo no seu navegador (isso pode levar até 1 minuto)...</div>';
-        const inicioMs = Date.now();
-        const tempoLimiteMs = 45000;
-        const hoje = new Date();
-        const inicio = new Date(hoje.getTime() - dias * 24 * 60 * 60 * 1000);
-        const fmt = (dt) => dt.toISOString().slice(0, 10).replace(/-/g, "");
-        const resCont = await buscarContratos(fmt(inicio), fmt(hoje), palavras, inicioMs, tempoLimiteMs);
-        encontrados = resCont.encontrados;
-        paginasVarridas = resCont.paginasVarridas;
-        totalPaginas = resCont.totalPaginas;
-        parcial = resCont.parcial;
-        falhaConexao = resCont.falhaConexao;
-        fonte = { tipo: "ao_vivo" };
-      }
-
-      // Guarda a lista NACIONAL (segmento + período, sem UF/município/órgão) separada da
-      // lista filtrada — antes o filtro de UF era aplicado direto em cima de "encontrados"
-      // e o cartão "Mercado Nacional" acabava mostrando o total do estado escolhido (e não
-      // o nacional de verdade). Isso fazia o diagnóstico parecer completamente vazio
-      // sempre que o segmento não tivesse nenhum contrato NA AMOSTRA daquele estado
-      // específico, mesmo havendo mercado nacional grande pro mesmo segmento.
-      const encontradosNacional = encontrados;
-
-      if (uf && metaContratos) {
-        // Filtra no servidor (ver consultarContratosSupabase) em vez de descartar em cima da
-        // amostra nacional já truncada em 5000 — evita perder contratos do estado escolhido
-        // que ficaram de fora só porque o corte de 5000 nacional aconteceu antes do filtro.
-        const resUf = await consultarContratosSupabase({ palavras, dias, uf });
-        encontrados = resUf.registros;
-        if (resUf.truncado) { consultaTruncada = true; totalCorrespondente = resUf.totalCorrespondente; totalRetornado = resUf.registros.length; }
-      } else if (uf) {
-        encontrados = encontrados.filter((r) => (r.uf || "").toUpperCase() === uf);
-      }
-      if (municipioFiltro) {
-        encontrados = encontrados.filter((r) => (r.municipio || "").toLowerCase().includes(municipioFiltro));
-      }
-      if (orgaoFiltro) {
-        encontrados = encontrados.filter((r) => (r.orgao || "").toLowerCase().includes(orgaoFiltro));
-      }
-
-      const concorrentes = calcularConcorrentes(encontrados);
-      const orgaos = calcularOrgaos(encontrados);
-      const porMes = calcularPorMes(encontrados);
-      const porUf = calcularPorUf(encontrados);
-      let oportunidadesAbertas = [];
-      let falhaConexaoOportunidades = false;
-      let ufOportunidadesFalhouHoje = false;
-      // Cache de licitações publicadas (tabela oportunidades_abertas no Supabase) é nacional, todas as
-      // UFs, com modalidadeNome/valorTotalEstimado/valorTotalHomologado por registro (ver
-      // coletarOportunidadesAbertas em scripts/atualizar_dados.js) — carrega uma vez só e
-      // reaproveita tanto pra tabela de "abertas agora" (só quando UF selecionada, como
-      // antes) quanto pro breakdown por modalidade (sempre, nacional ou por UF).
-      const cacheOp = await cacheOpPromise;
-      if (uf) {
-        if (cacheOp) {
-          oportunidadesAbertas = cacheOp.registros
-            .filter((r) => r.uf === uf && bateComSegmento(r.objeto, palavras))
-            .map((r) => ({ ...r, link: linkPncp(r.numeroControlePNCP) }));
-          ufOportunidadesFalhouHoje = Array.isArray(cacheOp.ufsComFalha) && cacheOp.ufsComFalha.includes(uf);
-        } else {
-          const resOp = await buscarOportunidadesAbertas(uf, palavras, 10);
-          oportunidadesAbertas = resOp.encontrados;
-          falhaConexaoOportunidades = resOp.falhaConexao;
-        }
-      }
-      let porModalidade = [];
-      if (cacheOp) {
-        const registrosSegmentoModalidade = cacheOp.registros.filter((r) =>
-          (!uf || r.uf === uf) && bateComSegmento(r.objeto, palavras)
-        );
-        porModalidade = calcularPorModalidade(registrosSegmentoModalidade);
-      }
-
-      // Atas de registro de preço + empresas vencedoras — cobre qualquer segmento (sem
-      // lista fixa), mas a cobertura de cada mercado específico cresce aos poucos, conforme
-      // o robô vai processando as atas (ver coletarMercadoSegmentos em
-      // scripts/atualizar_dados.js). Pra segmentos ainda não alcançados, o painel mostra um
-      // aviso explicando que a coleta está em andamento (não que o segmento é ignorado).
-      let atasFiltradas = [];
-      let empresasMercado = [];
-      let marcasMercado = [];
-      let mercadoSegmentosMonitorados = [];
-      let mercadoAtualizadoEm = null;
-      let mercadoParcial = false;
-      const cacheMercado = await cacheMercadoPromise;
-      if (cacheMercado) {
-        mercadoSegmentosMonitorados = cacheMercado.segmentosMonitorados || [];
-        mercadoAtualizadoEm = cacheMercado.atualizadoEm;
-        mercadoParcial = !!cacheMercado.parcial;
-        atasFiltradas = cacheMercado.atas;
-        empresasMercado = calcularEmpresasMercado(atasFiltradas);
-        marcasMercado = calcularMarcasMercado(atasFiltradas);
-      }
-
-      estado.diagnostico = {
-        encontrados,
-        encontradosNacional,
-        palavras,
-        uf: uf || null,
-        periodo: { dias },
-        amostra: {
-          parcial,
-          paginasVarridas,
-          totalPaginasDisponiveis: totalPaginas,
-          falhaConexao: falhaConexao || falhaConexaoOportunidades,
-          ufOportunidadesFalhouHoje,
-          limiteOportunidadesAtingido: !!cacheOp?.limiteAtingido,
-          consultaTruncada,
-          totalCorrespondente,
-          totalRetornado,
-        },
-        fonte,
-        concorrentes,
-        orgaos,
-        porMes,
-        porUf,
-        porModalidade,
-        oportunidadesAbertas,
-        fornecedorSelecionado: null,
-        orgaoSelecionado: null,
-        mercado: {
-          atas: atasFiltradas,
-          empresas: empresasMercado,
-          marcas: marcasMercado,
-          segmentosMonitorados: mercadoSegmentosMonitorados,
-          atualizadoEm: mercadoAtualizadoEm,
-          parcial: mercadoParcial,
-          empresaSelecionada: null,
-          marcaSelecionada: null,
-        },
-      };
-
-      // Impede que uma resposta tardia do resumo substitua o relatório completo já pronto.
-      alvo.dataset.dgCarga = "";
-      renderChipsDiagnostico();
-      renderDiagnostico();
-      renderProspeccaoFornecedores();
-    } catch (e) {
-      alvo.dataset.dgCarga = "";
-      alvo.innerHTML = `<div class="aviso">Erro ao gerar diagnóstico: ${escapeHtml(String(e))}</div>`;
-    } finally {
-      btn.disabled = false;
-    }
-  });
-
-  // ---------- Histórico de Compras ----------
-  // Consulta a mesma base de contratos da Visão Geral, mas tem filtros e resultados próprios:
-  // não exige que o cliente gere antes um diagnóstico e não dispara busca ao PNCP no navegador.
-  let _hcContextoAtual = null;
-
-  function renderDetalheHistoricoOrgao(indice) {
-    const contexto = _hcContextoAtual;
-    const alvo = document.getElementById("hc-resultado");
-    if (!contexto || !alvo || !contexto.orgaos[indice]) return;
-    const orgao = contexto.orgaos[indice];
-    const compras = contexto.registros
-      .filter((contrato) => (contrato.orgao || "Órgão não informado") === orgao.nome)
-      .sort((a, b) => String(b.dataAssinatura || "").localeCompare(String(a.dataAssinatura || "")));
-    const valor = compras.reduce((soma, contrato) => soma + (contrato.valor || 0), 0);
-    let html = `<div class="dg-topo-acoes"><button type="button" class="btn-imprimir" id="hc-voltar-resultados">← Voltar aos resultados</button><span></span></div>
-      <h2>Compras de ${escapeHtml(orgao.nome)}</h2>
-      <div class="cartoes">
-        <div class="cartao"><h3>Contratos no recorte</h3><div class="valor">${compras.length}</div></div>
-        <div class="cartao"><h3>Valor contratado</h3><div class="valor">${escapeHtml(formatarValor(valor))}</div></div>
-        <div class="cartao"><h3>UFs</h3><div class="valor" style="font-size:16px;">${escapeHtml(orgao.ufs.join(", ") || "-")}</div></div>
-      </div>
-      <p class="dica-clique">Recorte da consulta atual. Cada linha aponta para o registro oficial quando o número PNCP está disponível.</p>
-      <table><tr><th>Assinatura</th><th>Objeto</th><th>Fornecedor</th><th>Valor</th><th>Fonte</th></tr>`;
-    for (const contrato of compras.slice(0, 100)) {
-      const link = linkPncpContrato(contrato.numeroControlePNCP);
-      html += `<tr>
-        <td>${formatarDataIso(contrato.dataAssinatura)}</td>
-        <td>${escapeHtml((contrato.objeto || "-").slice(0, 180))}</td>
-        <td>${escapeHtml(contrato.nomeFornecedor || "-")}</td>
-        <td>${escapeHtml(formatarValor(contrato.valor || 0))}</td>
-        <td>${link ? `<a class="link-pncp" href="${escapeHtml(link)}" target="_blank" rel="noopener">PNCP <svg class='icone-ph'><use href='#ph-arrow-square-out'></use></svg></a>` : "-"}</td>
-      </tr>`;
-    }
-    html += "</table>";
-    if (compras.length > 100) html += `<p class="dica-clique">Mostrando os 100 registros mais recentes de ${compras.length}.</p>`;
-    alvo.innerHTML = html;
-    alvo.querySelector("#hc-voltar-resultados").addEventListener("click", () => {
-      // Volta ao mesmo resultado já carregado: não faz nova consulta, não perde filtro e
-      // evita transformar o histórico numa página infinita de tabelas empilhadas.
-      renderListaHistorico("orgaos");
-    });
-    alvo.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
-
-  function renderHistoricoCompras(registros, { palavras, uf, dias, totalCorrespondente, truncado, resultadosHomologados = [], resultadosHomologadosTruncados = false, estadoResultadosHomologados = null }) {
-    const alvo = document.getElementById("hc-resultado");
-    if (!alvo) return;
-
-    const valorTotal = registros.reduce((soma, contrato) => soma + (contrato.valor || 0), 0);
-    const ticketMedio = registros.length > 0 ? valorTotal / registros.length : 0;
-    const orgaos = calcularOrgaos(registros);
-    const fornecedores = calcularConcorrentes(registros);
-    const totalOrgaos = new Set(registros.map((contrato) => contrato.orgao || "Órgão não informado")).size;
-    const porMes = calcularPorMes(registros);
-    const filtroTexto = palavras.join(", ");
-    const filtroLocal = uf ? ` em ${uf}` : " no Brasil";
-    _hcContextoAtual = {
-      registros,
-      orgaos,
-      fornecedores,
-      resultadosHomologados,
-      opcoes: { palavras, uf, dias, totalCorrespondente, truncado },
-    };
-
-    let html = `<div class="aviso" style="border-color:var(--aviso-neutro-borda);color:var(--aviso-neutro-texto);">Histórico de compras para <strong>${escapeHtml(filtroTexto)}</strong>${escapeHtml(filtroLocal)} nos últimos ${dias} dia(s), usando contratos já coletados.</div>`;
-    if (truncado) {
-      html += `<div class="aviso">A busca encontrou ${Number(totalCorrespondente).toLocaleString("pt-BR")} contratos. Para manter a consulta rápida, os indicadores mostram os ${registros.length.toLocaleString("pt-BR")} mais recentes; refine o objeto, a UF ou o período para analisar uma amostra menor.</div>`;
-    }
-    html += '<h2>Resultados homologados do Compras.gov</h2>';
-    if (estadoResultadosHomologados) {
-      const atualizadoEm = estadoResultadosHomologados.ultimoSucessoEm || estadoResultadosHomologados.atualizadoEm;
-      const situacaoFonte = estadoResultadosHomologados.saudeFonte === "indisponivel"
-        ? "Fonte em recuperação; a coleta retoma automaticamente do último cursor."
-        : "Coleta incremental ativa; novos resultados são incorporados sem duplicar contratos.";
-      html += `<p class="dica-clique">${escapeHtml(situacaoFonte)}${atualizadoEm ? ` Última atualização: ${escapeHtml(formatarDataIso(atualizadoEm))}.` : ""}</p>`;
-    }
-    if (resultadosHomologados.length === 0) {
-      html += '<div class="aviso" style="border-color:var(--aviso-neutro-borda);color:var(--aviso-neutro-texto);">Nenhum resultado homologado público encontrado ainda neste recorte. Esta base é coletada separadamente e aparecerá aqui conforme o backfill avançar.</div>';
-    } else {
-      if (resultadosHomologadosTruncados) html += `<p class="dica-clique">Mostrando os ${resultadosHomologados.length} resultados mais recentes; refine o filtro para ver uma fatia menor.</p>`;
-      html += '<p class="dica-clique">Fonte complementar, mantida separada dos contratos para evitar dupla contagem. Clique em uma linha para ver a rastreabilidade do item.</p>';
-      html += '<table class="historico-compras-tabela"><tr><th>Resultado</th><th>Item</th><th>Fornecedor</th><th>UF</th><th>Valor homologado</th><th>Fonte</th></tr>';
-      resultadosHomologados.slice(0, 100).forEach((registro, indice) => {
-        const item = registro.item || {};
-        const fornecedor = registro.fornecedor || {};
-        const resultado = registro.resultado || {};
-        html += `<tr class="linha-clicavel" data-hc-resultado-homologado="${indice}" title="Ver rastreabilidade do resultado"><td>${escapeHtml(formatarDataIso(resultado.data))}</td><td>${escapeHtml((item.descricao || item.descricaoResumida || "-").slice(0, 150))}</td><td>${escapeHtml(fornecedor.nome || fornecedor.documento || "-")}</td><td>${escapeHtml(registro.compra?.uf || "-")}</td><td>${escapeHtml(formatarValor(resultado.valorTotalHomologado || 0))}</td><td>Compras.gov</td></tr>`;
-      });
-      html += '</table>';
-    }
-    html += `<div class="cartoes">
-      <div class="cartao"><h3>Compras encontradas</h3><div class="valor">${registros.length.toLocaleString("pt-BR")}</div></div>
-      <div class="cartao"><h3>Valor contratado</h3><div class="valor">${escapeHtml(formatarValor(valorTotal))}</div></div>
-      <div class="cartao"><h3>Ticket médio</h3><div class="valor">${escapeHtml(formatarValor(ticketMedio))}</div></div>
-      <div class="cartao"><h3>Órgãos compradores</h3><div class="valor">${totalOrgaos}</div></div>
-    </div>`;
-
-    if (registros.length === 0) {
-      html += '<div class="aviso">Nenhuma compra encontrada nesse recorte. Tente um termo mais amplo, outra UF ou um período maior.</div>';
-      alvo.innerHTML = html;
-      return;
-    }
-
-    if (porMes.length > 0) {
-      const maxMes = Math.max(...porMes.map((mes) => mes.valor), 1);
-      html += '<h2>Evolução mensal</h2><div class="mini-grafico">';
-      for (const mes of porMes) {
-        const alturaPct = Math.max(4, Math.round((mes.valor / maxMes) * 100));
-        html += `<div class="mini-grafico-coluna" title="${escapeHtml(mes.rotulo)}: ${escapeHtml(mes.valorFormatado)} · ${mes.contratos} contrato(s)">
-          <div class="mini-grafico-valor">${mes.contratos}</div>
-          <div class="mini-grafico-barra" style="height:${alturaPct}%"></div>
-          <div class="mini-grafico-rotulo">${escapeHtml(mes.rotulo)}</div>
-        </div>`;
-      }
-      html += '</div>';
-    }
-
-    if (orgaos.length > 0) {
-      html += '<h2>Principais órgãos compradores</h2><table><tr><th>Órgão</th><th>Contratos</th><th>Valor contratado</th><th>UFs</th></tr>';
-      orgaos.forEach((orgao, indice) => {
-        html += `<tr class="linha-clicavel" data-hc-orgao="${indice}" title="Ver compras deste órgão"><td>${escapeHtml(orgao.nome)}</td><td>${orgao.contratos}</td><td>${escapeHtml(orgao.valorFormatado)}</td><td>${escapeHtml(orgao.ufs.join(", ") || "-")}</td></tr>`;
-      });
-      html += '</table>';
-    }
-
-    if (fornecedores.length > 0) {
-      html += '<h2>Fornecedores com mais contratos</h2><table><tr><th>Fornecedor</th><th>Contratos</th><th>Valor contratado</th><th>UFs</th></tr>';
-      fornecedores.forEach((fornecedor, indice) => {
-        html += `<tr class="linha-clicavel" data-hc-fornecedor="${indice}" title="Abrir dossiê desta empresa"><td>${escapeHtml(fornecedor.nome)}<br><small>${escapeHtml(fornecedor.cnpj)}</small></td><td>${fornecedor.contratos}</td><td>${escapeHtml(fornecedor.valorFormatado)}</td><td>${escapeHtml(fornecedor.ufs.join(", ") || "-")}</td></tr>`;
-      });
-      html += '</table>';
-    }
-
-    html += '<h2>Compras mais recentes</h2><table class="historico-compras-tabela"><tr><th>Assinatura</th><th>Objeto</th><th>Órgão</th><th>Fornecedor</th><th>UF</th><th>Valor</th></tr>';
-    for (const contrato of registros.slice(0, 100)) {
-      html += `<tr>
-        <td>${formatarDataIso(contrato.dataAssinatura)}</td>
-        <td>${escapeHtml((contrato.objeto || "-").slice(0, 150))}</td>
-        <td>${escapeHtml(contrato.orgao || "-")}</td>
-        <td>${escapeHtml(contrato.nomeFornecedor || "-")}</td>
-        <td>${escapeHtml(contrato.uf || "-")}</td>
-        <td>${escapeHtml(formatarValor(contrato.valor || 0))}</td>
-      </tr>`;
-    }
-    html += '</table>';
-    if (registros.length > 100) html += `<p class="dica-clique">Mostrando as 100 compras mais recentes de ${registros.length.toLocaleString("pt-BR")} encontradas.</p>`;
-    alvo.innerHTML = html;
-    alvo.querySelectorAll("tr[data-hc-orgao]").forEach((linha) => {
-      linha.addEventListener("click", () => renderDetalheHistoricoOrgao(Number(linha.dataset.hcOrgao)));
-    });
-    alvo.querySelectorAll("tr[data-hc-fornecedor]").forEach((linha) => {
-      linha.addEventListener("click", () => {
-        const fornecedor = fornecedores[Number(linha.dataset.hcFornecedor)];
-        if (!fornecedor || !fornecedor.cnpj) return;
-        document.querySelector('nav button[data-alvo="empresa"]').click();
-        document.getElementById("emp-cnpj").value = fornecedor.cnpj;
-        document.getElementById("emp-segmento").value = palavras.join(", ");
-        document.getElementById("emp-buscar").click();
-      });
-    });
-    alvo.querySelectorAll("tr[data-hc-resultado-homologado]").forEach((linha) => {
-      linha.addEventListener("click", () => {
-        const registro = resultadosHomologados[Number(linha.dataset.hcResultadoHomologado)];
-        if (!registro) return;
-        const item = registro.item || {};
-        const fornecedor = registro.fornecedor || {};
-        const resultado = registro.resultado || {};
-        const compra = registro.compra || {};
-        const existente = alvo.querySelector(".detalhe-drilldown");
-        if (existente) existente.remove();
-        const detalhe = document.createElement("div");
-        detalhe.className = "detalhe-drilldown";
-        const podeConsultarMarca = !item.marca && item.catalogoCodigo && compra.id && item.id;
-        detalhe.innerHTML = `<dl><div><dt>Descrição oficial do item</dt><dd>${escapeHtml(item.descricao || item.descricaoResumida || "-")}</dd></div><div><dt>Fornecedor</dt><dd>${escapeHtml(fornecedor.nome || "-")} · ${escapeHtml(fornecedor.documento || "-")}</dd></div><div><dt>Processo / PNCP</dt><dd>${escapeHtml(compra.numeroControlePncp || compra.id || "-")}</dd></div><div><dt>Resultado</dt><dd>${escapeHtml(resultado.situacao || "-")} · classificação ${escapeHtml(String(resultado.classificacao ?? "-"))}</dd></div><div><dt>Quantidade e valor</dt><dd>${escapeHtml(String(resultado.quantidadeHomologada ?? "-"))} ${escapeHtml(item.unidadeMedida || "")} · ${escapeHtml(formatarValor(resultado.valorUnitarioHomologado || 0))} unitário · ${escapeHtml(formatarValor(resultado.valorTotalHomologado || 0))} total</dd></div><div><dt>Marca / modelo</dt><dd id="hc-marca-detalhe">${escapeHtml(item.marca || item.modelo ? `${item.marca || "-"} / ${item.modelo || "-"}` : item.marcaModeloStatus || "Não informado")}${podeConsultarMarca ? ' <button type="button" class="btn-imprimir" id="hc-consultar-marca">Consultar marca declarada</button>' : ""}</dd></div><div><dt>Proveniência</dt><dd>API pública do Compras.gov · coletado em ${escapeHtml(formatarDataIso(registro.coletadoEm))} · <a class="link-pncp" href="https://dadosabertos.compras.gov.br/swagger-ui/index.html" target="_blank" rel="noopener">Documentação da fonte <svg class='icone-ph'><use href='#ph-arrow-square-out'></use></svg></a></dd></div></dl>`;
-        linha.after(detalhe);
-        const botaoMarca = detalhe.querySelector("#hc-consultar-marca");
-        if (botaoMarca) {
-          botaoMarca.addEventListener("click", async () => {
-            const destinoMarca = detalhe.querySelector("#hc-marca-detalhe");
-            botaoMarca.disabled = true;
-            botaoMarca.textContent = "Consultando...";
-            try {
-              const params = new URLSearchParams({ catalogo: item.catalogoCodigo, compra: compra.id, item: item.id });
-              const resposta = await fetchComSessao(`/api/comprasgov-marca?${params}`);
-              const dados = await resposta.json();
-              if (!resposta.ok || !dados.ok) throw new Error(dados.erro || "Consulta indisponível.");
-              destinoMarca.textContent = dados.encontrada ? `${dados.marca} — marca declarada na ${dados.fonte}.` : "A fonte oficial não informou uma marca utilizável para este item.";
-            } catch (erro) {
-              destinoMarca.textContent = `Não foi possível consultar a marca agora: ${erro.message}`;
-            }
-          });
-        }
-      });
-    });
-  }
-
-  // O histórico não deve entregar todos os relatórios na primeira resposta. A visão geral
-  // aponta o próximo caminho; cada clique abre sua própria lista e, depois, seu dossiê.
-  // Assim a profundidade continua disponível sem transformar a página em uma esteira.
-  function cabecalhoHistorico(titulo, descricao, voltar) {
-    return `<div class="hc-trilha"><span>Histórico de compras</span><span>›</span><strong>${escapeHtml(titulo)}</strong></div>
-      <div class="dg-topo-acoes">${voltar ? `<button type="button" class="btn-imprimir" id="hc-voltar">← ${escapeHtml(voltar)}</button>` : "<span></span>"}</div>
-      <h2>${escapeHtml(titulo)}</h2>${descricao ? `<p class="dica-clique">${escapeHtml(descricao)}</p>` : ""}`;
-  }
-
-  function voltarVisaoGeralHistorico() {
-    const contexto = _hcContextoAtual;
-    if (!contexto) return;
-    renderHistoricoComprasProgressivo(contexto.registros, contexto.opcoes);
-  }
-
-  function ligarVoltarHistorico(alvo, destino) {
-    const botao = alvo.querySelector("#hc-voltar");
-    if (!botao) return;
-    botao.addEventListener("click", () => {
-      if (destino) renderListaHistorico(destino);
-      else voltarVisaoGeralHistorico();
-    });
-  }
-
-  function renderHistoricoComprasProgressivo(registros, opcoes) {
-    const alvo = document.getElementById("hc-resultado");
-    if (!alvo) return;
-    // Fallback defensivo para chamadas legadas durante a transição deste fluxo.
-    if (!Array.isArray(registros) || !opcoes) return renderHistoricoCompras(registros || [], opcoes || {});
-    const { palavras, uf, dias, totalCorrespondente, truncado, resultadosHomologados = [], resultadosHomologadosTruncados = false, estadoResultadosHomologados = null } = opcoes;
-    const valorTotal = registros.reduce((soma, contrato) => soma + (contrato.valor || 0), 0);
-    const orgaos = calcularOrgaos(registros);
-    const fornecedores = calcularConcorrentes(registros);
-    _hcContextoAtual = { registros, orgaos, fornecedores, resultadosHomologados, opcoes: { ...opcoes, resultadosHomologadosTruncados, estadoResultadosHomologados } };
-
-    const recorte = `${palavras.join(", ")} · ${uf || "Brasil"} · ${dias} dias`;
-    const atualizacao = estadoResultadosHomologados?.ultimoSucessoEm || estadoResultadosHomologados?.atualizadoEm;
-    let html = cabecalhoHistorico("Visão geral", `Recorte atual: ${recorte}. Escolha uma frente para aprofundar a análise.`, null);
-    if (truncado) html += `<div class="aviso">A consulta encontrou ${Number(totalCorrespondente).toLocaleString("pt-BR")} contratos. Os indicadores usam os ${registros.length.toLocaleString("pt-BR")} mais recentes; refine o filtro para analisar uma amostra menor.</div>`;
-    html += `<div class="cartoes">
-      <div class="cartao"><h3>Contratos</h3><div class="valor">${registros.length.toLocaleString("pt-BR")}</div></div>
-      <div class="cartao"><h3>Valor contratado</h3><div class="valor" title="${escapeHtml(formatarValor(valorTotal))}">${escapeHtml(formatarValorCompacto(valorTotal))}</div></div>
-      <div class="cartao"><h3>Órgãos compradores</h3><div class="valor">${orgaos.length.toLocaleString("pt-BR")}</div></div>
-      <div class="cartao"><h3>Resultados homologados</h3><div class="valor">${resultadosHomologados.length.toLocaleString("pt-BR")}</div></div>
-    </div>
-    <div class="hc-painel-exploracao">
-      <button type="button" class="hc-acao-explorar" data-hc-explorar="homologados"><strong>Resultados homologados</strong><span>Marca declarada, fornecedor, valor e rastreabilidade do item no Compras.gov.</span></button>
-      <button type="button" class="hc-acao-explorar" data-hc-explorar="orgaos"><strong>Órgãos compradores</strong><span>Quem compra, em quais UFs e qual é o histórico de cada órgão.</span></button>
-      <button type="button" class="hc-acao-explorar" data-hc-explorar="fornecedores"><strong>Fornecedores vencedores</strong><span>Empresas que mais venceram no recorte e acesso ao dossiê.</span></button>
-      <button type="button" class="hc-acao-explorar" data-hc-explorar="contratos"><strong>Contratos recentes</strong><span>Lista oficial dos contratos para conferir processo, órgão e valor.</span></button>
-    </div>`;
-    if (atualizacao) html += `<p class="dica-clique">Resultados homologados atualizados em ${escapeHtml(formatarDataIso(atualizacao))}. A base complementar não entra nos totais de contratos, evitando dupla contagem.</p>`;
-    alvo.innerHTML = html;
-    alvo.querySelectorAll("[data-hc-explorar]").forEach((botao) => botao.addEventListener("click", () => renderListaHistorico(botao.dataset.hcExplorar)));
-  }
-
-  function renderListaHistorico(tipo) {
-    const contexto = _hcContextoAtual;
-    const alvo = document.getElementById("hc-resultado");
-    if (!contexto || !alvo) return;
-    const { registros, orgaos, fornecedores, resultadosHomologados, opcoes } = contexto;
-    let html = "";
-    if (tipo === "homologados") {
-      html = cabecalhoHistorico("Resultados homologados", "Clique em uma linha para abrir o dossiê do item e consultar a marca declarada.", "Visão geral");
-      if (opcoes.resultadosHomologadosTruncados) html += `<p class="dica-clique">Mostrando os ${resultadosHomologados.length} resultados mais recentes; refine o filtro para reduzir a lista.</p>`;
-      if (resultadosHomologados.length === 0) html += '<div class="aviso">Nenhum resultado homologado público encontrado neste recorte. A coleta complementar segue em expansão.</div>';
-      else {
-        html += '<table class="historico-compras-tabela"><tr><th>Resultado</th><th>Item</th><th>Fornecedor</th><th>UF</th><th>Valor homologado</th></tr>';
-        resultadosHomologados.slice(0, 100).forEach((registro, indice) => {
-          const item = registro.item || {}, fornecedor = registro.fornecedor || {}, resultado = registro.resultado || {};
-          html += `<tr class="linha-clicavel" data-hc-resultado-homologado="${indice}" title="Abrir dossiê do item"><td>${escapeHtml(formatarDataIso(resultado.data))}</td><td>${escapeHtml((item.descricao || item.descricaoResumida || "-").slice(0, 140))}</td><td>${escapeHtml(fornecedor.nome || fornecedor.documento || "-")}</td><td>${escapeHtml(registro.compra?.uf || "-")}</td><td>${escapeHtml(formatarValor(resultado.valorTotalHomologado || 0))}</td></tr>`;
-        });
-        html += "</table>";
-      }
-    } else if (tipo === "orgaos") {
-      html = cabecalhoHistorico("Órgãos compradores", "Abra um órgão para ver apenas as compras dele dentro do recorte atual.", "Visão geral");
-      html += '<table><tr><th>Órgão</th><th>Contratos</th><th>Valor contratado</th><th>UFs</th></tr>';
-      orgaos.forEach((orgao, indice) => { html += `<tr class="linha-clicavel" data-hc-orgao="${indice}" title="Abrir compras deste órgão"><td>${escapeHtml(orgao.nome)}</td><td>${orgao.contratos}</td><td>${escapeHtml(orgao.valorFormatado)}</td><td>${escapeHtml(orgao.ufs.join(", ") || "-")}</td></tr>`; });
-      html += "</table>";
-    } else if (tipo === "fornecedores") {
-      html = cabecalhoHistorico("Fornecedores vencedores", "Abra uma empresa para ver sua participação antes de partir para a análise completa.", "Visão geral");
-      html += '<table><tr><th>Fornecedor</th><th>Contratos</th><th>Valor contratado</th><th>UFs</th></tr>';
-      fornecedores.forEach((fornecedor, indice) => { html += `<tr class="linha-clicavel" data-hc-fornecedor="${indice}" title="Abrir dossiê do fornecedor"><td>${escapeHtml(fornecedor.nome)}<br><small>${escapeHtml(fornecedor.cnpj || "-")}</small></td><td>${fornecedor.contratos}</td><td>${escapeHtml(fornecedor.valorFormatado)}</td><td>${escapeHtml(fornecedor.ufs.join(", ") || "-")}</td></tr>`; });
-      html += "</table>";
-    } else {
-      html = cabecalhoHistorico("Contratos recentes", "Clique em uma linha para ver o processo e a origem oficial.", "Visão geral");
-      html += '<table class="historico-compras-tabela"><tr><th>Assinatura</th><th>Objeto</th><th>Órgão</th><th>Fornecedor</th><th>UF</th><th>Valor</th></tr>';
-      registros.slice(0, 100).forEach((contrato, indice) => { html += `<tr class="linha-clicavel" data-hc-contrato="${indice}" title="Abrir dossiê do contrato"><td>${formatarDataIso(contrato.dataAssinatura)}</td><td>${escapeHtml((contrato.objeto || "-").slice(0, 140))}</td><td>${escapeHtml(contrato.orgao || "-")}</td><td>${escapeHtml(contrato.nomeFornecedor || "-")}</td><td>${escapeHtml(contrato.uf || "-")}</td><td>${escapeHtml(formatarValor(contrato.valor || 0))}</td></tr>`; });
-      html += "</table>";
-    }
-    alvo.innerHTML = html;
-    ligarVoltarHistorico(alvo);
-    alvo.querySelectorAll("[data-hc-orgao]").forEach((linha) => linha.addEventListener("click", () => renderDetalheHistoricoOrgao(Number(linha.dataset.hcOrgao))));
-    alvo.querySelectorAll("[data-hc-fornecedor]").forEach((linha) => linha.addEventListener("click", () => renderDetalheHistoricoFornecedor(Number(linha.dataset.hcFornecedor))));
-    alvo.querySelectorAll("[data-hc-contrato]").forEach((linha) => linha.addEventListener("click", () => renderDetalheHistoricoContrato(Number(linha.dataset.hcContrato))));
-    alvo.querySelectorAll("[data-hc-resultado-homologado]").forEach((linha) => linha.addEventListener("click", () => renderDetalheHistoricoResultado(Number(linha.dataset.hcResultadoHomologado))));
-    alvo.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
-
-  function renderDetalheHistoricoFornecedor(indice) {
-    const contexto = _hcContextoAtual, alvo = document.getElementById("hc-resultado");
-    const fornecedor = contexto?.fornecedores[indice];
-    if (!fornecedor || !alvo) return;
-    const compras = contexto.registros.filter((contrato) => (contrato.cnpjFornecedor || "") === fornecedor.cnpj);
-    alvo.innerHTML = `${cabecalhoHistorico(fornecedor.nome, "Dossiê do fornecedor dentro do recorte pesquisado.", "Fornecedores vencedores")}
-      <div class="cartoes"><div class="cartao"><h3>Contratos</h3><div class="valor">${compras.length}</div></div><div class="cartao"><h3>Valor contratado</h3><div class="valor">${escapeHtml(fornecedor.valorFormatado)}</div></div><div class="cartao"><h3>UFs</h3><div class="valor" style="font-size:16px;">${escapeHtml(fornecedor.ufs.join(", ") || "-")}</div></div></div>
-      ${fornecedor.cnpj ? `<button type="button" class="btn-buscar" id="hc-abrir-empresa">Abrir análise completa da empresa</button>` : ""}`;
-    ligarVoltarHistorico(alvo, "fornecedores");
-    const botao = alvo.querySelector("#hc-abrir-empresa");
-    if (botao) botao.addEventListener("click", () => { document.querySelector('nav button[data-alvo="empresa"]').click(); document.getElementById("emp-cnpj").value = fornecedor.cnpj; document.getElementById("emp-segmento").value = contexto.opcoes.palavras.join(", "); document.getElementById("emp-buscar").click(); });
-  }
-
-  function renderDetalheHistoricoContrato(indice) {
-    const contexto = _hcContextoAtual, alvo = document.getElementById("hc-resultado"), contrato = contexto?.registros[indice];
-    if (!contrato || !alvo) return;
-    const fonte = linkPncpContrato(contrato.numeroControlePNCP);
-    alvo.innerHTML = `${cabecalhoHistorico("Dossiê do contrato", "Dados já coletados; consulte a fonte oficial para o processo completo.", "Contratos recentes")}
-      <div class="detalhe-drilldown hc-dossie"><dl><div><dt>Objeto</dt><dd>${escapeHtml(contrato.objeto || "-")}</dd></div><div><dt>Órgão</dt><dd>${escapeHtml(contrato.orgao || "-")}</dd></div><div><dt>Fornecedor</dt><dd>${escapeHtml(contrato.nomeFornecedor || "-")} · ${escapeHtml(contrato.cnpjFornecedor || "-")}</dd></div><div><dt>UF / município</dt><dd>${escapeHtml([contrato.municipio, contrato.uf].filter(Boolean).join(" · ") || "-")}</dd></div><div><dt>Assinatura</dt><dd>${escapeHtml(formatarDataIso(contrato.dataAssinatura))}</dd></div><div><dt>Valor</dt><dd>${escapeHtml(formatarValor(contrato.valor || 0))}</dd></div><div><dt>Processo</dt><dd>${escapeHtml(contrato.numeroControlePNCP || "-")}${fonte ? ` · <a class="link-pncp" href="${escapeHtml(fonte)}" target="_blank" rel="noopener">Abrir no PNCP <svg class='icone-ph'><use href='#ph-arrow-square-out'></use></svg></a>` : ""}</dd></div></dl></div>`;
-    ligarVoltarHistorico(alvo, "contratos");
-  }
-
-  function renderDetalheHistoricoResultado(indice) {
-    const contexto = _hcContextoAtual, alvo = document.getElementById("hc-resultado"), registro = contexto?.resultadosHomologados[indice];
-    if (!registro || !alvo) return;
-    const item = registro.item || {}, fornecedor = registro.fornecedor || {}, resultado = registro.resultado || {}, compra = registro.compra || {};
-    const podeConsultarMarca = !item.marca && item.catalogoCodigo && compra.id && item.id;
-    alvo.innerHTML = `${cabecalhoHistorico("Dossiê do resultado homologado", "Rastreabilidade do item público do Compras.gov.", "Resultados homologados")}
-      <div class="detalhe-drilldown hc-dossie"><dl><div><dt>Descrição oficial</dt><dd>${escapeHtml(item.descricao || item.descricaoResumida || "-")}</dd></div><div><dt>Fornecedor</dt><dd>${escapeHtml(fornecedor.nome || "-")} · ${escapeHtml(fornecedor.documento || "-")}</dd></div><div><dt>Processo / PNCP</dt><dd>${escapeHtml(compra.numeroControlePncp || compra.id || "-")}</dd></div><div><dt>Resultado</dt><dd>${escapeHtml(resultado.situacao || "-")} · classificação ${escapeHtml(String(resultado.classificacao ?? "-"))}</dd></div><div><dt>Quantidade e valor</dt><dd>${escapeHtml(String(resultado.quantidadeHomologada ?? "-"))} ${escapeHtml(item.unidadeMedida || "")} · ${escapeHtml(formatarValor(resultado.valorUnitarioHomologado || 0))} unitário · ${escapeHtml(formatarValor(resultado.valorTotalHomologado || 0))} total</dd></div><div><dt>Marca / modelo</dt><dd id="hc-marca-detalhe">${escapeHtml(item.marca || item.modelo ? `${item.marca || "-"} / ${item.modelo || "-"}` : item.marcaModeloStatus || "Não informado")}${podeConsultarMarca ? ' <button type="button" class="btn-imprimir" id="hc-consultar-marca">Consultar marca declarada</button>' : ""}</dd></div><div><dt>Proveniência</dt><dd>API pública do Compras.gov · coletado em ${escapeHtml(formatarDataIso(registro.coletadoEm))}</dd></div></dl></div>`;
-    ligarVoltarHistorico(alvo, "homologados");
-    const botaoMarca = alvo.querySelector("#hc-consultar-marca");
-    if (botaoMarca) botaoMarca.addEventListener("click", async () => {
-      const destinoMarca = alvo.querySelector("#hc-marca-detalhe");
-      botaoMarca.disabled = true; botaoMarca.textContent = "Consultando...";
-      try {
-        const params = new URLSearchParams({ catalogo: item.catalogoCodigo, compra: compra.id, item: item.id });
-        const resposta = await fetchComSessao(`/api/comprasgov-marca?${params}`);
-        const dados = await resposta.json();
-        if (!resposta.ok || !dados.ok) throw new Error(dados.erro || "Consulta indisponível.");
-        destinoMarca.textContent = dados.encontrada ? `${dados.marca} — marca declarada na ${dados.fonte}.` : "A fonte oficial não informou uma marca utilizável para este item.";
-      } catch (erro) { destinoMarca.textContent = `Não foi possível consultar a marca agora: ${erro.message}`; }
-    });
-  }
-
-  function comPrazoHistorico(promessa, milissegundos, fallback) {
+  function comPrazoMercado(promessa, milissegundos, fallback) {
     let temporizador = null;
     const limite = new Promise((resolve) => {
       temporizador = setTimeout(() => resolve(fallback), milissegundos);
@@ -10356,58 +8485,115 @@
     return Promise.race([promessa, limite]).finally(() => clearTimeout(temporizador));
   }
 
-  document.getElementById("hc-buscar").addEventListener("click", async () => {
-    const objetoRaw = document.getElementById("hc-objeto").value.trim();
-    const uf = document.getElementById("hc-uf").value.trim().toUpperCase();
-    const dias = parseInt(document.getElementById("hc-dias").value, 10);
-    const alvo = document.getElementById("hc-resultado");
-    const chips = document.getElementById("hc-chips");
-    const btn = document.getElementById("hc-buscar");
+  function mkTabela(cabecalho, linhas) {
+    return `<div class="mk-tabela-caixa"><table class="mk-tabela"><thead><tr>${cabecalho.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${linhas.join("")}</tbody></table></div>`;
+  }
+  function mkGraficoMeses(meses) {
+    if (!meses.length) return '<p class="dica-clique">As compras encontradas não têm data para montar o gráfico.</p>';
+    const maior = Math.max(...meses.map((m) => m.valor)) || 1;
+    return `<div class="mk-grafico" role="img" aria-label="Valor comprado por mês">${meses.map((m) => `<div class="mk-barra" title="${escapeHtml(m.rotulo)}: ${escapeHtml(formatarValor(m.valor))} em ${m.compras} compra(s)"><span class="mk-barra-valor">${escapeHtml(formatarValorCompacto(m.valor))}</span><span class="mk-barra-coluna" style="height:${Math.max(4, Math.round((m.valor / maior) * 140))}px"></span><span class="mk-barra-rotulo">${escapeHtml(m.rotulo)}</span></div>`).join("")}</div>`;
+  }
 
-    if (!objetoRaw) {
-      alvo.innerHTML = '<div class="aviso">Informe ao menos uma palavra-chave de objeto ou produto.</div>';
+  function renderPesquisaMercado(alvo, { termo, uf, dias, vendas, avisos }) {
+    const M = window.MercadoPesquisa;
+    const local = uf ? `em ${uf}` : "no Brasil";
+    const cabecalho = `<p class="mk-recorte">Resultado para <strong>${escapeHtml(termo)}</strong> ${escapeHtml(local)}, últimos ${escapeHtml(String(dias))} dias.</p>${avisos.map((a) => `<div class="aviso">${escapeHtml(a)}</div>`).join("")}`;
+    if (!vendas.length) {
+      alvo.innerHTML = `${cabecalho}<div class="estado-vazio"><p class="estado-vazio-titulo">Nenhuma compra encontrada</p><p>Tente uma palavra mais curta (ex.: "papel" em vez de "papel sulfite A4 75g"), outro estado ou um período maior.</p></div>`;
       return;
     }
+    const r = M.resumo(vendas);
+    const ganha = M.quemGanha(vendas), paga = M.quantoSePaga(vendas), compra = M.quemCompra(vendas);
+    const cartoes = `<div class="cartoes mk-cartoes">
+      <div class="cartao"><h3>Valor total comprado</h3><div class="valor" title="${escapeHtml(formatarValor(r.valor))}">${escapeHtml(formatarValorCompacto(r.valor))}</div></div>
+      <div class="cartao"><h3>Compras encontradas</h3><div class="valor">${r.compras.toLocaleString("pt-BR")}</div></div>
+      <div class="cartao"><h3>Empresas que ganharam</h3><div class="valor">${r.fornecedores.toLocaleString("pt-BR")}</div></div>
+      <div class="cartao"><h3>Órgãos que compraram</h3><div class="valor">${r.orgaos.toLocaleString("pt-BR")}</div></div>
+    </div>`;
+    const linhasGanha = ganha.map((f) => `<tr><td>${escapeHtml(f.fornecedor || "Não informado")}${f.documento ? `<br><small>${escapeHtml(f.documento)}</small>` : ""}</td><td class="num">${f.vitorias}</td><td class="num">${escapeHtml(formatarValor(f.valor))}</td><td>${/^\d{14}$/.test(f.documento) ? `<button type="button" class="btn-imprimir mk-analisar" data-mk-cnpj="${escapeHtml(f.documento)}">Analisar empresa</button>` : ""}</td></tr>`);
+    const linhasPaga = paga.map((g) => `<tr><td>${escapeHtml(g.item)}</td><td>${escapeHtml(g.unidade || "-")}</td><td class="num">${g.compras}</td><td class="num"><strong>${escapeHtml(formatarValor(g.medio))}</strong></td><td class="num">${escapeHtml(formatarValor(g.menor))}</td><td class="num">${escapeHtml(formatarValor(g.maior))}</td><td>${g.linkMenor ? `<a href="${escapeHtml(g.linkMenor)}" target="_blank" rel="noopener noreferrer">ver compra</a>` : "-"}</td></tr>`);
+    const linhasCompra = compra.map((o) => `<tr><td>${escapeHtml(o.orgao)}</td><td>${escapeHtml(o.uf || "-")}</td><td class="num">${o.compras}</td><td class="num">${escapeHtml(formatarValor(o.valor))}</td></tr>`);
+    alvo.innerHTML = `${cabecalho}${cartoes}
+      <div class="mk-bloco"><h3>Compras por mês</h3>${mkGraficoMeses(M.porMes(vendas))}</div>
+      <div class="mk-bloco" id="mk-quem-ganha"><h3>Quem ganha</h3><p class="dica-clique">Empresas que mais venderam este produto ou serviço. Cada contrato ou item ganho conta como uma vitória. <button type="button" class="btn-filtro-rapido" data-abrir-fornecedor-ia="${escapeHtml(termo)}">Encontrar fornecedor com IA</button></p>${ganha.length ? mkTabela(["Empresa", "Vitórias", "Valor", ""], linhasGanha) : '<p class="dica-clique">Sem empresa identificada nas compras encontradas.</p>'}</div>
+      <div class="mk-bloco" id="mk-quanto-paga"><h3>Quanto se paga</h3><p class="dica-clique">Preço por unidade que os órgãos pagaram. O link abre a compra com o menor preço.</p>${paga.length ? mkTabela(["Item", "Unidade", "Compras", "Preço médio", "Menor", "Maior", "Fonte"], linhasPaga) : '<p class="dica-clique">As compras encontradas não informam preço por unidade (só o valor do contrato). Para preço por item, use uma palavra de produto (ex.: "papel A4").</p>'}</div>
+      <div class="mk-bloco" id="mk-quem-compra"><h3>Quem compra</h3><p class="dica-clique">Órgãos que mais gastaram com este produto ou serviço.</p>${compra.length ? mkTabela(["Órgão", "UF", "Compras", "Valor"], linhasCompra) : '<p class="dica-clique">As compras encontradas não informam o órgão.</p>'}</div>
+      <p class="dica-clique">Fontes: contratos e atas de registro de preço do PNCP e resultados homologados do Compras.gov já coletados, mais a Pesquisa de Preços do Compras.gov consultada agora. Um mesmo processo pode aparecer em mais de uma fonte; use os totais como ordem de grandeza.</p>`;
+  }
 
-    const palavras = objetoRaw.split(",").map((palavra) => palavra.trim()).filter(Boolean);
-    btn.disabled = true;
-    chips.innerHTML = "";
-    alvo.innerHTML = '<div class="carregando">Consultando histórico de compras...</div>';
-
-    try {
-      const [resultado, homologados] = await Promise.all([
-        comPrazoHistorico(
-          consultarContratosSupabase({ palavras, dias, uf: uf || null }),
-          15000,
-          { registros: [], erro: true, totalCorrespondente: null, truncado: false }
-        ),
-        comPrazoHistorico(
-          consultarResultadosHomologadosComprasGov({ palavras, dias, uf: uf || null }),
-          10000,
-          { registros: [], erro: true, totalCorrespondente: null, truncado: false, estado: null }
-        ),
-      ]);
-      if (resultado.erro) {
-        alvo.innerHTML = '<div class="aviso">Não foi possível consultar o histórico agora. Tente novamente em alguns instantes.</div>';
-        return;
-      }
-      chips.innerHTML = `<span class="chip">${escapeHtml(palavras.join(", "))}</span><span class="chip">${uf ? escapeHtml(uf) : "Brasil"}</span><span class="chip">${dias} dias</span>`;
-      renderHistoricoComprasProgressivo(resultado.registros, {
-        palavras,
-        uf,
-        dias,
-        totalCorrespondente: resultado.totalCorrespondente,
-        truncado: resultado.truncado,
-        resultadosHomologados: homologados.registros,
-        resultadosHomologadosTruncados: homologados.truncado,
-        estadoResultadosHomologados: homologados.estado,
-      });
-    } catch (e) {
-      alvo.innerHTML = `<div class="aviso">Erro ao consultar histórico: ${escapeHtml(String(e))}</div>`;
-    } finally {
-      btn.disabled = false;
+  async function pesquisarMercado() {
+    const termo = document.getElementById("mk-termo").value.trim();
+    const uf = document.getElementById("mk-uf").value.trim().toUpperCase();
+    const dias = parseInt(document.getElementById("mk-dias").value, 10) || 365;
+    const alvo = document.getElementById("mk-resultado");
+    const btn = document.getElementById("mk-buscar");
+    if (termo.length < 2) {
+      alvo.innerHTML = '<div class="aviso">Escreva o produto ou serviço que você vende (ex.: papel A4).</div>';
+      return;
     }
+    dgJaBuscado = true;
+    salvarFiltroDiagnostico(termo, uf, dias);
+    const seq = ++mkBuscaSeq;
+    btn.disabled = true;
+    alvo.innerHTML = '<div class="carregando">Pesquisando contratos e preços pagos pelos órgãos...</div>';
+    try {
+      const palavras = termo.split(",").map((p) => p.trim()).filter(Boolean);
+      const falha = { registros: [], erro: true };
+      const [contratos, homologados, atas, aoVivo] = await Promise.all([
+        comPrazoMercado(consultarContratosSupabase({ palavras, dias, uf: uf || null }), 15000, { ...falha, truncado: false }),
+        comPrazoMercado(consultarResultadosHomologadosComprasGov({ palavras, dias, uf: uf || null }), 10000, falha),
+        comPrazoMercado(carregarMercadoSegmentos(palavras, uf || null), 15000, null),
+        comPrazoMercado(consultarMarcasPorProdutoOficial(palavras[0], uf), 20000, { erro: true, itens: [] }),
+      ]);
+      if (seq !== mkBuscaSeq) return; // uma busca mais nova já está na tela
+      const M = window.MercadoPesquisa;
+      const desdeIso = new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const vendas = M.juntar([
+        contratos.registros.map((c) => M.deContrato(c, linkPncpContrato(c.numeroControlePNCP))),
+        homologados.registros.map((h) => M.deResultado(h, linkPncp(h.compra && h.compra.numeroControlePncp))),
+        (atas ? atas.atas : []).flatMap((a) => M.deAta(a, linkPncp(a.numeroControlePNCPCompra))),
+        aoVivo.itens.map(M.dePrecoAoVivo),
+      ], desdeIso);
+      const avisos = [];
+      if (contratos.erro || homologados.erro || !atas) avisos.push("Parte da base guardada não respondeu agora; os números podem estar incompletos. Tente de novo em instantes.");
+      if (aoVivo.erro) avisos.push("A Pesquisa de Preços do Compras.gov não respondeu agora; os preços mostram só o que já estava guardado.");
+      // A contagem é estimativa do Postgres ("planned"): só avisa corte quando a amostra realmente encheu.
+      if (contratos.truncado && contratos.registros.length >= 1000) avisos.push(`Foram achados mais de ${contratos.registros.length.toLocaleString("pt-BR")} contratos; a tela usa os mais recentes. Para um retrato mais fiel, escolha um estado ou um período menor.`);
+      renderPesquisaMercado(alvo, { termo, uf, dias, vendas, avisos });
+    } catch (e) {
+      if (seq === mkBuscaSeq) alvo.innerHTML = `<div class="aviso">Não foi possível pesquisar agora: ${escapeHtml(String(e && e.message || e))}</div>`;
+    } finally {
+      if (seq === mkBuscaSeq) btn.disabled = false;
+    }
+  }
+
+  document.getElementById("mk-form").addEventListener("submit", (ev) => { ev.preventDefault(); pesquisarMercado(); });
+  // "Analisar empresa" abre a análise do concorrente já com o CNPJ e o produto pesquisado.
+  document.getElementById("mk-resultado").addEventListener("click", (ev) => {
+    const botao = ev.target.closest("[data-mk-cnpj]");
+    if (!botao) return;
+    document.querySelector('nav button[data-alvo="empresa"]').click();
+    document.getElementById("emp-cnpj").value = botao.dataset.mkCnpj;
+    document.getElementById("emp-segmento").value = document.getElementById("mk-termo").value.trim();
+    document.getElementById("emp-buscar").click();
   });
+
+  // Baixa concorrência (baixa-concorrencia.js): abas Desertos / 1 / 2 / 3 licitantes do produto pesquisado.
+  // Só relê o histórico quando o produto muda.
+  function mkMontarBaixaConcorrencia() {
+    const alvo = document.getElementById("dg-bc-licitantes");
+    if (!alvo || !window.BaixaConcorrencia) return;
+    const termo = document.getElementById("mk-termo").value.trim();
+    if (termo.length < 2) {
+      delete alvo.dataset.palavras;
+      alvo.innerHTML = '<div class="aviso">Pesquise um produto ou serviço na aba <strong>Pesquisa de mercado</strong> para ver onde houve pouca concorrência.</div>';
+      return;
+    }
+    if (alvo.dataset.palavras === termo) return;
+    alvo.dataset.palavras = termo;
+    window.BaixaConcorrencia.montar({ alvo, cliente: window.__sbClient, palavras: termo.split(",").map((p) => p.trim()).filter(Boolean) });
+  }
+  document.querySelector('#dg-subabas [data-subaba="baixa-concorrencia"]').addEventListener("click", mkMontarBaixaConcorrencia);
 
   // ---------- Analisar Empresa ----------
   function salvarFiltroEmpresa(cnpj, segmentoRaw, dias) {
@@ -10928,19 +9114,11 @@
 
   async function restaurarDiagnostico() {
     const filtro = lerFiltroDiagnostico();
-    if (!filtro || !filtro.segmentoRaw) return;
-    document.getElementById("dg-segmento").value = filtro.segmentoRaw || "";
-    document.getElementById("dg-uf").value = filtro.uf || "";
-    document.getElementById("dg-orgao-filtro").value = filtro.orgaoFiltro || "";
-    if (filtro.dias) document.getElementById("dg-dias").value = filtro.dias;
-    if (filtro.municipio) {
-      try {
-        const municipios = await carregarTodosMunicipios();
-        renderOpcoesMunicipio(document.getElementById("dg-municipio"), (filtro.uf || "").toUpperCase(), municipios);
-        document.getElementById("dg-municipio").value = filtro.municipio;
-      } catch (e) { /* segue sem restaurar o município */ }
-    }
-    document.getElementById("dg-buscar").click();
+    if (!filtro || !filtro.termo) return;
+    document.getElementById("mk-termo").value = filtro.termo;
+    document.getElementById("mk-uf").value = filtro.uf || "";
+    if (filtro.dias) document.getElementById("mk-dias").value = filtro.dias;
+    pesquisarMercado();
   }
 
   // O estado único escolhido no cadastro é uma preferência forte e pode poupar vários
@@ -10956,7 +9134,7 @@
     const uf = unicos[0];
     const definicoes = [
       { seletor: "op-uf", temFiltro: () => !!lerFiltroOportunidades() },
-      { seletor: "dg-uf", temFiltro: () => !!lerFiltroDiagnostico() },
+      { seletor: "mk-uf", temFiltro: () => !!lerFiltroDiagnostico() },
       { seletor: "cv-uf", temFiltro: () => !!lerFiltroConvenios() },
     ];
     definicoes.forEach(({ seletor, temFiltro }) => {
