@@ -1,10 +1,11 @@
 name: SINAPI (preços de insumos e composições da CAIXA)
 
 # Robô mensal da tela SINAPI (scripts/coletar_sinapi.js): baixa da CAIXA (grátis, sem login, sem captcha) o ZIP
-# da referência mais recente (~16 MB, todas as UFs) e grava a tabela sinapi_precos das UFs pedidas.
+# da referência mais recente (~16 MB, todas as UFs) e grava sinapi_itens, sinapi_custos (27 UFs, desonerado e
+# não desonerado) e sinapi_composicao_itens (composições analíticas).
 # A CAIXA publica por volta do dia 10 a 15 do mês seguinte; roda dia 16 e dia 25 às 12:00 UTC (9h de Brasília)
-# para pegar atraso e retificação. Rodar de novo é seguro (upsert + limpeza da referência anterior por UF).
-# Não escreve no repositório: só no Supabase. Precisa de supabase/sinapi.sql aplicado antes.
+# para pegar atraso e retificação. Rodar de novo é seguro (upsert + limpeza da referência anterior).
+# Não escreve no repositório: só no Supabase. Precisa de supabase/sinapi_todas_ufs.sql aplicado antes.
 concurrency:
   group: sinapi
   cancel-in-progress: false
@@ -15,9 +16,9 @@ on:
   workflow_dispatch:
     inputs:
       ufs:
-        description: "UFs separadas por vírgula"
+        description: "UFs separadas por vírgula (vazio = todas as 27)"
         required: false
-        default: "AM"
+        default: ""
       referencia:
         description: "Mês AAAA-MM (vazio = mais recente publicado)"
         required: false
@@ -29,7 +30,7 @@ permissions:
 jobs:
   coletar:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -39,6 +40,6 @@ jobs:
       - name: Coletar SINAPI
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          SINAPI_UFS: ${{ github.event.inputs.ufs || 'AM' }}
+          SINAPI_UFS: ${{ github.event.inputs.ufs || '' }}
           SINAPI_REFERENCIA: ${{ github.event.inputs.referencia || '' }}
         run: node scripts/coletar_sinapi.js

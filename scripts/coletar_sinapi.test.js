@@ -2,7 +2,6 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const S = require("./coletar_sinapi");
 
-const EM = "2026-11-19T12:00:00.000Z";
 // Recorte do layout real (SINAPI_Referência_2026_10.xlsx): UF na linha 4, dados a partir da 11.
 const COMPARTILHADOS = ["AC", "AM", "MATERIAL", "AREIA MÉDIA &amp; LAVADA", "M3", "CR", "Alvenaria", "ALVENARIA DE VEDAÇÃO", "M2"];
 const sst = `<sst>${COMPARTILHADOS.map((t, i) => (i === 3 ? `<si><r><t>AREIA MÉDIA </t></r><r><t>&amp; LAVADA</t></r></si>` : `<si><t>${t}</t></si>`)).join("")}</sst>`;
@@ -23,25 +22,53 @@ test("textosCompartilhados junta rich text e decodifica entidades", () => {
   assert.equal(t[1], "AM");
 });
 
-test("linhasParaUf (insumo): coluna da UF pela linha 4, preço arredondado a centavo, sem preço na UF fica fora", () => {
-  const l = S.linhasParaUf(insumos, S.textosCompartilhados(sst), "ISD", "AM", "2026-10", EM);
-  assert.deepEqual(l, [{ uf: "AM", tipo: "insumo", desonerado: false, codigo: "370", descricao: "AREIA MÉDIA & LAVADA", unidade: "M3", grupo: "MATERIAL", origem: "CR",
-    preco: "72.85", referencia: "2026-10-01", busca: "areia media & lavada", coletado_em: EM }]);
-  assert.equal(S.linhasParaUf(insumos, S.textosCompartilhados(sst), "ICD", "AC", "2026-10", EM).length, 2);
+test("lerTabela (insumo): coluna de cada UF pela linha 4, preço arredondado a centavo, em branco vira null", () => {
+  const l = S.lerTabela(insumos, S.textosCompartilhados(sst), "ISD", ["AM", "AC"]);
+  assert.deepEqual(l[0], { tipo: "insumo", codigo: "370", descricao: "AREIA MÉDIA & LAVADA", unidade: "M3", grupo: "MATERIAL", origem: "CR",
+    precos: { AM: "72.85", AC: "99.50" } });
+  assert.deepEqual(l[1].precos, { AM: null, AC: "10.00" });
 });
 
-test("linhasParaUf (composição): código sai da fórmula HYPERLINK (valor em cache 0)", () => {
-  const [c] = S.linhasParaUf(composicoes, S.textosCompartilhados(sst), "CCD", "AM", "2026-10", EM);
+test("lerTabela (composição): código sai da fórmula HYPERLINK (valor em cache 0)", () => {
+  const [c] = S.lerTabela(composicoes, S.textosCompartilhados(sst), "CCD", ["AM"]);
   assert.equal(c.codigo, "104658");
   assert.equal(c.tipo, "composicao");
-  assert.equal(c.desonerado, true);
-  assert.equal(c.preco, "269.08");
+  assert.equal(c.precos.AM, "269.08");
   assert.equal(c.origem, null);
   assert.equal(c.grupo, "Alvenaria");
 });
 
-test("linhasParaUf recusa layout sem a UF no cabeçalho (não grava lixo)", () => {
-  assert.throws(() => S.linhasParaUf(insumos, S.textosCompartilhados(sst), "ISD", "SP", "2026-10", EM), /coluna da UF SP/);
+test("lerTabela recusa layout sem a UF no cabeçalho (não grava lixo)", () => {
+  assert.throws(() => S.lerTabela(insumos, S.textosCompartilhados(sst), "ISD", ["AM", "SP"]), /coluna da UF SP/);
+});
+
+test("montarLinhas: descrição uma vez; por UF, par sem/com desoneração; sem preço nos dois regimes fica fora", () => {
+  const comp = S.textosCompartilhados(sst);
+  const sd = S.lerTabela(insumos, comp, "ISD", ["AM", "AC"]);
+  const cd = [{ ...sd[0], precos: { AM: "70.00", AC: null } }];
+  const { itens, custos } = S.montarLinhas(sd, cd, ["AM", "AC"], "2026-10");
+  assert.equal(itens.length, 2);
+  assert.deepEqual(itens[0], { tipo: "insumo", codigo: "370", descricao: "AREIA MÉDIA & LAVADA", unidade: "M3", grupo: "MATERIAL", origem: "CR", referencia: "2026-10-01", busca: "areia media & lavada" });
+  assert.deepEqual(custos, [
+    { uf: "AM", tipo: "insumo", codigo: "370", preco_sd: "72.85", preco_cd: "70.00", referencia: "2026-10-01" },
+    { uf: "AC", tipo: "insumo", codigo: "370", preco_sd: "99.50", preco_cd: null, referencia: "2026-10-01" },
+    { uf: "AC", tipo: "insumo", codigo: "371", preco_sd: "10.00", preco_cd: null, referencia: "2026-10-01" },
+  ]);
+});
+
+test("lerAnalitico: pula a linha da composição, lê itens com coeficiente e soma item repetido", () => {
+  const xml = `<sheetData>
+<row r="10"><c r="C10" t="inlineStr"><is><t>Tipo Item</t></is></c></row>
+<row r="11"><c r="A11" t="inlineStr"><is><t>Acessibilidade</t></is></c><c r="B11"><v>104658</v></c><c r="E11" t="inlineStr"><is><t>PISO PODOTÁTIL</t></is></c><c r="F11" t="inlineStr"><is><t>M2</t></is></c></row>
+<row r="12"><c r="B12"><v>104658</v></c><c r="C12" t="inlineStr"><is><t>COMPOSICAO</t></is></c><c r="D12"><v>88316</v></c><c r="E12" t="inlineStr"><is><t>SERVENTE</t></is></c><c r="F12" t="inlineStr"><is><t>H</t></is></c><c r="G12"><v>1.279</v></c><c r="H12" t="inlineStr"><is><t>COM CUSTO</t></is></c></row>
+<row r="13"><c r="B13"><v>104658</v></c><c r="C13" t="inlineStr"><is><t>INSUMO</t></is></c><c r="D13"><v>34357</v></c><c r="E13" t="inlineStr"><is><t>REJUNTE</t></is></c><c r="F13" t="inlineStr"><is><t>KG</t></is></c><c r="G13"><v>0.24</v></c></row>
+<row r="14"><c r="B14"><v>104658</v></c><c r="C14" t="inlineStr"><is><t>INSUMO</t></is></c><c r="D14"><v>34357</v></c><c r="E14" t="inlineStr"><is><t>REJUNTE</t></is></c><c r="G14"><v>0.01</v></c></row>
+</sheetData>`;
+  const a = S.lerAnalitico(xml, [], "2026-10");
+  assert.equal(a.length, 2);
+  assert.deepEqual(a[0], { composicao: "104658", item_tipo: "composicao", item_codigo: "88316", descricao: "SERVENTE", unidade: "H", coeficiente: "1.279", situacao: "COM CUSTO", referencia: "2026-10-01" });
+  assert.equal(a[1].item_tipo, "insumo");
+  assert.equal(Number(a[1].coeficiente), 0.25);
 });
 
 test("mapaAbas liga nome da aba ao XML pelo rels", () => {
