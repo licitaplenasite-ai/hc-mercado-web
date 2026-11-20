@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { handler } = require("../netlify/functions/pncp-itens");
+const { comoLogado } = require("../netlify/functions/__tests__/fixtures/login-aprovado");
+const handler = comoLogado(require("../netlify/functions/pncp-itens").handler);
 
 test("consulta paginada busca só a página pedida e devolve continuidade", async () => {
   const original = global.fetch;

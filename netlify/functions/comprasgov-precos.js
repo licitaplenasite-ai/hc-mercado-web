@@ -1,4 +1,4 @@
-// Proxy público para a Pesquisa de Preços do Compras.gov.
+// Proxy (login aprovado) para a Pesquisa de Preços do Compras.gov.
 //
 // O Catálogo e a Pesquisa de Preços são fontes públicas, mas o navegador pode
 // bloquear chamadas diretas por CORS/instabilidade de origem. Centralizar as
@@ -6,7 +6,7 @@
 
 const CATALOGO = "https://cnbs.estaleiro.serpro.gov.br/cnbs-api/material/v1";
 const PESQUISA = "https://pesqpreco.estaleiro.serpro.gov.br/pesquisa-precos-backend-semlogin/api/itens-compra/buscar";
-const { origemPermitida, limitarPorIp } = require("./_auth");
+const { origemPermitida, exigirAprovadoComLimite } = require("./_auth");
 // A tela chama na mesma origem; CORS fica só no domínio canônico (teste de ataque 19/11, M5).
 const CABECALHOS = { "Content-Type": "application/json", "Access-Control-Allow-Origin": origemPermitida({}) };
 
@@ -30,7 +30,7 @@ async function obterJson(url, signal) {
 }
 
 exports.handler = async (event) => {
-  const limite = await limitarPorIp(event, "comprasgov-precos");
+  const limite = await exigirAprovadoComLimite(event, "comprasgov-precos");
   if (!limite.ok) return resposta(limite.status, { ok: false, erro: limite.erro });
   const parametros = event.queryStringParameters || {};
   const acao = texto(parametros.acao, 24);

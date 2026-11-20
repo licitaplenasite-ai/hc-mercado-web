@@ -7,7 +7,7 @@ const dossieValido = { versao: 17, versaoValidacao: 17, fonteLida: true, geradoE
   estrutura: { documentosHabilitacao: ["Certidão negativa de débitos federais"], declaracoesExigidas: [], coberturaLeitura: { parcial: false } } };
 
 // Simula o Supabase: a fila respeita on_conflict como o PostgREST, então um pedido repetido não duplica a linha.
-async function consultar({ dossie = null, filaFalha = false, vezes = 1 } = {}) {
+async function consultar({ dossie = null, filaFalha = false, vezes = 1, pedidosHoje = 1 } = {}) {
   const anterior = global.fetch, env = { ...process.env };
   process.env.SUPABASE_SERVICE_ROLE_KEY = "servico-teste";
   delete process.env.NETLIFY_BLOBS_CONTEXT;
@@ -17,8 +17,11 @@ async function consultar({ dossie = null, filaFalha = false, vezes = 1 } = {}) {
     if (url.includes("/rest/v1/clientes?")) return new Response(JSON.stringify([{ status: "aprovado" }]));
     if (url.includes("/auth/v1/user")) return new Response(JSON.stringify({ id: "cliente" }));
     if (url.includes("/rest/v1/dossies_editais")) return new Response(JSON.stringify(dossie ? [{ dossie, versao: dossie.versao }] : []));
+    // Teto da fila por pessoa (_auth.js, limitarFilaDossies): 1º pedido do dia.
+    if (url.endsWith("/rpc/incrementar_uso_ip")) return new Response(String(pedidosHoje));
     if (url.includes("/rest/v1/fila_dossies")) {
       if (filaFalha) throw new TypeError("fetch failed");
+      if (!opcoes.method) return new Response(JSON.stringify([...fila.values()].filter((l) => url.includes(encodeURIComponent(l.numero_controle_pncp)) && !l.concluido_em)));
       pedidosFila.push({ url, prefer: opcoes.headers.Prefer, linhas: JSON.parse(opcoes.body) });
       if (url.includes("on_conflict=numero_controle_pncp") && /merge-duplicates/.test(opcoes.headers.Prefer)) {
         for (const linha of JSON.parse(opcoes.body)) fila.set(linha.numero_controle_pncp, linha);
@@ -79,4 +82,11 @@ test("falha ao enfileirar não derruba a consulta de requisitos", async () => {
   assert.equal(r.respostas[0].statusCode, 200);
   assert.equal(r.respostas[0].corpo.disponivel, false);
   assert.deepEqual(r.respostas[0].corpo.requisitos, []);
+});
+
+test("acima do teto da fila por pessoa (10/dia) o edital novo não entra na fila", async () => {
+  const r = await consultar({ pedidosHoje: 11 });
+  assert.equal(r.respostas[0].statusCode, 200);
+  assert.equal(r.respostas[0].corpo.enfileirado, false);
+  assert.equal(r.pedidosFila.length, 0);
 });

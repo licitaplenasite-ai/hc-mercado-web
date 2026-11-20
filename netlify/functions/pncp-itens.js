@@ -4,7 +4,7 @@
 // necessidade de token.
 //
 // Uso: GET /.netlify/functions/pncp-itens?cnpj=...&ano=...&sequencial=...
-const { cabecalhosPadrao, limitarPorIp } = require("./_auth");
+const { cabecalhosPadrao, exigirAprovadoComLimite } = require("./_auth");
 const BASE_URL = "https://pncp.gov.br/api/pncp/v1/orgaos";
 
 // Ver nota em pncp-proxy.js: alguns endpoints do PNCP resetam a conexão sem User-Agent de
@@ -23,9 +23,9 @@ function margemPreferencia(item) {
 }
 
 exports.handler = async (event) => {
-  // Proxy público: CORS só do nosso domínio e teto diário por IP (teste de ataque 19/11, M5).
+  // Proxy do governo: CORS só do nosso domínio, login aprovado, teto por minuto da conta e teto diário por IP (abuso 20/11).
   const headers = cabecalhosPadrao(event);
-  const limite = await limitarPorIp(event, "pncp-itens");
+  const limite = await exigirAprovadoComLimite(event, "pncp-itens");
   if (!limite.ok) return { statusCode: limite.status, headers, body: JSON.stringify({ erro: limite.erro }) };
   const q = event.queryStringParameters || {};
   const cnpj = (q.cnpj || "").replace(/\D/g, "");

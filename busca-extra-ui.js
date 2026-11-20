@@ -66,7 +66,7 @@
     let salvo = null;
     try { salvo = JSON.parse(window.sessionStorage.getItem(`lp-itens-${k}`) || "null"); } catch { /* sem storage */ }
     if (salvo) { cacheItens.set(k, salvo); return salvo; }
-    const resp = await fetch(`/api/pncp-itens?${new URLSearchParams({ cnpj: partes.cnpj, ano: String(partes.ano), sequencial: String(partes.sequencial) })}`);
+    const resp = await (window.fetchComSessao || fetch)(`/api/pncp-itens?${new URLSearchParams({ cnpj: partes.cnpj, ano: String(partes.ano), sequencial: String(partes.sequencial) })}`);
     const j = resp.ok ? await resp.json().catch(() => null) : null;
     if (!j || j.erro || !Array.isArray(j.itens)) return null;
     const enxuto = j.itens.map((i) => ({ materialOuServico: i.materialOuServico, valorUnitarioEstimado: i.valorUnitarioEstimado }));
@@ -113,7 +113,7 @@
       let achados = (data || []).map((l) => l.dado).filter((r) => BX.mesmoNumero(r, uasg, numero));
       if (!achados.length) {
         const q = new URLSearchParams({ tipos_documento: "edital", q: `${Number(n.numero)}/${n.ano}`, status: "todos", ordenacao: "-data", tam_pagina: "50", pagina: "1" });
-        const resp = await fetch(`/api/pncp-proxy?url=${encodeURIComponent(`https://pncp.gov.br/api/search?${q}`)}`);
+        const resp = await (window.fetchComSessao || fetch)(`/api/pncp-proxy?url=${encodeURIComponent(`https://pncp.gov.br/api/search?${q}`)}`);
         const dados = resp.ok ? await resp.json().catch(() => null) : null;
         achados = ((dados && dados.items) || []).map(BX.editalDaBusca).filter((r) => BX.mesmoNumero(r, uasg, numero))
           .map((r) => ({ ...r, link: r.numeroControlePNCP ? `https://pncp.gov.br/app/editais/${r.numeroControlePNCP.replace(/^(\d{14})-\d+-0*(\d+)\/(\d{4})$/, "$1/$3/$2")}` : null }));

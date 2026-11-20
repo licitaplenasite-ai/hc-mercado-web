@@ -1,8 +1,9 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { handler: itensHandler } = require("../pncp-itens");
-const { handler: detalheHandler } = require("../pncp-detalhe");
+const { comoLogado } = require("./fixtures/login-aprovado");
+const itensHandler = comoLogado(require("../pncp-itens").handler);
+const detalheHandler = comoLogado(require("../pncp-detalhe").handler);
 
 function evento() {
   return { queryStringParameters: { cnpj: "04191078000191", ano: "2026", sequencial: "110" } };

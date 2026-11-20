@@ -414,7 +414,7 @@
       if (!m || typeof fetch !== 'function') return;
       const e = epoca;
       try {
-        const r = await fetch(`/api/pncp-detalhe?cnpj=${m[1]}&ano=${m[2]}&sequencial=${m[3]}`);
+        const r = await requisitarAutenticado(`/api/pncp-detalhe?cnpj=${m[1]}&ano=${m[2]}&sequencial=${m[3]}`);
         const d = r.ok ? await r.json() : null;
         if (e === epoca && d?.detalhe) pintar({ ...base, ...d.detalhe });
       } catch { /* sem detalhe: fica o que o processo já guarda */ }
@@ -581,7 +581,7 @@
       // Itens do processo: mesmo contexto do kit (empresa + processo). Sem processo, nunca chega aqui.
       // Gancho: apos salvar item, renova o catalogo do kit SOMENTE se o contexto ainda for o mesmo (epoca) e o mesmo kit.
       const epocaKit = epoca, kitDoItem = { atual: null };
-      if (itens) itensComp = itens.montar({ alvo: el('itens-processo'), contexto: { empresaId: contexto.empresaId, processoId: contexto.processoId }, requisitar: requisitarAutenticado,
+      if (itens) itensComp = itens.montar({ alvo: el('itens-processo'), contexto: { empresaId: contexto.empresaId, processoId: contexto.processoId }, requisitar: requisitarAutenticado, buscarMercado: requisitarAutenticado,
         // Mesmo kit e mesmo contexto, mesmo oculto (voltar ao Hoje preserva o kit). Fechado ou contexto trocado: bloqueia.
         aoSalvar: () => { if (epoca === epocaKit && componente !== null && componente === kitDoItem.atual) kitDoItem.atual?.atualizarItens?.(); } });
       if (esteira && el('checklist-esteira')) esteiraComp = esteira.montar({ alvo: el('checklist-esteira'), contexto: { empresaId: contexto.empresaId, processoId: contexto.processoId }, requisitar: requisitarAutenticado });

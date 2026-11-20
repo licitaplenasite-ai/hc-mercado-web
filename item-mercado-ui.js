@@ -87,7 +87,7 @@
   }
 
   // item: { descricao, codigoCatalogo }. aoUsarPreco(centavos, resumo, unidade): só no CRM (preço do item).
-  function montar({ alvo, item, doc = global.document, requisitar = (...a) => global.fetch(...a), aoUsarPreco = null }) {
+  function montar({ alvo, item, doc = global.document, requisitar = (...a) => (global.fetchComSessao || global.fetch)(...a), aoUsarPreco = null }) {
     const h = (tag, attrs = {}, ...filhos) => {
       const e = doc.createElement(tag);
       for (const [k, v] of Object.entries(attrs)) { if (v === null || v === undefined || v === false) continue; if (k === 'texto') e.textContent = v; else if (k === 'classe') e.className = v; else e.setAttribute(k, v === true ? '' : String(v)); }

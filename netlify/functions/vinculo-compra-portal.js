@@ -1,7 +1,7 @@
-const {cabecalhosPadrao,exigirUsuarioLogado}=require('./_auth');
+const {cabecalhosPadrao,exigirUsuarioAprovado}=require('./_auth');
 const {carregarContextoIdentificacao}=require('./_empresa_identificacao_contexto');
 const {uuid}=require('./_kit_documentos');
-function criarHandler({autenticar=exigirUsuarioLogado,contexto=carregarContextoIdentificacao}={}){
+function criarHandler({autenticar=exigirUsuarioAprovado,contexto=carregarContextoIdentificacao}={}){
  return async event=>{
   const response=(statusCode,body)=>({statusCode,headers:{...cabecalhosPadrao(event),'Cache-Control':'no-store'},body:JSON.stringify(body)});
   if(event.httpMethod==='OPTIONS')return response(204,{});

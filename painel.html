@@ -29,6 +29,7 @@
 <link rel="stylesheet" href="mercado-comprasgov.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" crossorigin="anonymous"></script>
 <script src="supabase-config.js"></script>
+<script src="fetch-sessao.js"></script>
 <script src="resumo-modelo.js?v=31e52fa09b74"></script>
 <script src="resumo-email.js?v=bac81f5d9b2d"></script>
 <script src="capag.js?v=167fac74e421"></script>
@@ -1703,6 +1704,7 @@
   <a href="operacao.html" class="nav-externo" title="Minhas empresas e documentos (abre outra página)"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-files'></use></svg></span><span class="nav-label">Minhas empresas e documentos</span><svg class='icone-ph nav-externo-ico' aria-hidden="true"><use href='#ph-arrow-square-out'></use></svg></a>
   <a href="extensao.html" title="Extensão"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-puzzle-piece'></use></svg></span><span class="nav-label">Extensão</span></a>
   <button data-alvo="juridico" title="Jurídico &amp; Dúvidas"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-scales'></use></svg></span><span class="nav-label">Jurídico &amp; Dúvidas</span></button>
+  <a href="indique.html" title="Indique e ganhe"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-handshake'></use></svg></span><span class="nav-label">Indique e ganhe</span></a>
   <button data-alvo="status" title="Status das Ferramentas"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-info'></use></svg></span><span class="nav-label">Status das Ferramentas</span></button>
 </nav>
 
@@ -3830,11 +3832,12 @@
     if (!partes) return [];
     iaItensPncpCarregando = (async () => {
       try {
-        const resp = await fetch(`/api/pncp-itens?cnpj=${partes.cnpj}&ano=${partes.ano}&sequencial=${partes.sequencial}`);
+        const resp = await fetchComSessao(`/api/pncp-itens?cnpj=${partes.cnpj}&ano=${partes.ano}&sequencial=${partes.sequencial}`);
         const dados = await resp.json();
         const itens = Array.isArray(dados.itens) ? dados.itens : [];
         if (!itens.length) return [];
-        sincronizarItensPncpNoResumo(edital, itens, false);
+        // true: se o resumo já foi desenhado antes da lista chegar, redesenha para pôr os botões "Ver mercado deste item".
+        sincronizarItensPncpNoResumo(edital, itens, true);
         try { localStorage.setItem(chaveCache, JSON.stringify({ em: Date.now(), itens })); } catch (e) { /* quota não impede o resumo */ }
         return itens;
       } catch (e) {
@@ -3991,7 +3994,7 @@
     painelLista.innerHTML = `<p class="itens-vazio">Carregando...</p>`;
     document.getElementById("modal-verarquivos-fundo").classList.add("aberto");
     try {
-      const resp = await fetch(`/api/pncp-arquivos?cnpj=${partes.cnpj}&ano=${partes.ano}&sequencial=${partes.sequencial}`);
+      const resp = await fetchComSessao(`/api/pncp-arquivos?cnpj=${partes.cnpj}&ano=${partes.ano}&sequencial=${partes.sequencial}`);
       const dados = await resp.json();
       // situacaoCompraId 1 = "Divulgada no PNCP" (normal). Qualquer outro valor é sinal de
       // que algo mudou no processo — revogação, suspensão, anulação etc. — vale destacar.
@@ -4091,7 +4094,7 @@
     botao.disabled = true;
     botao.textContent = "Buscando arquivos...";
     try {
-      const resp = await fetch(`/api/pncp-arquivos?cnpj=${partes.cnpj}&ano=${partes.ano}&sequencial=${partes.sequencial}`);
+      const resp = await fetchComSessao(`/api/pncp-arquivos?cnpj=${partes.cnpj}&ano=${partes.ano}&sequencial=${partes.sequencial}`);
       const dados = await resp.json();
       const lista = dados.arquivos || [];
       if (lista.length === 0) {
@@ -6691,7 +6694,8 @@
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
-      return await fetch(url, { ...(opts || {}), signal: ctrl.signal });
+      // Só a busca no PNCP (/api/pncp-proxy) passa aqui: o proxy exige login desde 20/11 (fetch-sessao.js).
+      return await fetchComSessao(url, { ...(opts || {}), signal: ctrl.signal });
     } finally {
       clearTimeout(t);
     }
@@ -7102,7 +7106,7 @@
     const partes = partesNumeroControleCliente(edital.numeroControlePNCP);
     if (!partes) return edital;
     try {
-      const resp = await fetch(`/api/pncp-detalhe?cnpj=${partes.cnpj}&ano=${partes.ano}&sequencial=${partes.sequencial}`);
+      const resp = await fetchComSessao(`/api/pncp-detalhe?cnpj=${partes.cnpj}&ano=${partes.ano}&sequencial=${partes.sequencial}`);
       if (!resp.ok) return edital;
       const dados = await resp.json();
       const detalhe = dados && dados.detalhe;
@@ -7207,7 +7211,7 @@
     botao.textContent = " Carregando...";
     botao.disabled = true;
     try {
-      const resp = await fetch(`/api/pncp-itens?cnpj=${partes.cnpj}&ano=${partes.ano}&sequencial=${partes.sequencial}`);
+      const resp = await fetchComSessao(`/api/pncp-itens?cnpj=${partes.cnpj}&ano=${partes.ano}&sequencial=${partes.sequencial}`);
       const dados = await resp.json();
       const itens = Array.isArray(dados.itens) ? dados.itens : [];
       painel.innerHTML = montarHtmlItens(itens);
@@ -9690,7 +9694,7 @@
     try {
       const parametros = new URLSearchParams({ termo });
       if (uf) parametros.set("uf", uf);
-      const resposta = await fetch(`/api/comprasgov-marcas-produto?${parametros}`);
+      const resposta = await fetchComSessao(`/api/comprasgov-marcas-produto?${parametros}`);
       const dados = await resposta.json();
       if (!resposta.ok || !dados.ok) return { erro: true, itens: [] };
       return { erro: false, itens: Array.isArray(dados.itens) ? dados.itens : [], fonte: dados.fonte || "Compras.gov", consultasComFalha: dados.consultasComFalha || 0 };
@@ -10099,7 +10103,7 @@
             botaoMarca.textContent = "Consultando...";
             try {
               const params = new URLSearchParams({ catalogo: item.catalogoCodigo, compra: compra.id, item: item.id });
-              const resposta = await fetch(`/api/comprasgov-marca?${params}`);
+              const resposta = await fetchComSessao(`/api/comprasgov-marca?${params}`);
               const dados = await resposta.json();
               if (!resposta.ok || !dados.ok) throw new Error(dados.erro || "Consulta indisponível.");
               destinoMarca.textContent = dados.encontrada ? `${dados.marca} — marca declarada na ${dados.fonte}.` : "A fonte oficial não informou uma marca utilizável para este item.";
@@ -10247,7 +10251,7 @@
       botaoMarca.disabled = true; botaoMarca.textContent = "Consultando...";
       try {
         const params = new URLSearchParams({ catalogo: item.catalogoCodigo, compra: compra.id, item: item.id });
-        const resposta = await fetch(`/api/comprasgov-marca?${params}`);
+        const resposta = await fetchComSessao(`/api/comprasgov-marca?${params}`);
         const dados = await resposta.json();
         if (!resposta.ok || !dados.ok) throw new Error(dados.erro || "Consulta indisponível.");
         destinoMarca.textContent = dados.encontrada ? `${dados.marca} — marca declarada na ${dados.fonte}.` : "A fonte oficial não informou uma marca utilizável para este item.";

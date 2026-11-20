@@ -14,7 +14,8 @@ async function ambiente(nome,acao){
    return{ok:true,json:async()=>compra};
   }
   if(u.pathname.includes('dossies_editais')){if(op.method==='POST'){if(estado.falharPersistencia)return{ok:false,status:503,text:async()=>'indisponível'};estado.persistido=JSON.parse(op.body)[0].dossie;return{ok:true};}return{ok:true,json:async()=>estado.persistido?[{dossie:estado.persistido,versao:17}]:[]};}
-  if(u.pathname.includes('fila_dossies')){estado.fila++;return{ok:true};}
+  if(u.pathname.includes('fila_dossies')){if(!op.method)return{ok:true,json:async()=>[]};estado.fila++;return{ok:true};}
+  if(u.pathname.endsWith('/rpc/incrementar_uso_ip'))return{ok:true,json:async()=>1};// teto da fila por pessoa, não é cota de IA
   if(u.pathname.includes('incrementar_uso')){estado.cota++;throw Error('Cota não deve ser consumida');}
   estado.ia++;throw Error('Rede não prevista no teste');
  };

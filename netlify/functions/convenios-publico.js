@@ -12,10 +12,11 @@
 // "*", já que não chama nenhuma API paga/cotada — só lê nosso próprio Supabase).
 //
 // Uso: GET /.netlify/functions/convenios-publico
+const { limitarPorIp } = require("./_auth");
 const SUPABASE_URL = "https://lsqjamqvmrcyrvowndiu.supabase.co";
 const LIMITE_RECENTES = 5;
 
-exports.handler = async () => {
+exports.handler = async (event = {}) => {
   const headers = {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin": "*",
@@ -23,6 +24,10 @@ exports.handler = async () => {
     // no Supabase a cada visita da landing page.
     "Cache-Control": "public, max-age=300",
   };
+
+  // Landing chama 1 vez por visita: teto curto por IP (abuso 20/11, gasto da cota do Cloudflare).
+  const limite = await limitarPorIp(event, "convenios-publico", 300, 20);
+  if (!limite.ok) return { statusCode: limite.status, headers: { ...headers, "Cache-Control": "no-store" }, body: JSON.stringify({ erro: limite.erro }) };
 
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceKey) {

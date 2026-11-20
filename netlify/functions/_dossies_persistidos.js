@@ -59,9 +59,15 @@ async function salvarDossiePersistido(numeroControlePNCP, dossie) {
 // tentativas anteriores continuam valendo, para um edital que sempre falha não voltar
 // a ser processado a cada clique. Quem gera é scripts/gerar_dossies_gemini.js.
 // novaLeitura (botão do resumo parcial): zera as tentativas para o robô ler o edital outra vez.
-async function enfileirarDossie(numeroControlePNCP, { novaLeitura = false } = {}) {
+// usuario: pedido de cliente conta no teto diário por pessoa (limitarFilaDossies); edital que já está na fila
+// esperando não conta de novo (reabrir o mesmo resumo não gasta). Devolve { ok:false, status:429 } acima do teto.
+async function enfileirarDossie(numeroControlePNCP, { novaLeitura = false, usuario = null } = {}) {
   const chave = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!chave || !numeroControlePNCP) return;
+  if (!chave || !numeroControlePNCP) return { ok: true };
+  if (usuario && (novaLeitura || !(await jaNaFila(numeroControlePNCP, chave)))) {
+    const teto = await require("./_auth").limitarFilaDossies(usuario);
+    if (!teto.ok) return teto;
+  }
   try {
     const resposta = await fetch(`${SUPABASE_URL}/rest/v1/fila_dossies?on_conflict=numero_controle_pncp`, {
       method: "POST",
@@ -77,6 +83,18 @@ async function enfileirarDossie(numeroControlePNCP, { novaLeitura = false } = {}
   } catch (e) {
     // A ficha oficial continua sendo exibida; o boletim ainda alimenta a fila.
     console.error(`fila_dossies: pedido falhou ${numeroControlePNCP}: ${e.message}`);
+  }
+  return { ok: true };
+}
+
+// Falha na leitura conta como "não está na fila": na dúvida o pedido entra no teto (protege a fila de todos).
+async function jaNaFila(numeroControlePNCP, chave) {
+  try {
+    const url = `${SUPABASE_URL}/rest/v1/fila_dossies?numero_controle_pncp=eq.${encodeURIComponent(numeroControlePNCP)}&concluido_em=is.null&select=numero_controle_pncp`;
+    const resposta = await fetch(url, { headers: { apikey: chave, Authorization: `Bearer ${chave}` }, signal: globalThis.AbortSignal.timeout(3000) });
+    return resposta.ok && (await resposta.json()).length > 0;
+  } catch {
+    return false;
   }
 }
 

@@ -1334,7 +1334,7 @@ exports.handler = async (event) => {
         // Mesma fila e mesma regra do modo resumo: o checklist não depende de o cliente abrir o resumo.
         let enfileirado = false;
         if (!ehRoboInterno) {
-          try { await enfileirarDossie(numero); enfileirado = true; } catch (_) { /* A consulta continua respondendo sem dossiê. */ }
+          try { enfileirado = (await enfileirarDossie(numero, { usuario: sessao.userId })).ok; } catch (_) { /* A consulta continua respondendo sem dossiê. */ }
         }
         return { statusCode: 200, headers, body: JSON.stringify({ disponivel: false, enfileirado, requisitos: [] }) };
       }
@@ -1412,7 +1412,8 @@ exports.handler = async (event) => {
         // quando o robô passa por eles; é o Supabase que o robô consulta para saber o que falta.
         if (ehRoboInterno && cacheDoBlob) await salvarDossiePersistido(edital.numeroControlePNCP, cache);
         const novaLeitura = !ehRoboInterno && pedidoDeNovaLeitura(body, cache);
-        if (novaLeitura) await enfileirarDossie(edital.numeroControlePNCP, { novaLeitura: true });
+        const fila = novaLeitura ? await enfileirarDossie(edital.numeroControlePNCP, { novaLeitura: true, usuario: sessao.userId }) : { ok: true };
+        if (!fila.ok) return { statusCode: fila.status, headers, body: JSON.stringify({ erro: fila.erro }) };
         return {
           statusCode: 200,
           headers,
@@ -1445,7 +1446,10 @@ exports.handler = async (event) => {
   // o GPT-5.1 no AI Gateway custava ~40 créditos por edital e suspendeu a conta. Sem
   // dossiê pronto, o pedido entra na fila e o cliente vê na hora a ficha oficial do PNCP.
   if (modo === "resumo" && edital.numeroControlePNCP) {
-    if (!ehRoboInterno) await enfileirarDossie(edital.numeroControlePNCP);
+    if (!ehRoboInterno) {
+      const fila = await enfileirarDossie(edital.numeroControlePNCP, { usuario: sessao.userId });
+      if (!fila.ok) return { statusCode: fila.status, headers, body: JSON.stringify({ erro: fila.erro }) };
+    }
     // Opt-in apenas do processo de homologação local; nenhum parâmetro do cliente ativa a leitura.
     if (!ehRoboInterno && process.env.LEITURA_DOCUMENTAL_LOCAL === "1" && fichaIdentificada(edital)) {
       const leitura = await buscarTextoEdital(edital.numeroControlePNCP);

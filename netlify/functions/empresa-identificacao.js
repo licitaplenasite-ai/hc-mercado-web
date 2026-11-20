@@ -1,4 +1,4 @@
-const {cabecalhosPadrao,exigirUsuarioLogado}=require('./_auth');
+const {cabecalhosPadrao,exigirUsuarioAprovado}=require('./_auth');
 const {falhar,LIMITES,LOGO,ufDoEndereco,validarArquivo,validarConfirmacao,mascararCpf,validarPerfilEmpresa,validarPremissas,validarPremissasRemover,tipoCaminhoLogo,validarLogo,lerAte}=require('./_empresa_identificacao');
 const {createHash,randomUUID}=require('node:crypto');
 const {carregarContextoIdentificacao,lerCpfRepresentante}=require('./_empresa_identificacao_contexto');
@@ -72,7 +72,7 @@ exports.handler=async event=>{
  if(event.httpMethod!=='POST')return resposta(405,{erro:'Método não permitido.'});
  if(process.env.IDENTIFICACAO_EMPRESA_LOCAL!=='1')return resposta(503,{erro:'Identificação da empresa ainda não habilitada neste ambiente.'});
  try{
- const auth=await exigirUsuarioLogado(event);if(!auth.ok)return resposta(auth.status,{erro:auth.erro});
+ const auth=await exigirUsuarioAprovado(event);if(!auth.ok)return resposta(auth.status,{erro:auth.erro});
  if(typeof event.body!=='string'||event.body.length>Math.ceil(LIMITES.upload/3)*4+4096)falhar('Solicitação muito grande.',413);
  let body;try{body=JSON.parse(event.body);}catch{falhar('Solicitação inválida.');}
  if(!uuid(body.empresaId))falhar('Empresa inválida.');

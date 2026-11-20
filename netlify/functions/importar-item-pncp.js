@@ -1,4 +1,4 @@
-const {exigirUsuarioLogado,cabecalhosPadrao}=require('./_auth');
+const {exigirUsuarioAprovado,cabecalhosPadrao}=require('./_auth');
 const {carregarContextoIdentificacao}=require('./_empresa_identificacao_contexto');
 const {falhar}=require('./_empresa_identificacao');
 const {buscarFonteItem}=require('./_pncp_item_fonte');
@@ -10,7 +10,7 @@ function referencia(p){
  if(!id)falhar('Processo sem referência PNCP utilizável. Confira o link oficial.',409);
  const a=/^(\d{14})-1-(\d+)\/(\d{4})$/.exec(id);return {cnpj:a[1],ano:a[3],seq:String(Number(a[2]))};
 }
-function criarHandler({enabled=()=>process.env.IMPORTACAO_PNCP_LOCAL==='1',serviceKey=()=>process.env.SUPABASE_SERVICE_ROLE_KEY,auth=exigirUsuarioLogado,contexto=carregarContextoIdentificacao,fetchImpl=(...a)=>fetch(...a),timeoutMs=10000}={}){
+function criarHandler({enabled=()=>process.env.IMPORTACAO_PNCP_LOCAL==='1',serviceKey=()=>process.env.SUPABASE_SERVICE_ROLE_KEY,auth=exigirUsuarioAprovado,contexto=carregarContextoIdentificacao,fetchImpl=(...a)=>fetch(...a),timeoutMs=10000}={}){
  if(!Number.isInteger(timeoutMs)||timeoutMs<1||timeoutMs>10000)throw Error('Timeout inválido');
  return async event=>{const reply=(statusCode,data)=>({statusCode,headers:{...cabecalhosPadrao(event),'Cache-Control':'no-store'},body:JSON.stringify(data)});
  if(event.httpMethod!=='POST')return reply(405,{erro:'Método não permitido.'});if(!enabled())return reply(503,{erro:'Importação rastreável ainda não habilitada.'});

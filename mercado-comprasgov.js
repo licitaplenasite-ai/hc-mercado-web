@@ -1,6 +1,6 @@
 /* global module, URLSearchParams, URL, Blob, setTimeout */
 // "Buscar no mercado (Compras.gov)": produtos já licitados com marca declarada, preço homologado, órgão e data.
-// Fonte: /api/comprasgov-marcas-produto (Catálogo CATMAT + Pesquisa de Preços, dados abertos, sem login).
+// Fonte: /api/comprasgov-marcas-produto (Catálogo CATMAT + Pesquisa de Preços, dados abertos; a rota exige login, fetch-sessao.js).
 // Usado no Catálogo de produtos (operacao.html, "Adicionar ao catálogo") e no preço por item (sistema.html, "Usar esta marca").
 // O preço daqui é REFERÊNCIA do que o governo pagou; nunca é o custo do fornecedor do usuário.
 (function (global) {
@@ -177,7 +177,7 @@
 
   // Uma caixa de busca: termo -> produtos do catálogo (chips, o mais provável já escolhido) -> marcas, modelos,
   // vencedores e compras. alvo: elemento vazio. aoUsar(item, resumo) recebe o resultado escolhido e o resumo do filtro atual.
-  function montar({ alvo, doc = global.document, requisitar = (...a) => global.fetch(...a), termo = '', rotuloUsar = 'Usar', aoUsar, hoje = hojeLocal }) {
+  function montar({ alvo, doc = global.document, requisitar = (...a) => (global.fetchComSessao || global.fetch)(...a), termo = '', rotuloUsar = 'Usar', aoUsar, hoje = hojeLocal }) {
     const estado = { termo: '', uf: '', catalogos: [], pdm: '', porPdm: new Map(), atributos: [], cartoes: [], mostrar: MOSTRAR,
       filtro: { unidade: '', marca: '', meses: '', esfera: '', qtdMin: '', qtdMax: '' }, buscando: false, geracao: 0, falhas: 0 };
     Object.defineProperty(estado, 'itens', { get: () => estado.porPdm.get(estado.pdm)?.itens || [] });

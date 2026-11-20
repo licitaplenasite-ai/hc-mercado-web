@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { handler } = require("../pncp-proxy");
+const { comoLogado } = require("./fixtures/login-aprovado");
+const handler = comoLogado(require("../pncp-proxy").handler);
 
 const evento = (url) => ({ httpMethod: "GET", headers: {}, queryStringParameters: { url } });
 
@@ -40,4 +41,15 @@ test("pncp-proxy para depois de 3 redirects", () =>
 test("pncp-proxy continua recusando host fora do PNCP", async () => {
   const r = await handler(evento("https://exemplo.com/api"));
   assert.equal(r.statusCode, 400);
+});
+
+test("pncp-proxy sem login responde 401 e não chama o PNCP (abuso 20/11)", async () => {
+  const original = global.fetch;
+  let chamadas = 0;
+  global.fetch = async () => { chamadas++; throw new Error("não deve chamar"); };
+  try {
+    const r = await require("../pncp-proxy").handler(evento("https://pncp.gov.br/api/search?q=a"));
+    assert.equal(r.statusCode, 401);
+    assert.equal(chamadas, 0);
+  } finally { global.fetch = original; }
 });

@@ -17,6 +17,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" crossorigin="anonymous"></script>
 <script src="supabase-config.js"></script>
 <script src="senha-captcha-ui.js"></script>
+<script src="indicacao.js"></script>
 <style>
   /* Design System "Direção A, azul original": cores, raios e tipografia vêm de ds-tokens.css. */
   * { box-sizing: border-box; }
@@ -594,6 +595,7 @@
           nome, cargo, empresa, cnpj, porte_empresa, segmento, telefone, aceite_termos: true,
           atividades, estados_interesse, como_conheceu, quantidade_funcionarios,
           licitacoes_por_mes, faturamento_anual, como_pretende_usar, plano_desejado,
+          ...LicitaPlenaIndicacao.dadosParaCadastro(Date.now()), // código do link "Indique e ganhe" (o banco confere)
         },
       },
     });
@@ -614,6 +616,7 @@
 
     mostrarAviso("Cadastro criado! Assim que for aprovado, você já pode entrar com seu e-mail e senha.", "ok");
     document.getElementById("form-cadastro").reset();
+    LicitaPlenaIndicacao.esquecer();
     btn.textContent = "Cadastro enviado";
   });
 </script>

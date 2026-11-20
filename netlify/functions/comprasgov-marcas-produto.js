@@ -13,7 +13,7 @@
 //   ?termo=notebook&codigoPdm=8435&pagina=2 -> 200 compras de um só produto (1 subrequisição), para a tela paginar;
 //   ?termo=caneta&codigoItem=622254         -> 200 compras de um item CATMAT exato (o catalogoCodigoItem do PNCP), 1 subrequisição.
 
-const { cabecalhosPadrao, limitarPorIp } = require("./_auth");
+const { cabecalhosPadrao, exigirAprovadoComLimite } = require("./_auth");
 const CATALOGO_URL = "https://cnbs.estaleiro.serpro.gov.br/cnbs-api/material/v1/palavra";
 const PRECO_URL = "https://dadosabertos.compras.gov.br/modulo-pesquisa-preco/1_consultarMaterial";
 const LINK_COMPRA = "https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/public/landing?destino=acompanhamento-compra&compra=";
@@ -258,9 +258,9 @@ async function paginaDoPdm(pdm, { pagina = 1, tamanhoPagina, uf, signal }) {
 const porData = (a, b) => String(b.dataResultado).localeCompare(String(a.dataResultado));
 
 exports.handler = async (event) => {
-  // Proxy público: CORS só do nosso domínio e teto diário por IP (teste de ataque 19/11, M5).
+  // Proxy do governo: CORS só do nosso domínio, login aprovado, teto por minuto da conta e teto diário por IP (abuso 20/11).
   const headers = cabecalhosPadrao(event);
-  const limite = await limitarPorIp(event, "comprasgov-marcas-produto");
+  const limite = await exigirAprovadoComLimite(event, "comprasgov-marcas-produto");
   if (!limite.ok) return { statusCode: limite.status, headers, body: JSON.stringify({ erro: limite.erro }) };
   const q = event.queryStringParameters || {};
   const termo = textoSeguro(q.termo, 100);

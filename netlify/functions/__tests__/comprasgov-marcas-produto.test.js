@@ -22,7 +22,8 @@ test("normalizarResultado expõe somente marca declarada pela fonte", () => {
   assert.equal(item.valorUnitario, 0.54);
 });
 
-const { separarMarcaModelo, centavosDoPreco, MAX_PDMS, handler } = require("../comprasgov-marcas-produto");
+const { separarMarcaModelo, centavosDoPreco, MAX_PDMS } = require("../comprasgov-marcas-produto");
+const handler = require("./fixtures/login-aprovado").comoLogado(require("../comprasgov-marcas-produto").handler);
 
 test("marcaUtil descarta medida, característica repetida da descrição e textos genéricos", () => {
   assert.equal(marcaUtil("A4 90 GRAMAS", "PAPEL PARA IMPRESSÃO FORMATADO, GRAMATURA 90 G/M2"), null);

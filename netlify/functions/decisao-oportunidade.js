@@ -1,4 +1,4 @@
-const { cabecalhosPadrao, exigirUsuarioLogado } = require('./_auth');
+const { cabecalhosPadrao, exigirUsuarioAprovado } = require('./_auth');
 const { tokenValido, hashToken, habilitada, rpc } = require('./_decisao_oportunidade');
 exports.handler = async event => {
   const responder = (statusCode, body) => ({statusCode,headers:{...cabecalhosPadrao(event),'Cache-Control':'no-store','Referrer-Policy':'no-referrer'},body:JSON.stringify(body)});
@@ -11,7 +11,7 @@ exports.handler = async event => {
   try { dados = JSON.parse(event.body || '{}'); } catch (_) { return responder(400,{erro:'Pedido inválido.'}); }
   try {
     if (dados?.acao === 'listar') {
-      const usuario = await exigirUsuarioLogado(event);
+      const usuario = await exigirUsuarioAprovado(event);
       if (!usuario.ok) return responder(usuario.status,{erro:usuario.erro});
       return responder(200,{decisoes:await rpc('listar_decisoes_oportunidade',{p_usuario:usuario.userId})});
     }

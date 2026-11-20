@@ -101,3 +101,20 @@ test("CORS restrito, só GET, falha do banco vira 502 sem cache", async () => {
     assert.equal(r.headers["Cache-Control"], "no-store");
   }, { resposta: { ok: false, status: 500, json: async () => ({}) } });
 });
+
+// Abuso 20/11: consulta simples (até 8 palavras, ao menos uma com 3+ letras) e teto por IP (10/min, 100/dia).
+test("termo complexo ou só com palavras curtas responde 400; acima do teto por IP responde 429 sem consultar", async () => {
+  await comFetch(async (chamadas) => {
+    for (const termo of ["de a", "ab cd ef", "um dois três quatro cinco seis sete oito nove"]) {
+      assert.equal((await handler(evento({ termo }))).statusCode, 400, `termo ${termo}`);
+    }
+    assert.equal(chamadas.length, 0);
+  });
+  await comFetch(async (chamadas) => {
+    const r = await handler(evento({ termo: "uniformes" }, { headers: { "x-nf-client-connection-ip": "203.0.113.5" } }));
+    assert.equal(r.statusCode, 429);
+    assert.match(JSON.parse(r.body).erro, /Espere 1 minuto/);
+    assert.equal(r.headers["Cache-Control"], "no-store");
+    assert.ok(chamadas.every((c) => c.url.endsWith("/rpc/incrementar_uso_ip")));
+  }, { resposta: { ok: true, status: 200, json: async () => 11 } });
+});

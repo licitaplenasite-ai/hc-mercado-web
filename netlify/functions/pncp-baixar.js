@@ -15,8 +15,9 @@ const USER_AGENT_NAVEGADOR =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 exports.handler = async (event) => {
-  // Proxy público: teto diário por IP (teste de ataque 19/11, M5). É link de download, não precisa de CORS.
-  const limite = await limitarPorIp(event, "pncp-baixar");
+  // Continua sem login: é link aberto pelo navegador (href, iframe do leitor de PDF), que não leva o cabeçalho
+  // Authorization. Teto curto por IP: 10 por minuto e 300 por dia (antes, 3.000 por dia; teste de ataque 19/11, M5).
+  const limite = await limitarPorIp(event, "pncp-baixar", 300, 10);
   if (!limite.ok) return { statusCode: limite.status, headers: { "Content-Type": "text/plain; charset=utf-8" }, body: limite.erro };
   const q = event.queryStringParameters || {};
   const cnpj = (q.cnpj || "").replace(/\D/g, "");

@@ -96,6 +96,9 @@ async function verificarLimiteDiario(userId, nomeFuncao, limite) {
   if (!serviceKey) {
     return indisponivel;
   }
+  // Antes da cota diária: pedido barrado pelo ritmo não gasta a cota do dia.
+  const ritmo = await limitarContaPorMinuto(userId, nomeFuncao);
+  if (!ritmo.ok) return ritmo;
   try {
     const opcoes = (corpo) => ({
       method: "POST",
@@ -164,40 +167,95 @@ async function exigirUsuarioAprovado(event) {
   return cadastro.ok ? usuario : cadastro;
 }
 
-// Proxies públicos (pncp-*, comprasgov-*): o painel chama sem token, então o teto é diário por IP (teste de ataque
-// 19/11, M5: script anônimo esgotava a cota do Cloudflare ou fazia o PNCP/Compras.gov bloquear nosso IP de saída).
+// Teto por IP das rotas sem login (teste de ataque 19/11, M5: script anônimo esgotava a cota do Cloudflare ou fazia
+// o PNCP/Compras.gov bloquear nosso IP de saída). Desde 20/11 os proxies pncp-*/comprasgov-* exigem login aprovado
+// (exigirAprovadoComLimite, que mantém este teto diário por IP); sem login, só com o teto por IP, ficam pncp-baixar
+// (link aberto pelo navegador, sem cabeçalho de token), busca-publica e convenios-publico (landing).
 // IP: só o cabeçalho que a própria plataforma define (mesma regra de portal-cliente.js): cf-connecting-ip no runtime
 // do Workers, x-nf-client-connection-ip fora dele. O banco recebe HMAC-SHA256(chave de serviço, IP), nunca o IP.
 // Sem IP confiável (ambiente local) ou sem chave de serviço não limita; falha do contador também não bloqueia
 // (fail-open, como verificarLimiteDiario fora da IA): o teto protege contra abuso, não é controle de acesso.
 const LIMITE_PROXY_POR_IP = 3000;
+const ERRO_POR_MINUTO = "Muitos pedidos em pouco tempo. Espere 1 minuto e tente de novo.";
 function ipConfiavel(event) {
   const h = event.headers || {};
   const ip = globalThis.navigator?.userAgent === "Cloudflare-Workers" ? h["cf-connecting-ip"] : h["x-nf-client-connection-ip"];
   return typeof ip === "string" && ip.trim() ? ip.trim() : null;
 }
-async function limitarPorIp(event, nomeFuncao, limite = LIMITE_PROXY_POR_IP) {
-  const ip = ipConfiavel(event);
+// Contador compartilhado entre as instâncias do Cloudflare (memória não serve: cada isolate conta sozinho).
+// Reaproveita incrementar_uso_ip (uso_ip_diario, que apaga sozinho o que passou de ontem): a janela de 1 minuto
+// vai no nome da função ("chat-ia@2026-11-20T12:34"), então cada minuto é uma linha nova. Devolve a contagem ou
+// null (sem chave, rede ou resposta inválida); quem chama decide, e todos aqui liberam no null (fail-open).
+async function contarUso(identidade, funcao) {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!ip || !serviceKey) return { ok: true };
+  if (!serviceKey) return null;
   try {
-    const chave = require("node:crypto").createHmac("sha256", serviceKey).update(`ip:${ip}`).digest("hex");
+    const chave = require("node:crypto").createHmac("sha256", serviceKey).update(identidade).digest("hex");
     const resp = await fetch(`${SUPABASE_URL}/rest/v1/rpc/incrementar_uso_ip`, {
       method: "POST",
       headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ p_chave: chave, p_funcao: nomeFuncao }),
+      body: JSON.stringify({ p_chave: chave, p_funcao: funcao }),
       signal: globalThis.AbortSignal.timeout(3000),
     });
-    if (!resp.ok) return { ok: true };
+    if (!resp.ok) return null;
     const contagem = await resp.json();
-    if (typeof contagem === "number" && contagem > limite) {
-      return { ok: false, status: 429, erro: "Muitas consultas a partir desta rede hoje. Tente de novo amanhã." };
-    }
-    return { ok: true };
+    return Number.isSafeInteger(contagem) ? contagem : null;
   } catch {
-    return { ok: true };
+    return null;
   }
+}
+const funcaoDoMinuto = (nomeFuncao) => `${nomeFuncao}@${new Date().toISOString().slice(0, 16)}`;
+
+// porMinuto > 0 soma um teto curto por IP (páginas e links sem login, como pncp-baixar e a busca da landing).
+async function limitarPorIp(event, nomeFuncao, limite = LIMITE_PROXY_POR_IP, porMinuto = 0) {
+  const ip = ipConfiavel(event);
+  if (!ip || !process.env.SUPABASE_SERVICE_ROLE_KEY) return { ok: true };
+  if (porMinuto > 0 && (await contarUso(`ip:${ip}`, funcaoDoMinuto(nomeFuncao))) > porMinuto) {
+    return { ok: false, status: 429, erro: ERRO_POR_MINUTO };
+  }
+  if ((await contarUso(`ip:${ip}`, nomeFuncao)) > limite) {
+    return { ok: false, status: 429, erro: "Muitas consultas a partir desta rede hoje. Tente de novo amanhã." };
+  }
+  return { ok: true };
+}
+
+// Teto por minuto por conta nas rotas caras (IA, buscas no governo), além da cota diária: a cota de 40/dia não
+// impede gastar tudo em 1 minuto e ocupar o limite por minuto da IA gratuita, que é de todos os clientes.
+const LIMITE_POR_MINUTO_CONTA = {
+  "ia-edital": 3, "chat-ia": 4, "fornecedor-ia": 3, "monte-busca-ia": 3,
+  "analise-cnpj": 5, "analise-cnpj-buscar": 10, "analise-cnpj-cadastro": 5,
+  "licitacao-anterior": 5, "licitacao-anterior-orgaos": 10, "sancoes": 20, "despesas-fornecedor": 10,
+  "pagometro": 10, "conferir-cbs-ibs": 10,
+};
+// Proxies do PNCP/Compras.gov: a busca do painel abre 1 página por UF e por termo ao mesmo tempo (27 UFs x 5 termos
+// = 135 pedidos num clique), por isso o teto é bem maior que o das rotas de IA.
+const LIMITE_PROXY_POR_MINUTO_CONTA = 300;
+async function limitarContaPorMinuto(userId, nomeFuncao, limite = LIMITE_POR_MINUTO_CONTA[nomeFuncao]) {
+  if (!userId || !(limite > 0)) return { ok: true };
+  const contagem = await contarUso(`conta:${userId}`, funcaoDoMinuto(nomeFuncao));
+  return contagem > limite ? { ok: false, status: 429, erro: ERRO_POR_MINUTO } : { ok: true };
+}
+
+// Login aprovado + teto por minuto da conta + o teto diário por IP que já existia: o que os proxies do governo
+// exigem desde 20/11 (antes eram públicos).
+async function exigirAprovadoComLimite(event, nomeFuncao) {
+  const usuario = await exigirUsuarioAprovado(event);
+  if (!usuario.ok) return usuario;
+  const ritmo = await limitarContaPorMinuto(usuario.userId, nomeFuncao, LIMITE_PROXY_POR_MINUTO_CONTA);
+  if (!ritmo.ok) return ritmo;
+  const rede = await limitarPorIp(event, nomeFuncao);
+  return rede.ok ? usuario : rede;
+}
+
+// Fila de dossiês: o robô gera ~60 por dia para todos; sem teto por pessoa, uma conta ocupava o dia inteiro.
+const LIMITE_FILA_DOSSIES_POR_CONTA = 10;
+async function limitarFilaDossies(userId) {
+  if (!userId) return { ok: true };
+  const contagem = await contarUso(`conta:${userId}`, "fila-dossies");
+  return contagem > LIMITE_FILA_DOSSIES_POR_CONTA
+    ? { ok: false, status: 429, erro: `Você já pediu ${LIMITE_FILA_DOSSIES_POR_CONTA} leituras completas de edital hoje. Tente de novo amanhã.` }
+    : { ok: true };
 }
 
 
-module.exports = { cabecalhosPadrao, exigirUsuarioLogado, exigirClienteAprovado, exigirUsuarioAprovado, verificarLimiteDiario, origemPermitida, limitarPorIp };
+module.exports = { cabecalhosPadrao, exigirUsuarioLogado, exigirClienteAprovado, exigirUsuarioAprovado, verificarLimiteDiario, origemPermitida, limitarPorIp, limitarContaPorMinuto, exigirAprovadoComLimite, limitarFilaDossies };
