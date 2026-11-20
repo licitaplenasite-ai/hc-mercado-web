@@ -13,6 +13,11 @@ const { passo, exigir, entrar, seed, chaves, SITE, PRINTS, resultados } = requir
 const { chromium } = require(process.env.PLAYWRIGHT_CORE || 'C:/Users/harre/AppData/Local/npm-cache/_npx/e41f203b7505f1fb/node_modules/playwright-core');
 
 const RAIZ = path.resolve(__dirname, '..');
+if (!process.env.VAPID_TESTE || !fs.existsSync(process.env.VAPID_TESTE)) {
+  console.error('FALHOU: falta VAPID_TESTE (arquivo com um par VAPID de TESTE fora do repo: node scripts/gerar_chaves_vapid.js <arquivo>).\n' +
+    'O servidor.cjs precisa rodar com VAPID_CHAVE_PUBLICA desse mesmo par. Nunca use as chaves reais.');
+  process.exit(1);
+}
 const vapid = Object.fromEntries(fs.readFileSync(process.env.VAPID_TESTE, 'utf8').split(/\r?\n/).filter((l) => /^VAPID_/.test(l)).map((l) => l.split('=')));
 
 async function servico(metodo, caminho, corpo) {

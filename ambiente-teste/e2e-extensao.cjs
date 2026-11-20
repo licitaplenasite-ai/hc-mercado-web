@@ -11,7 +11,7 @@ const fs = require('node:fs'), path = require('node:path'), os = require('node:o
 const { chromium } = require('playwright');
 
 const RAIZ = path.resolve(__dirname, '..'), EXT = path.join(RAIZ, 'extensao-leitura');
-const SITE = process.env.SITE_TESTE || 'http://127.0.0.1:8831';
+const SITE = process.env.SITE_TESTE || `http://127.0.0.1:${process.env.PORTA_TESTE || 8788}`; // mesma PORTA_TESTE do servidor
 const PRINTS = process.env.PRINTS || 'C:/Users/harre/Desktop/LICITAPLENA/_historico/prints-extensao-portal';
 const seed = JSON.parse(fs.readFileSync(path.join(__dirname, 'seed.local.json'), 'utf8'));
 const PORTAL = 'https://cnetmobile.estaleiro.serpro.gov.br';

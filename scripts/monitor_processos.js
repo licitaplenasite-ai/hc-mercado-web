@@ -294,15 +294,16 @@ async function cadastrarProcessos(rest) {
   return new Set(linhas.map((l) => l.processo_id));
 }
 
+// Dica de FK: operacao_processos tem 2 FKs para operacao_empresas (empresa_id e escopo_fk), sem ela o PostgREST devolve PGRST201.
 // CNPJ da empresa e itens escolhidos no cartão (funil_v3.sql). Sem a coluna nova, segue só com o CNPJ.
 async function comContextoDaEmpresa(rest, fila) {
   if (!fila.length) return fila;
   const ids = fila.map((l) => l.processo_id).join(",");
   let linhas;
   try {
-    linhas = await (await rest(`operacao_processos?id=in.(${ids})&select=id,monitor_itens,operacao_empresas(cnpj)`)).json();
+    linhas = await (await rest(`operacao_processos?id=in.(${ids})&select=id,monitor_itens,operacao_empresas!operacao_processos_empresa_id_fkey(cnpj)`)).json();
   } catch {
-    linhas = await (await rest(`operacao_processos?id=in.(${ids})&select=id,operacao_empresas(cnpj)`)).json();
+    linhas = await (await rest(`operacao_processos?id=in.(${ids})&select=id,operacao_empresas!operacao_processos_empresa_id_fkey(cnpj)`)).json();
   }
   const porId = new Map((Array.isArray(linhas) ? linhas : []).map((p) => [p.id, p]));
   return fila.map((l) => {

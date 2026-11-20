@@ -7,7 +7,7 @@ const AdmZip = require('adm-zip');
 const { chromium } = require(process.env.PLAYWRIGHT_CORE || 'C:/Users/harre/AppData/Local/npm-cache/_npx/e41f203b7505f1fb/node_modules/playwright-core');
 
 const AQUI = __dirname, RAIZ = path.resolve(AQUI, '..');
-const SITE = process.env.SITE_TESTE || 'http://127.0.0.1:8788'; // outra porta: PORTA_TESTE no servidor + SITE_TESTE aqui
+const SITE = process.env.SITE_TESTE || `http://127.0.0.1:${process.env.PORTA_TESTE || 8788}`; // mesma PORTA_TESTE do servidor (ou SITE_TESTE)
 const PRINTS = process.env.PRINTS || 'C:/Users/harre/Desktop/LICITAPLENA/_historico/teste-ponta-a-ponta';
 const seed = JSON.parse(fs.readFileSync(path.join(AQUI, 'seed.local.json'), 'utf8'));
 const chaves = JSON.parse(fs.readFileSync(path.join(AQUI, 'chaves.local.json'), 'utf8'));

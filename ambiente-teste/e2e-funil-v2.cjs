@@ -63,7 +63,7 @@ async function print(p, nome) { await p.screenshot({ path: path.join(PRINTS, nom
     });
     await passo('checklist abre, a esteira marca "Analisar o edital" e a marcação vai ao banco', p, async () => {
       const card = p.locator(`#kanban-quadro .kanban-card[data-id="${ORIGEM}"]`);
-      await card.locator('.funil-contador').click();
+      await card.locator('[data-funil-checklist]').click();
       const dlg = p.locator('#funil-checklist-dialogo');
       await dlg.waitFor({ state: 'visible' });
       exigir(await dlg.getByText('Feito pela esteira automática').count() >= 1, 'tarefa da esteira não apareceu marcada');
@@ -119,7 +119,7 @@ async function print(p, nome) { await p.screenshot({ path: path.join(PRINTS, nom
         await print(p, nome);
       }
       await p.click('[data-funil-visao="quadro"]');
-      await p.locator(`#kanban-quadro .kanban-card[data-id="${ORIGEM}"] .funil-contador`).click();
+      await p.locator(`#kanban-quadro .kanban-card[data-id="${ORIGEM}"] [data-funil-checklist]`).click();
       await p.locator('#funil-checklist-dialogo').waitFor({ state: 'visible' });
       await print(p, '10-checklist-375.png');
     });
