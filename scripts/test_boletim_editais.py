@@ -172,9 +172,27 @@ def test_email_e_so_aviso_sem_lista_de_editais():
     assert "Chegaram 7 novas licitações" in html and "Chegaram 7 novas licitações" in texto
     assert "Empresa X" in html and "limpeza, higiene" in html and "20/11/2026" in html
     assert "Acessar o boletim" in html and html_escape(LINK) in html and LINK in texto
-    # nenhum link alem do botao: sem PNCP, sem site do orgao
-    assert re.findall(r'href="([^"]+)"', html) == [html_escape(LINK)]
+    # links: botao, ajustar filtros, gerenciar avisos e e-mail de suporte; sem PNCP, sem site do orgao
+    hrefs = re.findall(r'href="([^"]+)"', html)
+    assert hrefs[0] == html_escape(LINK) and set(hrefs[1:]) == {b.URL_AJUSTAR_FILTROS, "mailto:" + b.EMAIL_SUPORTE}
     assert "pncp" not in (html + texto).lower()
+    # logo em PNG por URL absoluta, rodape com motivo, nao responder e CNPJ da HCM
+    assert 'src="https://licitaplena.com.br/logo.png"' in html and 'alt="LicitaPlena"' in html
+    assert "cadastrou o filtro" in html and "Ajustar meus filtros" in html and "não responda" in html
+    assert "28.786.260/0001-53" in html and "cadastrou o filtro" in texto
+    assert "@" not in "".join(h for h in hrefs if not h.startswith("mailto:"))
+
+
+def test_resumo_so_numeros_sem_objeto():
+    editais = [
+        {"objetoCompra": "Papel A4", "unidadeOrgao": {"ufSigla": "AM"}, "valorTotalEstimado": 1500.5},
+        {"objetoCompra": "Limpeza, exclusivo para ME/EPP", "unidadeOrgao": {"ufSigla": "AM"}, "valorTotalEstimado": 90000},
+        {"objetoCompra": "Tinta", "unidadeOrgao": {"ufSigla": "PA"}},
+    ]
+    r = b.montar_resumo(editais)
+    assert r[:2] == ["2 no AM", "1 no PA"] and "1 exclusiva ME/EPP" in r and r[-1].startswith("maior valor")
+    html = b.montar_email_html("X", "f", EDICAO, 3, LINK, r)
+    assert "2 no AM" in html and "Papel" not in html and b.montar_resumo([]) == []
 
 
 def test_assunto_e_singular_ou_plural():
@@ -184,7 +202,7 @@ def test_assunto_e_singular_ou_plural():
 
 def test_email_sem_novidade_nao_tem_botao():
     html = b.montar_email_html("Empresa X", "limpeza", EDICAO, 0, LINK)
-    assert "Acessar o boletim" not in html and "href=" not in html
+    assert "Acessar o boletim" not in html and html_escape(LINK) not in html and "Ajustar meus filtros" in html
 
 
 def test_nome_da_empresa_e_escapado_no_html():

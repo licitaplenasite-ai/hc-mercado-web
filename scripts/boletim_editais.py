@@ -651,43 +651,99 @@ def montar_assunto(quantidade):
     return "Nenhuma oportunidade nova hoje"
 
 
-def montar_email_html(nome_empresa, filtro, edicao, quantidade, link):
-    rodape = ('<div style="font-size:12px;color:#9aa0a6;margin-top:20px;text-align:center;">'
-              'Aviso automático do LicitaPlena.</div>')
+URL_LOGO = "https://licitaplena.com.br/logo.png"  # PNG branco 1000x1000, publicado por montar_publico.js (SVG nao abre no Gmail/Outlook)
+URL_AJUSTAR_FILTROS = URL_PAINEL + "#boletim"
+EMAIL_SUPORTE = "licitaplena.site@gmail.com"  # mesmo contato do site; WhatsApp de supabase-config.js ainda vazio
+RODAPE_EMPRESA = "LicitaPlena, uma solução HC Licitações, desenvolvida e operada pela HCM LTDA, CNPJ nº 28.786.260/0001-53, Manaus/AM."
+
+
+def montar_resumo(editais):
+    # So numeros, nunca o objeto dos editais: o e-mail continua sendo apenas um aviso.
+    editais = editais or []
+    partes = []
+    ufs = {}
+    for e in editais:
+        uf = ((e.get("unidadeOrgao") or {}).get("ufSigla") or "").strip().upper()
+        if uf:
+            ufs[uf] = ufs.get(uf, 0) + 1
+    for uf, n in sorted(ufs.items(), key=lambda x: (-x[1], x[0]))[:3]:
+        partes.append(str(n) + " no " + uf)
+    exclusivas = sum(1 for e in editais if ME_EPP.search(_norm(e.get("objetoCompra") or "")))
+    if exclusivas:
+        partes.append(str(exclusivas) + (" exclusiva ME/EPP" if exclusivas == 1 else " exclusivas ME/EPP"))
+    valores = [v for v in (_numero(e.get("valorTotalEstimado")) for e in editais) if v]
+    if valores:
+        partes.append("maior valor " + formatar_valor(max(valores)))
+    return partes
+
+
+def montar_email_html(nome_empresa, filtro, edicao, quantidade, link, resumo=None):
+    esc = html.escape
+    fonte = "font-family:Arial,Helvetica,sans-serif;"
     if quantidade:
+        resumo_html = ""
+        if resumo:
+            resumo_html = ('<tr><td align="center" style="' + fonte + 'font-size:14px;color:#3c4043;line-height:1.5;'
+                           'padding:0 0 20px 0;">' + esc(" · ".join(resumo)) + '</td></tr>')
         corpo = (
-            '<div style="font-size:26px;font-weight:bold;color:#202124;margin-bottom:8px;">'
-            + _titulo_quantidade(quantidade) + '</div>'
-            '<div style="font-size:15px;color:#3c4043;line-height:1.5;margin-bottom:22px;">no filtro <b>'
-            + html.escape(filtro) + '</b> da empresa <b>' + html.escape(nome_empresa) + '</b><br>'
-            'Edição de ' + edicao.strftime("%d/%m/%Y") + '</div>'
-            '<a href="' + html.escape(link, quote=True) + '" style="display:inline-block;background:' + COR_MARCA
+            '<tr><td align="center" style="' + fonte + 'font-size:26px;line-height:32px;font-weight:bold;color:#202124;padding:0 0 8px 0;">'
+            + _titulo_quantidade(quantidade) + '</td></tr>'
+            '<tr><td align="center" style="' + fonte + 'font-size:15px;color:#3c4043;line-height:1.5;padding:0 0 18px 0;">no filtro <b>'
+            + esc(filtro) + '</b> da empresa <b>' + esc(nome_empresa) + '</b><br>Edição de '
+            + edicao.strftime("%d/%m/%Y") + '</td></tr>' + resumo_html +
+            '<tr><td align="center" style="padding:0 0 14px 0;"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>'
+            '<td align="center" bgcolor="' + COR_MARCA + '" style="border-radius:8px;"><a href="' + esc(link, quote=True)
+            + '" style="display:inline-block;' + fonte + 'background:' + COR_MARCA
             + ';color:#ffffff;padding:16px 36px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:18px;">'
-            'Acessar o boletim</a>'
-            '<div style="font-size:12px;color:#5f6368;margin-top:16px;">Você entra com seu login e vê a lista completa.</div>'
+            'Acessar o boletim</a></td></tr></table></td></tr>'
+            '<tr><td align="center" style="' + fonte + 'font-size:12px;color:#5f6368;">Você entra com seu login e vê a lista completa.</td></tr>'
         )
     else:
         corpo = (
-            '<div style="font-size:20px;color:#202124;margin-bottom:8px;">Nenhuma oportunidade nova hoje</div>'
-            '<div style="font-size:14px;color:#5f6368;">no filtro <b>' + html.escape(filtro) + '</b> da empresa <b>'
-            + html.escape(nome_empresa) + '</b>.</div>'
+            '<tr><td align="center" style="' + fonte + 'font-size:20px;color:#202124;padding:0 0 8px 0;">Nenhuma oportunidade nova hoje</td></tr>'
+            '<tr><td align="center" style="' + fonte + 'font-size:14px;color:#5f6368;">no filtro <b>' + esc(filtro)
+            + '</b> da empresa <b>' + esc(nome_empresa) + '</b>.</td></tr>'
         )
+    estilo_link = 'color:#5f6368;text-decoration:underline;'
+    rodape = (
+        '<tr><td align="center" style="' + fonte + 'font-size:12px;line-height:1.6;color:#80868b;padding:20px 8px 0 8px;">'
+        'Você recebe este aviso porque cadastrou o filtro <b>' + esc(filtro) + '</b> no LicitaPlena.<br>'
+        '<a href="' + esc(URL_AJUSTAR_FILTROS, quote=True) + '" style="' + estilo_link + '">Ajustar meus filtros</a>'
+        ' &nbsp;|&nbsp; '
+        '<a href="' + esc(URL_AJUSTAR_FILTROS, quote=True) + '" style="' + estilo_link + '">Parar ou gerenciar avisos</a><br>'
+        'Dúvidas? Escreva para <a href="mailto:' + EMAIL_SUPORTE + '" style="' + estilo_link + '">' + EMAIL_SUPORTE + '</a>.<br>'
+        'Este é um aviso automático: não responda este e-mail.<br><br>'
+        + esc(RODAPE_EMPRESA) + '</td></tr>'
+    )
     return (
-        '<html><body style="margin:0;padding:0;background:#f4f4f4;">'
-        '<div style="max-width:560px;margin:0 auto;padding:24px 16px;font-family:Arial,sans-serif;">'
-        '<div style="background:' + COR_MARCA + ';color:#ffffff;font-size:22px;font-weight:bold;padding:16px 24px;'
-        'border-radius:8px 8px 0 0;">LicitaPlena</div>'
-        '<div style="background:#ffffff;padding:32px 24px;border-radius:0 0 8px 8px;text-align:center;">'
-        + corpo + '</div>' + rodape + '</div></body></html>'
+        '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1"><title>LicitaPlena</title></head>'
+        '<body style="margin:0;padding:0;background:#f4f4f4;">'
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f4f4f4"><tr>'
+        '<td align="center" style="padding:24px 12px;">'
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;width:100%;">'
+        '<tr><td bgcolor="' + COR_MARCA + '" style="background:' + COR_MARCA + ';padding:14px 20px;border-radius:8px 8px 0 0;">'
+        '<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>'
+        '<td valign="middle" style="padding-right:10px;"><img src="' + URL_LOGO + '" width="36" height="36" alt="LicitaPlena" '
+        'style="display:block;border:0;width:36px;height:36px;"></td>'
+        '<td valign="middle" style="' + fonte + 'color:#ffffff;font-size:22px;font-weight:bold;">LicitaPlena</td>'
+        '</tr></table></td></tr>'
+        '<tr><td bgcolor="#ffffff" style="background:#ffffff;padding:32px 20px;border-radius:0 0 8px 8px;">'
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">' + corpo + '</table></td></tr>'
+        + rodape + '</table></td></tr></table></body></html>'
     )
 
 
-def montar_email_texto(nome_empresa, filtro, edicao, quantidade, link):
+def montar_email_texto(nome_empresa, filtro, edicao, quantidade, link, resumo=None):
+    rodape = ("\n--\nVocê recebe este aviso porque cadastrou o filtro " + filtro + " no LicitaPlena.\n"
+              "Ajustar meus filtros ou parar os avisos: " + URL_AJUSTAR_FILTROS + "\n"
+              "Dúvidas: " + EMAIL_SUPORTE + "\nAviso automático: não responda este e-mail.\n" + RODAPE_EMPRESA + "\n")
     if not quantidade:
-        return "LicitaPlena\n\nNenhuma oportunidade nova hoje no filtro " + filtro + " da empresa " + nome_empresa + ".\n"
+        return "LicitaPlena\n\nNenhuma oportunidade nova hoje no filtro " + filtro + " da empresa " + nome_empresa + ".\n" + rodape
     return ("LicitaPlena\n\n" + _titulo_quantidade(quantidade) + " no filtro " + filtro + " da empresa " + nome_empresa + ".\n"
-            "Edição de " + edicao.strftime("%d/%m/%Y") + ".\n\n"
-            "Acessar o boletim: " + link + "\n")
+            "Edição de " + edicao.strftime("%d/%m/%Y") + ".\n"
+            + ((" · ".join(resumo) + "\n") if resumo else "") + "\n"
+            "Acessar o boletim: " + link + "\n" + rodape)
 
 
 def registrar_log_boletim(destinatario, status, quantidade, mensagem_erro=None):
@@ -754,8 +810,9 @@ def enviar_email(destino_email, nome_destinatario, editais_novos, prefixo_assunt
     edicao = hoje_brasilia()
     link = montar_link_boletim(edicao, filtro_id)
     assunto = prefixo_assunto + montar_assunto(quantidade)
-    texto = montar_email_texto(nome_destinatario, filtro, edicao, quantidade, link)
-    html_corpo = montar_email_html(nome_destinatario, filtro, edicao, quantidade, link)
+    resumo = montar_resumo(editais_novos)
+    texto = montar_email_texto(nome_destinatario, filtro, edicao, quantidade, link, resumo)
+    html_corpo = montar_email_html(nome_destinatario, filtro, edicao, quantidade, link, resumo)
     token = os.environ.get("ZEPTOMAIL_TOKEN")
     if token:
         try:
