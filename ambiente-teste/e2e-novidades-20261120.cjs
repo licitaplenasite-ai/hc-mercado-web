@@ -57,10 +57,11 @@ async function main() {
 
     await passo('SINAPI: buscar e "Usar este preço"', p, async () => {
       // Banco recriado por subir.cjs vem sem SINAPI (o robô baixa ~16 MB da CAIXA): sem AM, grava 1 composição fictícia e apaga no fim.
-      const temAm = await servico('GET', '/rest/v1/sinapi_precos?uf=eq.AM&tipo=eq.composicao&busca=ilike.*alvenaria*&select=codigo&limit=1');
+      const temAm = await servico('GET', '/rest/v1/sinapi_custos?uf=eq.AM&tipo=eq.composicao&select=codigo&limit=1');
       if (!temAm.length) {
-        await servico('POST', '/rest/v1/sinapi_precos', [false, true].map((desonerado) => ({ uf: 'AM', tipo: 'composicao', desonerado, codigo: '990101',
-          descricao: 'ALVENARIA DE BLOCO CERAMICO (FICTICIO E2E)', unidade: 'M2', preco: 88.1, referencia: '2026-10-01', busca: 'alvenaria de bloco ceramico ficticio e2e' })));
+        await servico('POST', '/rest/v1/sinapi_itens', { tipo: 'composicao', codigo: '990101', descricao: 'ALVENARIA DE BLOCO CERAMICO (FICTICIO E2E)', unidade: 'M2',
+          referencia: '2026-10-01', busca: 'alvenaria de bloco ceramico ficticio e2e' });
+        await servico('POST', '/rest/v1/sinapi_custos', { uf: 'AM', tipo: 'composicao', codigo: '990101', preco_sd: 88.1, preco_cd: 85.4, referencia: '2026-10-01' });
         ctx.sinapiFicticio = true;
       }
       await p.goto(SITE + '/sinapi.html');
@@ -145,7 +146,7 @@ async function main() {
     }
   } finally {
     if (ctx.proc) await servico('DELETE', `/rest/v1/operacao_processos?id=eq.${ctx.proc.id}`).catch((e) => console.log('limpeza processo:', e.message));
-    if (ctx.sinapiFicticio) await servico('DELETE', '/rest/v1/sinapi_precos?uf=eq.AM&codigo=eq.990101').catch((e) => console.log('limpeza SINAPI:', e.message));
+    if (ctx.sinapiFicticio) await servico('DELETE', '/rest/v1/sinapi_itens?tipo=eq.composicao&codigo=eq.990101').catch((e) => console.log('limpeza SINAPI:', e.message));
     if (ctx.resumo) await servico('DELETE', '/rest/v1/dados_robo?chave=eq.dashboard_mercado').catch((e) => console.log('limpeza resumo:', e.message));
     await navegador.close();
   }
