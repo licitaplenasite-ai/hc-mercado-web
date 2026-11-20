@@ -31,13 +31,13 @@
 <main>
   <h1>Extensão de leitura do LicitaPlena</h1>
   <p class="apoio">Para trazer ao LicitaPlena participantes, marcas e motivos de recusa dos pregões anteriores, a leitura é feita no seu navegador, por você.</p>
-  <p class="aviso"><strong>Versão de desenvolvedor (0.4.0).</strong> A versão da Chrome Web Store vem depois. Por enquanto a extensão é instalada manualmente, como abaixo.</p>
+  <p class="aviso"><strong>Versão de desenvolvedor (0.5.0).</strong> A versão da Chrome Web Store vem depois. Por enquanto a extensão é instalada manualmente, como abaixo.</p>
 
   <h2>Instalar (uma vez, uns 3 minutos)</h2>
   <!-- Botão de download adicionado em 19/11/2026: aguarda aprovação. -->
-  <a class="btn-baixar" href="extensao/licitaplena-extensao-0.4.0.zip" download>Baixar a extensão (versão 0.4.0)</a>
+  <a class="btn-baixar" href="extensao/licitaplena-extensao-0.5.0.zip" download>Baixar a extensão (versão 0.5.0)</a>
   <ol>
-    <li>Clique em <strong>Baixar a extensão</strong>, acima. O arquivo <code>licitaplena-extensao-0.4.0.zip</code> vai para a pasta <strong>Downloads</strong>; mova para a pasta <strong>Documentos</strong>.</li>
+    <li>Clique em <strong>Baixar a extensão</strong>, acima. O arquivo <code>licitaplena-extensao-0.5.0.zip</code> vai para a pasta <strong>Downloads</strong>; mova para a pasta <strong>Documentos</strong>.</li>
     <li>Clique com o botão direito no arquivo e escolha <strong>Extrair tudo…</strong> → <strong>Extrair</strong>. Vai aparecer uma pasta com o mesmo nome. Não apague essa pasta depois: o navegador usa ela.</li>
     <li>No Chrome, digite <code>chrome://extensions</code> na barra de endereço e aperte Enter. No Edge, digite <code>edge://extensions</code>.</li>
     <li>Ligue a chave <strong>Modo do desenvolvedor</strong> (no Chrome fica no canto superior direito; no Edge, na barra da esquerda, embaixo).</li>
@@ -56,7 +56,7 @@
     <li>Volte ao LicitaPlena (aberto e logado em outra aba) e clique <strong>Atualizar</strong>.</li>
   </ol>
 
-  <p class="info">A extensão só lê o que a página já mostrou. Ela não clica, não navega, não envia propostas nem lances e não resolve captcha. Se algo não estiver aberto na tela, ela lista o que você precisa abrir.</p>
+  <p class="info">A extensão só lê o que a página já mostrou. Ela não clica, não navega, não envia propostas e não resolve captcha. Lance, só no modo "Lance com 1 clique" e com o seu clique. Se algo não estiver aberto na tela, ela lista o que você precisa abrir.</p>
   <h2>Preencher proposta</h2>
   <p>Para não digitar item por item no cadastro de propostas do Compras.gov, a extensão preenche os campos por você a partir do seu lote no LicitaPlena ou de uma planilha CSV.</p>
   <ol>
@@ -75,6 +75,19 @@
     <li>Quando o pregoeiro escrever, aparece uma notificação com o trecho e a hora, e o ícone mostra um número. Mensagens que citam sua empresa, convocação, anexo, prazo, recusa, desclassificação, inabilitação, diligência, habilitação, suspensão ou aceite vêm destacadas. O som é opcional; as importantes também dão um bipe na própria aba do pregão (funciona mesmo com o som de notificação do Windows desligado, depois que você clicou na página).</li>
   </ol>
   <p class="info"><strong>Limites.</strong> Precisa da aba aberta e do computador ligado (sem a aba, nada é avisado). Se a página recarregar, a extensão volta a acompanhar sozinha. Se o portal deslogar, cair, a aba sair da página ou não der para voltar, ela avisa "parei de acompanhar". Ela só lê o que a própria página mostra: não faz requisições ao portal, não recarrega, não navega e não resolve captcha. Gravar as mensagens no LicitaPlena é opcional e só funciona na página pública "Acompanhar contratação". Ainda não foi testada na sala de disputa real.</p>
+
+  <h2>Lance com 1 clique (sala de disputa)</h2>
+  <!-- Seção adicionada em 20/11/2026 (etapas 1 e 2 do lance): aguarda aprovação. -->
+  <p>Durante a disputa, a extensão calcula o próximo lance com o <strong>piso</strong> (valor mínimo) que você cadastrou no item do LicitaPlena e pergunta "Dar lance de R$ X?". <strong>Ela só envia quando você clica em "Sim, dar lance"</strong>, um lance por clique.</p>
+  <ol>
+    <li>Cadastre no LicitaPlena o valor mínimo (piso) de cada item do processo.</li>
+    <li>Entre você mesmo na sala de disputa do Compras.gov. Deixe o LicitaPlena aberto e logado em outra aba.</li>
+    <li>Na extensão, em <strong>Lance com 1 clique</strong>, clique <strong>Buscar meus pisos no LicitaPlena</strong>. Para cada item, informe o valor de cada redução, a diferença mínima do edital (se houver) e o máximo de lances.</li>
+    <li>Leia o resumo, marque <strong>Confirmo</strong> e clique <strong>Salvar e ligar</strong>. Com a janela da extensão aberta, aparece o próximo lance; clique <strong>Sim, dar lance</strong> para enviar.</li>
+  </ol>
+  <p>Se o pregão tiver o campo <strong>"valor final mínimo"</strong> do robô do próprio Compras.gov (IN SEGES 73/2022, art. 19), o botão <strong>Preencher "valor final mínimo"</strong> coloca o seu piso nesse campo. Confira e clique você mesmo em Salvar no portal.</p>
+  <p class="info"><strong>Travas.</strong> Nunca abaixo do piso. Pelo menos 20 s entre seus lances e nunca abaixo da diferença mínima do edital. Para tudo e avisa se aparecer captcha, mensagem nova do pregoeiro, suspensão, desempate/ME-EPP, fase fechada (o lance fechado é sempre seu) ou sessão expirada. O botão vermelho <strong>PARAR lances</strong> fica no topo da janela. Depois de cada lance aparece o aviso: lance errado pode ser excluído uma vez, em até 15 s, no botão do portal (IN 73, art. 21, §3º). Cada lance sugerido, enviado ou recusado fica registrado no seu navegador.</p>
+  <p class="aviso">Se a sua conta tiver mais de uma empresa (CNPJ) no mesmo pregão, o lance pela extensão fica bloqueado: duas empresas da mesma conta disputando o mesmo pregão pode ser conluio. A extensão nunca pede senha gov.br, código ou certificado, não resolve captcha e não dá lance sozinha. O lance é seu: leia o edital, que pode proibir ferramentas de lance. <strong>Ainda não foi testada numa sala de disputa real.</strong></p>
 
   <h2>Quando a extensão não reconhece a página: enviar diagnóstico</h2>
   <p>O portal do governo muda de vez em quando. Se a extensão disser que não reconhece a página (ou que não achou o chat, os itens ou os campos), aparece no fim da janela da extensão o botão <strong>Enviar diagnóstico</strong>.</p>
@@ -95,7 +108,7 @@
     <li><strong>Se o portal pedir para recarregar:</strong> recarregue normalmente. <em>Esperado:</em> o ícone mostra "…" e volta para "ON" sozinho. Se o chat fechou com a recarga, vem o aviso "não vejo o chat": abra o chat de novo.</li>
     <li><strong>Depois da sessão:</strong> na página pública "Acompanhar contratação" do pregão, abra os itens e fornecedores e clique <strong>Ler esta página e gravar</strong>. <em>Esperado:</em> "Gravado no LicitaPlena (N propostas…)".</li>
   </ol>
-  <p class="aviso">Em nenhum passo a extensão clica em Salvar, aceita termo ou declarações, resolve captcha, envia lance ou troca de página sozinha.</p>
+  <p class="aviso">Em nenhum passo a extensão clica em Salvar, aceita termo ou declarações, resolve captcha, envia lance sem o seu clique em "Sim, dar lance" ou troca de página sozinha.</p>
 
   <p><a href="index.html">Voltar ao LicitaPlena</a></p>
 </main>

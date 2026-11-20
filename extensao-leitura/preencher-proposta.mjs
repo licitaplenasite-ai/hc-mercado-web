@@ -94,7 +94,7 @@ export function registrarDiario(storage, compra, resultado, agora = new Date().t
   try { storage.setItem(chaveDiario(compra), JSON.stringify(d)); } catch { /* sem armazenamento: o diário é conveniência */ }
   return d;
 }
-const PREFIXOS_ARMAZENADOS = ['lp-preencher-lote:', 'lp-preencher-diario:'];
+const PREFIXOS_ARMAZENADOS = ['lp-preencher-lote:', 'lp-preencher-diario:', 'lp-lance-config:', 'lp-lance-registro:']; // lance: piso e registro também expiram
 // Lote traz valorMinimo (estratégia do usuário): não fica para sempre no navegador. Lote guarda {em, itens}, diário {item:{em}}; sem data ou com mais de `dias`, apaga.
 export function expirarArmazenamento(storage, agora = Date.now(), dias = 30) {
   try {

@@ -2,8 +2,9 @@
 <html lang="pt-BR">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>LicitaPlena — leitura</title><link rel="stylesheet" href="popup.css"></head>
 <body>
+  <button id="lanceParar" class="parar" type="button">PARAR lances</button>
   <h1>LicitaPlena</h1>
-  <p>Grava o pregão aberto na aba, preenche a proposta no Compras.gov (você confere e salva cada item), acompanha o chat do pregoeiro e envia um diagnóstico quando não reconhece a página. Não envia propostas nem lances.</p>
+  <p>Grava o pregão aberto na aba, preenche a proposta no Compras.gov (você confere e salva cada item), acompanha o chat do pregoeiro e envia um diagnóstico quando não reconhece a página. Não envia propostas. Lance só com o seu clique em "Sim, dar lance".</p>
   <h2>Conferir contexto</h2>
   <fieldset><legend>Contexto esperado — informe para comparar</legend>
     <label for="cnpj">CNPJ do fornecedor</label><input id="cnpj" autocomplete="off" maxlength="18" inputmode="numeric">
@@ -44,6 +45,24 @@
     <p id="acompanharStatus" role="status" aria-live="polite">Não está acompanhando.</p>
     <p>Não faz requisições próprias, não recarrega nem navega, não resolve captcha. Se o portal deslogar, a aba sair da página ou não der para voltar depois de recarregar, avisa "parei de acompanhar".</p>
   </section>
+  <section aria-labelledby="lanceTitulo">
+    <h2 id="lanceTitulo">Lance com 1 clique</h2>
+    <p>Na sala de disputa do Compras.gov (logado por você): mostra o próximo lance, calculado com o seu piso do LicitaPlena, e só envia quando você clica "Sim, dar lance". Nunca abaixo do piso; 20 s entre seus lances; para sozinho com captcha, mensagem do pregoeiro, suspensão, desempate, fase fechada ou sessão expirada.</p>
+    <button id="lanceBuscar" type="button">Buscar meus pisos no LicitaPlena</button>
+    <div id="lanceConfig"></div>
+    <label><input id="lanceConfirmo" type="checkbox"> <span id="lanceConfirmoTexto">Confirmo a configuração acima.</span></label>
+    <button id="lanceLigar" type="button">Salvar e ligar</button>
+    <button id="lanceMinimo" type="button" class="secundario">Preencher "valor final mínimo" do Compras.gov com o piso</button>
+    <div id="lanceSugestao" class="sugestao" hidden>
+      <p id="lancePergunta" role="status" aria-live="assertive"></p>
+      <button id="lanceSim" type="button">Sim, dar lance</button>
+      <button id="lanceNao" type="button" class="secundario">Não</button>
+    </div>
+    <p id="lanceAviso" class="aviso" role="alert" hidden></p>
+    <p id="lanceStatus" role="status" aria-live="polite">Desligado.</p>
+    <details><summary>Registro dos lances (neste navegador)</summary><ol id="lanceRegistro"></ol></details>
+    <p>Não guarda nem pede senha gov.br, código ou certificado; não resolve captcha; não clica em Salvar nem aceita termo; não envia nada sozinho nem pelo servidor. Fechar esta janela ou PARAR desliga.</p>
+  </section>
   <section id="diagnostico" aria-labelledby="diagnosticoTitulo" hidden>
     <h2 id="diagnosticoTitulo">Página não reconhecida</h2>
     <button id="diagnosticoEnviar" type="button">Enviar diagnóstico</button>
@@ -53,4 +72,5 @@
   <script type="module" src="gravar.mjs"></script>
   <script type="module" src="preencher.mjs"></script>
   <script type="module" src="acompanhar.mjs"></script>
+  <script type="module" src="lance.mjs"></script>
 </body></html>

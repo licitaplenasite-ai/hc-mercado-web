@@ -40,9 +40,11 @@ exports.handler = async (event) => {
     const r = await request(`/rest/v1/operacao_processos?uasg=eq.${uasg}&status=neq.arquivado&select=id,empresa_id,organizacao_id,numero,objeto&limit=50`);
     if (!r.ok) falhar("Processos indisponíveis.", 503);
     const candidatos = (await r.json()).filter((p) => uuid(p?.id) && uuid(p.organizacao_id) && mesmoNumero(p.numero, numero, ano));
+    // Trava anticonluio do lance com 1 clique: mais de uma empresa (CNPJ) da mesma conta nesta compra bloqueia o lance na extensão.
+    const empresasNaCompra = new Set(candidatos.map((p) => p.empresa_id || p.id)).size;
     const escolhido = q.processo ? candidatos.find((p) => p.id === q.processo) : candidatos.length === 1 ? candidatos[0] : null;
     if (!candidatos.length || (q.processo && !escolhido)) return resposta(200, { ok: true, compra, processo: null });
-    if (!escolhido) return resposta(200, { ok: true, compra, escolher: candidatos.map((p) => ({ processoId: p.id, numero: p.numero, objeto: p.objeto })) });
+    if (!escolhido) return resposta(200, { ok: true, compra, empresasNaCompra, escolher: candidatos.map((p) => ({ processoId: p.id, numero: p.numero, objeto: p.objeto })) });
 
     const itens = [];
     let afterId;
@@ -53,7 +55,7 @@ exports.handler = async (event) => {
     } while (afterId && itens.length < MAX_ITENS);
     if (afterId) falhar("Processo com itens demais para uma leitura.", 422);
     return resposta(200, {
-      ok: true, compra,
+      ok: true, compra, empresasNaCompra,
       processo: { processoId: escolhido.id, numero: escolhido.numero, objeto: escolhido.objeto },
       itens: itens.filter((i) => i.valor_unitario_proposta).map((i) => ({
         item: i.identificador, quantidade: i.quantidade, valorUnitario: i.valor_unitario_proposta,

@@ -17,8 +17,11 @@ const seed = JSON.parse(fs.readFileSync(path.join(__dirname, 'seed.local.json'),
 const PORTAL = 'https://cnetmobile.estaleiro.serpro.gov.br';
 const ITEM = `${PORTAL}/comprasnet-web/public/compras/acompanhamento-compra/item/1?compra=19302805900082025`;
 const CADASTRO = `${PORTAL}/comprasnet-web/seguro/fornecedor/cadastro-propostas?compra=16013705000332026`;
+const SALA_LANCE = `${PORTAL}/comprasnet-web/seguro/fornecedor/lances?compra=16013705000332026`; // UASG 160137, nº 33/2026
+const PRINTS_LANCE = process.env.PRINTS_LANCE || 'C:/Users/harre/Desktop/LICITAPLENA/_historico/prints-lance';
 const fixture = n => fs.readFileSync(path.join(EXT, 'fixtures', n), 'utf8');
 fs.mkdirSync(PRINTS, { recursive: true });
+fs.mkdirSync(PRINTS_LANCE, { recursive: true });
 
 const resultados = [];
 async function passo(nome, f) {
@@ -65,6 +68,7 @@ async function main() {
     await rotas(ctx, {
       '/comprasnet-web/public/compras/acompanhamento-compra/item/1': fixture('comprasgov-item-19302805900082025-1.html'),
       '/comprasnet-web/seguro/fornecedor/cadastro-propostas': `<html><head><title>Cadastrar propostas</title></head><body>${fixture('comprasgov-cadastro-propostas.html')}</body></html>`,
+      '/comprasnet-web/seguro/fornecedor/lances': `<html><head><title>Sala de disputa</title></head><body>${fixture('comprasgov-sala-disputa.html')}</body></html>`,
       '/comprasnet-web/seguro/fornecedor/disputa': '<html><head><title>Sala</title></head><body><header>Usuário: 123.456.789-09 - FULANA</header><div class="sala-chat"><div class="msg-pregoeiro"><p class="corpo">Senhores, bom dia.</p></div></div></body></html>',
     });
     let [sw] = ctx.serviceWorkers();
@@ -83,10 +87,10 @@ async function main() {
       return (await chrome.scripting.executeScript({ target: { tabId: t, frameIds: [0] }, func: mod[f], args: a }))[0].result;
     }, [tabId, modulo, func, args]);
 
-    await passo('extensão carrega no Edge com o manifesto 0.4.0 e o worker', async () => {
+    await passo('extensão carrega no Edge com o manifesto 0.5.0 e o worker', async () => {
       const m = await ext.evaluate(() => chrome.runtime.getManifest());
       exigir(!errosPopup.length, `erro ao abrir o popup: ${errosPopup.join(' | ')}`);
-      exigir(m.version === '0.4.0' && m.background.service_worker === 'acompanhar-worker.mjs', JSON.stringify(m).slice(0, 200));
+      exigir(m.version === '0.5.0' && m.background.service_worker === 'acompanhar-worker.mjs', JSON.stringify(m).slice(0, 200));
       await ext.screenshot({ path: path.join(PRINTS, 'extensao-01-popup.png'), fullPage: true });
     });
 
@@ -162,6 +166,74 @@ async function main() {
       await portal.waitForTimeout(2500);
       exigir((await notificacoes()).length === 3 && await ext.evaluate(t => chrome.action.getBadgeText({ tabId: t }), tab) === 'OFF', 'não avisou ao sair');
     });
+
+    // Lance com 1 clique pelos botões do popup. A automação não tem o clique que concede permissão nem a "aba ativa"
+    // do popup de verdade: só nesta página de teste, permissions.request responde sim e a aba ativa é a sala.
+    const P_LANCE = '00000000-0000-4000-8000-00000000c001', P_LANCE2 = '00000000-0000-4000-8000-00000000c002';
+    const limparLance = () => psql(`delete from operacao_itens_resultado where processo_id in ('${P_LANCE}','${P_LANCE2}'); delete from operacao_processos where id in ('${P_LANCE}','${P_LANCE2}');`);
+    await passo('lance: pisos do LicitaPlena, valor final mínimo sem Salvar, "Dar lance de R$ X?" só envia no clique, aviso de 15 s e paradas', async () => {
+      limparLance();
+      psql(`insert into operacao_processos(id, organizacao_id, empresa_id, uasg, numero, objeto, status) values ('${P_LANCE}', '${seed.ids.orgA}', '${seed.ids.empA1}', '160137', '33/2026', 'Papelaria (teste do lance)', 'preparacao');
+        insert into operacao_itens_resultado(organizacao_id, processo_id, identificador, quantidade, valor_unitario_proposta, valor_unitario_minimo) values
+        ('${seed.ids.orgA}', '${P_LANCE}', '1', 10, 10.50, 9.00), ('${seed.ids.orgA}', '${P_LANCE}', '2', 10, 4.00, 3.80);`);
+      const lp = await ctx.newPage();
+      await lp.goto(SITE + '/login.html');
+      await lp.fill('#email', seed.usuarios.gestor.email); await lp.fill('#senha', seed.usuarios.gestor.senha);
+      await Promise.all([lp.waitForURL(/painel\.html|sistema/, { timeout: 20000 }), lp.click('#btn-entrar')]);
+      await portal.goto(SALA_LANCE);
+      await ext.evaluate(u => {
+        const q = chrome.tabs.query.bind(chrome.tabs);
+        chrome.tabs.query = o => (o.active ? q({}).then(l => l.filter(t => t.url === u)) : q(o));
+        chrome.permissions.request = async () => true;
+      }, SALA_LANCE);
+      const statusLance = () => ext.textContent('#lanceStatus');
+      const esperarStatus = (re, ms = 10000) => ext.waitForFunction(r => new RegExp(r).test(document.getElementById('lanceStatus').textContent), re.source, { timeout: ms })
+        .catch(async () => { throw new Error(`status: ${await statusLance()}`); });
+      await ext.click('#lanceBuscar');
+      await esperarStatus(/Processo 33\/2026: 2 itens/);
+      exigir(/R\$ 9,0000/.test(await ext.textContent('#lanceConfig')), 'piso do item 1 não aparece');
+      for (const [item, campo, v] of [['1', 'decremento', '0,10'], ['1', 'maxLances', '5'], ['2', 'decremento', '0,10'], ['2', 'maxLances', '5']]) await ext.fill(`#lanceConfig input[data-item="${item}"][data-campo="${campo}"]`, v);
+      await ext.click('#lanceLigar');
+      exigir(/Confirmo/.test(await statusLance()), 'ligou sem marcar Confirmo');
+      await ext.check('#lanceConfirmo');
+      await ext.evaluate(() => document.getElementById('lanceTitulo').scrollIntoView());
+      await ext.screenshot({ path: path.join(PRINTS_LANCE, 'lance-01-configuracao-piso.png'), fullPage: true });
+      await ext.click('#lanceLigar');
+      await ext.waitForSelector('#lanceSugestao:not([hidden])', { timeout: 8000 });
+      const pergunta = await ext.textContent('#lancePergunta');
+      exigir(/Dar lance de R\$ 9,9000 no item 1\?/.test(pergunta), pergunta);
+      exigir(await portal.evaluate(() => window.__lances.length) === 0, 'enviou lance sem o clique');
+      await ext.screenshot({ path: path.join(PRINTS_LANCE, 'lance-02-dar-lance.png'), fullPage: true });
+
+      await ext.click('#lanceMinimo');
+      await esperarStatus(/Valor final mínimo preenchido/, 5000);
+      const minimos = await portal.$$eval('input[data-test="input-valor-final-minimo"]', l => l.map(i => i.value));
+      exigir(minimos.join('|') === '9,0000|3,8000' && await portal.evaluate(() => window.__salvarMinimo) === 0, `${minimos} / clicou Salvar`);
+      await portal.screenshot({ path: path.join(PRINTS_LANCE, 'lance-03-valor-final-minimo-sala-modelada.png'), fullPage: true });
+
+      await ext.waitForSelector('#lanceSim:not([disabled])', { timeout: 8000 });
+      await ext.click('#lanceSim');
+      await ext.waitForSelector('#lanceAviso:not([hidden])', { timeout: 8000 });
+      exigir(/15 s/.test(await ext.textContent('#lanceAviso')), 'sem aviso dos 15 s');
+      exigir(await portal.evaluate(() => window.__lances.join('|')) === '9,9000', 'lance diferente do confirmado');
+      exigir(await portal.textContent('[data-test="item-disputa"] [data-test="meu-valor"]') === 'R$ 9,9000', 'sala não registrou');
+      exigir(/enviado R\$ 9,9000/.test(await ext.textContent('#lanceRegistro')), 'registro sem o envio');
+      await ext.evaluate(() => { document.querySelector('details').open = true; });
+      await ext.screenshot({ path: path.join(PRINTS_LANCE, 'lance-04-enviado-aviso-15s.png'), fullPage: true });
+
+      await portal.evaluate(() => { const c = document.createElement('div'); c.className = 'cp-mensagens-compra'; c.innerHTML = '<div class="mensagens-texto">Fornecedor, confirme o item 1.</div>'; document.querySelector('app-mensagens-chat-lista').appendChild(c); });
+      await esperarStatus(/pregoeiro escreveu/, 8000);
+      exigir(await ext.isHidden('#lanceSugestao') && await portal.evaluate(() => window.__lances.length) === 1, 'continuou depois da mensagem do pregoeiro');
+
+      psql(`insert into operacao_processos(id, organizacao_id, empresa_id, uasg, numero, objeto, status) values ('${P_LANCE2}', '${seed.ids.orgA}', '${seed.ids.empA2}', '160137', '33/2026', 'Mesma compra, outra empresa da conta', 'preparacao');`);
+      await ext.click('#lanceBuscar');
+      await esperarStatus(/conluio/);
+      await ext.click('#lanceLigar');
+      exigir(/conluio/.test(await statusLance()), 'ligou com duas empresas no pregão');
+      await ext.screenshot({ path: path.join(PRINTS_LANCE, 'lance-05-anticonluio.png'), fullPage: true });
+      await lp.close();
+    });
+    limparLance();
 
     if (diagnosticoId) psql(`delete from extensao_diagnosticos where id = ${Number(diagnosticoId)}`);
   } finally {

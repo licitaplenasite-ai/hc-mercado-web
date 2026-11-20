@@ -15,3 +15,10 @@ h2 { font-size: 17px; margin: 22px 0 6px; }
 #acompanharStatus { font-weight: 600; overflow-wrap: anywhere; white-space: pre-line; }
 label:has(> input[type=checkbox]) { display: flex; gap: 8px; align-items: center; }
 input[type=checkbox] { width: auto; }
+#lanceStatus, #lancePergunta { font-weight: 600; overflow-wrap: anywhere; white-space: pre-line; }
+.parar { position: sticky; top: 0; z-index: 2; margin: 0 0 10px; background: #b3261e; font-weight: 700; letter-spacing: .5px; }
+.secundario { background: #fff; color: #2255e0; border: 1px solid #2255e0; }
+.sugestao { margin-top: 12px; padding: 10px; border: 2px solid #2255e0; border-radius: 8px; background: #eaf1fe; }
+.aviso { background: #fff4e0; border: 1px solid #f0cf95; color: #8a4b00; border-radius: 6px; padding: 8px; font-weight: 600; }
+#lanceRegistro { font-size: 12px; padding-left: 18px; }
+fieldset { margin-top: 10px; }

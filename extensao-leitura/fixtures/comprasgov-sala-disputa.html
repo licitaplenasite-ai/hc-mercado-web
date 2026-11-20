@@ -1,0 +1,57 @@
+<!-- Sala de disputa do Compras.gov MODELADA (não capturada do portal: a sala real nunca foi aberta por nós).
+     Estrutura e data-test são suposições no estilo do cadastro de propostas (mapa de 18/11); o 1º teste real
+     confirma ou corrige. Empresas e valores fictícios. O script no fim imita o portal: "Enviar lance" aceita valor
+     menor que o seu e atualiza "Meu valor"; valor igual/maior mostra erro. Salvar do valor final mínimo grava. -->
+<main data-test="sala-disputa">
+  <h1>Sala de disputa — Pregão 90033/2026</h1>
+  <div data-test="aviso-sala"></div>
+  <section class="item-disputa" data-test="item-disputa">
+    <span data-test="numero-item">1</span> <span>Papel A4, resma</span>
+    <span data-test="modo-disputa">Aberto</span>
+    <span data-test="etapa-item">Aberta</span>
+    <span>Melhor valor: <span data-test="melhor-valor">R$ 10,0000</span></span>
+    <span>Meu valor: <span data-test="meu-valor">R$ 10,5000</span></span>
+    <span data-test="situacao-item">Perdendo</span>
+    <span>Intervalo mínimo entre lances: <span data-test="intervalo-minimo">R$ 0,0500</span></span>
+    <label>Valor do lance <input data-test="input-valor-lance" maxlength="18"></label>
+    <button type="button" data-test="btn-enviar-lance">Enviar lance</button>
+    <span data-test="mensagem-lance"></span>
+    <label>Valor final mínimo <input data-test="input-valor-final-minimo" maxlength="18"></label>
+    <button type="button" data-test="btn-salvar-valor-final-minimo">Salvar</button>
+  </section>
+  <section class="item-disputa" data-test="item-disputa">
+    <span data-test="numero-item">2</span> <span>Caneta azul, caixa</span>
+    <span data-test="modo-disputa">Aberto</span>
+    <span data-test="etapa-item">Aberta</span>
+    <span>Melhor valor: <span data-test="melhor-valor">R$ 4,0000</span></span>
+    <span>Meu valor: <span data-test="meu-valor">R$ 4,0000</span></span>
+    <span data-test="situacao-item">Ganhando</span>
+    <label>Valor do lance <input data-test="input-valor-lance" maxlength="18"></label>
+    <button type="button" data-test="btn-enviar-lance">Enviar lance</button>
+    <span data-test="mensagem-lance"></span>
+    <label>Valor final mínimo <input data-test="input-valor-final-minimo" maxlength="18"></label>
+    <button type="button" data-test="btn-salvar-valor-final-minimo">Salvar</button>
+  </section>
+  <app-mensagens-chat-lista>
+    <div class="cp-mensagens-compra"><div class="mensagens-texto">Bom dia. Iniciada a etapa de lances.</div><div class="mensagens-data"><small>20/11/2026 09:00</small></div></div>
+  </app-mensagens-chat-lista>
+</main>
+<script>
+  window.__lances = []; window.__salvarMinimo = 0;
+  const num = t => Number(String(t).replace(/R\$|\s|\./g, '').replace(',', '.'));
+  const fmt = n => 'R$ ' + n.toFixed(4).replace('.', ',');
+  document.querySelectorAll('[data-test="item-disputa"]').forEach(item => {
+    const q = s => item.querySelector(`[data-test="${s}"]`);
+    q('btn-enviar-lance').addEventListener('click', () => {
+      const v = num(q('input-valor-lance').value);
+      window.__lances.push(q('input-valor-lance').value);
+      if (!(v > 0) || v >= num(q('meu-valor').textContent)) { q('mensagem-lance').textContent = 'Lance recusado: o valor deve ser menor que o seu último lance.'; return; }
+      setTimeout(() => {
+        q('meu-valor').textContent = fmt(v);
+        if (v < num(q('melhor-valor').textContent)) { q('melhor-valor').textContent = fmt(v); q('situacao-item').textContent = 'Ganhando'; }
+        q('input-valor-lance').value = ''; q('mensagem-lance').textContent = 'Lance registrado.';
+      }, 300);
+    });
+    q('btn-salvar-valor-final-minimo').addEventListener('click', () => { window.__salvarMinimo++; });
+  });
+</script>

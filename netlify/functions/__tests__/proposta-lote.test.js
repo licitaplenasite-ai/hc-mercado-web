@@ -69,3 +69,14 @@ test("dois processos da mesma compra: pede escolha; com ?processo devolve o esco
   assert.equal(JSON.parse((await handler(ev({ compra: COMPRA, processo: P2 }))).body).processo.processoId, P2);
   assert.equal(JSON.parse((await handler(ev({ compra: COMPRA, processo: "bbbbbbbb-0000-4000-8000-000000000004" }))).body).processo, null);
 }));
+
+test("anticonluio: conta quantas empresas (CNPJ) da conta têm processo nesta compra", () => comFetch(async () => {
+  const EMP2 = "aaaaaaaa-0000-4000-8000-000000000003";
+  instalar({ processos: [proc(P1, "33/2026"), { ...proc(P2, "33/2026"), empresa_id: EMP2 }] });
+  assert.equal(JSON.parse((await handler(ev())).body).empresasNaCompra, 2);
+  assert.equal(JSON.parse((await handler(ev({ compra: COMPRA, processo: P1 }))).body).empresasNaCompra, 2);
+  instalar({ processos: [proc(P1, "33/2026"), proc(P2, "33/2026")] });
+  assert.equal(JSON.parse((await handler(ev())).body).empresasNaCompra, 1);
+  instalar({ processos: [proc(P1, "33/2026")] });
+  assert.equal(JSON.parse((await handler(ev())).body).empresasNaCompra, 1);
+}));

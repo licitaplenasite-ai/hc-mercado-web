@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "LicitaPlena — leitura de contexto (protótipo)",
-  "version": "0.4.0",
-  "description": "Conferência manual de CNPJ e pregão, gravação, preenchimento assistido de proposta e acompanhamento do chat do pregão aberto na aba. Não envia propostas nem lances.",
+  "version": "0.5.0",
+  "description": "Conferência manual de CNPJ e pregão, gravação, preenchimento assistido de proposta e acompanhamento do chat e lance com 1 clique (só envia quando você confirma). Não envia propostas.",
   "permissions": [
     "activeTab",
     "scripting",
