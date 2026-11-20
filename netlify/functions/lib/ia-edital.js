@@ -2,8 +2,8 @@
 // Netlify Function: Resumo do Edital + Pergunte ao Edital (Fase 1 do roadmap de novas
 // ferramentas, inspirado no ConLicitação).
 //
-// Usa a Groq API (modelos Llama, gratuita — sem cartão de crédito, sem cobrança por uso,
-// limite generoso de 14.400 consultas/dia) pra explicar a licitação.
+// IA principal: Gemini (o dono comparou e aprovou o resumo dele; a Groq ficou fraca para edital).
+// A Groq continua como reserva automática em todas as chamadas (ver chamarIA e _ia_provedores.js).
 //
 // v2: agora tenta ler o PDF de verdade do edital (via API pública do PNCP, sem token) e
 // gerar um resumo ESTRUTURADO em seções (igual ao que o ConLicitação faz), em vez de só um
@@ -53,7 +53,7 @@ const TIMEOUT_ARQUIVO_PNCP_MS = Number(process.env.TIMEOUT_ARQUIVO_PNCP_MS) || 3
 const VERSAO_RESUMO = 17;
 const VERSAO_VALIDACAO_CATALOGO = 17;
 const { cabecalhosPadrao, exigirUsuarioAprovado, verificarLimiteDiario } = require("../_auth");
-const { responderComFallback, haProvedorConfigurado } = require("../_ia_provedores");
+const { responderComFallback, haProvedorConfigurado, montarProvedoresCompat, chamarCompat } = require("../_ia_provedores");
 
 // Ver nota em pncp-proxy.js: alguns endpoints do PNCP resetam a conexão sem User-Agent de
 // navegador. Manda em todo fetch pro PNCP por segurança.
@@ -618,6 +618,29 @@ async function chamarGroq(apiKey, mensagens, opts) {
   return { ok: false, erro: "Não há um modelo de IA disponível para gerar o resumo agora." };
 }
 
+// Gemini primeiro, Groq de reserva, para síntese, catálogo, defesa e resumo em texto corrido.
+// Um prazo único vale para os dois: o Gemini usa no máximo 2/3 do tempo da chamada e a Groq o que
+// sobra, então o tempo total não muda (o painel corta em 30 s). Só fetch: cabe nos 10 ms de CPU do
+// Cloudflare grátis (esperar o fetch não conta). Sem GEMINI_API_KEY, é a Groq de antes, com o prazo inteiro.
+// Os orçamentos de tokens abaixo continuam os da Groq (8k TPM): servem para os dois provedores.
+async function chamarIA(apiKeyGroq, mensagens, opts = {}) {
+  const total = opts.timeoutMs || 20000;
+  const prazo = Date.now() + total;
+  const gemini = montarProvedoresCompat(process.env).find((p) => p.nome === "gemini");
+  if (gemini) {
+    const { response_format, reasoning_effort } = montarCorpoGroq(gemini.modelos[0], mensagens, opts);
+    const prazoGemini = Date.now() + Math.round(total * 2 / 3);
+    for (const modelo of gemini.modelos) {
+      const timeoutMs = prazoGemini - Date.now();
+      if (timeoutMs < 3000) break;
+      const texto = await chamarCompat(gemini, modelo, mensagens, { maxTokens: opts.maxTokens || 500, corpoExtra: { response_format, reasoning_effort } }, fetch, timeoutMs);
+      if (texto) return { ok: true, texto, modelo, provedor: "gemini" };
+    }
+  }
+  if (!apiKeyGroq) return { ok: false, erro: "A IA não retornou uma resposta utilizável. Tente novamente em instantes." };
+  return chamarGroq(apiKeyGroq, mensagens, { ...opts, timeoutMs: Math.max(1000, prazo - Date.now()) });
+}
+
 // Entrada até 5k; a saída aproveita a folga até 7,2k somados, nos 8k TPM.
 const { Tiktoken } = require("js-tiktoken/lite");
 const ranksResumo = require("js-tiktoken/ranks/o200k_base");
@@ -777,7 +800,7 @@ async function chamarSinteseEdital(apiKey, mensagens) {
   // suporta JSON e permite controlar o orçamento por etapa.
   const orcamento = orcamentoResumo(mensagens);
   if (!cabeResumo(mensagens, orcamento)) return { ok: false, diagnostico: { status: 413, tipo: "orcamento_local" }, erro: "A etapa excedeu o orçamento de tokens e será subdividida. Nenhum conteúdo foi enviado ao provedor." };
-  const resposta = await chamarGroq(apiKey, mensagensTransporteDaEtapa(mensagens), { modelo: MODELO_RESUMO, maxTokens: orcamento.saida, timeoutMs: 20000, schema: schemaTransporteDaEtapa(mensagens), reasoningEffort: "low" });
+  const resposta = await chamarIA(apiKey, mensagensTransporteDaEtapa(mensagens), { modelo: MODELO_RESUMO, maxTokens: orcamento.saida, timeoutMs: 20000, schema: schemaTransporteDaEtapa(mensagens), reasoningEffort: "low" });
   if (!resposta.ok) return resposta;
   const fonte = fonteDaEtapa(mensagens);
   let transportada;
@@ -788,7 +811,7 @@ async function chamarSinteseEdital(apiKey, mensagens) {
 }
 
 // Exposto somente para os testes unitários locais; a Netlify continua chamando handler.
-exports.__test = { montarDossieDaFonte, SCHEMA_ETAPA, SCHEMA_MINUTA, INSTRUCOES_MINUTA, schemaDaEtapa, schemaTransporteDaEtapa, mensagensTransporteDaEtapa, traduzirEtapaTransportada, fonteDaEtapa, requisitosConhecidosDaFonte, blocoDeMinuta, converterEtapaOperacional, tokensEntradaResumo, orcamentoResumo, cabeResumo, INSTRUCOES_ETAPA, chamarGroq, chamarSinteseEdital, montarCorpoGroq, mensagensDaEtapa, valorRotuladoDoTexto, normalizarListaDoDossie, sanitizarListasDoDossie, buscarTextoEdital, MOTIVO_DOWNLOAD_INDISPONIVEL, pedidoDeNovaLeitura, selecionarDocumentosParaLeitura, leituraPrioritariaPendente, precisaReleituraPrioritaria, aplicarCamposOperacionaisDoTexto, montarEstruturaBasica, buscarFichaCanonica };
+exports.__test = { montarDossieDaFonte, SCHEMA_ETAPA, SCHEMA_MINUTA, INSTRUCOES_MINUTA, schemaDaEtapa, schemaTransporteDaEtapa, mensagensTransporteDaEtapa, traduzirEtapaTransportada, fonteDaEtapa, requisitosConhecidosDaFonte, blocoDeMinuta, converterEtapaOperacional, tokensEntradaResumo, orcamentoResumo, cabeResumo, INSTRUCOES_ETAPA, chamarGroq, chamarIA, chamarSinteseEdital, montarCorpoGroq, mensagensDaEtapa, valorRotuladoDoTexto, normalizarListaDoDossie, sanitizarListasDoDossie, buscarTextoEdital, MOTIVO_DOWNLOAD_INDISPONIVEL, pedidoDeNovaLeitura, selecionarDocumentosParaLeitura, leituraPrioritariaPendente, precisaReleituraPrioritaria, aplicarCamposOperacionaisDoTexto, montarEstruturaBasica, buscarFichaCanonica };
 
 // Modelos menores (como o 8b gratuito que usamos) às vezes ignoram a instrução de "só
 // JSON" e embrulham a resposta em ```json ... ``` ou colocam uma frase antes/depois. Em vez
@@ -1082,7 +1105,7 @@ function preencherDestinoUnico(original, item) {
 async function sintetizarLoteCatalogo(apiKey, bloco) {
   const lote = JSON.parse(bloco), orcamento = orcamentoCatalogo(lote);
   if (orcamento.entrada > 4000 || orcamento.saida < 1) return { erro: "Lote acima do orçamento seguro de síntese." };
-  const resposta = await chamarGroq(apiKey, mensagensCatalogo(lote), { modelo: MODELO_RESUMO, json: true, maxTokens: orcamento.saida, reasoningEffort: "low", timeoutMs: 20000 });
+  const resposta = await chamarIA(apiKey, mensagensCatalogo(lote), { modelo: MODELO_RESUMO, json: true, maxTokens: orcamento.saida, reasoningEffort: "low", timeoutMs: 20000 });
   if (!resposta.ok) return resposta;
   const rejeitar = (erro, guarda, original, candidato) => {
     const resumoRecebido = typeof candidato?.resumo === "string" ? candidato.resumo : "";
@@ -1299,7 +1322,7 @@ exports.handler = async (event) => {
   if (modo === "defesa") {
     const resultado = await require("../_defesa_handler").executarDefesa(body, {
       sessao, robo: ehRoboInterno, carregar: buscarDossiePersistido, autorizar: verificarLimiteDiario, modelo: MODELO,
-      chamar: (chave, mensagens, schema) => chamarGroq(chave, mensagens, { modelo: MODELO, maxTokens: 2500, timeoutMs: 20000, reasoningEffort: "low", schema }),
+      chamar: (chave, mensagens, schema) => chamarIA(chave, mensagens, { modelo: MODELO, maxTokens: 2500, timeoutMs: 20000, reasoningEffort: "low", schema }),
     });
     return { statusCode: resultado.statusCode, headers, body: JSON.stringify(resultado.dados) };
   }
@@ -1504,7 +1527,7 @@ exports.handler = async (event) => {
   // resumo genérico baseado nos mesmos campos que já estão na tela.
   // O orçamento do robô é controlado pelo próprio job (quantidade máxima por execução).
   // Não mistura esse processamento de base com a cota diária individual dos clientes.
-  const precisaEtapas = modo === "resumo" && Boolean(textoEdital) && Boolean(edital.numeroControlePNCP && process.env.GROQ_API_KEY);
+  const precisaEtapas = modo === "resumo" && Boolean(textoEdital) && Boolean(edital.numeroControlePNCP && (process.env.GEMINI_API_KEY || process.env.GROQ_API_KEY));
   if (precisaEtapas && !storeResumos) return { statusCode: 503, headers, body: JSON.stringify({ erro: "O armazenamento das etapas não está disponível. A análise longa não foi iniciada; tente novamente mais tarde." }) };
   const usarEtapas = precisaEtapas && Boolean(storeResumos);
   const limite = ehRoboInterno || usarEtapas ? { ok: true } : await verificarLimiteDiario(sessao.userId, "ia-edital", 40);
@@ -1540,7 +1563,7 @@ exports.handler = async (event) => {
       }
     }
     mensagens.push({ role: "user", content: JSON.stringify({ dados: ficha, pergunta: pergunta.trim(), fontes: contexto.fontes.map(({ id, documento, pagina, texto }) => ({ id, documento, pagina, texto })) }) });
-    // Groq primeiro; se ela falhar, Gemini → OpenRouter → Cloudflare (ver _ia_provedores.js).
+    // Gemini primeiro; se ele falhar, OpenRouter → Cloudflare → Groq (ver _ia_provedores.js).
     const r = await responderComFallback(mensagens, { maxTokens: 2500, timeoutMs: 20000, reasoningEffort: "low", json: true }, { groq: chamarGroq });
     if (!r.ok) return { statusCode: 502, headers, body: JSON.stringify({ erro: "A IA não retornou uma resposta utilizável. Tente novamente em instantes ou confira os documentos oficiais." }) };
     const resposta = documental.formatarRespostaDocumental(r.texto, contexto.fontes);
@@ -1588,7 +1611,7 @@ exports.handler = async (event) => {
       } catch (_) {
         return { statusCode: 503, headers, body: JSON.stringify({ erro: "Não foi possível salvar ou retomar esta etapa. Tente novamente; as etapas já salvas serão preservadas." }) };
       }
-    } else r = apiKey ? await chamarSinteseEdital(apiKey, mensagensEstrutura) : { ok: false };
+    } else r = apiKey || process.env.GEMINI_API_KEY ? await chamarSinteseEdital(apiKey, mensagensEstrutura) : { ok: false };
     if (r.ok) {
       const estrutura = extrairJson(r.texto);
       if (estrutura) {
@@ -1681,7 +1704,7 @@ exports.handler = async (event) => {
         { role: "system", content: REGRAS_BASE + "\nVocê só tem os campos estruturados abaixo, não o PDF completo do edital — deixe isso claro se for relevante." },
         { role: "user", content: `Dados da oportunidade:\n${ficha}\n\nFaça um resumo curto (4 a 6 frases) explicando do que se trata essa licitação: o que está sendo comprado, quem compra, o prazo, e o porte aproximado pelo valor estimado (se houver).` },
       ];
-  const r2 = await chamarGroq(apiKey, mensagens, { maxTokens: fonteLida ? 700 : 400, timeoutMs: 7500 });
+  const r2 = await chamarIA(apiKey, mensagens, { maxTokens: fonteLida ? 700 : 400, timeoutMs: 7500 });
   if (!r2.ok) {
     const estrutura = montarEstruturaBasica(edital, motivoFonteNaoLida);
     // Contingência não entra no cache: quando o serviço voltar, a pessoa deve poder

@@ -7,7 +7,7 @@
 //   - contato e cidade: cadastro público da Receita (BrasilAPI) só das 3 empresas mostradas; MEI não tem contato
 //     exibido (o telefone/e-mail da Receita costuma ser o da pessoa); a Receita não tem site: quando o e-mail é de domínio
 //     próprio (não Gmail/Hotmail...), o domínio vira "site provável" e a tela diz de onde veio; senão "não localizado";
-//   - IA (cadeia grátis que o projeto já tem: Groq -> Gemini -> OpenRouter -> Cloudflare): só dá a aderência (%) e o
+//   - IA (cadeia que o projeto já tem: Gemini -> OpenRouter -> Cloudflare -> Groq): só dá a aderência (%) e o
 //     "por quê" a partir dos dados acima. Sem IA ou com resposta inválida, aderência e motivo saem dos próprios dados.
 // Custo: 1 leitura no Supabase + até 3 na BrasilAPI + 1 chamada de IA por pergunta; 20 perguntas por usuário/dia.
 const { cabecalhosPadrao, exigirUsuarioAprovado, verificarLimiteDiario } = require("./_auth");

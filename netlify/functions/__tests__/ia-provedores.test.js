@@ -30,14 +30,25 @@ test('Groq com espaços e compatível truncado não contam como sucesso', async 
   assert.ok(r.erro?.trim());
 });
 
-test("Groq 429 cai para o Gemini, que responde", async () => {
+test("Gemini vem primeiro: responde e a Groq nem é chamada", async () => {
   const chamadas = [];
   const r = await responderComFallback(MENSAGENS, OPCOES, {
-    env: { GROQ_API_KEY: "g", GEMINI_API_KEY: "k" }, groq: groqFalha,
+    env: { GROQ_API_KEY: "g", GEMINI_API_KEY: "k" }, groq: async () => assert.fail("Groq só entra depois das outras"),
     fetchFn: fetchPorHost({ [HOST_GEMINI]: ok("resposta gemini") }, chamadas),
   });
   assert.deepEqual([r.ok, r.texto, r.provedor, r.modelo], [true, "resposta gemini", "gemini", "gemini-3.8-flash"]);
   assert.deepEqual(chamadas, ["generativelanguage/gemini-3.8-flash"]);
+});
+
+test("Groq é a última reserva: só responde depois de Gemini, OpenRouter e Cloudflare falharem", async () => {
+  const ordem = [];
+  const r = await responderComFallback(MENSAGENS, OPCOES, {
+    env: { GROQ_API_KEY: "g", GEMINI_API_KEY: "k", OPENROUTER_API_KEY: "o", OPENROUTER_MODELOS: "m1", CLOUDFLARE_ACCOUNT_ID: "c", CLOUDFLARE_AI_TOKEN: "t" },
+    groq: async () => { ordem.push("groq"); return { ok: true, texto: "da groq" }; },
+    fetchFn: fetchPorHost({ [HOST_GEMINI]: resp(429), [HOST_OR]: resp(503), [HOST_CF]: resp(500) }, ordem),
+  });
+  assert.deepEqual([r.ok, r.provedor, r.texto], [true, "groq", "da groq"]);
+  assert.deepEqual(ordem, ["generativelanguage/gemini-3.8-flash", "openrouter/m1", "api/@cf/openai/gpt-oss-120b", "groq"]);
 });
 
 test("pula provedores sem chave e segue modelo a modelo até o sucesso", async () => {
@@ -51,7 +62,7 @@ test("pula provedores sem chave e segue modelo a modelo até o sucesso", async (
   assert.deepEqual(chamadas, ["generativelanguage/gemini-3.8-flash", "openrouter/m1", "openrouter/m2"]);
 });
 
-test("timeout, resposta vazia e 401 passam ao Cloudflare, o último da cadeia", async () => {
+test("timeout, resposta vazia e 401 passam ao Cloudflare (sem Groq configurada)", async () => {
   const chamadas = [];
   const r = await responderComFallback(MENSAGENS, OPCOES, {
     env: { GEMINI_API_KEY: "k", GEMINI_MODELOS_PERGUNTA: "g1", OPENROUTER_API_KEY: "o", OPENROUTER_MODELOS: "m1", CLOUDFLARE_ACCOUNT_ID: "c", CLOUDFLARE_AI_TOKEN: "t" },
@@ -86,17 +97,16 @@ test("haProvedorConfigurado e Cloudflare exigem as variáveis certas", () => {
   assert.deepEqual(montarProvedoresCompat({ CLOUDFLARE_ACCOUNT_ID: "c", CLOUDFLARE_AI_TOKEN: "t", CLOUDFLARE_AI_MODELO: "@cf/x" })[0].modelos, ["@cf/x"]);
 });
 
-test("Groq e Gemini lentos (timeout) ainda deixam tempo para OpenRouter e Cloudflare", async () => {
+test("Gemini, OpenRouter e Cloudflare lentos (timeout) ainda deixam tempo para a Groq", async () => {
   let relogio = 0;
   const prazosGroq = [];
   const prazos = [];
   const chamadas = [];
   // Cada provedor lento consome o prazo inteiro que recebeu e então expira.
-  const groq = async (_chave, _mensagens, opcoes) => { prazosGroq.push(opcoes.timeoutMs); relogio += opcoes.timeoutMs; return { ok: false, erro: "Erro ao consultar a IA: timeout" }; };
+  const groq = async (_chave, _mensagens, opcoes) => { prazosGroq.push(opcoes.timeoutMs); return { ok: true, texto: "da groq" }; };
   const fetchFn = async (url, opcoes) => {
     const host = new URL(url).host;
     chamadas.push(host.split(".")[0]);
-    if (host === HOST_CF) return ok("do cloudflare");
     const prazo = 12000;
     prazos.push(prazo);
     relogio += prazo;
@@ -106,7 +116,19 @@ test("Groq e Gemini lentos (timeout) ainda deixam tempo para OpenRouter e Cloudf
     env: { GROQ_API_KEY: "g", GEMINI_API_KEY: "k", OPENROUTER_API_KEY: "o", OPENROUTER_MODELOS: "m1", CLOUDFLARE_ACCOUNT_ID: "c", CLOUDFLARE_AI_TOKEN: "t" },
     groq, fetchFn, agora: () => relogio,
   });
-  assert.deepEqual(prazosGroq, [12000]);
   assert.deepEqual(chamadas, ["generativelanguage", "openrouter", "api"]);
-  assert.deepEqual([r.ok, r.provedor], [true, "cloudflare"]);
+  assert.deepEqual(prazos, [12000, 12000, 12000]);
+  // 48 s de orçamento - 36 s gastos = 12 s para a Groq.
+  assert.deepEqual(prazosGroq, [12000]);
+  assert.deepEqual([r.ok, r.provedor], [true, "groq"]);
+});
+
+test("corpoExtra (contrato estruturado) vai no corpo do provedor compatível", async () => {
+  const { chamarCompat } = require("../_ia_provedores");
+  let corpo;
+  const texto = await chamarCompat({ nome: "gemini", url: "https://generativelanguage.googleapis.com/x", apiKey: "k" }, "g1", MENSAGENS,
+    { maxTokens: 50, corpoExtra: { response_format: { type: "json_object" }, reasoning_effort: "low" } },
+    async (_url, opcoes) => { corpo = JSON.parse(opcoes.body); return ok("{}"); }, 1000);
+  assert.equal(texto, "{}");
+  assert.deepEqual([corpo.model, corpo.response_format, corpo.reasoning_effort, corpo.max_tokens], ["g1", { type: "json_object" }, "low", 50]);
 });

@@ -28,6 +28,8 @@ jobs:
 
       - name: Rodar boletim de editais
         env:
+          # ZeptoMail (o mesmo token dos lembretes e do site); sem ele, ou se falhar, cai no Gmail SMTP abaixo.
+          ZEPTOMAIL_TOKEN: ${{ secrets.ZEPTOMAIL_TOKEN }}
           EMAIL_REMETENTE: ${{ secrets.EMAIL_REMETENTE }}
           EMAIL_SENHA_APP: ${{ secrets.EMAIL_SENHA_APP }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

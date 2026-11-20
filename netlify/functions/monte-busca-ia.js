@@ -1,7 +1,7 @@
 // "Monte minha busca com IA": o usuário descreve o que vende e recebe palavras, variações e exclusões
 // para o filtro do Encontrar Licitações. Ele revisa e confirma na tela antes de salvar; aqui nada é gravado.
 //   POST /api/monte-busca-ia  {descricao}  (Authorization: Bearer <sessão>)  -> { palavras, variacoes, exclusoes }
-// Custo: usa a cadeia de provedores que o projeto já tem (Groq -> Gemini -> OpenRouter -> Cloudflare), sem nada novo.
+// Custo: usa a cadeia de provedores que o projeto já tem (Gemini -> OpenRouter -> Cloudflare -> Groq), sem nada novo.
 // Barreiras: cadastro aprovado, 10 usos por usuário/dia (incrementar_uso) e descrição sem e-mail/telefone/CPF/CNPJ/links.
 const { cabecalhosPadrao, exigirUsuarioAprovado, verificarLimiteDiario } = require("./_auth");
 const { responderComFallback, haProvedorConfigurado } = require("./_ia_provedores");
@@ -14,7 +14,7 @@ const INSTRUCOES = "Você ajuda empresas brasileiras a montar buscas de licitaç
   "variacoes: até 12 sinônimos, plurais e grafias comuns dos termos. " +
   "exclusoes: até 8 termos de objetos parecidos que a empresa NÃO vende e que gerariam resultado inútil. Sem números, nomes de pessoas ou marcas.";
 
-// Groq direto (a cadeia de fallback só chama a Groq se receber esta função).
+// Groq direto, última reserva (a cadeia de fallback só chama a Groq se receber esta função).
 async function chamarGroq(apiKey, mensagens, opcoes) {
   try {
     const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {

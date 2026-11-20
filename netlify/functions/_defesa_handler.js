@@ -78,7 +78,7 @@ async function executarDefesa(body, { sessao, robo, env = process.env, carregar,
       (body.respostaOrgao !== undefined && (typeof body.respostaOrgao !== 'string' || body.respostaOrgao.length > 12000)) ||
       (body.manifestacaoAnterior !== undefined && (typeof body.manifestacaoAnterior !== 'string' || body.manifestacaoAnterior.length > 6000)) ||
       (body.fase && body.fase !== 'questionamento' && !body.respostaOrgao?.trim())) return erro(400, 'Confira identificação, fonte, fase, questionamento e limites de texto.');
-  if (env.DEFESA_IA_GRATUITA_CONFIRMADA !== 'true' || !env.GROQ_API_KEY) return erro(503, 'A análise inteligente está desabilitada até confirmar acesso gratuito ao provedor atual. O rascunho documental permanece disponível.');
+  if (env.DEFESA_IA_GRATUITA_CONFIRMADA !== 'true' || !(env.GEMINI_API_KEY || env.GROQ_API_KEY)) return erro(503, 'A análise inteligente está desabilitada até confirmar acesso gratuito ao provedor atual. O rascunho documental permanece disponível.');
   try {
     const dossie = await carregar(body.edital.numeroControlePNCP);
     if (coberturaLeituraBloqueada(dossie?.estrutura?.coberturaLeitura)) return erro(409, 'A leitura documental está parcial ou contém OCR ainda não revisado. Confira os documentos e conclua a revisão da fonte antes de analisar; nenhuma chamada de IA foi feita.');
@@ -95,6 +95,7 @@ async function executarDefesa(body, { sessao, robo, env = process.env, carregar,
     if (!orcamento) return erro(422, 'O texto não pode ser processado com segurança no formato atual. Reduza o questionamento ou a resposta e evite sequências muito longas sem separação. Nenhuma chamada de IA foi feita.');
     const cota = await autorizar(sessao.userId, 'ia-edital', 40);
     if (!cota?.ok) return erro(cota?.status === 429 ? 429 : 503, cota?.erro || 'Não foi possível confirmar a cota da IA. Tente depois.');
+    // chamar = chamarIA: Gemini primeiro, Groq (esta chave) de reserva.
     const resposta = await chamar(env.GROQ_API_KEY, orcamento.mensagens, orcamento.schemaTransporte);
     if (!resposta?.ok) return erro(502, 'A IA não concluiu uma análise utilizável. Tente depois; nenhum documento foi enviado.');
     const analise = validarAnalise(traduzirTransporte(resposta.texto, orcamento.schema), ctx, body);

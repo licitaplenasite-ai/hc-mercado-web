@@ -2,7 +2,9 @@
 // (429/5xx) e o produto não pode depender de um único provedor. Só usa `fetch`: roda no
 // Cloudflare Pages Functions (plano gratuito, 10 ms de CPU por requisição; esperar o fetch
 // não conta), então nada de SDK nem processamento pesado aqui.
-// Ordem: Groq (chamarGroq existente) → Gemini → OpenRouter → Cloudflare Workers AI.
+// Ordem: Gemini → OpenRouter → Cloudflare Workers AI → Groq (chamarGroq existente, por último).
+// Gemini primeiro desde 20/11/2026: o dono testou a Groq e achou o resumo de edital fraco; o do
+// Gemini foi aprovado. Se o custo do Gemini subir, a decisão dele é subir o preço do plano.
 // Provedor sem chave é ignorado. Qualquer falha (429/413/5xx/401/403/404, timeout, rede ou
 // resposta vazia) passa ao próximo; a primeira resposta com texto encerra a cadeia.
 
@@ -13,8 +15,8 @@ const URL_OPENROUTER = "https://openrouter.ai/api/v1/chat/completions";
 const MODELOS_GEMINI_PADRAO = "gemini-3.8-flash";
 const MODELO_CLOUDFLARE_PADRAO = "@cf/openai/gpt-oss-120b";
 // Um prazo único vale para a cadeia inteira, Groq incluída: cada tentativa recebe no máximo
-// 12 s e nunca mais que o tempo que resta. Sem isso, Groq e Gemini lentos (timeout, não 429)
-// consumiam o orçamento todo e OpenRouter/Cloudflare nunca eram tentados.
+// 12 s e nunca mais que o tempo que resta. Sem isso, provedores lentos (timeout, não 429)
+// consumiam o orçamento todo e as reservas seguintes nunca eram tentadas.
 const TIMEOUT_CHAMADA_MS = 12000;
 const ORCAMENTO_TOTAL_MS = 48000;
 // Abaixo disso uma nova tentativa só atrasaria a resposta de erro.
@@ -45,6 +47,8 @@ function haProvedorConfigurado(env = process.env) {
   return Boolean(env.GROQ_API_KEY) || montarProvedoresCompat(env).length > 0;
 }
 
+// opcoes.corpoExtra: campos a mais no corpo (response_format, reasoning_effort), usados só pela
+// síntese do edital, que exige o contrato estruturado.
 async function chamarCompat(provedor, modelo, mensagens, opcoes, fetchFn, timeoutMs) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -53,7 +57,7 @@ async function chamarCompat(provedor, modelo, mensagens, opcoes, fetchFn, timeou
       method: "POST",
       signal: ctrl.signal,
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${provedor.apiKey}` },
-      body: JSON.stringify({ model: modelo, messages: mensagens, max_tokens: opcoes.maxTokens, temperature: 0.2 }),
+      body: JSON.stringify({ model: modelo, messages: mensagens, max_tokens: opcoes.maxTokens, temperature: 0.2, ...opcoes.corpoExtra }),
     });
     // Nunca loga o corpo nem a chave: só o código curto.
     if (!resp.ok) { console.warn(`ia-provedores: ${provedor.nome} HTTP ${resp.status}`); return null; }
@@ -78,22 +82,22 @@ async function responderComFallback(mensagens, opcoes, { env = process.env, fetc
   let erroGroq = null;
   const tempoDaTentativa = () => Math.min(TIMEOUT_CHAMADA_MS, prazo - agora());
 
-  if (env.GROQ_API_KEY && groq) {
-    const r = await groq(env.GROQ_API_KEY, mensagens, { ...opcoes, timeoutMs: Math.min(opcoes.timeoutMs || TIMEOUT_CHAMADA_MS, tempoDaTentativa()) }) || {};
-    const texto = textoResposta(r.texto);
-    if (r.ok && texto) return { ok: true, texto, provedor: "groq", modelo: r.modelo || null };
-    erroGroq = r.erro || null;
-    console.warn("ia-provedores: groq falhou, tentando o próximo provedor");
-  }
   for (const provedor of montarProvedoresCompat(env)) {
     for (const modelo of provedor.modelos) {
       const timeoutMs = tempoDaTentativa();
-      if (timeoutMs < MINIMO_POR_TENTATIVA_MS) return { ok: false, erro: erroGroq || ERRO_TODOS_FALHARAM };
+      if (timeoutMs < MINIMO_POR_TENTATIVA_MS) return { ok: false, erro: ERRO_TODOS_FALHARAM };
       const texto = await chamarCompat(provedor, modelo, mensagens, opcoes, fetchFn, timeoutMs);
       if (texto) return { ok: true, texto, provedor: provedor.nome, modelo };
     }
   }
+  if (env.GROQ_API_KEY && groq && tempoDaTentativa() >= MINIMO_POR_TENTATIVA_MS) {
+    const r = await groq(env.GROQ_API_KEY, mensagens, { ...opcoes, timeoutMs: Math.min(opcoes.timeoutMs || TIMEOUT_CHAMADA_MS, tempoDaTentativa()) }) || {};
+    const texto = textoResposta(r.texto);
+    if (r.ok && texto) return { ok: true, texto, provedor: "groq", modelo: r.modelo || null };
+    erroGroq = r.erro || null;
+    console.warn("ia-provedores: groq (última reserva) também falhou");
+  }
   return { ok: false, erro: erroGroq || ERRO_TODOS_FALHARAM };
 }
 
-module.exports = { responderComFallback, haProvedorConfigurado, montarProvedoresCompat, ERRO_TODOS_FALHARAM };
+module.exports = { responderComFallback, haProvedorConfigurado, montarProvedoresCompat, chamarCompat, ERRO_TODOS_FALHARAM };

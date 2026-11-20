@@ -30,6 +30,11 @@ ARQUIVO_HISTORICO = os.path.join(DIR_DADOS, "editais_vistos.json")
 USER_AGENT_NAVEGADOR = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
 NOME_REMETENTE = "LicitaPlena - Alertas de Editais"
+# Envio: ZeptoMail (ZEPTOMAIL_TOKEN, o mesmo dos lembretes e do site). O Gmail SMTP para em ~500
+# e-mails/dia (~100 clientes com 3 rodadas) e fica como reserva automatica: entra se o token faltar
+# ou se o ZeptoMail falhar naquele e-mail. Assunto, texto e HTML sao os mesmos nos dois caminhos.
+ZEPTOMAIL_URL = "https://api.zeptomail.com/v1.1/email"
+REMETENTE_ZEPTO = "licitaplena@licitaplena.com.br"
 
 TODAS_UFS = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB",
              "PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"]
@@ -732,21 +737,53 @@ def registrar_log_boletim(destinatario, status, quantidade, mensagem_erro=None):
         log("AVISO: falha ao registrar log do boletim para " + destinatario["email"] + " (" + str(e) + ").")
 
 
-def enviar_email(destino_email, nome_destinatario, editais_novos, prefixo_assunto=""):
+def enviar_zeptomail(token, destino_email, nome_destinatario, assunto, texto, html_corpo):
+    token = re.sub(r"^Zoho-enczapikey\s+", "", token.strip()).strip("\"'").strip()
+    corpo = {
+        "from": {"address": REMETENTE_ZEPTO, "name": NOME_REMETENTE},
+        "to": [{"email_address": {"address": destino_email, "name": nome_destinatario}}],
+        "subject": assunto,
+        "textbody": texto,
+        "htmlbody": html_corpo,
+    }
+    req = urllib.request.Request(
+        ZEPTOMAIL_URL, data=json.dumps(corpo).encode("utf-8"), method="POST",
+        headers={"Accept": "application/json", "Content-Type": "application/json", "Authorization": "Zoho-enczapikey " + token},
+    )
+    with urllib.request.urlopen(req, timeout=20):
+        pass
+
+
+def enviar_gmail(destino_email, assunto, texto, html_corpo):
     remetente = os.environ["EMAIL_REMETENTE"]
     senha_app = os.environ["EMAIL_SENHA_APP"]
     msg = MIMEMultipart("alternative")
-    if editais_novos:
-        msg["Subject"] = prefixo_assunto + "Novos editais encontrados (" + str(len(editais_novos)) + ")"
-    else:
-        msg["Subject"] = prefixo_assunto + "Nenhuma oportunidade nova hoje"
+    msg["Subject"] = assunto
     msg["From"] = formataddr((str(Header(NOME_REMETENTE, "utf-8")), remetente))
     msg["To"] = destino_email
-    msg.attach(MIMEText(montar_email_texto(nome_destinatario, editais_novos), "plain", "utf-8"))
-    msg.attach(MIMEText(montar_email_html(nome_destinatario, editais_novos), "html", "utf-8"))
+    msg.attach(MIMEText(texto, "plain", "utf-8"))
+    msg.attach(MIMEText(html_corpo, "html", "utf-8"))
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as servidor:
         servidor.login(remetente, senha_app)
         servidor.sendmail(remetente, [destino_email], msg.as_string())
+
+
+def enviar_email(destino_email, nome_destinatario, editais_novos, prefixo_assunto=""):
+    if editais_novos:
+        assunto = prefixo_assunto + "Novos editais encontrados (" + str(len(editais_novos)) + ")"
+    else:
+        assunto = prefixo_assunto + "Nenhuma oportunidade nova hoje"
+    texto = montar_email_texto(nome_destinatario, editais_novos)
+    html_corpo = montar_email_html(nome_destinatario, editais_novos)
+    token = os.environ.get("ZEPTOMAIL_TOKEN")
+    if token:
+        try:
+            enviar_zeptomail(token, destino_email, nome_destinatario, assunto, texto, html_corpo)
+            return
+        except Exception as e:
+            # So o tipo e o codigo HTTP: nunca o token nem o corpo da resposta.
+            log("ZeptoMail falhou (" + type(e).__name__ + " " + str(getattr(e, "code", "")) + "); enviando pelo Gmail")
+    enviar_gmail(destino_email, assunto, texto, html_corpo)
 
 
 # ---- WhatsApp via CallMeBot (API gratuita, nao-oficial) ----

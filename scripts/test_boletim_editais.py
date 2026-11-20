@@ -114,3 +114,37 @@ def test_prospecta_manda_lista_ordenada_so_da_empresa_ligada(monkeypatch):
     monkeypatch.setattr(be, "sugerir_no_funil", lambda empresa, itens: chamadas.append((empresa, [i["numero_controle"][-11:-5] for i in itens])) or len(itens))
     be.main()
     assert chamadas == [("e1", ["000002", "000001"])]
+
+
+# ---- Envio: ZeptoMail primeiro, Gmail de reserva, mesmo conteudo nos dois ----
+def _capturar_envios(monkeypatch, zepto_falha=False):
+    envios = []
+
+    def zepto(token, email, nome, assunto, texto, html_corpo):
+        envios.append(("zepto", email, assunto, texto, html_corpo))
+        if zepto_falha:
+            raise be.urllib.error.HTTPError(be.ZEPTOMAIL_URL, 500, "erro", None, None)
+
+    monkeypatch.setattr(be, "enviar_zeptomail", zepto)
+    monkeypatch.setattr(be, "enviar_gmail", lambda email, assunto, texto, html_corpo: envios.append(("gmail", email, assunto, texto, html_corpo)))
+    return envios
+
+
+def test_enviar_email_usa_zeptomail_quando_ha_token(monkeypatch):
+    envios = _capturar_envios(monkeypatch)
+    monkeypatch.setenv("ZEPTOMAIL_TOKEN", "token-falso")
+    be.enviar_email("a@b.com", "Ana", [], "[Teste] ")
+    assert [e[0] for e in envios] == ["zepto"]
+    assert envios[0][2] == "[Teste] Nenhuma oportunidade nova hoje"
+
+
+def test_enviar_email_cai_no_gmail_sem_token_ou_com_falha_e_mantem_o_conteudo(monkeypatch):
+    envios = _capturar_envios(monkeypatch, zepto_falha=True)
+    monkeypatch.delenv("ZEPTOMAIL_TOKEN", raising=False)
+    be.enviar_email("a@b.com", "Ana", [])
+    assert [e[0] for e in envios] == ["gmail"]
+    monkeypatch.setenv("ZEPTOMAIL_TOKEN", "token-falso")
+    be.enviar_email("a@b.com", "Ana", [])
+    assert [e[0] for e in envios] == ["gmail", "zepto", "gmail"]
+    # Mesmo assunto, texto e HTML nos dois caminhos: o formato aprovado nao muda.
+    assert envios[1][2:] == envios[2][2:] == envios[0][2:]

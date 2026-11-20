@@ -415,3 +415,34 @@ test("pedido de nova leitura zera as tentativas na fila; clique comum preserva",
     if (chaveOriginal === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY; else process.env.SUPABASE_SERVICE_ROLE_KEY = chaveOriginal;
   }
 });
+
+test("chamarIA usa o Gemini primeiro, com o contrato estruturado, e a Groq só como reserva", async () => {
+  const fetchOriginal = global.fetch;
+  const anterior = process.env.GEMINI_API_KEY;
+  process.env.GEMINI_API_KEY = "gemini-teste";
+  const chamadas = [];
+  let geminiFalha = false;
+  global.fetch = async (url, opcoes) => {
+    const host = new URL(url).host;
+    const corpo = JSON.parse(opcoes.body);
+    chamadas.push(`${host.split(".")[0]}/${corpo.model}/${corpo.response_format?.type || "-"}`);
+    if (host.startsWith("generativelanguage") && geminiFalha) return { ok: false, status: 429, text: async () => "" };
+    return { ok: true, json: async () => ({ choices: [{ message: { content: "{\"ok\":true}" }, finish_reason: "stop" }] }) };
+  };
+  try {
+    const { __test } = carregarComModelo(null);
+    const primeiro = await __test.chamarIA("groq-teste", [{ role: "user", content: "x" }], { json: true, maxTokens: 100, timeoutMs: 9000 });
+    assert.deepEqual([primeiro.ok, primeiro.provedor], [true, "gemini"]);
+    assert.deepEqual(chamadas, ["generativelanguage/gemini-3.8-flash/json_object"]);
+    chamadas.length = 0;
+    geminiFalha = true;
+    const reserva = await __test.chamarIA("groq-teste", [{ role: "user", content: "x" }], { json: true, maxTokens: 100, timeoutMs: 9000 });
+    assert.equal(reserva.ok, true);
+    assert.deepEqual(chamadas, ["generativelanguage/gemini-3.8-flash/json_object", "api/openai/gpt-oss-20b/json_object"]);
+    const semGroq = await __test.chamarIA(undefined, [{ role: "user", content: "x" }], { timeoutMs: 9000 });
+    assert.equal(semGroq.ok, false);
+  } finally {
+    global.fetch = fetchOriginal;
+    if (anterior === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = anterior;
+  }
+});
