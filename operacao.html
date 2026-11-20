@@ -14,6 +14,7 @@
 <script src="empresa-identificacao-ui.js"></script>
 <script src="agenda-ics.js"></script>
 <script src="operacao-pdf-unico.js"></script>
+<script src="operacao-secoes-sicaf.js"></script>
 <script src="operacao-identificacao.js"></script>
 <script src="perfil-empresa.js"></script>
 <script src="planilha-itens.js"></script>
@@ -306,8 +307,9 @@ input::placeholder,textarea::placeholder{color:var(--text-secondary);opacity:1}
     { tipo: "Balanço patrimonial", nome: "Qualificação Econômico-Financeira: balanço patrimonial" },
   ];
   const EMISSOR_SICAF_AUTO = "Compras.gov.br (dados abertos)", SICAF_HABILITADO = "Ativo e habilitado a licitar";
-  // Documento que vale para a seção: o de validade mais longa (renovar não apaga o antigo).
-  const docDaSecao = (tipo) => estado.documentos.filter(d => d.tipo === tipo).sort((a, b) => String(b.vencimento || "").localeCompare(String(a.vencimento || "")))[0];
+  // Documento que vale para a seção: o de validade mais longa (renovar não apaga o antigo). Nomes antigos e
+  // variações ("FGTS (CRF)", "CND Federal"...) entram pela seção do mapa de apelidos (operacao-secoes-sicaf.js).
+  const docDaSecao = (tipo) => estado.documentos.filter(d => OperacaoSecoesSicaf.secaoDoTipo(d.tipo) === tipo).sort((a, b) => String(b.vencimento || "").localeCompare(String(a.vencimento || "")))[0];
   function situacaoSecao(s, d) {
     if (!d) return ["pendente", "Não enviada"];
     if (s.auto && d.orgao_emissor === EMISSOR_SICAF_AUTO) return [d.titulo === SICAF_HABILITADO ? "valido" : "vencido", d.titulo || "—"];

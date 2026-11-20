@@ -77,7 +77,13 @@ async function main() {
       exigir(await p.locator('.secao-sicaf').count() === 8, 'seções: ' + await p.locator('.secao-sicaf').count());
       for (const t of ['Certidão Federal', 'FGTS', 'CNDT']) exigir(await secao(t).locator('[data-emitir]').count() === 1 && await secao(t).locator('[data-carregar]').count() === 1, 'botões de ' + t);
       exigir(await secao('Certidão Estadual').locator('[data-emitir]').count() === 0, 'estadual não tem emissão assistida');
-      exigir(/Não enviada/.test(await secao('CNDT').locator('.tag').innerText()), 'CNDT deveria estar não enviada');
+      // O seed usa nomes antigos ("CND Federal", "FGTS (CRF)", "Certidão Trabalhista (CNDT)", "CND Estadual"): o quadro os reconhece.
+      const tag = async (t) => secao(t).locator('.tag').innerText();
+      exigir(/Vencida/.test(await tag('Certidão Federal')), 'CND Federal antiga: ' + await tag('Certidão Federal'));
+      exigir(/Vencendo/.test(await tag('FGTS')), 'FGTS (CRF) antigo: ' + await tag('FGTS'));
+      exigir(/Válida/.test(await tag('CNDT')), 'CNDT antiga: ' + await tag('CNDT'));
+      exigir(/Vencendo/.test(await tag('Certidão Estadual')), 'CND Estadual antiga: ' + await tag('Certidão Estadual'));
+      exigir(/Não enviada/.test(await tag('Certidão Municipal')), 'municipal deveria estar não enviada');
       await p.locator('#secoes-sicaf').screenshot({ path: path.join(PRINTS, '3-quadro-sicaf.png') });
     });
     await passo('SICAF atualizado automaticamente grava situação, fonte e data', p, async () => {
@@ -106,12 +112,21 @@ async function main() {
       await p.setInputFiles('#form-documento [name=arquivo]', { name: 'cndt.pdf', mimeType: 'application/pdf', buffer: PDF });
       await p.screenshot({ path: path.join(PRINTS, '6-carregar-pdf-secao.png') });
       await p.click('#btn-salvar-documento');
-      await secao('CNDT').locator('.tag', { hasText: 'Válida' }).waitFor({ timeout: 15000 });
+      // A CNDT antiga do seed já está válida: esperar a linha nova e a validade dela (a mais longa) no quadro.
+      await linha(p, 'CNDT-E2E').first().waitFor({ timeout: 15000 });
+      const venc = new Date(Date.now() + 170 * 864e5).toISOString().slice(0, 10).split('-').reverse().join('/');
+      await secao('CNDT').locator('.nota', { hasText: venc }).waitFor({ timeout: 15000 });
+      exigir(/Válida/.test(await secao('CNDT').locator('.tag').innerText()), 'CNDT nova não ficou válida');
       const [reg] = await banco('operacao_documentos?titulo=eq.CNDT-E2E&select=id,tipo,orgao_emissor,arquivo_caminho');
       exigir(reg?.tipo === 'CNDT' && reg.orgao_emissor === 'Tribunal Superior do Trabalho' && reg.arquivo_caminho, 'registro: ' + JSON.stringify(reg));
       await p.locator('#secoes-sicaf').screenshot({ path: path.join(PRINTS, '7-quadro-depois.png') });
-      p.once('dialog', d => d.accept());
-      await linha(p, 'CNDT-E2E').locator('.btn-excluir').click();
+      // Apaga todas (sobra de rodada anterior interrompida não pode travar a próxima).
+      while (await linha(p, 'CNDT-E2E').count()) {
+        const n = await linha(p, 'CNDT-E2E').count();
+        p.once('dialog', d => d.accept());
+        await linha(p, 'CNDT-E2E').first().locator('.btn-excluir').click();
+        await p.waitForFunction((m) => document.querySelectorAll('#lista-documentos tr').length && [...document.querySelectorAll('#lista-documentos tr')].filter(t => /CNDT-E2E/.test(t.innerText)).length < m, n, { timeout: 15000 });
+      }
       await p.waitForFunction(() => !/CNDT-E2E/.test(document.querySelector('#lista-documentos').innerText), null, { timeout: 15000 });
     });
   } finally {
