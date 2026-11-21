@@ -351,7 +351,7 @@
     </div>
     <div class="hero-resto">
       <div class="hero-acoes">
-        <a href="cadastro.html" class="btn btn-pri btn-grande">Testar grátis por 5 dias</a>
+        <a href="cadastro.html" class="btn btn-pri btn-grande">Testar grátis por 14 dias</a>
         <a href="#boletim-exemplo" class="btn btn-sec btn-grande">Ver um boletim de exemplo</a>
       </div>
       <!-- Dono confirmar: o cadastro (cadastro.html) hoje não pede cartão e toda conta passa por aprovação manual. Se isso mudar, ajustar esta frase. -->
@@ -408,7 +408,7 @@
         <h3>Você vende com o próprio CNPJ</h3>
         <p>Quer saber o que abriu, se vale a pena entrar e o que o edital pede.</p>
         <ol class="beneficios">
-          <li><strong>Boletim no e-mail em todo dia útil</strong><span>Licitações novas do seu segmento, nas UFs que você escolher, com link direto para o PNCP.</span></li>
+          <li><strong>Boletim em todo dia útil</strong><span>Licitações novas do seu segmento, nas UFs que você escolher, com aviso por e-mail e link direto para o PNCP.</span></li>
           <li><strong>Resumo do edital com IA</strong><span>Prazos, exigências de habilitação e documentos pedidos. O resumo avisa se leu o PDF do edital ou só os dados do PNCP.</span></li>
           <li><strong>Preço e concorrência antes de decidir</strong><span>Quanto o governo já pagou pelo item, quem costuma vencer e o histórico de um CNPJ concorrente.</span></li>
         </ol>
@@ -435,11 +435,11 @@
     <div class="boletim-lado">
       <p class="sobretitulo">Boletim de exemplo</p>
       <h2 class="titulo" id="boletim-titulo">É isso que chega no seu <span style="white-space:nowrap">e-mail</span></h2>
-      <p class="intro">O robô cruza as licitações publicadas no PNCP com o segmento e as UFs do seu cadastro e manda só o que é novo.</p>
+      <p class="intro">O LicitaPlena cruza as licitações publicadas no PNCP com as palavras e as UFs do filtro da sua empresa. Quando chega algo novo, você recebe um aviso por e-mail e vê a lista completa no painel.</p>
       <ul>
         <li><b>Quando</b><span>Dias úteis, com envios de manhã, ao meio-dia e no fim da tarde quando há novidade.</span></li>
-        <li><b>O que vem</b><span>Modalidade, cidade, órgão, objeto, valor estimado, data de encerramento e link do edital.</span></li>
-        <li><b>Sem novidade</b><span>Você recebe um aviso curto dizendo que não houve oportunidade nova.</span></li>
+        <li><b>O que vem</b><span>No e-mail: quantas licitações chegaram e o botão para o boletim. No painel: modalidade, cidade, órgão, objeto, valor estimado, data de encerramento e link do edital.</span></li>
+        <li><b>Sem novidade</b><span>Você recebe um aviso curto dizendo que não houve licitação nova.</span></li>
       </ul>
     </div>
     <div>
@@ -450,11 +450,16 @@
             <span class="apoio tn">Hoje, 06:04</span>
           </div>
           <div class="linha"><b>De</b><span>LicitaPlena</span></div>
-          <div class="linha"><b>Assunto</b><span id="email-assunto">Novos editais encontrados (2)</span></div>
+          <div class="linha"><b>Assunto</b><span id="email-assunto">Chegaram 2 novas licitações no seu boletim</span></div>
         </div>
         <div class="email-corpo">
-          <p class="ola">Olá, Empresa Exemplo!</p>
-          <p>Encontramos <b id="email-qtd">2</b> nova(s) oportunidade(s) de licitação para você hoje. Segmento: <span id="email-segmento">material de limpeza</span> · AM.</p>
+          <p class="ola" id="email-titulo">Chegaram 2 novas licitações</p>
+          <p>no filtro <b id="email-segmento">material de limpeza</b> da empresa <b>Empresa Exemplo</b> · AM</p>
+          <span class="btn btn-pri ed-link" aria-hidden="true">Acessar o boletim</span>
+          <p class="email-rodape">Você entra com seu login e vê a lista completa.</p>
+        </div>
+      </div>
+      <p class="sobretitulo" style="margin:24px 0 12px">Ao clicar, a lista abre no painel</p>
           <div id="email-cartoes">
             <div class="ed">
               <p class="ed-mod">Pregão Eletrônico · Município Exemplo/AM</p>
@@ -471,9 +476,6 @@
               <span class="btn btn-pri ed-link" aria-hidden="true">Ver edital no PNCP</span>
             </div>
           </div>
-          <p class="email-rodape">Alerta automático gerado por LicitaPlena com base em dados públicos do PNCP.</p>
-        </div>
-      </div>
     </div>
   </div>
 </section>
@@ -630,10 +632,10 @@
     <div>
       <p class="sobretitulo">Dados ao vivo</p>
       <h2 class="titulo" id="dados-titulo">Convênios e emendas federais monitorados agora</h2>
-      <p class="intro">Prévia pública do que o robô coletou. A lista mostra os mais recentes, sem precisar de conta.</p>
+      <p class="intro">Prévia pública dos dados coletados. A lista mostra os mais recentes, sem precisar de conta.</p>
       <dl class="numeros">
         <!-- Valor legível sem JavaScript: o número real só substitui o texto quando a prévia responde com total maior que zero. -->
-        <div><dt>Convênios e emendas</dt><dd id="cv-preview-total">Diário<small>atualizado pelo robô</small></dd></div>
+        <div><dt>Convênios e emendas</dt><dd id="cv-preview-total">Diário<small>atualizado todo dia</small></dd></div>
         <div><dt>UFs cobertas no PNCP</dt><dd class="tn">27<small>todas as unidades da federação</small></dd></div>
         <div><dt>Boletim por e-mail</dt><dd>Dias úteis<small>até 3 envios por dia</small></dd></div>
         <div><dt>Fontes oficiais</dt><dd class="tn">3<small>PNCP, Compras.gov e Transparência</small></dd></div>
@@ -656,7 +658,7 @@
     <div class="cabeca-secao">
       <p class="sobretitulo">Planos</p>
       <h2 class="titulo" id="planos-titulo">Preço público, sem precisar falar com vendedor</h2>
-      <p class="intro">Os dois planos começam com 5 dias de teste. Os valores abaixo são de lançamento.</p>
+      <p class="intro">Os dois planos começam com 14 dias de teste grátis, sem cartão. Os valores abaixo são de lançamento.</p>
     </div>
     <div class="planos">
       <div class="plano">
@@ -711,15 +713,15 @@
       </details>
       <details>
         <summary>Quais fontes vocês usam?</summary>
-        <div class="resp"><p>Licitações e contratos vêm do PNCP (Portal Nacional de Contratações Públicas). Preços praticados vêm do Compras.gov. Convênios, emendas, despesas e sanções vêm do Portal da Transparência. São dados públicos e oficiais, coletados por robôs todos os dias.</p><p>O resumo com IA é um apoio de leitura. Confira sempre no edital original antes de enviar a proposta.</p></div>
+        <div class="resp"><p>Licitações e contratos vêm do PNCP (Portal Nacional de Contratações Públicas). Preços praticados vêm do Compras.gov. Convênios, emendas, despesas e sanções vêm do Portal da Transparência. São dados públicos e oficiais, coletados automaticamente todos os dias.</p><p>O resumo com IA é um apoio de leitura. Confira sempre no edital original antes de enviar a proposta.</p></div>
       </details>
       <details>
         <summary>Tem robô de lances?</summary>
-        <div class="resp"><p>Ainda não. O LicitaPlena não dá lances por você nem acompanha o chat do pregoeiro. O foco é encontrar, entender e organizar: o que acontece antes da sessão de disputa.</p></div>
+        <div class="resp"><p>Não damos lance automático. A extensão do LicitaPlena para o navegador acompanha o chat do pregoeiro e tem o "Lance com 1 clique": ela calcula o próximo lance a partir do valor mínimo que você cadastrou e só envia quando você clica. A decisão de cada lance é sempre sua.</p></div>
       </details>
       <details>
-        <summary>Como funciona o teste de 5 dias?</summary>
-        <div class="resp"><p>Você faz o cadastro com os dados da empresa, nossa equipe aprova a conta e você usa as ferramentas por 5 dias. O cadastro não pede cartão de crédito.</p></div>
+        <summary>Como funciona o teste de 14 dias?</summary>
+        <div class="resp"><p>Você faz o cadastro com os dados da empresa, nossa equipe aprova a conta e você usa as ferramentas por 14 dias. O cadastro não pede cartão de crédito. No fim do teste nada é cobrado: se você não assinar, a conta passa para o plano Grátis.</p></div>
       </details>
       <details>
         <summary>Como cancelo?</summary>
@@ -743,7 +745,7 @@
         <p>Cadastre a empresa, escolha o segmento e as UFs. Depois da aprovação, o boletim começa a chegar.</p>
       </div>
       <div class="acoes">
-        <a href="cadastro.html" class="btn btn-pri btn-grande">Testar grátis por 5 dias</a>
+        <a href="cadastro.html" class="btn btn-pri btn-grande">Testar grátis por 14 dias</a>
         <a href="login.html" class="btn btn-sec btn-grande">Já tenho conta</a>
       </div>
     </div>
@@ -791,12 +793,6 @@
     function dataLocal(iso) {
       const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ""));
       return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
-    }
-    // Mesmo formatador da prévia anterior: a data de publicação do convênio vem como texto ISO.
-    function formatarData(iso) {
-      if (!iso) return "";
-      const d = new Date(iso);
-      return isNaN(d.getTime()) ? "" : d.toLocaleDateString("pt-BR");
     }
     const dataBr = (iso) => { const d = dataLocal(iso); return d ? d.toLocaleDateString("pt-BR") : ""; };
 
@@ -872,7 +868,7 @@
         area.innerHTML = `
           <div class="resultados-topo"><h3>${resultados.length} licitaç${resultados.length > 1 ? "ões abertas" : "ão aberta"} para "${escapeHtml(termo)}"${uf.value ? " em " + escapeHtml(uf.value) : ""}</h3><span class="apoio" style="font:var(--text-label)">Fonte: PNCP</span></div>
           <ul class="lista-op">${resultados.map(itemHtml).join("")}</ul>
-          <div class="convite"><p>Crie sua conta para receber essas oportunidades todo dia útil.</p><a href="cadastro.html" class="btn btn-pri">Testar grátis por 5 dias</a></div>`;
+          <div class="convite"><p>Crie sua conta para receber essas oportunidades todo dia útil.</p><a href="cadastro.html" class="btn btn-pri">Testar grátis por 14 dias</a></div>`;
       } catch (e) {
         area.innerHTML = '<p class="msg wa"><span aria-hidden="true">!</span><span class="tx">A busca não respondeu agora. Tente de novo em instantes ou <a href="#boletim-exemplo">veja um boletim de exemplo</a>.</span></p>';
       } finally {
@@ -895,8 +891,9 @@
         const resultados = (await buscar("material de limpeza", "AM")).slice(0, 3);
         if (resultados.length === 0) return;
         document.getElementById("email-selo").innerHTML = '<span class="g" aria-hidden="true">i</span>Exemplo com licitações reais abertas no PNCP';
-        document.getElementById("email-assunto").textContent = `Novos editais encontrados (${resultados.length})`;
-        document.getElementById("email-qtd").textContent = String(resultados.length);
+        const titulo = resultados.length === 1 ? "Chegou 1 nova licitação" : `Chegaram ${resultados.length} novas licitações`;
+        document.getElementById("email-assunto").textContent = titulo + " no seu boletim";
+        document.getElementById("email-titulo").textContent = titulo;
         document.getElementById("email-cartoes").innerHTML = resultados.map((r) => `
           <div class="ed">
             <p class="ed-mod">${escapeHtml([r.modalidade, [r.municipio, r.uf].filter(Boolean).join("/")].filter(Boolean).join(" · "))}</p>
@@ -930,7 +927,7 @@
           <div class="cv-preview-item">
             <div>
               <div class="cv-preview-item-org">${escapeHtml(r.orgao)}</div>
-              <div class="cv-preview-item-meta">${escapeHtml(r.uf || "-")} · ${escapeHtml(formatarData(r.dataPublicacao)) || "Data não informada"}</div>
+              <div class="cv-preview-item-meta">${escapeHtml(r.uf || "-")} · ${escapeHtml(dataBr(r.dataPublicacao)) || "Data não informada"}</div>
             </div>
             <div class="cv-preview-item-valor">${r.valor ? brl(r.valor, 0) : "Valor não informado"}</div>
           </div>`).join("");
