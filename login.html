@@ -59,6 +59,7 @@
   button.entrar:hover { background: var(--action-strong-hover); }
   button.entrar:disabled { background: var(--surface-sunken); color: var(--text-disabled); border-color: var(--border-default); cursor: not-allowed; }
   .captcha-turnstile { max-width: 100%; }
+  .esqueci { margin: -8px 0 16px; text-align: right; }
   .captcha-aviso { font: var(--text-label); color: var(--text-secondary); margin: 0 0 16px; }
   /* Aviso: cor + texto + sinal (estado nunca só por cor). */
   .aviso { margin-top: 16px; padding: 12px 16px; border-radius: var(--radius-card); border: 1px solid; display: none; gap: 8px; }
@@ -101,10 +102,24 @@
         </button>
       </div>
 
+      <p class="esqueci"><button type="button" class="btn btn-ter" id="btn-esqueci">Esqueci minha senha</button></p>
       <div class="captcha-turnstile"></div>
       <p class="captcha-aviso" role="alert" hidden></p>
-
       <button type="submit" class="btn entrar" id="btn-entrar">Entrar</button>
+    </form>
+    <!-- Nova senha: aparece só quando a pessoa abre o link de "Esqueci minha senha" que chegou no e-mail. -->
+    <form id="form-nova-senha" hidden>
+      <label for="nova-senha">Nova senha</label>
+      <div class="campo-senha-wrap">
+        <input type="password" id="nova-senha" required minlength="6" autocomplete="new-password">
+        <button type="button" class="btn-mostrar-senha" data-alvo="nova-senha" aria-controls="nova-senha" aria-pressed="false" aria-label="Mostrar senha" title="Mostrar senha">
+          <svg class="olho-aberto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          <svg class="olho-fechado" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.9 10.9 0 0 1 12 20c-7 0-11-8-11-8a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9.1 9.1 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24"/><path d="M1 1l22 22"/></svg>
+        </button>
+      </div>
+      <label for="nova-senha-confirmar">Confirmar nova senha</label>
+      <input type="password" id="nova-senha-confirmar" required minlength="6" autocomplete="new-password">
+      <button type="submit" class="btn entrar" id="btn-nova-senha">Salvar nova senha</button>
     </form>
 
     <div class="aviso" id="aviso" role="status" aria-live="polite"></div>
@@ -132,8 +147,9 @@
   })();
 </script>
 <script>
+  // Link de "Esqueci minha senha": o Supabase manda #...type=recovery e limpa o endereço ao ler; guardar antes.
+  const veioDoLinkDeSenha = /type=recovery/.test(window.location.hash);
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
   // ?voltar= só aceita caminho deste site ("/sistema"); "//outro.site", "/\outro" ou URL completa caem no painel,
   // para o login nunca virar redirecionador aberto.
   function destinoSeguro(voltar) {
@@ -166,6 +182,57 @@
   const avisoSistema = codigoAviso && Object.prototype.hasOwnProperty.call(AVISOS_SISTEMA, codigoAviso) ? AVISOS_SISTEMA[codigoAviso] : null;
   if (avisoSistema) mostrarAviso(avisoSistema[0], avisoSistema[1]);
 
+  // Esqueci minha senha: manda o link para o e-mail digitado. A resposta é a mesma com ou sem cadastro,
+  // para a tela não revelar quem é cliente.
+  document.getElementById("btn-esqueci").addEventListener("click", async () => {
+    const campo = document.getElementById("email");
+    const email = campo.value.trim();
+    if (!email || !campo.checkValidity()) {
+      mostrarAviso("Digite o seu e-mail no campo acima e clique de novo em Esqueci minha senha.", "erro");
+      campo.focus();
+      return;
+    }
+    const btn = document.getElementById("btn-esqueci");
+    btn.disabled = true;
+    const captchaToken = await captcha.obterToken();
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + "/login.html", captchaToken });
+    captcha.resetar();
+    btn.disabled = false;
+    if (error && SenhaCaptchaUi.ehErroDeCaptcha(error)) { mostrarAviso(SenhaCaptchaUi.MSG_CAPTCHA, "erro"); return; }
+    if (error && /rate limit|seconds/i.test(error.message || "")) { mostrarAviso("Você já pediu um link há pouco. Aguarde alguns minutos e confira também a caixa de spam.", "erro"); return; }
+    mostrarAviso("Se este e-mail tiver cadastro, enviamos um link para criar uma nova senha. Confira a caixa de entrada e o spam.", "ok");
+  });
+  function mostrarNovaSenha() {
+    document.getElementById("form-login").hidden = true;
+    document.getElementById("form-nova-senha").hidden = false;
+    document.querySelector("h1").textContent = "Criar nova senha";
+    document.querySelector("p.sub").textContent = "Digite a nova senha duas vezes. Depois é só entrar com ela.";
+    document.getElementById("nova-senha").focus();
+  }
+  if (veioDoLinkDeSenha) mostrarNovaSenha();
+  sb.auth.onAuthStateChange((evento) => { if (evento === "PASSWORD_RECOVERY") mostrarNovaSenha(); });
+  document.getElementById("form-nova-senha").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const senha = document.getElementById("nova-senha").value;
+    if (senha !== document.getElementById("nova-senha-confirmar").value) { mostrarAviso("As senhas não coincidem. Confira e tente de novo.", "erro"); return; }
+    const btn = document.getElementById("btn-nova-senha");
+    btn.disabled = true;
+    const { error } = await sb.auth.updateUser({ password: senha });
+    btn.disabled = false;
+    if (error) {
+      const m = error.message || "";
+      mostrarAviso(/password/i.test(m) && !/session|expired|jwt/i.test(m)
+        ? "Essa senha não serve: use pelo menos 6 caracteres e diferente da anterior."
+        : "O link expirou ou já foi usado. Clique em Esqueci minha senha para receber outro.", "erro");
+      return;
+    }
+    await sb.auth.signOut();
+    document.getElementById("form-nova-senha").hidden = true;
+    document.getElementById("form-login").hidden = false;
+    document.querySelector("h1").textContent = "Entrar";
+    document.querySelector("p.sub").textContent = "Entre com o e-mail e a senha do seu cadastro.";
+    mostrarAviso("Senha alterada. Entre com a nova senha.", "ok");
+  });
   document.getElementById("form-login").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const btn = document.getElementById("btn-entrar");
