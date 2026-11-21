@@ -6,6 +6,12 @@
 const { chromium } = require(process.env.PLAYWRIGHT_CORE || 'C:/Users/harre/AppData/Local/npm-cache/_npx/e41f203b7505f1fb/node_modules/playwright-core');
 const path = require('node:path');
 const fs = require('node:fs');
+const { spawnSync } = require('node:child_process');
+
+// O banco local nasce sem peças (o coletor fala com o ComprasNet/PNCP): o teste grava 2 fictícias e apaga no fim.
+const PECAS = ['cn-e2e-juridico-1', 'pncp-e2e-juridico-2'];
+const psql = (sql) => { const r = spawnSync('docker', ['exec', '-i', 'supabase_db_licitaplena-teste', 'psql', '-U', 'postgres', '-d', 'postgres', '-X', '-q', '-A', '-t', '-v', 'ON_ERROR_STOP=1'], { input: sql, encoding: 'utf8' }); if (r.status !== 0) throw new Error('psql: ' + r.stderr); return r.stdout.trim(); };
+const apagarPecas = () => psql(`delete from pecas_juridicas where id in ('${PECAS.join("','")}');`);
 const { passo, exigir, novaPagina, seed, SITE, PRINTS, resultados } = require('./e2e.cjs');
 
 async function imprimir(p, nome) {
@@ -24,6 +30,12 @@ async function main() {
   fs.mkdirSync(PRINTS, { recursive: true });
   const navegador = await chromium.launch({ channel: 'msedge', headless: true });
   const p = await novaPagina(navegador, seed.usuarios.gestor);
+  apagarPecas();
+  psql(`insert into pecas_juridicas(id,tipo,pregao,uasg,orgao,texto,resposta,lei,url,data,busca) values
+    ('${PECAS[0]}','recurso','12/2022','158000','ORGAO FICTICIO E2E','Recurso fictício e2e: o atestado de capacidade técnica apresentado atende ao edital.','Negado provimento (fictício).','10520',
+     'https://www.comprasnet.gov.br/livre/pregao/ficticio','2022-05-10','recurso ficticio e2e o atestado de capacidade tecnica apresentado atende ao edital orgao ficticio e2e'),
+    ('${PECAS[1]}','impugnacao',null,null,'MUNICIPIO FICTICIO E2E','Impugnação fictícia e2e: exigência de atestado com quantidade mínima acima de 50%.',null,'14133',
+     'https://pncp.gov.br/app/editais/99999999000191/2026/2','2026-11-18','impugnacao ficticia e2e exigencia de atestado com quantidade minima acima de 50 municipio ficticio e2e');`);
   try {
     await p.goto(SITE + '/painel.html#juridico');
     await p.waitForSelector('#juridico-central .jur-item');
@@ -63,6 +75,7 @@ async function main() {
       await imprimir(p, 'juridico-banco-escuro');
     });
   } finally {
+    apagarPecas();
     await navegador.close();
     console.log(JSON.stringify(resultados, null, 1));
   }
