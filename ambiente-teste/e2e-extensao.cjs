@@ -173,6 +173,8 @@ async function main() {
     const limparLance = () => psql(`delete from operacao_itens_resultado where processo_id in ('${P_LANCE}','${P_LANCE2}'); delete from operacao_processos where id in ('${P_LANCE}','${P_LANCE2}');`);
     await passo('lance: pisos do LicitaPlena, valor final mínimo sem Salvar, "Dar lance de R$ X?" só envia no clique, aviso de 15 s e paradas', async () => {
       limparLance();
+      // Desde 21/11 o preenchimento da proposta é o extra pago "Lance assistido" (planos_e_recursos.sql): a conta do teste o contrata.
+      psql(`update assinaturas set extras = '{lance_assistido}' where usuario_id = (select owner_id from operacao_organizacoes where id = '${seed.ids.orgA}');`);
       psql(`insert into operacao_processos(id, organizacao_id, empresa_id, uasg, numero, objeto, status) values ('${P_LANCE}', '${seed.ids.orgA}', '${seed.ids.empA1}', '160137', '33/2026', 'Papelaria (teste do lance)', 'preparacao');
         insert into operacao_itens_resultado(organizacao_id, processo_id, identificador, quantidade, valor_unitario_proposta, valor_unitario_minimo) values
         ('${seed.ids.orgA}', '${P_LANCE}', '1', 10, 10.50, 9.00), ('${seed.ids.orgA}', '${P_LANCE}', '2', 10, 4.00, 3.80);`);

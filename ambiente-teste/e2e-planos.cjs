@@ -223,7 +223,88 @@ async function main() {
       exigir(a.situacao === 'ativa' && a.vence_em, 'assinatura da Assessoria: ' + JSON.stringify(a));
       return texto;
     });
-    const erros = [pE, pA, pD].flatMap(p => p.erros).filter(e => !/favicon|turnstile|challenges\.cloudflare|fonts\.g/i.test(e));
+    // ---------------- 21/11: planos novos, fim do Grátis, extras e uso justo ----------------
+    await passo('dono: liga Lance assistido e IA extra do mês na assinatura (aba Clientes)', null, async () => {
+      await pD.setViewportSize({ width: 1280, height: 900 });
+      await pD.click('.tabs button[data-status="clientes"]');
+      await pD.click('.filtros button[data-filtro="todos"]');
+      await pD.click(`#conteudo-lista button[data-detalhe="${E.id}"]`);
+      await pD.waitForSelector('#ass-extra-lance', { timeout: 20000 });
+      await pD.check('#ass-extra-lance');
+      await pD.fill('#ass-ia-extra', '500');
+      for (const largura of [1280, 375]) { await pD.setViewportSize({ width: largura, height: largura === 375 ? 812 : 900 }); await pD.waitForTimeout(300); await print(pD, `admin-extras-${largura}.png`); }
+      await pD.setViewportSize({ width: 1280, height: 900 });
+      await pD.click('#btn-salvar-plano');
+      await pD.waitForFunction(() => document.getElementById('resultado-plano-salvo') || /Não foi possível|Confira/.test(document.getElementById('resultado-plano')?.textContent || ''), null, { timeout: 20000 });
+      const a = (await servico('GET', `/rest/v1/assinaturas?usuario_id=eq.${E.id}&select=extras,ia_extra_usos,ia_extra_mes`))[0];
+      exigir(a.extras.includes('lance_assistido') && a.ia_extra_usos === 500 && /-01$/.test(a.ia_extra_mes), 'extras: ' + JSON.stringify(a));
+      exigir(/IA no mês: \d+ de \d+/.test(await pD.innerText('#bloco-plano')), 'admin não mostra a IA do mês');
+      await pD.keyboard.press('Escape');
+      await pD.evaluate(() => document.getElementById('modal-detalhe-fundo').classList.remove('aberto'));
+      return JSON.stringify(a);
+    });
+    const pV = await novaPagina(navegador);
+    await passo('página de venda: 3 planos, extras, teste de 14 dias, sem Grátis e sem número de IA', null, async () => {
+      for (const largura of [1280, 375]) {
+        await pV.setViewportSize({ width: largura, height: largura === 375 ? 812 : 900 });
+        await pV.goto(SITE + '/index.html#planos');
+        const t = await pV.innerText('#planos');
+        exigir(/R\$ 127/.test(t) && /R\$ 249/.test(t) && /R\$ 697/.test(t) && /Lance assistido/.test(t) && /14 dias/.test(t) && /uso justo/.test(t), 'planos: ' + t.slice(0, 300));
+        exigir(!/grátis para sempre|plano grátis|usos de IA|\d+ usos/i.test(await pV.innerText('body')), 'promessa de Grátis ou número de IA na página');
+        exigir(await semRolagem(pV), 'rolagem horizontal na página de venda ' + largura);
+        await pV.locator('#planos').screenshot({ path: path.join(PRINTS, `venda-planos-${largura}.png`) });
+        await pV.goto(SITE + '/cadastro.html');
+        exigir(/Essencial/.test(await pV.innerText('body')) && !/plano Grátis/i.test(await pV.innerText('body')), 'cadastro sem Essencial ou com Grátis');
+        exigir(await semRolagem(pV), 'rolagem horizontal no cadastro ' + largura);
+      }
+    });
+    const S = await conta('plano-essencial', 'Essencial Plano Teste', 'essencial');
+    const T = await conta('plano-vencido', 'Vencido Plano Teste', 'empresa');
+    await servico('PATCH', `/rest/v1/assinaturas?usuario_id=eq.${S.id}`, { plano: 'essencial', situacao: 'ativa', vence_em: new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10) });
+    await servico('PATCH', `/rest/v1/assinaturas?usuario_id=eq.${T.id}`, { teste_ate: new Date(Date.now() - 864e5).toISOString() });
+    Object.assign(seed.usuarios, { plano_essencial: S, plano_vencido: T });
+    fs.writeFileSync(SEED, JSON.stringify(seed, null, 2));
+    const pS = await novaPagina(navegador);
+    await entrar(pS, S);
+    await passo('essencial: Mercado, Pesquisa de Preços, Convênios e Concorrente travados; Prospecção travada também no banco', null, async () => {
+      for (const [secao, rotulo] of [['diagnostico', 'Mercado'], ['precos', 'Pesquisa de Preços'], ['transparencia', 'Convênios'], ['empresa', 'Análise por CNPJ']]) {
+        await pS.goto(SITE + '/painel.html#' + secao);
+        await pS.waitForSelector(`#${secao} .trava-plano`, { timeout: 30000 });
+        const t = await pS.innerText(`#${secao} .trava-plano`);
+        exigir(/não está no seu plano/.test(t) && new RegExp(rotulo).test(t), `${secao}: ${t}`);
+        exigir(await pS.getAttribute(`#${secao} .trava-plano a`, 'href') === 'index.html#planos', 'botão sem destino');
+      }
+      await pS.goto(SITE + '/painel.html#boletim');
+      await pS.waitForTimeout(3000);
+      exigir(!(await pS.$('#boletim .trava-plano')), 'boletim travado no Essencial');
+      await pS.goto(SITE + '/prospeccao.html');
+      await pS.waitForSelector('main .trava-plano', { timeout: 30000 });
+      for (const largura of [1280, 375]) { await pS.setViewportSize({ width: largura, height: largura === 375 ? 812 : 900 }); await pS.waitForTimeout(300); await print(pS, `essencial-prospeccao-${largura}.png`); exigir(await semRolagem(pS), 'rolagem ' + largura); }
+      const tS = await token(S);
+      const r = await comoUsuario(tS.access_token, 'GET', '/rest/v1/prospeccao_itens?select=id&limit=1');
+      exigir(r.status === 200 && r.corpo === '[]', 'RLS de Prospecção: ' + r.status + ' ' + r.corpo.slice(0, 100));
+      const pl = JSON.parse((await comoUsuario(tS.access_token, 'POST', '/rest/v1/rpc/meu_plano', {})).corpo);
+      exigir(pl.plano === 'essencial' && !('ia_mes' in pl), 'meu_plano do Essencial: ' + JSON.stringify(pl).slice(0, 200));
+    });
+    const pT = await novaPagina(navegador);
+    await entrar(pT, T);
+    await passo('teste vencido: telas travadas com "Assinar" (aviso fixo) e ferramenta recusada no servidor', null, async () => {
+      for (const tela of ['painel.html', 'operacao.html', 'sistema.html']) {
+        await pT.goto(SITE + '/' + tela);
+        await pT.waitForSelector('main .trava-plano', { timeout: 30000 });
+        exigir(/Seu teste grátis terminou/.test(await pT.innerText('main .trava-plano')), tela + ': sem aviso');
+        exigir((await pT.$$('.trava-plano')).length === 1, tela + ': mais de um aviso');
+      }
+      for (const largura of [1280, 375]) { await pT.setViewportSize({ width: largura, height: largura === 375 ? 812 : 900 }); await pT.waitForTimeout(300); await print(pT, `teste-vencido-${largura}.png`); exigir(await semRolagem(pT), 'rolagem ' + largura); }
+      await Promise.all([pT.waitForURL(/index\.html#planos/, { timeout: 20000 }), pT.click('main .trava-plano a')]);
+      const tT = await token(T);
+      // Sanções: rota com cota que não depende de chave de IA no ambiente local; a regra é a mesma de todas (consumir_uso_plano).
+      const ia = await fetch(SITE + '/api/sancoes?cnpj=11222333000181', { headers: { Authorization: 'Bearer ' + tT.access_token } });
+      const corpo = await ia.text();
+      exigir(ia.status === 403 && /teste grátis terminou/.test(corpo), 'ferramenta no teste vencido: ' + ia.status + ' ' + corpo.slice(0, 160));
+      return `${ia.status} ${corpo.slice(0, 120)}`;
+    });
+    const erros = [pE, pA, pD, pV, pS, pT].flatMap(p => p.erros).filter(e => !/favicon|turnstile|challenges\.cloudflare|fonts\.g/i.test(e));
     await passo('sem erro de página nas três contas', null, async () => { exigir(!erros.some(e => /pageerror/.test(e)), erros.join(' | ')); return erros.slice(0, 5).join(' | ') || 'nenhum'; });
   } finally { await navegador.close(); }
   fs.writeFileSync(path.join(PRINTS, 'resultado.json'), JSON.stringify(resultados, null, 2));
