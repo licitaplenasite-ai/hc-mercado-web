@@ -164,7 +164,7 @@
       <button type="button" class="btn btn-ter" id="tema">Tema escuro</button>
     </div>
     <h1>Cadastre-se gratuitamente</h1>
-    <p class="sub destaque">Experimente todas as ferramentas do LicitaPlena por 5 dias gratuitos.</p>
+    <p class="sub destaque">Experimente todas as ferramentas do LicitaPlena por 14 dias grátis, sem cartão.</p>
     <p class="sub">Seu cadastro fica em análise até ser aprovado — quanto mais completo, mais rápido conseguimos avaliar e liberar seu acesso.</p>
 
     <form id="form-cadastro">
@@ -403,6 +403,14 @@
     el.style.display = "flex";
   }
 
+  // O Supabase responde em inglês; os casos comuns viram frase simples (nada de texto técnico na tela).
+  function motivoEmPortugues(erro) {
+    const m = String((erro && erro.message) || "");
+    if (/password/i.test(m)) return "a senha é fraca ou curta demais. Use pelo menos 6 caracteres, misturando letras e números.";
+    if (/invalid.*email|email.*invalid|validate email/i.test(m)) return "o e-mail parece inválido. Confira e tente de novo.";
+    if (/rate limit|too many|seconds/i.test(m)) return "muitas tentativas seguidas. Aguarde alguns minutos e tente de novo.";
+    return "tente de novo em instantes. Se continuar, escreva para licitaplena.site@gmail.com.";
+  }
   const ESTADOS_BR = [
     ["AC", "Acre"], ["AL", "Alagoas"], ["AP", "Amapá"], ["AM", "Amazonas"],
     ["BA", "Bahia"], ["CE", "Ceará"], ["DF", "Distrito Federal"], ["ES", "Espírito Santo"],
@@ -604,7 +612,7 @@
         error.message.includes("already registered") || error.message.includes("already been registered")
           ? "Esse e-mail já tem cadastro. Tente entrar na sua conta."
           : SenhaCaptchaUi.ehErroDeCaptcha(error) ? SenhaCaptchaUi.MSG_CAPTCHA
-          : "Não foi possível criar o cadastro: " + error.message,
+          : "Não foi possível criar o cadastro: " + motivoEmPortugues(error),
         "erro"
       );
       btn.disabled = false;
