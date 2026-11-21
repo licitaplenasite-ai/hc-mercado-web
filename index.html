@@ -234,7 +234,11 @@
   .cv-preview-item-valor { font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
   /* 7. Planos */
-  .planos { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; max-width: 920px; }
+  .planos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+  .extras { margin: 24px 0 0; padding: 20px 24px; border: 1px solid var(--border-default); border-radius: var(--radius-card); background: var(--surface-default); }
+  .extras h3 { font-size: 16px; line-height: 24px; margin: 0 0 8px; }
+  .extras ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; color: var(--text-secondary); }
+  .extras strong { color: var(--text-primary); }
   .plano { background: var(--surface-default); border: 1px solid var(--border-default); border-radius: var(--radius-card); padding: 28px; display: flex; flex-direction: column; }
   .plano.destaque { border-color: var(--action-strong); box-shadow: inset 0 0 0 1px var(--action-strong); }
   .plano-topo { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
@@ -244,7 +248,7 @@
   .preco b { font-size: 40px; line-height: 48px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
   .preco span { color: var(--text-secondary); }
   .plano .obs { font: var(--text-label); color: var(--text-secondary); margin: 0 0 24px; }
-  .inclui { list-style: none; margin: 0 0 28px; padding: 20px 0 0; border-top: 1px solid var(--border-default); display: grid; gap: 10px; flex: 1; }
+  .inclui { list-style: none; margin: 0 0 28px; padding: 20px 0 0; border-top: 1px solid var(--border-default); display: grid; gap: 10px; flex: 1; align-content: start; }
   .inclui li { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 8px; }
   .inclui li::before { content: "\2713"; color: var(--success-text); font-weight: 700; font-size: 13px; }
   .inclui li.titulo-lista { display: block; font: var(--text-label); color: var(--text-secondary); }
@@ -284,6 +288,7 @@
     .boletim-grid, .vivo-grid, .faq-grid, .etapa { grid-template-columns: minmax(0, 1fr); gap: 32px; }
     .etapa:nth-child(even) .etapa-texto { order: 0; }
     .difs { grid-template-columns: minmax(0, 1fr); gap: 32px; }
+    .planos { grid-template-columns: minmax(0, 1fr); max-width: 640px; }
   }
   @media (max-width: 760px) {
     .container { padding: 0 20px; }
@@ -658,43 +663,69 @@
     <div class="cabeca-secao">
       <p class="sobretitulo">Planos</p>
       <h2 class="titulo" id="planos-titulo">Preço público, sem precisar falar com vendedor</h2>
-      <p class="intro">Os dois planos começam com 14 dias de teste grátis, sem cartão. Os valores abaixo são de lançamento.</p>
+      <p class="intro">Todo plano começa com 14 dias de teste grátis, sem cartão, com tudo do plano Empresa liberado. Se você não assinar, só o boletim por e-mail continua, e o que você salvou fica guardado.</p>
     </div>
     <div class="planos">
       <div class="plano">
-        <div class="plano-topo"><h3>Empresa</h3><span class="chip in"><span class="g" aria-hidden="true">i</span>Preço de lançamento</span></div>
-        <p class="para">Para quem participa de licitações com o próprio CNPJ.</p>
-        <p class="preco"><b>R$ 149</b><span>/mês</span></p>
-        <p class="obs">Valor de lançamento, sujeito a reajuste para novas assinaturas.</p>
-        <!-- a definir pelo dono: número de usuários por conta, limite de resumos de edital com IA por dia (hoje há cota diária no servidor) e se a Central Operacional entra neste plano. Texto mantido neutro. -->
+        <div class="plano-topo"><h3>Essencial</h3></div>
+        <p class="para">Para começar a licitar com organização.</p>
+        <p class="preco"><b>R$ 127</b><span>/mês</span></p>
+        <p class="obs">1 CNPJ · 1 pessoa · até 15 processos</p>
         <ul class="inclui">
           <li>Boletim por e-mail em todo dia útil</li>
-          <li>Encontrar Licitações em todas as UFs</li>
-          <li>Resumo de edital com IA, com cota diária de uso</li>
-          <li>Inteligência de Mercado e Pesquisa de Preços</li>
-          <li>Analisar Empresa (raio-X por CNPJ)</li>
-          <li>Convênios e Emendas Federais</li>
-          <li>Kanban e Jurídico e Dúvidas</li>
+          <li>Resumo do Edital e Pergunte ao Edital</li>
+          <li>IA à vontade, com uso justo</li>
+          <li>Minhas empresas e documentos, com aviso de certidão vencendo</li>
+          <li>Agenda de prazos e avisos no celular</li>
+          <li>Jurídico e Dúvidas</li>
+          <li>SINAPI, BDI e Mão de obra</li>
         </ul>
-        <a href="cadastro.html" class="btn btn-sec btn-grande">Testar o plano Empresa</a>
+        <a href="cadastro.html" class="btn btn-sec btn-grande">Testar grátis por 14 dias</a>
       </div>
       <div class="plano destaque">
-        <div class="plano-topo"><h3>Assessoria</h3><span class="chip in"><span class="g" aria-hidden="true">i</span>Preço de lançamento</span></div>
-        <p class="para">Para quem cuida das licitações de mais de uma empresa.</p>
-        <p class="preco"><b>R$ 299</b><span>/mês</span></p>
-        <p class="obs">Valor de lançamento, sujeito a reajuste para novas assinaturas.</p>
-        <!-- a definir pelo dono: quantas empresas clientes e quantos usuários entram no plano Assessoria. O sistema hoje não aplica esse limite; não prometer número. -->
+        <div class="plano-topo"><h3>Empresa</h3><span class="chip in"><span class="g" aria-hidden="true">i</span>Recomendado</span></div>
+        <p class="para">Para quem participa de licitações com o próprio CNPJ.</p>
+        <p class="preco"><b>R$ 249</b><span>/mês</span></p>
+        <p class="obs">1 CNPJ · 3 pessoas · processos sem limite</p>
         <ul class="inclui">
-          <li class="titulo-lista">Tudo do plano Empresa, mais:</li>
-          <li>Várias empresas clientes no mesmo acesso</li>
-          <li>Documentos e certidões por empresa, com alertas de vencimento</li>
-          <li>Agenda operacional e checklist de habilitação</li>
-          <li>Exportação dos documentos da empresa em CSV</li>
+          <li class="titulo-lista">Tudo do Essencial, mais:</li>
+          <li>Funil, quadros e esteira do edital sem limite</li>
+          <li>Proposta e declarações em Word</li>
+          <li>Itens com custo, preço-alvo e simulador de lance</li>
+          <li>Impostos novos (CBS/IBS)</li>
+          <li>Pesquisa de Preços, Inteligência de Mercado e Marcas</li>
+          <li>Licitação anterior do órgão</li>
+          <li>Analisar concorrente e Raio-X financeiro</li>
+          <li>Prospecção (compras futuras dos órgãos) e Convênios</li>
+          <li>Chat com IA e aviso "mudou algo no edital"</li>
+          <li>Extensão do Compras.gov para ler o pregão</li>
         </ul>
-        <a href="cadastro.html" class="btn btn-pri btn-grande">Testar o plano Assessoria</a>
+        <a href="cadastro.html" class="btn btn-pri btn-grande">Testar grátis por 14 dias</a>
+      </div>
+      <div class="plano">
+        <div class="plano-topo"><h3>Assessoria</h3></div>
+        <p class="para">Para quem cuida das licitações de várias empresas.</p>
+        <p class="preco"><b>R$ 697</b><span>/mês</span></p>
+        <p class="obs">3 CNPJs · 6 pessoas · CNPJ extra por R$ 199/mês</p>
+        <ul class="inclui">
+          <li class="titulo-lista">Tudo do Empresa para cada CNPJ, mais:</li>
+          <li>Painel com todas as empresas clientes</li>
+          <li>Portal do cliente: ele vê e aprova sem precisar de login</li>
+          <li>Quadros e metas por cliente</li>
+          <li>Permissões por pessoa (ex.: acesso só para consulta)</li>
+        </ul>
+        <a href="cadastro.html" class="btn btn-sec btn-grande">Testar grátis por 14 dias</a>
       </div>
     </div>
-    <p class="planos-nota">Quantidade de empresas e de usuários por plano: fale com a gente em <a href="mailto:licitaplena.site@gmail.com">licitaplena.site@gmail.com</a> antes de assinar se a sua operação for grande.</p>
+    <div class="extras">
+      <h3>Extras, contratados à parte por CNPJ</h3>
+      <ul>
+        <li><strong>Lance assistido · R$ 97/mês.</strong> A extensão preenche a proposta no Compras.gov e sugere o lance respeitando o seu valor mínimo. Quem dá o clique final é você.</li>
+        <li><strong>Pacote Operação · R$ 49/mês.</strong> Monitor do chat do pregoeiro. Em breve: certidões tiradas automaticamente e avisos no WhatsApp.</li>
+        <li><strong>IA extra · R$ 49.</strong> Para a equipe que usa muito a IA no mês.</li>
+      </ul>
+    </div>
+    <p class="planos-nota">No plano anual você paga 10 meses e leva 12 (2 meses grátis). Empresas grandes: fale com a gente em <a href="mailto:licitaplena.site@gmail.com">licitaplena.site@gmail.com</a>.</p>
   </div>
 </section>
 
@@ -717,11 +748,11 @@
       </details>
       <details>
         <summary>Tem robô de lances?</summary>
-        <div class="resp"><p>Não damos lance automático. A extensão do LicitaPlena para o navegador acompanha o chat do pregoeiro e tem o "Lance com 1 clique": ela calcula o próximo lance a partir do valor mínimo que você cadastrou e só envia quando você clica. A decisão de cada lance é sempre sua.</p></div>
+        <div class="resp"><p>Não damos lance automático. Com o extra Lance assistido, a extensão do LicitaPlena preenche a proposta no Compras.gov e tem o "Lance com 1 clique": ela calcula o próximo lance a partir do valor mínimo que você cadastrou e só envia quando você clica. O monitor do chat do pregoeiro vem no extra Pacote Operação. A decisão de cada lance é sempre sua.</p></div>
       </details>
       <details>
         <summary>Como funciona o teste de 14 dias?</summary>
-        <div class="resp"><p>Você faz o cadastro com os dados da empresa, nossa equipe aprova a conta e você usa as ferramentas por 14 dias. O cadastro não pede cartão de crédito. No fim do teste nada é cobrado: se você não assinar, a conta passa para o plano Grátis.</p></div>
+        <div class="resp"><p>Você faz o cadastro com os dados da empresa, nossa equipe aprova a conta e você usa as ferramentas por 14 dias. O cadastro não pede cartão de crédito. No fim do teste nada é cobrado: se você não assinar, você continua recebendo só o boletim por e-mail, e o que salvou fica guardado para quando assinar.</p></div>
       </details>
       <details>
         <summary>Como cancelo?</summary>
