@@ -3,7 +3,7 @@
 // (vencidas e não vencidas, com descrição, preço, posição, órgão, data e link) e motivos de desclassificação.
 // Dados:
 //   - RPC analise_cnpj_participacoes (tabelas historico_*, com a RLS do usuário): PNCP, dados abertos do
-//     Compras.gov e arquivo semanal de propostas;
+//     Compras.gov e lista semanal de propostas (dados abertos);
 //   - pregoes_gravados_* (extensão "Gravar pregão"): desclassificação/inabilitação com o texto literal;
 //   - /api/sancoes-cnpj (CEIS/CNEP) e /api/analise-cnpj (coleta por demanda + fila do robô);
 //   - /api/analise-cnpj {acao:"cadastro"} (base aberta da Receita, cache empresas_cadastro) e a tabela

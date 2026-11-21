@@ -45,8 +45,10 @@ async function analisar(p, cnpj) {
   await p.waitForSelector('#emp-cnpj', { state: 'visible', timeout: 20000 });
   await p.fill('#emp-cnpj', cnpj);
   await p.click('#emp-buscar');
-  await p.waitForSelector('#emp-analise-cnpj .acn-participacoes', { timeout: 120000 });
+  // Tela refeita em fa45aaa: a última seção é "Onde atua e o que vende"; os detalhes (itens, desclassificações) vêm fechados.
+  await p.waitForSelector('#emp-analise-cnpj .acn-onde-atua', { timeout: 120000 });
   await p.waitForTimeout(1500);
+  await p.evaluate(() => document.querySelectorAll('#emp-analise-cnpj details').forEach((d) => { d.open = true; }));
   return (await p.innerText('#emp-analise-cnpj')).replace(/\s+/g, ' ');
 }
 
@@ -226,12 +228,12 @@ async function passosNovos({ navegador, p, contexto, urlProcesso }) {
       const r = robo('esteira_processos.js', { LIMITE_MINUTOS_ESTEIRA: '6', LOTE_ANALISE_CNPJ: '1', MAX_COMPRAS_ANALISE_CNPJ: '10' });
       const [depois] = await banco(`historico_cnpj_consultas?cnpj=eq.${vencedor}&select=situacao,meses_pendentes,tentativas`);
       const txt = await analisar(p, vencedor);
-      const disputas = (txt.match(/Disputas \(itens\) (\d+)/) || [])[1];
+      const disputas = (txt.match(/Itens disputados (\d+)/) || [])[1];
       exigir(Number(disputas) > 0, 'nenhuma disputa na análise: ' + txt.slice(0, 400));
       const selo = await p.locator('#emp-analise-cnpj .sancao-selo').count();
       exigir(!comSancao.length || selo, 'vencedor tem sanção no CEIS/CNEP e o selo não apareceu');
       exigir(!CPF.test(txt), 'CPF na análise por CNPJ');
-      return `CNPJ ${vencedor} (${comSancao.length ? 'com sanção ' + comSancao[0].cadastro : 'sem sanção'}; selo ${selo ? 'visível' : 'ausente'}); ${disputas} disputa(s); fila ${fila?.situacao}->${depois?.situacao} (meses pendentes ${JSON.stringify(depois?.meses_pendentes || []).slice(0, 60)}); robô saiu ${r.status}${antes.includes('Disputas') ? '' : ' (1ª abertura sem participações)'}`;
+      return `CNPJ ${vencedor} (${comSancao.length ? 'com sanção ' + comSancao[0].cadastro : 'sem sanção'}; selo ${selo ? 'visível' : 'ausente'}); ${disputas} disputa(s); fila ${fila?.situacao}->${depois?.situacao} (meses pendentes ${JSON.stringify(depois?.meses_pendentes || []).slice(0, 60)}); robô saiu ${r.status}${/Itens disputados [1-9]/.test(antes) ? '' : ' (1ª abertura sem participações)'}`;
     });
 
     await passo('prospecção: 4 abas (AM) e link no menu', p, async () => {
@@ -317,7 +319,7 @@ async function passosNovos({ navegador, p, contexto, urlProcesso }) {
       const selo = p.locator('#emp-analise-cnpj .selo-nao-verificado').first();
       exigir(await selo.count(), 'selo "não verificado" ausente: ' + txt.slice(0, 500));
       await selo.scrollIntoViewIfNeeded();
-      return `GET verificado=false (${g.pregao.mensagens.length} mensagens); análise ${recusada}: "${await selo.innerText()}"; ${(txt.match(/Desclassificações \(pregões gravados\) \d+/) || [''])[0]}`;
+      return `GET verificado=false (${g.pregao.mensagens.length} mensagens); análise ${recusada}: "${await selo.innerText()}"; ${(txt.match(/Desclassificações e inabilitações \(\d+\)/) || [''])[0]}`;
     });
 
     const leitorPg = await novaPagina(navegador, U.leitura);
