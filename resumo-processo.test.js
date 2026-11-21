@@ -30,3 +30,8 @@ test("campos vazios viram travessão, não 'undefined'", () => {
   assert.ok(r.ficha.every(([, v]) => !/undefined|null|NaN/.test(v)));
   assert.ok(r.preco.every(([, v]) => v === "—"));
 });
+
+test("item precificado no sistema (só unitário) mostra o total da proposta, não travessão", () => {
+  const r = R.montarResumo({ processo: { objeto: "X" }, empresa: null, itens: [{ identificador: "1", descricao: "Caneta", quantidade: 2.5, valor_unitario_proposta: 0.33 }] });
+  assert.match(r.itens[0][3], /0,83/); // 2,5 × 0,33 = 0,825 → R$ 0,83
+});

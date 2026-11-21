@@ -37,7 +37,7 @@
       titulo: p.objeto || "Processo",
       ficha, preco,
       prazos: abertos.map((z) => [dataBr(z.vencimento, true), z.titulo]),
-      itens: itens.slice(0, MAX_ITENS).map((i) => [i.identificador, curto(i.descricao, 160) || "—", i.quantidade ?? "—", moeda(i.valor_proposta)]),
+      itens: itens.slice(0, MAX_ITENS).map((i) => [i.identificador, curto(i.descricao, 160) || "—", i.quantidade ?? "—", moeda(i.valor_proposta ?? (i.valor_unitario_proposta == null || i.quantidade == null ? null : Math.round(Number(i.quantidade) * Number(i.valor_unitario_proposta) * 100) / 100))]),
       itensRestantes: Math.max(0, itens.length - MAX_ITENS),
       documentos: documentos.map((d) => [d.tipo, d.titulo || "", d.vencimento ? `Válido até ${dataBr(d.vencimento)}` : "Sem validade"]),
       exigidos: Array.isArray(p.documentos_exigidos) ? p.documentos_exigidos.filter(Boolean) : [],
@@ -77,9 +77,11 @@
     const empresaId = q.get("empresa") || "", processoId = q.get("processo") || "";
     const falhar = (t) => alvo.replaceChildren(criar("p", { className: "vazio", textContent: t }));
     if (!UUID.test(empresaId) || !UUID.test(processoId)) return falhar("Link incompleto. Abra o resumo pelo processo no sistema.");
+    const voltar = document.getElementById("voltar"); // volta ao mesmo processo, não à tela inicial do sistema
+    if (voltar) voltar.href = `sistema?empresa=${encodeURIComponent(empresaId)}&processo=${encodeURIComponent(processoId)}`;
     const sb = global.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     const { data: { session } } = await sb.auth.getSession();
-    if (!session) { location.replace(`login.html?voltar=${encodeURIComponent("/sistema")}`); return; }
+    if (!session) { location.replace(`login.html?voltar=${encodeURIComponent(location.pathname + location.search)}`); return; }
     // Mesma porta das outras telas logadas: cadastro não aprovado não vê nada.
     const { data: cad } = await sb.from("clientes").select("status").eq("id", session.user.id).maybeSingle();
     if (cad?.status !== "aprovado") { await sb.auth.signOut(); location.replace("login.html"); return; }
@@ -87,7 +89,7 @@
       sb.from("operacao_processos").select("*").eq("id", processoId).eq("empresa_id", empresaId).maybeSingle(),
       sb.from("operacao_empresas").select("razao_social,cnpj").eq("id", empresaId).maybeSingle(),
       sb.from("operacao_prazos_processo").select("titulo,vencimento,concluido_em").eq("processo_id", processoId).order("vencimento"),
-      sb.from("operacao_itens_resultado").select("identificador,descricao,quantidade,valor_proposta").eq("processo_id", processoId).order("identificador").limit(200),
+      sb.from("operacao_itens_resultado").select("identificador,descricao,quantidade,valor_proposta,valor_unitario_proposta").eq("processo_id", processoId).order("identificador").limit(200),
       sb.from("operacao_processo_documentos").select("documento_id").eq("processo_id", processoId)]);
     if (p.error || !p.data) return falhar("Processo não encontrado ou sem acesso.");
     const ids = (v.data || []).map((x) => x.documento_id);
