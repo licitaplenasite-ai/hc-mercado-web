@@ -132,7 +132,7 @@ const pesquisa = (id, orgao, numero, objeto, data, itens) => ({
     exigir(/Marca, situação e vencedor lidos das páginas públicas do ComprasNet antigo \(sem captcha\)/.test(t), 'fonte do ComprasNet antigo não declarada');
     exigir(/produto ofertado é álcool em gel/.test(t) && /Recusa em/.test(t), 'motivo literal da recusa gravada ausente');
     exigir(/lido por usuário, não verificado · lido em/.test(t), 'selo não verificado ausente');
-    exigir(/fonte sem HTTPS/.test(t), 'selo fonte sem HTTPS ausente');
+    exigir(/sem conexão segura/.test(t), "selo de fonte sem HTTPS ('sem conexão segura') ausente");
     exigir(/Empresa com sanção vigente \(CEIS\)/.test(t), 'selo de sanção ausente');
     exigir(/grave com a extensão do LicitaPlena/.test(t), 'dica de gravar ausente nas compras sem gravação');
     // O cartão híbrido tem o link explícito "Ver tudo"/"Abrir a ata completa" (o usuário resolve o captcha); nenhum OUTRO link pode levar à ata com captcha.
@@ -170,7 +170,7 @@ const pesquisa = (id, orgao, numero, objeto, data, itens) => ({
         await pagina.waitForTimeout(2500);
         for (const d of await pagina.locator('#licitacao-anterior details').all()) await d.evaluate((e) => { e.open = true; });
         const t = (await pagina.locator('#licitacao-anterior').innerText()).replace(/\s+/g, ' ');
-        exigir(/produto ofertado é álcool em gel/.test(t) && /lido por usuário, não verificado/.test(t) && /fonte sem HTTPS/.test(t) && /Empresa com sanção vigente/.test(t), `cartão ${largura} sem as camadas novas: ${t.slice(0, 200)}`);
+        exigir(/produto ofertado é álcool em gel/.test(t) && /lido por usuário, não verificado/.test(t) && /sem conexão segura/.test(t) && /Empresa com sanção vigente/.test(t), `cartão ${largura} sem as camadas novas: ${t.slice(0, 200)}`);
         exigir(!CPF.test(t), 'CPF no cartão');
         if (largura === 375) { const w = await pagina.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]); exigir(w[0] <= w[1] + 1, 'rolagem horizontal no cartão (celular): ' + w); }
         await pagina.locator('#licitacao-anterior').scrollIntoViewIfNeeded();
