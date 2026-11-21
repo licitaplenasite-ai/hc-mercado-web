@@ -165,9 +165,11 @@ const municipios = async (p) => (await p.locator('#op-resultado .boletim-card').
       exigir(l.length === 1 && l[0].dias_antes === 2 && l[0].hora_aviso === 7 && l[0].enviado === false, JSON.stringify(l));
     });
     await passo('robô de lembretes (só registrar): avisa o que passou da hora e não envia nada', null, async () => {
-      // Aviso 1 h atrás e prazo daqui a 3 h: deve "enviar" (registrar); o de 2027 não.
-      psql(`insert into public.lembretes(cliente_id,numero_controle_pncp,objeto_resumo,data_final_proposta,dias_antes,hora_aviso)
-        values ('${uid}','TESTE-AGORA','Edital fictício',now()+interval '3 hours',0,extract(hour from (now() at time zone 'America/Sao_Paulo') - interval '1 hour')::int);`);
+      // Aviso 1 h atrás e prazo daqui a 3 h: deve "enviar" (registrar); o de 2027 não. dias_antes = dias entre o aviso e o
+      // prazo em Brasília: depois das 21h o prazo cai no dia seguinte e, com 0 fixo, o aviso ia para amanhã (teste falhava à noite).
+      psql(`with t as (select now()+interval '3 hours' as prazo, (now() at time zone 'America/Sao_Paulo') - interval '1 hour' as aviso)
+        insert into public.lembretes(cliente_id,numero_controle_pncp,objeto_resumo,data_final_proposta,dias_antes,hora_aviso)
+        select '${uid}','TESTE-AGORA','Edital fictício',prazo,(prazo at time zone 'America/Sao_Paulo')::date - aviso::date,extract(hour from aviso)::int from t;`);
       const r = spawnSync('python', [path.join(__dirname, '../scripts/lembretes_licitacoes.py')], { encoding: 'utf8',
         env: { ...process.env, SUPABASE_URL: chaves.API_URL, SUPABASE_SERVICE_ROLE_KEY: chaves.SERVICE_ROLE_KEY, LEMBRETES_SO_REGISTRAR: '1', ZEPTOMAIL_TOKEN: '', EMAIL_REMETENTE: '', EMAIL_SENHA_APP: '' } });
       const saida = (r.stdout || '') + (r.stderr || '');
