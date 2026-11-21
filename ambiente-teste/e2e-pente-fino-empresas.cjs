@@ -12,7 +12,7 @@ const PDF = Buffer.from('%PDF-1.1\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj 2 
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==', 'base64');
 const JPG = Buffer.from('/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=', 'base64');
 // Jargão de sistema que não pode aparecer para o cliente.
-const JARGAO = /Supabase|\bSQL\b|\bJSON\b|\bRPC\b|row-level|violates|undefined|\[object|NaN|fail-open|migração|\.sql\b|\bapp\b/i;
+const JARGAO = /Supabase|\bSQL\b|\bJSON\b|\bRPC\b|row-level|violates|undefined|\[object|(?-i:\bNaN\b)|fail-open|migração|\.sql\b|\bapp\b/i;
 const linha = (p, texto) => p.locator('#lista-documentos tr', { hasText: texto });
 
 async function login(navegador, u) {
