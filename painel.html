@@ -8537,7 +8537,8 @@
       if (atual.uf) p.set("uf", atual.uf);
       const resposta = await fetchComSessao(`/api/prospeccao?${p}`);
       const dados = await resposta.json().catch(() => ({}));
-      if (!resposta.ok) throw new Error(dados.erro || `Contratação futura indisponível (${resposta.status}).`);
+      // Erro do servidor fala de "prospecção" (outra tela): aqui o aviso é o desta aba.
+      if (!resposta.ok) throw new Error(resposta.status < 500 && dados.erro ? dados.erro : "Não foi possível consultar o que os órgãos planejam comprar agora. Tente de novo em instantes.");
       return dados;
     };
     try {
@@ -8803,7 +8804,7 @@
     </div>`;
 
     if (registros.length === 0) {
-      html += '<div class="aviso">Nenhum convênio encontrado com esse filtro no período coletado.</div>';
+      html += '<div class="aviso">Nenhum convênio encontrado com esse filtro no período disponível.</div>';
       alvo.innerHTML = html;
       return;
     }

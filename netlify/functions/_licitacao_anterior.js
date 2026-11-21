@@ -355,7 +355,7 @@ async function coletar({ uasg, alvos, palavrasBusca = "", excluir = [], desdeAno
       const q = new URLSearchParams({ tipo: "codigoItemCatalogo", codigo: catmat, codigoUasg: uasg, pagina: "1", tamanhoPagina: "500",
         dataCompraInicio: `${desdeAno}-01-01` });
       let dados;
-      try { dados = await b.json(`${PESQUISA}?${q}`); } catch (e) { if (e instanceof SemOrcamento) throw e; avisos.push(`Pesquisa de Preços indisponível (CATMAT ${catmat}).`); continue; }
+      try { dados = await b.json(`${PESQUISA}?${q}`); } catch (e) { if (e instanceof SemOrcamento) throw e; avisos.push(`A Pesquisa de Preços não respondeu para o código de catálogo ${catmat}.`); continue; }
       for (const l of dados?.resultado || []) {
         const id = idDaLinhaPesquisa(l), n = inteiro(l.numeroItemCompra);
         // A fonte ignora dataCompraInicio em parte das linhas: o período é conferido aqui pelo ano do id.
@@ -438,7 +438,7 @@ async function coletar({ uasg, alvos, palavrasBusca = "", excluir = [], desdeAno
   } catch (e) {
     if (!(e instanceof SemOrcamento)) throw e;
     parcial = true;
-    avisos.push("Limite de consultas desta busca atingido: o robô completa o restante.");
+    avisos.push("Limite de consultas desta busca atingido: o restante aparece aqui nos próximos dias.");
   }
   // Participação sem item gravado (item que caiu do teto) não entra: a FK do banco exige o item.
   const linhasItens = [...itens.values()];

@@ -88,7 +88,7 @@ async function coletarNaHora(cnpj, { fetchImpl = (...a) => fetch(...a), orcament
     }
   } catch (e) {
     if (!(e instanceof L.SemOrcamento)) throw e;
-    saida.avisos.push("Limite de consultas desta busca atingido: o robô completa o restante.");
+    saida.avisos.push("Limite de consultas desta busca atingido: o restante aparece aqui nos próximos dias.");
   }
   // Refazer um CNPJ já completo relê só os 2 meses que o governo regera toda semana; o resto já está guardado.
   saida.meses = anterior?.situacao === "completo" ? A.mesesJanela(agora, 2) : A.mesesJanela(agora);
