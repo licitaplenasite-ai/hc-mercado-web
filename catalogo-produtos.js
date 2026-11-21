@@ -342,7 +342,7 @@
     async function carregar() {
       if (!estado.empresaId) return;
       const { data, error } = await sb.from('operacao_catalogo_produtos').select('*').eq('empresa_id', estado.empresaId).order('nome').limit(MAX_LINHAS);
-      if (error) { status(`Catálogo indisponível: ${error.message}`); return; }
+      if (error) { status('Não foi possível carregar o catálogo agora. Clique em Atualizar em instantes.'); return; }
       estado.produtos = data || [];
       desenharLista();
     }
@@ -498,7 +498,7 @@
         .eq('situacao', 'ganho').eq('operacao_processos.empresa_id', empresaId).limit(10000),
       sb.from('operacao_processos').select('id,numero,objeto').eq('empresa_id', empresaId).in('situacao_resultado', ['vitoria_total', 'vitoria_parcial']).limit(2000),
     ]);
-    if (itens.error || procs.error) { alvo.innerHTML = `<p class="nota">Resumo indisponível: ${esc((itens.error || procs.error).message)}</p>`; return null; }
+    if (itens.error || procs.error) { alvo.innerHTML = '<p class="nota">Não foi possível montar o resumo agora. Tente de novo em instantes.</p>'; return null; }
     const r = resumoCustosVendas(itens.data, procs.data);
     desenharResumo(alvo, r);
     return r;

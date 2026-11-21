@@ -115,7 +115,7 @@ test("agenda mantém compromissos vencidos visíveis", async () => {
   };
   vm.runInNewContext(`${html.slice(inicio, fim)}\nthis.carregarAgenda = carregarAgenda;`, contexto);
   await contexto.carregarAgenda();
-  assert.match(alvo.innerHTML, /Em atraso · sessao/);
+  assert.match(alvo.innerHTML, /Em atraso · Sessão/); // rótulo em português, não o código gravado
   assert.match(alvo.innerHTML, /Prazo futuro/);
 });
 

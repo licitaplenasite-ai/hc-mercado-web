@@ -44,6 +44,7 @@ function preparar(limite, empresas) {
     fecharModal: () => chamadas.push("fechar"),
     carregarEmpresas: async () => chamadas.push("recarregar"),
     aviso: mensagem => chamadas.push(["aviso", mensagem]),
+    motivo: e => e.message,
   };
   vm.runInNewContext(`${operacao.slice(inicio, fim)}\nthis.salvar = salvarEmpresa;`, contexto);
   return { salvar: contexto.salvar, formulario, botao, chamadas };

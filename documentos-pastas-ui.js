@@ -104,6 +104,7 @@
         if (!doc || !celula || celula.querySelector(".lp-pasta-campo")) continue;
         const campo = criar("input", { className: "lp-pasta-campo", value: pastas.get(doc.id) || "", placeholder: SEM_PASTA, maxLength: 60, style: "max-width:170px;font-size:12px;padding:2px 6px" });
         campo.setAttribute("list", "lp-pastas-lista");
+        campo.disabled = document.body.classList.contains("somente-leitura"); // papel leitura: o banco recusaria a pasta
         campo.setAttribute("aria-label", `Pasta de ${doc.tipo}`);
         campo.addEventListener("change", async () => {
           try {
