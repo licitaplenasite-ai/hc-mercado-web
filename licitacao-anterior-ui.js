@@ -710,7 +710,7 @@
       ocupado = false; consultar.disabled = false;
       if (r.erro) { estado.textContent = r.erro; resultado.replaceChildren(); return; }
       estado.textContent = (r.guardado ? 'Resultado guardado' : 'Consulta feita agora') + (r.gerado_em ? ` em ${data(r.gerado_em)}` : '') +
-        (r.situacao === 'parcial' ? '. Os demais participantes (arquivo semanal de propostas) entram na próxima rodada do robô.' : '.');
+        (r.situacao === 'parcial' ? '. Os demais participantes aparecem aqui quando a próxima busca automática terminar.' : '.');
       const visao = montarVisao(r);
       const extras = await carregarExtras(visao, { cliente, sancoes: sancoes || (cliente ? sancoesEmLote(cliente) : null) });
       const sanc = sancoes || (cliente ? sancoesEmLote(cliente) : null);

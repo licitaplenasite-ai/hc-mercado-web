@@ -168,7 +168,8 @@
     const c = p.classificarLance(lance, calc.limite, calc.alvo, lucro);
     const textoSelo = c.prejuizo ? 'Prejuízo' : { vermelho: 'Abaixo do limite', amarelo: 'Negociação', verde: 'Boa margem' }[c.cor];
     const qtd = decimalPositivo(quantidade, 3);
-    const margem = (lucro * 10000n) / lance; // centésimos de ponto percentual
+    const dobro = (lucro * 20000n) / lance; // centésimos de ponto ×2: arredonda como o lucro (meio para longe do zero)
+    const margem = (dobro + (dobro < 0n ? -1n : 1n)) / 2n;
     return {
       ok: true, cor: c.prejuizo ? 'vermelho' : c.cor, texto: textoSelo,
       margem: `${p.formatarDecimal(margem, 2)}%`,

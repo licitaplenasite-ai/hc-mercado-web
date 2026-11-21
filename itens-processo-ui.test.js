@@ -55,3 +55,12 @@ test('cenários de margem: sem custo, margem própria inválida e soma de percen
   assert.match(c[2].erro, /menor que 100%/);
   assert.match(c[3].erro, /Margem própria/);
 });
+
+test('simulador de lance: margem arredonda como o lucro (caso do e2e: custo 30, tributos 8% + garantia 1%, lance 33,50)', () => {
+  const calc = I.calcularPrecos([{ id: 'a', custoUnitario: '30.00', quantidade: '27.000' }], { tributos: '8', garantia: '1', margem: '20', margemMinima: '8' }).get('a');
+  const r = I.simularLance('33,50', calc, '27.000');
+  // lucro = 33,50 − 9% de 33,50 − 30 = 0,485 → R$ 0,49; margem = 0,485 ÷ 33,50 = 1,4477% → 1,45%
+  assert.equal(r.lucroUnidade, 'R$ 0,49');
+  assert.equal(r.lucroTotal, 'R$ 13,10');
+  assert.equal(r.margem, '1,45%');
+});
