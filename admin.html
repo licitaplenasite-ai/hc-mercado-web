@@ -254,7 +254,7 @@
 <div id="tela-mfa-enroll" class="tela-auth" style="display:none;">
   <div class="caixa">
     <h2 style="margin-top:0;">Configure a autenticação em duas etapas</h2>
-    <p style="color:var(--texto-fraco);font-size:14px;">Escaneie o QR code abaixo com um app autenticador (Google Authenticator, Authy etc.) e digite o código de 6 dígitos pra confirmar. Isso é obrigatório pra acessar o painel administrativo.</p>
+    <p style="color:var(--texto-fraco);font-size:14px;">Escaneie o QR code abaixo com um app autenticador (Google Authenticator, Authy etc.) e digite o código de 6 dígitos para confirmar. Isso é obrigatório para acessar o painel administrativo.</p>
     <div class="mfa-qrcode" id="mfa-qrcode"></div>
     <p class="mfa-secreto">Não consegue escanear? Digite manualmente no app: <code id="mfa-secret"></code></p>
     <form id="form-mfa-enroll">
@@ -334,7 +334,7 @@
     <div id="secao-planos" style="display:none;">
       <div class="cartao-lista" style="padding:20px 24px;">
         <h3 style="margin-top:0;">Planos e recursos</h3>
-        <p class="nota-equipe">Esta é a tabela única de regras. Vale na hora para todas as contas do plano: o banco bloqueia o que passar do limite. Campo vazio = sem limite (nos recursos, vazio = limite padrão da ferramenta). A linha "Teste grátis" limita quem está nos 14 dias: vale o menor valor entre o plano escolhido e ela.</p>
+        <p class="nota-equipe">Esta é a tabela única de regras. Vale na hora para todas as contas do plano: o sistema bloqueia o que passar do limite. Campo vazio = sem limite (nos recursos, vazio = limite padrão da ferramenta). A linha "Teste grátis" limita quem está nos 14 dias: vale o menor valor entre o plano escolhido e ela.</p>
         <div class="tabela-rolavel" id="conteudo-planos"><div class="carregando">Carregando planos...</div></div>
         <div id="resultado-planos" role="status" style="margin-top:12px;"></div>
       </div>
@@ -349,7 +349,7 @@
     <div id="secao-financeiro" style="display:none;">
       <div class="cartao-lista" style="padding:20px 24px;margin-bottom:20px;">
         <h3 style="margin-top:0;">Registrar cobrança</h3>
-        <p class="nota-equipe">Nenhuma cobrança é enviada daqui e não há integração de pagamento ligada. Registre o Pix que caiu na sua conta: com "Já recebido" marcado, a assinatura fica ativa e o próximo vencimento é calculado (1 mês ou 1 ano). Os pontos de ligação para Asaas ou Pix pelo banco estão em _historico/arquitetura-planos-admin-20261119.md.</p>
+        <p class="nota-equipe">Nenhuma cobrança é enviada daqui e não há integração de pagamento ligada. Registre o Pix que caiu na sua conta: com "Já recebido" marcado, a assinatura fica ativa e o próximo vencimento é calculado (1 mês ou 1 ano).</p>
         <form id="form-pagamento" class="form-equipe grade-form">
           <div><label for="pag-conta">Conta</label><select id="pag-conta" required></select></div>
           <div><label for="pag-plano">Plano</label><select id="pag-plano"></select></div>
@@ -378,7 +378,7 @@
       <div class="cartao-lista" style="padding:24px;">
         <h3 style="margin-top:0;">Adicionar novo membro</h3>
         <div class="nota-equipe">
-          A pessoa adicionada aqui precisa já ter uma conta criada no Supabase Auth (cadastro próprio, por exemplo pelo cadastro.html, ou convite manual). Este formulário só libera o acesso administrativo pra um e-mail que já tem conta — ele não cria a conta.
+          A pessoa precisa já ter uma conta no LicitaPlena (feita pela página de cadastro). Este formulário só libera o acesso administrativo para um e-mail que já tem conta; ele não cria a conta.
         </div>
         <form id="form-add-membro" class="form-equipe">
           <label>E-mail</label>
@@ -399,7 +399,7 @@
     <div id="secao-acessos" style="display:none;">
       <div class="cartao-lista" style="padding:24px;margin-bottom:20px;">
         <h3 style="margin-top:0;">Convidar pessoa para uma empresa</h3>
-        <p class="nota-equipe">A pessoa verá somente a empresa escolhida na Central Operacional, no acompanhamento e no Kanban. Ela cria a própria senha pelo link do convite. Não recebe acesso administrativo.</p>
+        <p class="nota-equipe">A pessoa verá somente a empresa escolhida em Minhas empresas e documentos, nos Processos e no Funil. Ela cria a própria senha pelo link do convite. Não recebe acesso administrativo.</p>
         <form id="form-convite-empresa" class="form-equipe">
           <label for="convite-nome">Nome</label><input id="convite-nome" type="text" required maxlength="120" autocomplete="name">
           <label for="convite-email">E-mail da pessoa</label><input id="convite-email" type="email" required autocomplete="email">
@@ -881,7 +881,7 @@
   });
 
   document.getElementById("btn-mfa-config").addEventListener("click", async () => {
-    const confirmar = window.confirm("Isso desativa a autenticação em duas etapas atual e pede pra você configurar de novo (ex: se trocou de celular). Continuar?");
+    const confirmar = window.confirm("Isso desativa a autenticação em duas etapas atual e pede para você configurar de novo (ex: se trocou de celular). Continuar?");
     if (!confirmar) return;
     const { data: fatoresData } = await sb.auth.mfa.listFactors();
     const fatores = (fatoresData && fatoresData.totp) || [];
@@ -956,7 +956,7 @@
     document.getElementById("conteudo-lista").innerHTML = '<div class="carregando">Carregando clientes...</div>';
     const { data, error } = await sb.rpc("admin_listar_contas");
     if (error) {
-      document.getElementById("conteudo-lista").innerHTML = '<div class="vazio">Erro ao carregar: ' + escapeHtml(error.message) + '. Confira se supabase/planos_e_recursos.sql foi aplicado.</div>';
+      document.getElementById("conteudo-lista").innerHTML = '<div class="vazio">Erro ao carregar: ' + escapeHtml(error.message) + '. Tente de novo em instantes.</div>';
       return;
     }
     todosClientes = data || [];
@@ -1295,7 +1295,7 @@
     ]);
     const erro = empresas.error || acessos.error || convites.error;
     if (erro) {
-      document.getElementById("lista-acessos-empresa").textContent = "Acessos indisponíveis. Confira a migração de convites no Supabase: " + erro.message;
+      document.getElementById("lista-acessos-empresa").textContent = "Acessos indisponíveis agora. Tente de novo em instantes. (" + erro.message + ")";
       document.getElementById("lista-convites-empresa").textContent = "Convites indisponíveis.";
       return;
     }
