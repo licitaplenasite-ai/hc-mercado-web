@@ -1,6 +1,7 @@
 -- Teste de planos_e_recursos.sql: regras automáticas de plano como asserts. Dados fictícios e rollback.
 -- Papéis simulados com "set local role" + request.jwt.claim.sub / request.jwt.claims (aal2 do admin).
--- E empresa (1 CNPJ), A assessoria em teste (até 3), V teste vencido (Grátis), M membro de A, D dono (owner), X outra org.
+-- E empresa (1 CNPJ), A assessoria em teste (até 3), V teste vencido (só boletim) e depois Essencial, M membro de A,
+-- D dono (owner), X outra org. 21/11: cota de IA mensal por CNPJ, troca para IA barata, teto de abuso e extras.
 begin;
 insert into auth.users(id,email) values
  ('e2000000-0000-4000-8000-000000000001','pl-e@qa.invalid'),('e2000000-0000-4000-8000-000000000002','pl-a@qa.invalid'),
@@ -9,7 +10,7 @@ insert into auth.users(id,email) values
 insert into public.admins(email,nome,role) values ('pl-d@qa.invalid','QA dono','owner');
 insert into public.clientes(id,nome,email,status,plano) values
  ('e2000000-0000-4000-8000-000000000001','QA E','pl-e@qa.invalid','aprovado','empresa'),
- ('e2000000-0000-4000-8000-000000000002','QA A','pl-a@qa.invalid','aprovado',null),
+ ('e2000000-0000-4000-8000-000000000002','QA A','pl-a@qa.invalid','aprovado','assessoria'),
  ('e2000000-0000-4000-8000-000000000003','QA V','pl-v@qa.invalid','aprovado','empresa'),
  ('e2000000-0000-4000-8000-000000000004','QA M','pl-m@qa.invalid','aprovado',null),
  ('e2000000-0000-4000-8000-000000000005','QA D','pl-d@qa.invalid','aprovado',null),
@@ -27,11 +28,12 @@ insert into public.operacao_membros(organizacao_id,usuario_id,papel) values
 
 do $$
 declare e uuid:='e2000000-0000-4000-8000-00000000000e'; a uuid:='e2000000-0000-4000-8000-00000000000a';
- vo uuid:='e2000000-0000-4000-8000-00000000000b'; d uuid:='e2000000-0000-4000-8000-00000000000d'; v jsonb; n int;
+ vo uuid:='e2000000-0000-4000-8000-00000000000b'; d uuid:='e2000000-0000-4000-8000-00000000000d'; v jsonb; n int; f text;
 begin
- -- Cadastro cria a assinatura: E escolheu Empresa; A sem escolha vira Assessoria; pendente X fica sem prazo.
+ -- Cadastro cria a assinatura: E escolheu Empresa; A escolheu Assessoria; M sem escolha testa a Assessoria; pendente X sem prazo.
  if (select plano||'/'||situacao from public.assinaturas where usuario_id='e2000000-0000-4000-8000-000000000001')<>'empresa/teste' then raise exception 'assinatura de E'; end if;
  if (select plano from public.assinaturas where usuario_id='e2000000-0000-4000-8000-000000000002')<>'assessoria' then raise exception 'assinatura de A'; end if;
+ if (select plano from public.assinaturas where usuario_id='e2000000-0000-4000-8000-000000000004')<>'assessoria' then raise exception 'teste sem escolha não é Assessoria'; end if;
  if (select teste_ate from public.assinaturas where usuario_id='e2000000-0000-4000-8000-000000000006') is not null then raise exception 'teste de pendente começou'; end if;
  if (select teste_ate from public.assinaturas where usuario_id='e2000000-0000-4000-8000-000000000001') < now()+interval '13 days' then raise exception 'teste de 14 dias'; end if;
  -- Empresa: 1 CNPJ (o 2º falha); em teste com Empresa continua 1.
@@ -44,27 +46,47 @@ begin
  exception when raise_exception then if sqlerrm not like 'Limite de 3 CNPJs%' then raise; end if; end;
  -- Dono: sem limite.
  insert into public.operacao_empresas(organizacao_id,razao_social) select d,'QA D'||g from generate_series(1,12) g;
- -- Teste vencido cai no Grátis: 3 processos ativos, IA 3/dia, sem análise por CNPJ.
- update public.assinaturas set teste_ate=now()-interval '1 day' where usuario_id='e2000000-0000-4000-8000-000000000003';
- v := public.plano_efetivo_titular('e2000000-0000-4000-8000-000000000003');
- if v->>'plano'<>'gratis' or (v->>'max_processos')::int<>3 then raise exception 'teste vencido não virou Grátis: %',v; end if;
+ -- Durante o teste V salva empresa e processos; o teste vence: só boletim, nada apagado, nenhuma ferramenta.
  insert into public.operacao_empresas(id,organizacao_id,razao_social) values ('e2000000-0000-4000-8000-0000000000b1',vo,'QA V1');
  insert into public.operacao_processos(organizacao_id,empresa_id,objeto) select vo,'e2000000-0000-4000-8000-0000000000b1','QA p'||g from generate_series(1,3) g;
- begin insert into public.operacao_processos(organizacao_id,empresa_id,objeto) values (vo,'e2000000-0000-4000-8000-0000000000b1','QA p4'); raise exception 'Grátis passou de 3 processos';
- exception when raise_exception then if sqlerrm not like 'Limite de 3 processos%' then raise; end if; end;
  update public.operacao_processos set status='arquivado' where organizacao_id=vo and objeto='QA p1';
- insert into public.operacao_processos(organizacao_id,empresa_id,objeto) values (vo,'e2000000-0000-4000-8000-0000000000b1','QA p4');
- begin update public.operacao_processos set status='triagem' where organizacao_id=vo and objeto='QA p1'; raise exception 'desarquivar passou do limite';
- exception when raise_exception then if sqlerrm not like 'Limite de 3 processos%' then raise; end if; end;
- v := public.consumir_uso_plano('e2000000-0000-4000-8000-000000000003','analise-cnpj',10);
- if (v->>'permitido')::boolean or v->>'motivo'<>'plano' then raise exception 'Grátis usou análise por CNPJ: %',v; end if;
- for n in 1..3 loop v := public.consumir_uso_plano('e2000000-0000-4000-8000-000000000003','ia-edital',40); end loop;
- if not (v->>'permitido')::boolean or (v->>'limite')::int<>3 then raise exception 'IA do Grátis: %',v; end if;
- v := public.consumir_uso_plano('e2000000-0000-4000-8000-000000000003','ia-edital',40);
- if (v->>'permitido')::boolean then raise exception 'Grátis passou de 3 IA/dia'; end if;
- -- O limite do plano soma as rotas do recurso: fornecedor-ia não ganha cota própria.
+ update public.assinaturas set teste_ate=now()-interval '1 day' where usuario_id='e2000000-0000-4000-8000-000000000003';
+ v := public.plano_efetivo_titular('e2000000-0000-4000-8000-000000000003');
+ if v->>'plano'<>'gratis' or not (v->>'bloqueado')::boolean or (v->>'max_processos')::int<>0 then raise exception 'teste vencido não travou: %',v; end if;
+ if (select count(*) from public.operacao_processos where organizacao_id=vo)<>3 then raise exception 'teste vencido apagou processos'; end if;
+ begin insert into public.operacao_processos(organizacao_id,empresa_id,objeto) values (vo,'e2000000-0000-4000-8000-0000000000b1','QA p4'); raise exception 'teste vencido criou processo';
+ exception when raise_exception then if sqlerrm not like 'Limite de 0 processos%' then raise; end if; end;
+ begin update public.operacao_processos set status='triagem' where organizacao_id=vo and objeto='QA p1'; raise exception 'teste vencido desarquivou';
+ exception when raise_exception then if sqlerrm not like 'Limite de 0 processos%' then raise; end if; end;
+ foreach f in array array['ia-edital','chat-ia','analise-cnpj','kit-documentos','sancoes','pregao-gravado-leitura'] loop
+  v := public.consumir_uso_plano('e2000000-0000-4000-8000-000000000003',f,40);
+  if (v->>'permitido')::boolean or v->>'motivo'<>'assinatura' then raise exception 'teste vencido usou %: %',f,v; end if;
+ end loop;
+ v := public.consumir_uso_plano('e2000000-0000-4000-8000-000000000003','enviar_duvida',10);
+ if not (v->>'permitido')::boolean then raise exception 'teste vencido não manda dúvida ao suporte: %',v; end if;
+ -- V assina o Essencial: 15 processos, IA sim; chat, análise por CNPJ, proposta, extensão e licitação anterior não.
+ update public.assinaturas set plano='essencial', situacao='ativa', vence_em=current_date+30 where usuario_id='e2000000-0000-4000-8000-000000000003';
+ v := public.plano_efetivo_titular('e2000000-0000-4000-8000-000000000003');
+ if v->>'plano'<>'essencial' or (v->>'max_processos')::int<>15 or (v->>'max_usuarios')::int<>1 or (v->>'ia_mes')::int<>300 then raise exception 'Essencial: %',v; end if;
+ foreach f in array array['chat-ia','analise-cnpj','kit-documentos','pregao-gravado','licitacao-anterior','proposta-lote'] loop
+  v := public.consumir_uso_plano('e2000000-0000-4000-8000-000000000003',f,40);
+  if (v->>'permitido')::boolean or v->>'motivo'<>'plano' then raise exception 'Essencial usou %: %',f,v; end if;
+ end loop;
+ foreach f in array array['mercado','pesquisa_precos','prospeccao','convenios','licitacao_anterior'] loop
+  if (public.plano_efetivo_titular('e2000000-0000-4000-8000-000000000003')->'recursos'->f->>'permitido')::boolean then raise exception 'Essencial tem %',f; end if;
+ end loop;
+ -- Uso justo por mês: a cota do Essencial (reduzida a 2 só neste teste) acaba e a IA continua, na opção barata.
+ update public.planos set ia_mes_por_cnpj=2 where codigo='essencial';
+ for n in 1..2 loop
+  v := public.consumir_uso_plano('e2000000-0000-4000-8000-000000000003','ia-edital',40);
+  if not (v->>'permitido')::boolean or (v->>'economico')::boolean then raise exception 'IA % dentro da cota: %',n,v; end if;
+ end loop;
  v := public.consumir_uso_plano('e2000000-0000-4000-8000-000000000003','fornecedor-ia',20);
- if (v->>'permitido')::boolean or (v->>'contagem')::int<>5 then raise exception 'fornecedor-ia furou a cota de IA do plano: %',v; end if;
+ if not (v->>'permitido')::boolean or not (v->>'economico')::boolean then raise exception 'passou da cota e não trocou para IA barata: %',v; end if;
+ -- Teto de abuso (100 por pessoa por dia, somando as rotas de IA): aí sim bloqueia.
+ insert into public.uso_diario(usuario_id,funcao,dia,contagem) values ('e2000000-0000-4000-8000-000000000003','monte-busca-ia',current_date,97);
+ v := public.consumir_uso_plano('e2000000-0000-4000-8000-000000000003','ia-edital',40);
+ if (v->>'permitido')::boolean or (v->>'limite')::int<>100 then raise exception 'teto de abuso: %',v; end if;
  -- Teste grátis: 3 análises por CNPJ/dia; busca por nome e cadastro da mesma análise não gastam essa cota.
  for n in 1..3 loop
   v := public.consumir_uso_plano('e2000000-0000-4000-8000-000000000001','analise-cnpj-buscar',100);
@@ -81,7 +103,20 @@ begin
  v := public.consumir_uso_plano('e2000000-0000-4000-8000-000000000004','sancoes',100);
  if not (v->>'permitido')::boolean or (v->>'limite')::int<>100 then raise exception 'rota sem recurso: %',v; end if;
  v := public.consumir_uso_plano('e2000000-0000-4000-8000-000000000004','ia-edital',40);
- if (v->>'limite')::int<>15 then raise exception 'membro não herdou o teste do titular: %',v; end if;
+ if (v->>'limite')::int<>100 or v->>'plano'<>'Assessoria' then raise exception 'membro não herdou o teste do titular: %',v; end if;
+ -- Cota mensal é da organização (CNPJs somados): uso do membro M entra na conta do titular A.
+ n := public.uso_ia_mes_titular('e2000000-0000-4000-8000-000000000002');
+ v := public.consumir_uso_plano('e2000000-0000-4000-8000-000000000004','chat-ia',15);
+ if public.uso_ia_mes_titular('e2000000-0000-4000-8000-000000000002')<>n+1 then raise exception 'uso do membro fora da cota da organização'; end if;
+ if (public.plano_efetivo_titular('e2000000-0000-4000-8000-000000000002')->>'ia_mes')::int<>2400 then raise exception 'Assessoria em teste: 800 x 3 CNPJs'; end if;
+ update public.planos set ia_mes_por_cnpj=0 where codigo='assessoria';
+ v := public.consumir_uso_plano('e2000000-0000-4000-8000-000000000004','ia-edital',40);
+ if not (v->>'economico')::boolean then raise exception 'organização passou da cota e não trocou: %',v; end if;
+ -- Lance assistido é extra: nem o Empresa nem o teste têm. Ler o pregão continua no Empresa.
+ v := public.consumir_uso_plano('e2000000-0000-4000-8000-000000000001','proposta-lote',300);
+ if (v->>'permitido')::boolean or v->>'recurso'<>'lance_assistido' then raise exception 'lance sem o extra: %',v; end if;
+ v := public.consumir_uso_plano('e2000000-0000-4000-8000-000000000001','pregao-gravado-leitura',300);
+ if not (v->>'permitido')::boolean then raise exception 'ler o pregão saiu do Empresa: %',v; end if;
 end $$;
 
 -- Usuário comum: não muda plano, não chama admin, não vê plano de outra organização, não grava 2º CNPJ por API.
@@ -106,6 +141,13 @@ begin
  if public.organizacao_pode('e2000000-0000-4000-8000-00000000000a','ia') then raise exception 'organizacao_pode respondeu para outra org'; end if;
  v := public.meu_plano();
  if v->>'plano'<>'empresa' or (v->>'max_cnpjs')::int<>1 or (v->'uso'->>'cnpjs')::int<>1 then raise exception 'meu_plano de E: %',v; end if;
+ if v ? 'ia_mes' then raise exception 'cliente vê a cota de IA: %',v; end if;
+ if not public.eu_posso('prospeccao') then raise exception 'Empresa em teste sem Prospecção'; end if;
+ perform set_config('request.jwt.claim.sub','e2000000-0000-4000-8000-000000000003',true);
+ if public.eu_posso('prospeccao') then raise exception 'Essencial lê Prospecção'; end if;
+ begin update public.assinaturas set extras='{lance_assistido}' where usuario_id='e2000000-0000-4000-8000-000000000003'; raise exception 'cliente ligou extra';
+ exception when insufficient_privilege then null; end;
+ perform set_config('request.jwt.claim.sub',e::text,true);
  if (select count(*) from public.assinaturas)<>1 then raise exception 'cliente vê assinatura de outro'; end if;
  perform public.solicitar_plano('assessoria');
  if (select plano_solicitado from public.assinaturas)<>'assessoria' then raise exception 'pedido de plano'; end if;
@@ -138,7 +180,7 @@ begin
  exception when raise_exception then if sqlerrm not like 'A conta tem 2 usuários%' then raise; end if; end;
  if jsonb_array_length(public.admin_historico_assinatura(a))<2 then raise exception 'histórico não registrou'; end if;
  v := public.admin_registrar_pagamento(a,'{"ciclo":"mensal","pago":true}');
- if (select situacao||'/'||valor_centavos from public.pagamentos where usuario_id=a)<>'pago/29900' then raise exception 'pagamento manual'; end if;
+ if (select situacao||'/'||valor_centavos from public.pagamentos where usuario_id=a)<>'pago/69700' then raise exception 'pagamento manual'; end if;
  g := (v->>'pagamento')::uuid;
  if (public.admin_atualizar_pagamento(g,'pago')->>'ja_aplicado')::boolean is not true then raise exception 'pagamento aplicado duas vezes'; end if;
  if (select vence_em from public.assinaturas where usuario_id=a)<>(current_date+interval '1 month')::date then raise exception 'vencimento após pagamento'; end if;
@@ -149,6 +191,20 @@ begin
  if (public.admin_resumo()->>'pendentes')::int<1 then raise exception 'resumo sem pendente'; end if;
 end $$;
 reset role;
+-- Fora do papel authenticated (para ler plano_efetivo_titular), com o dono ainda nas claims (aal2).
+do $$
+declare a uuid:='e2000000-0000-4000-8000-000000000002';
+begin
+ -- Extras ligados pelo admin: Lance assistido libera o preenchimento; IA extra só no mês dela; extra inválido não entra.
+ perform public.admin_definir_assinatura('e2000000-0000-4000-8000-000000000001','{"extras":["lance_assistido"]}');
+ if not (public.plano_efetivo_titular('e2000000-0000-4000-8000-000000000001')->'recursos'->'lance_assistido'->>'permitido')::boolean then raise exception 'extra Lance não ligou'; end if;
+ begin perform public.admin_definir_assinatura('e2000000-0000-4000-8000-000000000001','{"extras":["robo_magico"]}'); raise exception 'extra inválido entrou';
+ exception when check_violation then null; end;
+ perform public.admin_definir_assinatura(a,jsonb_build_object('ia_extra_usos',1000,'ia_extra_mes',current_date));
+ if (public.plano_efetivo_titular(a)->>'ia_mes')::int<>1000 then raise exception 'IA extra do mês: %',public.plano_efetivo_titular(a); end if;
+ perform public.admin_definir_assinatura(a,jsonb_build_object('ia_extra_mes',(current_date-interval '1 month')::date));
+ if (public.plano_efetivo_titular(a)->>'ia_mes')::int<>0 then raise exception 'IA extra de outro mês ainda vale'; end if;
+end $$;
 do $$
 begin
  begin insert into public.operacao_membros(organizacao_id,usuario_id,papel) values ('e2000000-0000-4000-8000-00000000000a','e2000000-0000-4000-8000-000000000006','leitura'); raise exception 'passou do limite de usuários';

@@ -1,5 +1,7 @@
--- LicitaPlena: planos com regras automáticas (Grátis, Teste, Empresa, Assessoria, Dono), assinaturas,
--- pagamentos (preparado, sem integração) e funções do painel de administração.
+-- LicitaPlena: planos com regras automáticas (Teste encerrado, Teste, Essencial, Empresa, Assessoria, Dono), assinaturas,
+-- extras, pagamentos (preparado, sem integração) e funções do painel de administração.
+-- 21/11/2026 (_historico/PLANOS-E-CUSTOS-20261121.html): fim do Grátis para sempre (teste vencido = só boletim), plano
+-- Essencial, preços novos, IA com uso justo por mês e por CNPJ (passou da cota = IA mais barata) e extras por assinatura.
 -- Arquitetura: _historico/arquitetura-planos-admin-20261119.md. Teste: supabase/testar_planos.sql.
 -- Idempotente: seguro rodar mais de uma vez no SQL Editor. Não apaga dados; não mexe em empresas, processos,
 -- documentos nem membros. Rodar DEPOIS de seguranca_aprovacao_20261119.sql. Se limite_cnpjs_operacao.sql ou
@@ -21,6 +23,7 @@ create table if not exists public.planos (
   preco_mensal_centavos integer check (preco_mensal_centavos is null or preco_mensal_centavos >= 0),
   preco_anual_centavos integer check (preco_anual_centavos is null or preco_anual_centavos >= 0),
   dias_teste integer check (dias_teste is null or dias_teste between 1 and 90),
+  ia_mes_por_cnpj integer check (ia_mes_por_cnpj is null or ia_mes_por_cnpj >= 0), -- uso justo de IA por mês; vazio = sem cota
   escolhivel_no_cadastro boolean not null default false,
   ordem integer not null default 0,
   ativo boolean not null default true,
@@ -50,33 +53,70 @@ create policy recursos_plano_select_publico on public.recursos_plano for select 
 drop policy if exists plano_recursos_select_publico on public.plano_recursos;
 create policy plano_recursos_select_publico on public.plano_recursos for select to anon, authenticated using (true);
 
--- Valores iniciais da proposta (pente-fino-cobranca-concorrentes-20261119.md, 4.1 e 4.2). "do nothing": o que o dono
--- editar depois não volta ao padrão quando este arquivo roda de novo.
-insert into public.planos (codigo, nome, descricao, max_cnpjs, max_usuarios, max_processos, preco_mensal_centavos, preco_anual_centavos, dias_teste, escolhivel_no_cadastro, ordem) values
-  ('gratis', 'Grátis', 'Busca e boletim de 1 CNPJ, 3 processos no CRM, sem proposta nem análise por CNPJ.', 1, 1, 3, 0, null, null, false, 1),
-  ('teste', 'Teste grátis', '14 dias sem cartão. Vale o menor limite entre o plano escolhido e esta linha.', 3, 5, null, 0, null, 14, false, 2),
-  ('empresa', 'Empresa', 'Para a empresa que licita: 1 CNPJ e 3 usuários.', 1, 3, null, 14900, 149000, null, true, 3),
-  ('assessoria', 'Assessoria', 'Para assessorias e consultores: até 10 CNPJs e 5 usuários.', 10, 5, null, 29900, 299000, null, true, 4),
-  ('dono', 'Dono (ilimitado)', 'Conta do proprietário do LicitaPlena.', null, null, null, null, null, null, false, 9)
+-- Banco que já tinha os planos de 19/11 (sem a linha Essencial): aplica uma vez os valores aprovados em 21/11. Depois
+-- disso o que o dono editar no admin não volta ao padrão quando este arquivo roda de novo.
+alter table public.planos add column if not exists ia_mes_por_cnpj integer check (ia_mes_por_cnpj is null or ia_mes_por_cnpj >= 0);
+do $$
+begin
+  if exists (select 1 from public.planos) and not exists (select 1 from public.planos where codigo = 'essencial') then
+    update public.planos set nome = 'Teste encerrado', max_processos = 0, ia_mes_por_cnpj = 0,
+      descricao = 'O teste de 14 dias terminou sem assinatura: só o boletim por e-mail continua. Os dados ficam guardados.' where codigo = 'gratis';
+    update public.planos set descricao = '14 dias sem cartão, com tudo do plano Empresa. Vale o menor limite entre o plano escolhido e esta linha.' where codigo = 'teste';
+    update public.planos set preco_mensal_centavos = 24900, preco_anual_centavos = 249000, ia_mes_por_cnpj = 1000, ordem = 4,
+      descricao = 'Para a empresa que licita: 1 CNPJ, 3 pessoas e tudo liberado. Lance assistido é extra.' where codigo = 'empresa';
+    update public.planos set preco_mensal_centavos = 69700, preco_anual_centavos = 697000, max_cnpjs = 3, max_usuarios = 6, ia_mes_por_cnpj = 800, ordem = 5,
+      descricao = 'Para assessorias: 3 CNPJs e 6 pessoas, com tudo do Empresa para cada CNPJ. CNPJ extra: R$ 199 por mês.' where codigo = 'assessoria';
+    -- Teste encerrado não usa nenhuma ferramenta; no teste e nos planos pagos a IA passa a ter só o teto diário de abuso.
+    update public.plano_recursos set permitido = false, limite_diario = null where plano = 'gratis';
+    update public.plano_recursos set limite_diario = null where plano = 'teste' and recurso = 'ia';
+    update public.plano_recursos set limite_diario = 100 where plano in ('empresa', 'assessoria') and recurso = 'ia' and limite_diario is null;
+  end if;
+end $$;
+
+-- Valores iniciais (instalação nova). "do nothing": o que o dono editar depois não volta ao padrão.
+-- Anual = 10 vezes o mensal (2 meses grátis). Preço de fundador (30% por 12 meses) = valor_centavos da assinatura.
+insert into public.planos (codigo, nome, descricao, max_cnpjs, max_usuarios, max_processos, preco_mensal_centavos, preco_anual_centavos, dias_teste, escolhivel_no_cadastro, ordem, ia_mes_por_cnpj) values
+  ('gratis', 'Teste encerrado', 'O teste de 14 dias terminou sem assinatura: só o boletim por e-mail continua. Os dados ficam guardados.', 1, 1, 0, 0, null, null, false, 1, 0),
+  ('teste', 'Teste grátis', '14 dias sem cartão, com tudo do plano Empresa. Vale o menor limite entre o plano escolhido e esta linha.', 3, 5, null, 0, null, 14, false, 2, null),
+  ('essencial', 'Essencial', 'Para começar: 1 CNPJ, 1 pessoa e até 15 processos. Resumo e Pergunte ao Edital, empresas e documentos, agenda, Jurídico, SINAPI, BDI e Mão de obra.', 1, 1, 15, 12700, 127000, null, true, 3, 300),
+  ('empresa', 'Empresa', 'Para a empresa que licita: 1 CNPJ, 3 pessoas e tudo liberado. Lance assistido é extra.', 1, 3, null, 24900, 249000, null, true, 4, 1000),
+  ('assessoria', 'Assessoria', 'Para assessorias: 3 CNPJs e 6 pessoas, com tudo do Empresa para cada CNPJ. CNPJ extra: R$ 199 por mês.', 3, 6, null, 69700, 697000, null, true, 5, 800),
+  ('dono', 'Dono (ilimitado)', 'Conta do proprietário do LicitaPlena.', null, null, null, null, null, null, false, 9, null)
 on conflict (codigo) do nothing;
+-- Recursos sem rota /api (funcoes vazio) valem pela tela e, onde dá, pela RLS (Prospecção, seção 4).
 insert into public.recursos_plano (codigo, nome, funcoes) values
   ('ia', 'Inteligência artificial (resumo, busca e fornecedor com IA)', array['ia-edital', 'monte-busca-ia', 'fornecedor-ia']),
+  ('chat_ia', 'Chat com IA', array['chat-ia']),
   ('analise_cnpj', 'Análise por CNPJ (concorrente)', array['analise-cnpj', 'analise-cnpj-buscar', 'analise-cnpj-cadastro']),
   ('proposta', 'Proposta e declarações', array['kit-documentos']),
-  ('robo_lances', 'Extensão do Compras.gov e robô de lances', array['pregao-gravado', 'pregao-gravado-leitura', 'proposta-lote']),
-  ('licitacao_anterior', 'Licitação anterior do órgão', array['licitacao-anterior', 'licitacao-anterior-orgaos'])
+  ('robo_lances', 'Extensão do Compras.gov (ler o pregão)', array['pregao-gravado', 'pregao-gravado-leitura']),
+  ('lance_assistido', 'Lance assistido (extra)', array['proposta-lote']),
+  ('pacote_operacao', 'Pacote Operação (extra: monitor do chat)', '{}'),
+  ('licitacao_anterior', 'Licitação anterior do órgão', array['licitacao-anterior', 'licitacao-anterior-orgaos']),
+  ('pesquisa_precos', 'Pesquisa de Preços', '{}'),
+  ('mercado', 'Inteligência de Mercado e Marcas', '{}'),
+  ('prospeccao', 'Prospecção', '{}'),
+  ('convenios', 'Convênios e Emendas', '{}')
 on conflict (codigo) do nothing;
-insert into public.plano_recursos (plano, recurso, permitido, limite_diario) values
-  ('gratis', 'ia', true, 3), ('gratis', 'analise_cnpj', false, null), ('gratis', 'proposta', false, null),
-  ('gratis', 'robo_lances', false, null), ('gratis', 'licitacao_anterior', true, 2),
-  ('teste', 'ia', true, 15), ('teste', 'analise_cnpj', true, 3), ('teste', 'proposta', true, null),
-  ('teste', 'robo_lances', true, null), ('teste', 'licitacao_anterior', true, null),
-  ('empresa', 'ia', true, null), ('empresa', 'analise_cnpj', true, null), ('empresa', 'proposta', true, null),
-  ('empresa', 'robo_lances', true, null), ('empresa', 'licitacao_anterior', true, null),
-  ('assessoria', 'ia', true, null), ('assessoria', 'analise_cnpj', true, null), ('assessoria', 'proposta', true, null),
-  ('assessoria', 'robo_lances', true, null), ('assessoria', 'licitacao_anterior', true, null),
-  ('dono', 'ia', true, null), ('dono', 'analise_cnpj', true, null), ('dono', 'proposta', true, null),
-  ('dono', 'robo_lances', true, null), ('dono', 'licitacao_anterior', true, null)
+-- O preenchimento da proposta pela extensão ("Lance") virou extra pago à parte; ler o pregão continua nos planos.
+update public.recursos_plano set nome = 'Extensão do Compras.gov (ler o pregão)', funcoes = array_remove(funcoes, 'proposta-lote')
+  where codigo = 'robo_lances' and 'proposta-lote' = any (funcoes);
+-- limite_diario da IA = teto de abuso por pessoa por dia, alto e invisível no uso normal (a cota de verdade é mensal).
+insert into public.plano_recursos (plano, recurso, permitido, limite_diario)
+select p.plano, r.recurso,
+  case
+    when p.plano = 'gratis' then false
+    when p.plano = 'dono' then true
+    when r.recurso in ('lance_assistido', 'pacote_operacao') then false   -- só como extra da assinatura
+    when p.plano = 'essencial' then r.recurso = 'ia'
+    else true end,
+  case
+    when p.plano = 'teste' and r.recurso = 'analise_cnpj' then 3          -- análise por CNPJ no teste: 3 por dia
+    when p.plano in ('essencial', 'empresa', 'assessoria') and r.recurso in ('ia', 'chat_ia') then 100 end
+from (values ('gratis'), ('teste'), ('essencial'), ('empresa'), ('assessoria'), ('dono')) p(plano)
+cross join (values ('ia'), ('chat_ia'), ('analise_cnpj'), ('proposta'), ('robo_lances'), ('lance_assistido'), ('pacote_operacao'),
+  ('licitacao_anterior'), ('pesquisa_precos'), ('mercado'), ('prospeccao'), ('convenios')) r(recurso)
+where exists (select 1 from public.planos where codigo = p.plano)
 on conflict (plano, recurso) do nothing;
 
 -- ---------------------------------------------------------------------------------------------------------------
@@ -105,6 +145,13 @@ create table if not exists public.assinaturas (
   atualizado_em timestamptz not null default now(),
   atualizado_por text
 );
+-- Extras contratados à parte (o admin liga na assinatura): Lance assistido e Pacote Operação. IA extra = usos a mais
+-- só no mês de ia_extra_mes (1º dia do mês); no mês seguinte some sozinho, sem rotina para zerar.
+alter table public.assinaturas add column if not exists extras text[] not null default '{}';
+alter table public.assinaturas add column if not exists ia_extra_usos integer check (ia_extra_usos is null or ia_extra_usos >= 0);
+alter table public.assinaturas add column if not exists ia_extra_mes date;
+alter table public.assinaturas drop constraint if exists assinaturas_extras_validos;
+alter table public.assinaturas add constraint assinaturas_extras_validos check (extras <@ array['lance_assistido', 'pacote_operacao']::text[]);
 create table if not exists public.pagamentos (
   id uuid primary key default gen_random_uuid(),
   usuario_id uuid references public.clientes(id) on delete set null,   -- registro fiscal fica mesmo se a conta sair
@@ -171,7 +218,7 @@ language plpgsql stable security definer set search_path = public as $$
 declare
   a public.assinaturas%rowtype; p public.planos%rowtype; t public.planos%rowtype;
   v_tem boolean := false; v_contratado text; v_efetivo text; v_teste boolean := false; v_situacao text;
-  v_max_c integer; v_max_u integer; v_max_p integer; v_rec jsonb;
+  v_max_c integer; v_max_u integer; v_max_p integer; v_rec jsonb; v_ia_cnpj integer; v_ia_mes integer;
 begin
   if p_titular is not null and public.eh_owner_admin_operacao(p_titular) then
     v_contratado := 'dono'; v_efetivo := 'dono'; v_situacao := 'ativa';
@@ -183,7 +230,8 @@ begin
       v_contratado := 'teste'; v_efetivo := 'teste'; v_situacao := 'sem_assinatura';
     else
       v_contratado := a.plano; v_situacao := a.situacao;
-      -- Vencimento com 5 dias de tolerância; teste vencido, vencida, suspensa e cancelada caem para o Grátis.
+      -- Vencimento com 5 dias de tolerância; teste vencido, vencida, suspensa e cancelada caem para "Teste encerrado"
+      -- (código gratis): só o boletim por e-mail continua; nada é apagado.
       v_efetivo := case
         when a.situacao = 'ativa' and (a.vence_em is null or a.vence_em + 5 >= current_date) then a.plano
         when a.situacao = 'teste' and (a.teste_ate is null or a.teste_ate > now()) then a.plano
@@ -193,18 +241,27 @@ begin
   end if;
   select * into p from public.planos where codigo = v_efetivo;
   if not found then v_efetivo := 'gratis'; v_teste := false; select * into p from public.planos where codigo = 'gratis'; end if;
-  v_max_c := p.max_cnpjs; v_max_u := p.max_usuarios; v_max_p := p.max_processos;
+  v_max_c := p.max_cnpjs; v_max_u := p.max_usuarios; v_max_p := p.max_processos; v_ia_cnpj := p.ia_mes_por_cnpj;
   if v_teste then
     -- least() ignora vazio (sem limite): vale o menor entre o plano escolhido e a linha Teste.
     select * into t from public.planos where codigo = 'teste';
     v_max_c := least(v_max_c, t.max_cnpjs); v_max_u := least(v_max_u, t.max_usuarios); v_max_p := least(v_max_p, t.max_processos);
+    v_ia_cnpj := least(v_ia_cnpj, t.ia_mes_por_cnpj);
   end if;
   if v_tem and v_efetivo = a.plano then
     v_max_c := coalesce(a.max_cnpjs, v_max_c); v_max_u := coalesce(a.max_usuarios, v_max_u); v_max_p := coalesce(a.max_processos, v_max_p);
   end if;
+  -- Uso justo de IA do mês: por CNPJ e somado (Assessoria 800 x 3; o CNPJ extra é o ajuste max_cnpjs e soma mais 800),
+  -- mais a IA extra do mês corrente. Vazio = sem cota (Dono).
+  v_ia_mes := v_ia_cnpj * greatest(coalesce(v_max_c, 1), 1);
+  if v_ia_mes is not null and v_tem and v_efetivo = a.plano and a.ia_extra_mes = date_trunc('month', current_date)::date then
+    v_ia_mes := v_ia_mes + coalesce(a.ia_extra_usos, 0);
+  end if;
   select coalesce(jsonb_object_agg(r.codigo, jsonb_build_object(
       'nome', r.nome,
-      'permitido', v_efetivo = 'dono' or (coalesce(pr.permitido, false) and (not v_teste or coalesce(tr.permitido, false))),
+      'permitido', v_efetivo = 'dono' or (coalesce(pr.permitido, false) and (not v_teste or coalesce(tr.permitido, false)))
+        -- Extra ligado na assinatura (Lance assistido, Pacote Operação) vale em qualquer plano, menos no teste encerrado.
+        or (v_tem and v_efetivo <> 'gratis' and coalesce(r.codigo = any (a.extras), false)),
       'limite_diario', case when v_teste then least(pr.limite_diario, tr.limite_diario) else pr.limite_diario end)), '{}'::jsonb)
     into v_rec
     from public.recursos_plano r
@@ -213,9 +270,22 @@ begin
   return jsonb_build_object('plano', v_efetivo, 'nome', p.nome, 'plano_contratado', v_contratado,
     'nome_contratado', (select nome from public.planos where codigo = v_contratado),
     'situacao', v_situacao, 'em_teste', v_teste, 'teste_ate', a.teste_ate, 'vence_em', a.vence_em,
-    'plano_solicitado', a.plano_solicitado,
-    'max_cnpjs', v_max_c, 'max_usuarios', v_max_u, 'max_processos', v_max_p, 'recursos', v_rec);
+    'plano_solicitado', a.plano_solicitado, 'bloqueado', v_efetivo = 'gratis', 'extras', coalesce(to_jsonb(a.extras), '[]'::jsonb),
+    'max_cnpjs', v_max_c, 'max_usuarios', v_max_u, 'max_processos', v_max_p, 'ia_mes', v_ia_mes, 'recursos', v_rec);
 end $$;
+
+-- IA usada no mês pela organização inteira do titular (ele e todos os membros), em todas as rotas de IA.
+-- shortcut: membro de duas organizações conta nas duas; trocar por organizacao_id em uso_diario se isso virar problema.
+create or replace function public.uso_ia_mes_titular(p_titular uuid) returns integer
+language sql stable security definer set search_path = public as $$
+  select coalesce(sum(u.contagem), 0)::integer from public.uso_diario u
+  where u.dia >= date_trunc('month', current_date)::date
+    and u.funcao = any (select unnest(r.funcoes) from public.recursos_plano r where r.codigo in ('ia', 'chat_ia'))
+    and u.usuario_id in (select p_titular union
+      select m.usuario_id from public.operacao_membros m join public.operacao_organizacoes o on o.id = m.organizacao_id where o.owner_id = p_titular);
+$$;
+revoke all on function public.uso_ia_mes_titular(uuid) from public, anon, authenticated;
+grant execute on function public.uso_ia_mes_titular(uuid) to service_role;
 
 -- Interna: a organização pode usar o recurso, ou cabe mais um CNPJ / usuário / processo?
 create or replace function public.pode_organizacao(p_org uuid, p_o_que text) returns boolean
@@ -244,6 +314,14 @@ language sql stable security definer set search_path = public as $$
   select public.tem_vinculo_operacao(p_org) and public.pode_organizacao(p_org, p_o_que);
 $$;
 
+-- Para RLS de telas sem rota /api (Prospecção): o plano de quem está logado inclui o recurso? Só fala de si mesmo.
+create or replace function public.eu_posso(p_recurso text) returns boolean
+language sql stable security definer set search_path = public as $$
+  select auth.uid() is not null and coalesce((public.plano_efetivo_titular(public.titular_do_usuario(auth.uid())) -> 'recursos' -> p_recurso ->> 'permitido')::boolean, false);
+$$;
+revoke all on function public.eu_posso(text) from public, anon;
+grant execute on function public.eu_posso(text) to authenticated;
+
 revoke all on function public.admin_planos_autorizado(), public.titular_do_usuario(uuid), public.plano_efetivo_titular(uuid),
   public.pode_organizacao(uuid, text), public.organizacao_pode(uuid, text) from public, anon, authenticated;
 grant execute on function public.admin_planos_autorizado(), public.organizacao_pode(uuid, text) to authenticated;
@@ -258,7 +336,8 @@ begin
   v_tit := public.titular_do_usuario(v_usuario);
   v := public.plano_efetivo_titular(v_tit);
   select id into v_org from public.operacao_organizacoes where owner_id = v_tit order by criado_em limit 1;
-  return v || jsonb_build_object('eh_titular', v_tit = v_usuario,
+  -- O cliente não vê número de cota de IA ("uso justo"): ia_mes fica só no servidor e no admin.
+  return (v - 'ia_mes') || jsonb_build_object('eh_titular', v_tit = v_usuario,
     'uso', jsonb_build_object(
       'cnpjs', (select count(*) from public.operacao_empresas where organizacao_id = v_org and ativo),
       'usuarios', (select count(distinct usuario_id) from public.operacao_membros where organizacao_id = v_org),
@@ -266,7 +345,7 @@ begin
       'hoje', (select coalesce(jsonb_object_agg(r.codigo, (select coalesce(sum(u.contagem), 0) from public.uso_diario u
           where u.usuario_id = v_usuario and u.dia = current_date and u.funcao = any (r.funcoes)
             and u.funcao not in ('analise-cnpj-buscar', 'analise-cnpj-cadastro'))), '{}'::jsonb) from public.recursos_plano r)),
-    'planos_disponiveis', (select coalesce(jsonb_agg(jsonb_build_object('codigo', codigo, 'nome', nome, 'max_cnpjs', max_cnpjs,
+    'planos_disponiveis', (select coalesce(jsonb_agg(jsonb_build_object('codigo', codigo, 'nome', nome, 'descricao', descricao, 'max_cnpjs', max_cnpjs,
         'preco_mensal_centavos', preco_mensal_centavos, 'preco_anual_centavos', preco_anual_centavos) order by ordem), '[]'::jsonb)
       from public.planos where ativo and escolhivel_no_cadastro));
 end $$;
@@ -293,14 +372,20 @@ grant execute on function public.solicitar_plano(text) to authenticated;
 -- Rotas /api (verificarLimiteDiario, só chave de serviço): o plano inclui o recurso da rota? Limite do plano ou da rota.
 create or replace function public.consumir_uso_plano(p_usuario_id uuid, p_funcao text, p_limite_padrao integer) returns jsonb
 language plpgsql security definer set search_path = public as $$
-declare v jsonb; v_rec text; v_r jsonb; v_lim integer := p_limite_padrao; n integer;
+declare v jsonb; v_rec text; v_r jsonb; v_lim integer := p_limite_padrao; n integer; v_tit uuid; v_economico boolean := false;
   -- Busca por nome e cadastro da Receita fazem parte da mesma análise por CNPJ: conferem o plano, mas não gastam a
   -- cota do recurso (ficam no limite da própria rota). Senão o Teste grátis (3/dia) só dava 1 CNPJ novo por dia.
   v_aux boolean := p_funcao in ('analise-cnpj-buscar', 'analise-cnpj-cadastro');
 begin
   if p_usuario_id is null or p_funcao is null then raise exception 'Parâmetros inválidos'; end if;
-  v := public.plano_efetivo_titular(public.titular_do_usuario(p_usuario_id));
-  select codigo into v_rec from public.recursos_plano where p_funcao = any (funcoes) order by codigo limit 1;
+  v_tit := public.titular_do_usuario(p_usuario_id);
+  v := public.plano_efetivo_titular(v_tit);
+  -- Teste encerrado: nenhuma ferramenta (o boletim é do robô e não passa por aqui). Dúvida ao suporte continua.
+  if coalesce((v ->> 'bloqueado')::boolean, false) and p_funcao <> 'enviar_duvida' then
+    return jsonb_build_object('permitido', false, 'motivo', 'assinatura', 'plano', v ->> 'nome');
+  end if;
+  -- A lista mais curta ganha: chat-ia está em "ia" (ia_conversas.sql) e em "chat_ia"; vale a regra do Chat.
+  select codigo into v_rec from public.recursos_plano where p_funcao = any (funcoes) order by cardinality(funcoes), codigo limit 1;
   if v_rec is not null then
     v_r := v -> 'recursos' -> v_rec;
     if not coalesce((v_r ->> 'permitido')::boolean, false) then
@@ -316,7 +401,12 @@ begin
       where u.usuario_id = p_usuario_id and u.dia = current_date and u.funcao = any (select unnest(r.funcoes) from public.recursos_plano r where r.codigo = v_rec)
         and u.funcao not in ('analise-cnpj-buscar', 'analise-cnpj-cadastro');
   end if;
-  return jsonb_build_object('permitido', v_lim is null or n <= v_lim, 'contagem', n, 'limite', v_lim, 'recurso', v_rec, 'plano', v ->> 'nome');
+  -- Uso justo: passou da IA do mês da organização, não bloqueia; a rota troca para a IA mais barata.
+  if v_rec in ('ia', 'chat_ia') and (v ->> 'ia_mes') is not null then
+    v_economico := public.uso_ia_mes_titular(v_tit) > (v ->> 'ia_mes')::integer;
+  end if;
+  return jsonb_build_object('permitido', v_lim is null or n <= v_lim, 'contagem', n, 'limite', v_lim, 'recurso', v_rec, 'plano', v ->> 'nome',
+    'economico', v_economico);
 end $$;
 revoke all on function public.consumir_uso_plano(uuid, text, integer) from public, anon, authenticated;
 grant execute on function public.consumir_uso_plano(uuid, text, integer) to service_role;
@@ -396,6 +486,17 @@ drop policy if exists operacao_processos_plano_permite on public.operacao_proces
 create policy operacao_processos_plano_permite on public.operacao_processos as restrictive for insert to authenticated
   with check (public.organizacao_pode(organizacao_id, 'novo_processo'));
 
+-- Prospecção (prospeccao.html e /api/prospeccao leem com o token do usuário): fora do plano, a tabela some para a
+-- conta. Restritiva = soma-se à policy de leitura de prospeccao.sql. (select ...) roda uma vez por consulta, não por linha.
+do $$
+begin
+  if to_regclass('public.prospeccao_itens') is not null then
+    drop policy if exists prospeccao_itens_select_plano on public.prospeccao_itens;
+    create policy prospeccao_itens_select_plano on public.prospeccao_itens as restrictive for select to authenticated
+      using ((select public.eu_posso('prospeccao')));
+  end if;
+end $$;
+
 -- Proposta e declarações: a rota kit-documentos confere o recurso "proposta" por consumir_uso_plano. Sem trigger nem
 -- policy em operacao_kit_documentos: o gate do kit (02-verificar) exige a tabela exatamente como kit_documentos.sql deixa.
 drop trigger if exists operacao_kit_documentos_plano on public.operacao_kit_documentos;
@@ -410,13 +511,17 @@ declare v_pedido text; v_plano text; v_dias integer;
 begin
   -- to_jsonb: lê o metadado do cadastro sem depender da coluna existir (ensaio sem Auth real).
   select to_jsonb(u) -> 'raw_user_meta_data' ->> 'plano_desejado' into v_pedido from auth.users u where u.id = new.id;
-  v_plano := case
-    when lower(coalesce(new.plano, '')) in ('gratis', 'empresa', 'assessoria') then lower(new.plano)
-    when exists (select 1 from public.planos where codigo = v_pedido and ativo and escolhivel_no_cadastro) then v_pedido
-    else 'assessoria' end; -- sem escolha: teste com até 3 CNPJs, como a cota antiga
+  v_pedido := case
+    when lower(coalesce(new.plano, '')) in ('essencial', 'empresa', 'assessoria') then lower(new.plano)
+    when exists (select 1 from public.planos where codigo = v_pedido and ativo and escolhivel_no_cadastro) then v_pedido end;
+  -- Teste de 14 dias = tudo do plano Empresa (21/11): quem pediu Essencial testa o Empresa e o pedido fica anotado
+  -- para o admin. Quem pediu Assessoria, ou não escolheu (convidado, conta antiga), testa a Assessoria, que tem tudo do
+  -- Empresa e até 3 CNPJs pela linha Teste, como a cota antiga.
+  v_plano := case when v_pedido in ('essencial', 'empresa') then 'empresa' else 'assessoria' end;
   select dias_teste into v_dias from public.planos where codigo = 'teste';
-  insert into public.assinaturas (usuario_id, plano, situacao, teste_ate, atualizado_por)
-    values (new.id, v_plano, 'teste', case when new.status = 'aprovado' then now() + make_interval(days => coalesce(v_dias, 14)) end, 'cadastro')
+  insert into public.assinaturas (usuario_id, plano, situacao, teste_ate, plano_solicitado, plano_solicitado_em, atualizado_por)
+    values (new.id, v_plano, 'teste', case when new.status = 'aprovado' then now() + make_interval(days => coalesce(v_dias, 14)) end,
+      nullif(v_pedido, v_plano), case when v_pedido <> v_plano then now() end, 'cadastro')
     on conflict (usuario_id) do nothing;
   update public.clientes set plano = v_plano where id = new.id and plano is distinct from v_plano;
   return new;
@@ -520,7 +625,8 @@ begin
       'usuarios', (select count(distinct m.usuario_id) from public.operacao_organizacoes o join public.operacao_membros m on m.organizacao_id = o.id where o.owner_id = c.id),
       'processos_ativos', (select count(*) from public.operacao_organizacoes o join public.operacao_processos p on p.organizacao_id = o.id and p.status <> 'arquivado' where o.owner_id = c.id),
       'uso_hoje', (select coalesce(sum(u.contagem), 0) from public.uso_diario u where u.usuario_id = c.id and u.dia = current_date),
-      'uso_30d', (select coalesce(sum(u.contagem), 0) from public.uso_diario u where u.usuario_id = c.id and u.dia > current_date - 30)) as x
+      'uso_30d', (select coalesce(sum(u.contagem), 0) from public.uso_diario u where u.usuario_id = c.id and u.dia > current_date - 30),
+      'ia_mes_uso', case when t.tit = c.id then public.uso_ia_mes_titular(c.id) end) as x
     from public.clientes c
     left join public.assinaturas a on a.usuario_id = c.id
     cross join lateral (select public.titular_do_usuario(c.id) as tit) t) s);
@@ -575,7 +681,8 @@ begin
   if not public.admin_planos_autorizado() then raise exception 'Mudar plano exige o proprietário com 2 fatores' using errcode = '42501'; end if;
   if jsonb_typeof(p_dados) is distinct from 'object' then raise exception 'Dados inválidos'; end if;
   if (select count(*) from jsonb_object_keys(p_dados) k where k not in ('plano', 'situacao', 'teste_ate', 'vence_em', 'ciclo',
-      'valor_centavos', 'max_cnpjs', 'max_usuarios', 'max_processos', 'observacoes')) > 0 then raise exception 'Campo não permitido'; end if;
+      'valor_centavos', 'max_cnpjs', 'max_usuarios', 'max_processos', 'observacoes', 'extras', 'ia_extra_usos', 'ia_extra_mes')) > 0 then raise exception 'Campo não permitido'; end if;
+  if p_dados ? 'extras' and jsonb_typeof(p_dados -> 'extras') not in ('array', 'null') then raise exception 'Extras inválidos'; end if;
   select * into a from public.assinaturas where usuario_id = p_usuario for update;
   if not found then raise exception 'Assinatura não encontrada'; end if;
   n := a;
@@ -589,13 +696,18 @@ begin
   if p_dados ? 'max_usuarios' then n.max_usuarios := (p_dados ->> 'max_usuarios')::integer; end if;
   if p_dados ? 'max_processos' then n.max_processos := (p_dados ->> 'max_processos')::integer; end if;
   if p_dados ? 'observacoes' then n.observacoes := p_dados ->> 'observacoes'; end if;
+  if p_dados ? 'extras' then n.extras := coalesce(array(select jsonb_array_elements_text(p_dados -> 'extras')), '{}'); end if;
+  if p_dados ? 'ia_extra_usos' then n.ia_extra_usos := (p_dados ->> 'ia_extra_usos')::integer; end if;
+  -- IA extra vale para o mês informado (qualquer dia dele vira o 1º dia do mês).
+  if p_dados ? 'ia_extra_mes' then n.ia_extra_mes := date_trunc('month', (p_dados ->> 'ia_extra_mes')::date)::date; end if;
   if not exists (select 1 from public.planos where codigo = n.plano) then raise exception 'Plano inexistente'; end if;
   if n.plano = 'dono' and not public.eh_owner_admin_operacao(p_usuario) then raise exception 'O plano Dono é só do proprietário'; end if;
   if n.plano = 'teste' then raise exception 'Teste é uma situação, não um plano: escolha o plano e a situação "teste"'; end if;
   if n.plano is distinct from a.plano then n.plano_solicitado := null; end if;
   update public.assinaturas set plano = n.plano, situacao = n.situacao, teste_ate = n.teste_ate, vence_em = n.vence_em, ciclo = n.ciclo,
     valor_centavos = n.valor_centavos, max_cnpjs = n.max_cnpjs, max_usuarios = n.max_usuarios, max_processos = n.max_processos,
-    observacoes = n.observacoes, plano_solicitado = n.plano_solicitado, atualizado_em = now(), atualizado_por = public.admin_email_atual()
+    observacoes = n.observacoes, plano_solicitado = n.plano_solicitado, extras = n.extras, ia_extra_usos = n.ia_extra_usos,
+    ia_extra_mes = n.ia_extra_mes, atualizado_em = now(), atualizado_por = public.admin_email_atual()
     where usuario_id = p_usuario;
   -- Não rebaixa abaixo do que a conta já usa (o dono desativa empresas ou usuários antes).
   v := public.plano_efetivo_titular(p_usuario);
@@ -620,7 +732,7 @@ language plpgsql security definer set search_path = public as $$
 begin
   if not public.admin_planos_autorizado() then raise exception 'Exige o proprietário com 2 fatores' using errcode = '42501'; end if;
   if jsonb_typeof(p_dados) is distinct from 'object' or (select count(*) from jsonb_object_keys(p_dados) k where k not in
-    ('nome', 'descricao', 'max_cnpjs', 'max_usuarios', 'max_processos', 'preco_mensal_centavos', 'preco_anual_centavos', 'dias_teste', 'escolhivel_no_cadastro', 'ativo')) > 0
+    ('nome', 'descricao', 'max_cnpjs', 'max_usuarios', 'max_processos', 'preco_mensal_centavos', 'preco_anual_centavos', 'dias_teste', 'escolhivel_no_cadastro', 'ativo', 'ia_mes_por_cnpj')) > 0
     then raise exception 'Campo não permitido'; end if;
   update public.planos set
     nome = case when p_dados ? 'nome' then p_dados ->> 'nome' else nome end,
@@ -631,6 +743,7 @@ begin
     preco_mensal_centavos = case when p_dados ? 'preco_mensal_centavos' then (p_dados ->> 'preco_mensal_centavos')::integer else preco_mensal_centavos end,
     preco_anual_centavos = case when p_dados ? 'preco_anual_centavos' then (p_dados ->> 'preco_anual_centavos')::integer else preco_anual_centavos end,
     dias_teste = case when p_dados ? 'dias_teste' then (p_dados ->> 'dias_teste')::integer else dias_teste end,
+    ia_mes_por_cnpj = case when p_dados ? 'ia_mes_por_cnpj' then (p_dados ->> 'ia_mes_por_cnpj')::integer else ia_mes_por_cnpj end,
     escolhivel_no_cadastro = case when p_dados ? 'escolhivel_no_cadastro' then (p_dados ->> 'escolhivel_no_cadastro')::boolean else escolhivel_no_cadastro end,
     ativo = case when p_dados ? 'ativo' then (p_dados ->> 'ativo')::boolean else ativo end,
     atualizado_em = now()
@@ -655,7 +768,7 @@ begin
   if not public.pode_aprovar_cadastros() then raise exception 'Acesso restrito à administração' using errcode = '42501'; end if;
   return (select coalesce(jsonb_agg(x order by (x ->> 'total')::int desc), '[]'::jsonb) from (
     select jsonb_build_object('usuario_id', u.usuario_id, 'nome', coalesce(c.nome, c.email), 'email', c.email,
-      'recurso', coalesce((select r.codigo from public.recursos_plano r where u.funcao = any (r.funcoes) order by r.codigo limit 1), 'outros'),
+      'recurso', coalesce((select r.codigo from public.recursos_plano r where u.funcao = any (r.funcoes) order by cardinality(r.funcoes), r.codigo limit 1), 'outros'),
       'funcao', u.funcao, 'total', sum(u.contagem), 'hoje', sum(u.contagem) filter (where u.dia = current_date)) as x
     from public.uso_diario u left join public.clientes c on c.id = u.usuario_id
     where u.dia > current_date - least(greatest(coalesce(p_dias, 30), 1), 366)
