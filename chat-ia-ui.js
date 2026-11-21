@@ -48,7 +48,7 @@
         return criar("li", {}, linkOficial(f.url) ? criar("a", { href: f.url, target: "_blank", rel: "noopener noreferrer", textContent: rotulo }) : rotulo);
       })));
     }
-    if (extra.modo === "base") caixa.append(criar("p", { className: "lp-dica", textContent: "Resposta direto da base do LicitaPlena (IA indisponível agora)." }));
+    if (extra.modo === "base") caixa.append(criar("p", { className: "lp-dica", textContent: "A IA está indisponível agora: esta resposta veio dos guias e dos dados do LicitaPlena." }));
     lista.append(caixa);
     caixa.scrollIntoView({ block: "end" });
     return caixa;
@@ -123,7 +123,7 @@
     botaoApagar.addEventListener("click", apagarHistorico);
     const gaveta = criar("aside", { className: "lp-gaveta lp-chat" }, [
       criar("div", { className: "lp-gaveta-topo" }, [criar("h2", { id: "lp-chat-titulo" }, ["Assistente IA ", criar("span", { className: "lp-chat-beta", textContent: "BETA" })]), fechar]),
-      criar("p", { className: "lp-aviso lp-chat-aviso", textContent: "É uma IA e pode errar. Responde com a base do LicitaPlena e cita a fonte; confira sempre o edital e a lei. Não informe CPF." }),
+      criar("p", { className: "lp-aviso lp-chat-aviso", textContent: "É uma IA e pode errar. Responde com os guias e os dados do LicitaPlena e cita a fonte; confira sempre o edital e a lei. Não informe CPF." }),
       criar("div", { className: "lp-gaveta-corpo" }, [lista, sugestoes]),
       criar("div", { className: "lp-gaveta-rodape" }, [uso, form,
         criar("div", { className: "lp-chat-opcoes" }, [criar("label", { className: "lp-opcao", htmlFor: "lp-chat-salvar" }, [salvar, "Salvar histórico"]), botaoHist, botaoApagar])]),

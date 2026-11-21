@@ -483,7 +483,7 @@
         ['Gerado em', hoje || ''], ['Disputas (itens)', r.disputas], ['Contratações', r.compras], ['Vencidas', r.vencidas], ['Não vencidas', r.naoVencidas],
         ['% de vitória', n(r.vitoria)], ['Valor disputado (R$)', n(r.valorDisputado)], ['Valor vencido (R$)', n(r.valorGanho)], ['Desclassificações/inabilitações/recusas listadas', motivos.length],
         ['Contratos (PNCP)', ct.total], ['Valor contratado (R$)', n(ct.valorContratado)],
-        ['Fontes', 'PNCP, dados abertos e arquivo semanal de propostas do Compras.gov, Pesquisa de Preços, ComprasNet antigo, pregões gravados, Receita (base aberta), Contratos.gov.br']] },
+        ['Fontes', 'PNCP, Compras.gov (dados abertos e Pesquisa de Preços), ComprasNet antigo, pregões gravados pela extensão, Receita Federal, Contratos.gov.br']] },
       { nome: 'Por modalidade', linhas: grupos(r.porModalidade) },
       { nome: 'Por UF', linhas: grupos(r.porUf) },
       { nome: 'Sazonalidade', linhas: [['Mês', 'Disputas', 'Vencidas', 'Valor vencido (R$)'], ...r.porMes.map((m) => [m.rotulo, m.disputas, m.vencidas, n(m.valor)])] },

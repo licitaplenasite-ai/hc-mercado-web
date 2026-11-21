@@ -72,8 +72,8 @@
     const campo = doc.getElementById('emp-cnpj');
     if (campo) {
       origem?.closest?.('.modal-ia-fundo.aberto')?.querySelector('#modal-ia-fechar')?.click();
+      campo.value = cnpj; // antes do menu: a tela não restaura a última empresa por cima
       doc.querySelector('nav button[data-alvo="empresa"]')?.click();
-      campo.value = cnpj;
       doc.getElementById('emp-buscar')?.click();
       return;
     }

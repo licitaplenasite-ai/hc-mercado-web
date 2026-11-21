@@ -20,7 +20,7 @@
   function montar() {
     if (!document.querySelector('link[href^="gaveta-lateral.css"]')) document.head.append(criar("link", { rel: "stylesheet", href: "gaveta-lateral.css" }));
     const fechar = criar("button", { type: "button", className: "lp-gaveta-fechar", title: "Fechar", textContent: "✕" });
-    fechar.setAttribute("aria-label", "Fechar prospecção de fornecedores");
+    fechar.setAttribute("aria-label", "Fechar Encontrar fornecedor com IA");
     usoTexto = criar("p", { className: "lp-dica", textContent: "Limite: 20 perguntas por dia." });
     usoBarra = criar("span", { style: "width:0%" });
     corpo = criar("div", { className: "lp-gaveta-corpo" }, [
@@ -33,7 +33,7 @@
     botaoBuscar = criar("button", { type: "button", className: "lp-primario", textContent: "Encontrar fornecedores" });
     botaoMais = criar("button", { type: "button", textContent: "Trazer mais três", hidden: true });
     const gaveta = criar("aside", { className: "lp-gaveta" }, [
-      criar("div", { className: "lp-gaveta-topo" }, [criar("h2", { id: "fornecedor-ia-titulo", textContent: "Prospecção de fornecedores" }), fechar]),
+      criar("div", { className: "lp-gaveta-topo" }, [criar("h2", { id: "fornecedor-ia-titulo", textContent: "Encontrar fornecedor com IA" }), fechar]),
       criar("div", { className: "lp-uso" }, [usoTexto, criar("div", { className: "lp-uso-barra" }, usoBarra)]),
       corpo,
       criar("div", { className: "lp-gaveta-rodape" }, [campo, criar("div", { style: "display:flex;gap:8px;flex-wrap:wrap" }, [botaoBuscar, botaoMais])]),
@@ -88,8 +88,8 @@
       const analisar = criar("button", { type: "button", textContent: "Analisar empresa", style: "margin-top:12px" });
       analisar.addEventListener("click", () => {
         fecharGaveta();
+        document.getElementById("emp-cnpj").value = f.cnpj; // antes do menu: a tela não restaura a última empresa por cima
         document.querySelector('nav button[data-alvo="empresa"]')?.click();
-        document.getElementById("emp-cnpj").value = f.cnpj;
         document.getElementById("emp-buscar")?.click();
       });
       filhos.push(analisar);

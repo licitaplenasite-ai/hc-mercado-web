@@ -608,7 +608,7 @@
       art.append(lista);
       raiz.append(art);
     });
-    if (filtrando && !mostrados) raiz.append(el('p', 'la-apoio', 'Nenhum item com esses filtros. A classificação e o nº de licitantes só existem nos itens com a lista de participantes (arquivo de propostas ou pregão gravado pela extensão).'));
+    if (filtrando && !mostrados) raiz.append(el('p', 'la-apoio', 'Nenhum item com esses filtros. A classificação e o nº de licitantes só existem nos itens com a lista de participantes (lista de propostas do Compras.gov ou pregão gravado pela extensão).'));
     raiz.append(el('p', 'la-fonte', 'Fontes: PNCP (itens e resultados), Pesquisa de Preços e as propostas publicadas pelo Compras.gov. ' + rodape));
     alvo.replaceChildren(raiz);
   }
@@ -705,7 +705,7 @@
       if (ocupado) return;
       if (!unidade.value) { estado.textContent = 'Escolha a unidade compradora.'; return; }
       ocupado = true; consultar.disabled = true;
-      estado.textContent = 'Consultando PNCP e Compras.gov… pode levar até um minuto.';
+      estado.textContent = 'Consultando as compras anteriores no PNCP e no Compras.gov… pode levar até um minuto.';
       const r = await chamar({ acao: 'consultar', uasg: unidade.value, catmat: catmat.value, palavras: palavras.value, anos: Number(anos.value) });
       ocupado = false; consultar.disabled = false;
       if (r.erro) { estado.textContent = r.erro; resultado.replaceChildren(); return; }

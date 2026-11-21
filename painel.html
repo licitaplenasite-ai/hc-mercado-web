@@ -2259,7 +2259,7 @@
 
     <div class="bloco-separado" id="raio-x-financeiro">
     <h3 class="bloco-separado-titulo">Raio-X Financeiro de Fornecedor</h3>
-    <p class="dica-clique" style="margin:0 0 14px;">Quanto uma empresa já recebeu de fato em pagamentos do governo federal — execução financeira real, não só o valor do contrato assinado. Complementa a tela "Analisar concorrente".</p>
+    <p class="dica-clique" style="margin:0 0 14px;">Para que serve: digite um CNPJ e veja quanto o governo federal já pagou de fato a essa empresa (dinheiro que saiu, não o valor do contrato assinado), por ano e por órgão. Use para conferir se uma empresa recebe mesmo do governo, por exemplo a sua, um parceiro ou um fornecedor que você vai contratar. Dados do Portal da Transparência.</p>
     <div class="secao-conteudo-principal">
     <div class="painel-filtros painel-filtros-recolhivel" id="fn-filtros-principais">
       <div class="painel-filtros-recolhivel-cabecalho">
@@ -8445,7 +8445,7 @@
         cab: ["Item planejado", "Órgão", "UF", "Data prevista", "Quantidade", "Valor estimado", "CATMAT/CATSER", "Fonte"],
         linhas: (pca.linhas || []).map((l) => [l.descricao || l.objeto, l.orgao_nome || l.unidade_nome, l.uf, mkData(l.data_ref), l.quantidade || "", l.valor_total || "", l.catmat || "", l.link]),
         html: () => {
-          const nota = '<p class="dica-clique">Plano de Contratações Anual (PCA) publicado no PNCP: o que os órgãos planejam comprar nos próximos 12 meses. O PNCP não busca o PCA por palavra; o robô do LicitaPlena copia o PCA dos órgãos todo dia (mesma base da tela Prospecção) e a busca é feita nessa cópia.</p>';
+          const nota = '<p class="dica-clique">O que os órgãos planejam comprar nos próximos 12 meses, segundo o Plano de Contratações Anual (PCA) que cada órgão publica no Portal Nacional de Contratações Públicas. A lista é atualizada todo dia.</p>';
           if (pca.estado === "carregando") return `${nota}<div class="carregando">Buscando o que os órgãos planejam comprar...</div>`;
           if (pca.estado === "erro") return `${nota}<div class="aviso">${escapeHtml(pca.erro || "Não foi possível consultar a contratação futura agora. Tente de novo em instantes.")}</div>`;
           if (!pca.linhas.length) return `${nota}<p class="dica-clique">Nenhum item planejado com esse termo${a.uf ? ` em ${escapeHtml(a.uf)}` : ""} nos próximos 12 meses.</p>`;
@@ -8524,7 +8524,7 @@
       <div class="mk-bloco"><h3>Compras por mês</h3>${mkGraficoMeses(M.porMes(vendas))}</div>
       <div class="mk-bloco" id="mk-angulos-caixa"><div class="mk-angulos-topo"><h3>Ângulos de análise</h3><button type="button" class="btn-imprimir" id="mk-csv">Baixar planilha (CSV) desta aba</button></div>
         <div class="mk-mais" id="mk-mais"></div><div class="mk-angulos" id="mk-angulos" role="tablist"></div><div id="mk-aba-conteudo"></div></div>
-      <p class="dica-clique">Fontes: contratos e atas de registro de preço do PNCP e resultados homologados do Compras.gov já coletados, mais a Pesquisa de Preços do Compras.gov consultada agora (é dela que vêm a marca e o código do catálogo). Contratação futura: PCA do PNCP. Um mesmo processo pode aparecer em mais de uma fonte; use os totais como ordem de grandeza.</p>`;
+      <p class="dica-clique">Fontes: contratos e atas de registro de preço do Portal Nacional de Contratações Públicas (PNCP), resultados do Compras.gov e a Pesquisa de Preços do Compras.gov consultada agora (é dela que vêm a marca e o código do catálogo). Um mesmo processo pode aparecer em mais de uma fonte; use os totais como ordem de grandeza.</p>`;
     mkDesenharAbas();
   }
 
@@ -8601,7 +8601,7 @@
         aoVivo.itens.map(M.dePrecoAoVivo),
       ], desdeIso);
       const avisos = [];
-      if (contratos.erro || homologados.erro || !atas) avisos.push("Parte da base guardada não respondeu agora; os números podem estar incompletos. Tente de novo em instantes.");
+      if (contratos.erro || homologados.erro || !atas) avisos.push("Parte das compras já guardadas não carregou agora; os números podem estar incompletos. Tente de novo em instantes.");
       if (aoVivo.erro) avisos.push("A Pesquisa de Preços do Compras.gov não respondeu agora; os preços e as marcas mostram só o que já estava guardado.");
       // A contagem é estimativa do Postgres ("planned"): só avisa corte quando a amostra realmente encheu.
       if (contratos.truncado && contratos.registros.length >= 1000) avisos.push(`Foram achados mais de ${contratos.registros.length.toLocaleString("pt-BR")} contratos; a tela usa os mais recentes. Para um retrato mais fiel, escolha um estado ou um período menor.`);
@@ -8626,8 +8626,9 @@
     // "Analisar empresa" abre a análise do concorrente já com o CNPJ.
     const botao = ev.target.closest("[data-mk-cnpj]");
     if (botao) {
-      document.querySelector('nav button[data-alvo="empresa"]').click();
+      // CNPJ antes do clique no menu: assim a tela não restaura a última empresa por cima (o botão ficaria travado nela).
       document.getElementById("emp-cnpj").value = botao.dataset.mkCnpj;
+      document.querySelector('nav button[data-alvo="empresa"]').click();
       document.getElementById("emp-buscar").click();
       return;
     }
@@ -8763,6 +8764,9 @@
 
   function formatarDataIso(s) {
     if (!s) return "-";
+    // Só a data (AAAA-MM-DD): new Date() leria meia-noite UTC e mostraria o dia anterior no horário de Brasília.
+    const soData = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s));
+    if (soData) return `${soData[3]}/${soData[2]}/${soData[1]}`;
     try {
       const d = new Date(s);
       if (isNaN(d.getTime())) return escapeHtml(String(s));
@@ -8775,7 +8779,7 @@
   function renderizarConvenios(dados, uf, municipioFiltro, palavras) {
     const alvo = document.getElementById("cv-resultado");
     if (!dados) {
-      alvo.innerHTML = '<div class="aviso">Ainda não há dados coletados de convênios. O robô roda automaticamente todo dia — volte em breve.</div>';
+      alvo.innerHTML = '<div class="aviso">A lista de convênios ainda não está disponível. Ela é atualizada todo dia; volte em breve.</div>';
       return;
     }
 
@@ -8790,7 +8794,7 @@
     }
     registros = [...registros].sort((a, b) => (b.dataPublicacao || "").localeCompare(a.dataPublicacao || ""));
 
-    let html = `<div class="aviso" style="border-color:var(--aviso-neutro-borda);color:var(--aviso-neutro-texto);">Dados atualizados automaticamente em ${escapeHtml(new Date(dados.atualizadoEm).toLocaleString("pt-BR"))} · histórico de ${escapeHtml(dados.dataInicial || "-")} a ${escapeHtml(dados.dataFinal || "-")}.</div>`;
+    let html = `<div class="aviso" style="border-color:var(--aviso-neutro-borda);color:var(--aviso-neutro-texto);">Lista atualizada em ${escapeHtml(new Date(dados.atualizadoEm).toLocaleString("pt-BR"))} · convênios publicados de ${escapeHtml(dados.dataInicial || "-")} a ${escapeHtml(dados.dataFinal || "-")}.</div>`;
 
     const valorTotal = registros.reduce((s, r) => s + (r.valorLiberado || r.valor || 0), 0);
     html += `<div class="cartoes">
@@ -8882,7 +8886,8 @@
   // ---- Raio-X financeiro de fornecedor (via Netlify Function, token fica no servidor) ----
   function renderizarRaioXFornecedor(dados) {
     const alvo = document.getElementById("fn-resultado");
-    if (dados.erro && dados.totalDocumentos === 0) {
+    // Sem nenhum documento (inclui a resposta de erro, que não traz totalDocumentos): só o aviso, sem cartões "undefined".
+    if (dados.erro && !dados.totalDocumentos) {
       alvo.innerHTML = `<div class="aviso">${escapeHtml(dados.erro)}</div>`;
       return;
     }
@@ -8913,7 +8918,7 @@
     }
 
     if (dados.totalDocumentos === 0) {
-      html += '<p style="color:var(--texto-fraco);font-size:13px;">Nenhum pagamento federal encontrado pra esse CNPJ nos últimos anos (pode ser que essa empresa só contrate com estados/municípios, cuja execução financeira não está nessa base).</p>';
+      html += '<p style="color:var(--texto-fraco);font-size:13px;">Nenhum pagamento federal encontrado pra esse CNPJ nos últimos anos (pode ser que essa empresa só contrate com estados/municípios, cujos pagamentos não aparecem no Portal da Transparência federal).</p>';
     } else if (Array.isArray(dados.documentos) && dados.documentos.length > 0) {
       html += `<table><tr><th>Data</th><th>Órgão</th><th>Unidade gestora</th><th>Valor</th></tr>`;
       for (const d of dados.documentos) {
@@ -8954,7 +8959,8 @@
       const dados = await resp.json();
       renderizarRaioXFornecedor(dados);
     } catch (e) {
-      alvo.innerHTML = `<div class="aviso">Erro ao consultar: ${escapeHtml(String(e))}</div>`;
+      console.warn("raio-x financeiro:", e);
+      alvo.innerHTML = '<div class="aviso">Não foi possível consultar o Portal da Transparência agora. Tente de novo em alguns instantes.</div>';
     }
   });
 
@@ -9017,7 +9023,7 @@
 
   async function restaurarEmpresa() {
     const filtro = lerFiltroEmpresa();
-    if (!filtro || !filtro.cnpj) return;
+    if (!filtro || !filtro.cnpj || document.getElementById("emp-cnpj").value.trim()) return; // quem chegou com um CNPJ manda
     document.getElementById("emp-cnpj").value = filtro.cnpj || "";
     document.getElementById("emp-buscar").click();
   }

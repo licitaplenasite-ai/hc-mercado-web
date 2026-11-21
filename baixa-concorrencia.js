@@ -111,7 +111,7 @@
       const r = classificarItens(data);
       estado.grupos = r.grupos; estado.semLista = r.semLista;
       status.textContent = `${(data || []).length} item(ns) do histórico com essas palavras${(data || []).length >= LIMITE ? ' (os 1.000 mais recentes)' : ''}. ` +
-        `${r.semLista} sem a lista de propostas ficaram de fora da contagem: nesses a fonte só mostra o vencedor. A cobertura cresce conforme o robô lê o arquivo de propostas do Compras.gov.`;
+        `${r.semLista} sem a lista de propostas ficaram de fora da contagem: nesses a fonte só mostra o vencedor. Essa lista de propostas vai sendo completada aos poucos, então a contagem cresce com o tempo.`;
       desenhar();
     }
     const pronto = carregar().catch(() => { status.textContent = 'Não foi possível ler o histórico de licitantes agora.'; });

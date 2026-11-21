@@ -38,7 +38,7 @@ exports.handler = async (event) => {
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ erro: "TRANSPARENCIA_TOKEN não configurado no Netlify." }),
+      body: JSON.stringify({ erro: "A consulta ao Portal da Transparência está indisponível agora. Tente de novo mais tarde." }),
     };
   }
 
