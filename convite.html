@@ -107,6 +107,17 @@
   const token = new URL(location.href).searchParams.get("token") || "";
   const $ = id => document.getElementById(id);
   let modo = "criar";
+  // Erros do login vêm em inglês: traduz os comuns; o resto vira um pedido simples para tentar de novo.
+  function motivo(erro) {
+    const m = String(erro?.message || "");
+    if (/invalid login credentials/i.test(m)) return "e-mail ou senha incorretos.";
+    if (/already registered|already exists/i.test(m)) return "este e-mail já tem conta. Escolha “Já tenho conta” e entre com a sua senha.";
+    if (/password should be|weak password/i.test(m)) return "a senha é fraca. Use pelo menos 8 caracteres, com letras e números.";
+    if (/email not confirmed/i.test(m)) return "confirme o e-mail recebido e abra este link de novo.";
+    if (/fetch|network/i.test(m)) return "sem conexão com a internet. Confira e tente de novo.";
+    if (/^[\x20-\x7E]*$/.test(m) || !m) return "tente de novo em instantes. Se continuar, peça um novo link ao administrador.";
+    return m; // mensagem do banco já em português (convite vencido, usado ou de outro e-mail)
+  }
   function aviso(texto, tipo = "") { $("estado-convite").textContent = texto; $("estado-convite").className = "aviso " + tipo; }
   function alternar(novo) {
     modo = novo;
@@ -131,7 +142,7 @@
       if (session) {
         $("email").value = session.user.email || "";
         $("form-convite").style.display = "none";
-        try { await aceitar(); } catch (erro) { $("form-convite").style.display = "block"; alternar("entrar"); aviso(erro.message, "erro"); }
+        try { await aceitar(); } catch (erro) { $("form-convite").style.display = "block"; alternar("entrar"); aviso("Não foi possível ativar o acesso: " + motivo(erro), "erro"); }
       }
     });
   }
@@ -154,7 +165,7 @@
         return;
       }
       await aceitar();
-    } catch (erro) { aviso(SenhaCaptchaUi.ehErroDeCaptcha(erro) ? SenhaCaptchaUi.MSG_CAPTCHA : "Não foi possível ativar o acesso: " + erro.message, "erro"); }
+    } catch (erro) { aviso(SenhaCaptchaUi.ehErroDeCaptcha(erro) ? SenhaCaptchaUi.MSG_CAPTCHA : "Não foi possível ativar o acesso: " + motivo(erro), "erro"); }
     finally { botao.disabled = false; captcha.resetar(); }
   });
 })();

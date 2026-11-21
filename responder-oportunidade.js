@@ -10,6 +10,8 @@
     if (!r.ok) throw Error(resposta.erro || 'Não foi possível registrar. Tente novamente.');
     return resposta;
   }
+  // Falha de rede (TypeError) ou resposta que não é do servidor (SyntaxError) chega em inglês: troca por aviso simples.
+  const falha = (e) => (e instanceof TypeError || e instanceof SyntaxError ? 'Sem conexão com o LicitaPlena agora. Confira a internet e recarregue a página.' : e.message);
   function mostrar(r) {
     document.getElementById('contexto').hidden = false;
     document.getElementById('empresa').textContent = `${r.empresa} · CNPJ ${r.cnpj}`;
@@ -22,12 +24,12 @@
   if (!/^[a-f0-9]{64}$/.test(token || '')) { mensagem.textContent = 'Link inválido. Peça um novo envio ao assessor.'; return; }
   const escolha = params.get('escolha');
   if (['participar','nao_participar'].includes(escolha)) form.querySelector(`[value="${escolha}"]`).checked = true;
-  consultar({acao:'consultar'}).then(mostrar).catch(e => { mensagem.textContent = e.message; });
+  consultar({acao:'consultar'}).then(mostrar).catch(e => { mensagem.textContent = falha(e); });
   form.addEventListener('submit', async ev => {
     ev.preventDefault();
     const botao = document.getElementById('confirmar'); botao.disabled = true;
     try { mostrar(await consultar({acao:'confirmar',decisao:form.querySelector('[name=escolha]:checked')?.value,nome:document.getElementById('nome').value.trim(),confirmado:document.getElementById('revisado').checked})); }
-    catch (e) { mensagem.textContent = e.message; }
+    catch (e) { mensagem.textContent = falha(e); }
     finally { botao.disabled = false; }
   });
 })();

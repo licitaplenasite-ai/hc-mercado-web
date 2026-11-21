@@ -78,7 +78,16 @@ ${prazo || proc ? `<div class="q-tags">${prazo}${proc}</div>` : ''}</article>`;
     const $ = (id) => document.getElementById(id);
     const estado = { orgId: null, empresaId: null, quadros: [], quadroId: null, colunas: [], cartoes: [], processos: [], arrastando: null };
     const hoje = () => new Date().toLocaleDateString('sv-SE');
-    function aviso(texto, tipo = 'info') { const e = $('aviso'); e.textContent = texto; e.className = texto ? `aviso ${tipo}` : 'aviso'; }
+    // Erro cru do banco/rede (inglês, nome de tabela) não chega ao usuário: mesmo filtro do processos.html.
+  const TECNICO = /\.sql\b|supabase|row-level|violates|permission denied|JWT|PGRST|schema cache|relation |column |does not exist|duplicate key|null value|Failed to fetch|NetworkError|Load failed/i;
+  function legivel(texto) {
+    if (!TECNICO.test(texto)) return texto;
+    console.warn(texto);
+    const base = /^[^:]+:\s/.test(texto) ? String(texto).split(/:\s/)[0] : 'Não foi possível concluir';
+    const motivo = /row-level|permission denied/i.test(texto) ? 'seu acesso a esta empresa é só de leitura' : /fetch|NetworkError|Load failed/i.test(texto) ? 'sem conexão com a internet. Confira e tente de novo' : 'tente de novo em instantes. Se continuar, fale com o suporte';
+    return `${base}: ${motivo}.`;
+  }
+  function aviso(texto, tipo = 'info') { const e = $('aviso'); e.textContent = legivel(texto); e.className = texto ? `aviso ${tipo}` : 'aviso'; }
 
     async function autenticar() {
       const { data: { session } } = await sb.auth.getSession();
@@ -113,7 +122,7 @@ ${prazo || proc ? `<div class="q-tags">${prazo}${proc}</div>` : ''}</article>`;
         sb.from('operacao_processos').select('id,numero,objeto').eq('empresa_id', empresa).neq('status', 'arquivado').order('criado_em', { ascending: false }).limit(300),
       ]);
       if (empresa !== estado.empresaId) return;
-      if (q.error) { aviso('Quadros precisa do SQL supabase/funil_quadros.sql: ' + q.error.message, 'erro'); return; }
+      if (q.error) { aviso('Não foi possível abrir os quadros: ' + q.error.message, 'erro'); return; }
       estado.quadros = q.data || []; estado.processos = p.data || [];
       estado.quadroId = [escolher, estado.quadroId].find((id) => estado.quadros.some((x) => x.id === id)) || estado.quadros[0]?.id || null;
       $('quadro-atual').innerHTML = estado.quadros.map((x) => `<option value="${esc(x.id)}">${esc(x.nome)}</option>`).join('');
