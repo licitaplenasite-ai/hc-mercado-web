@@ -31,6 +31,31 @@
       $("total-homologado-item").textContent = !ganho ? "Total homologado: somente se o item for ganho" : homologado === "" && anterior?.valor_homologado != null ? `Total anterior sem unitário: ${dinheiro(anterior.valor_homologado)}` : `Total homologado à empresa: ${valorOpcional(totalHomologado)}`;
     }
 
+    // Andamento do item ganho: passo, data de cada passo e rastreio/link. Grava só no botão (sem pop-up).
+    const PASSO_ROTULO = { aguardando_compra: "Aguardando compra", comprado: "Comprado", enviado: "Enviado", entregue: "Entregue" };
+    function blocoAndamento(item) {
+      if (item.situacao !== "ganho") return "";
+      const atual = raiz.LicitaAcompanhamento.PASSOS_ENTREGA.includes(item.entrega_situacao) ? item.entrega_situacao : "aguardando_compra";
+      const datas = [["Comprado", item.comprado_em], ["Enviado", item.enviado_em], ["Entregue", item.entregue_em]].filter(([, d]) => d).map(([r, d]) => `${r} em ${data(d)}`).join(" · ");
+      const link = linkSeguro(item.rastreio);
+      return `<div class="andamento-item" data-andamento-item="${item.id}"><small>Andamento: <b>${PASSO_ROTULO[atual]}</b>${datas ? ` · ${esc(datas)}` : ""}${item.rastreio ? ` · Rastreio: ${link ? `<a href="${esc(link)}" target="_blank" rel="noopener">${esc(item.rastreio)}</a>` : esc(item.rastreio)}` : ""}</small>
+        <label>Passo <select data-andamento-passo="${item.id}">${raiz.LicitaAcompanhamento.PASSOS_ENTREGA.map(p => `<option value="${p}"${p === atual ? " selected" : ""}>${PASSO_ROTULO[p]}</option>`).join("")}</select></label>
+        <label>Rastreio ou link <input data-andamento-rastreio="${item.id}" maxlength="500" value="${esc(item.rastreio || "")}" placeholder="Código dos Correios ou link da transportadora"></label>
+        <button class="btn" data-salvar-andamento="${item.id}">Salvar andamento</button></div>`;
+    }
+    async function salvarAndamento(id) {
+      const item = estado.itens.find(registro => registro.id === id);
+      const caixa = $("d-acompanhamento").querySelector(`[data-andamento-item="${id}"]`);
+      if (!item || !caixa) return;
+      const hoje = new Date(Date.now() - 3 * 36e5).toISOString().slice(0, 10);
+      const r = raiz.LicitaAcompanhamento.andamentoItem(item, caixa.querySelector("[data-andamento-passo]").value, hoje, caixa.querySelector("[data-andamento-rastreio]").value);
+      if (r.erro) { aviso(r.erro, "erro"); return; }
+      const { error } = await sb.from("operacao_itens_resultado").update(r.dados).eq("id", id).eq("processo_id", item.processo_id).eq("organizacao_id", estado.orgId);
+      if (error) { aviso("Não foi possível salvar o andamento: " + mensagemErro(error), "erro"); return; }
+      await atualizarEReabrir(item.processo_id);
+      aviso(`Andamento do ${item.tipo} ${item.identificador}: ${PASSO_ROTULO[r.dados.entrega_situacao]}.`, "info");
+    }
+
     function renderizar(processo) {
       versaoLeitura++;
       if (!estado.detalhesCarregados) {
@@ -50,16 +75,17 @@
       const publicos = doProcesso(estado.contratosPublicos || [], processo.id);
       const sugeridos = CP.itensAindaPendentes(((estado.esteiraResultado || []).find(t => t.processo_id === processo.id) || {}).detalhe?.sugestao, itens);
       const apurado = raiz.LicitaAcompanhamento.resultadoEfetivo(processo, itens);
+      const andamento = raiz.LicitaAcompanhamento.contarAndamento(itens);
       const lista = (registros, montar, vazio) => registros.length ? registros.map(montar).join("") : `<p class="nota">${vazio}</p>`;
       $("d-acompanhamento").innerHTML = `
         <section class="bloco-dossie"><h3>Participação e resultado</h3>
-          <div class="dossie-grid"><div class="dado"><span>Participação / resultado</span><b>${esc(rotulo(apurado.situacao))}</b></div><div class="dado"><span>Valor homologado à empresa</span><b>${valorOpcional(apurado.valor)}</b></div><div class="dado"><span>Apuração</span><b>${itens.length ? `${apurado.ganhos} de ${apurado.total} itens/lotes ganhos` : "Resultado informado manualmente"}</b></div></div>
+          <div class="dossie-grid"><div class="dado"><span>Participação / resultado</span><b>${esc(rotulo(apurado.situacao))}</b></div><div class="dado"><span>Valor homologado à empresa</span><b>${valorOpcional(apurado.valor)}</b></div><div class="dado"><span>Apuração</span><b>${itens.length ? `${apurado.ganhos} de ${apurado.total} itens/lotes ganhos` : "Resultado informado manualmente"}</b></div>${andamento.total ? `<div class="dado" data-contador-andamento><span>Entrega dos itens ganhos</span><b>${andamento.entregue} de ${andamento.total} entregues</b><small>${andamento.aguardando_compra} aguardando compra · ${andamento.comprado} comprados · ${andamento.enviado} enviados</small></div>` : ""}</div>
           ${itens.length && !apurado.valorCompleto && apurado.ganhos ? '<p class="aviso-dados">Há item ganho sem valor homologado informado; o total permanece desconhecido.</p>' : ""}
           <p class="nota">Data: ${data(processo.data_resultado)} · ${origem(processo.fonte_resultado) || "Fonte oficial não vinculada"}${processo.motivo_perda ? ` · ${esc(processo.motivo_perda)}` : ""}</p>
           ${processo.resultado ? `<p class="nota">Registro anterior do processo: ${esc(processo.resultado)}</p>` : ""}
           <div class="acoes-bloco"><button class="btn" data-editar-processo="${processo.id}">Editar cadastro e sessão</button><button class="btn" data-resultado="${processo.id}">Registrar resultado</button><button class="btn" data-item="${processo.id}">+ Item/lote</button></div>
           ${sugeridos.length ? `<div class="linha-registro" data-sugestao-resultado="${processo.id}"><strong>Resultado encontrado no PNCP</strong><small>${esc(CP.textoSugestao(sugeridos, dinheiro))}</small><small>Nada foi gravado ainda. Confira e confirme para preencher o resultado de ${sugeridos.length} ${sugeridos.length === 1 ? "item" : "itens"}.</small><button class="btn" data-confirmar-sugestao="${processo.id}">Confirmar resultado</button></div>` : ""}
-          ${lista(itens, item => `<div class="linha-registro"><span class="tag">${esc(item.tipo)} ${esc(item.identificador)}</span><strong>${esc(item.descricao || "Sem descrição")}</strong><small>${esc(rotulo(item.situacao))} · qtd.: ${esc(item.quantidade ?? "Não informada")} · proposta: ${valorOpcional(item.valor_proposta)} · homologado à empresa: ${valorOpcional(item.valor_homologado)}</small>${item.valor_unitario_proposta != null || item.valor_unitario_homologado != null ? `<small>Unitário proposto: ${valorOpcional(item.valor_unitario_proposta)} · unitário homologado: ${valorOpcional(item.valor_unitario_homologado)}</small>` : ""}${item.marca || item.modelo ? `<small>Marca: ${esc(item.marca || "—")} · Modelo: ${esc(item.modelo || "—")}</small>` : ""}${item.motivo ? `<small>${esc(item.motivo)}</small>` : ""}${origem(item.fonte_oficial)} <button class="btn" data-corrigir-item="${item.id}">Corrigir</button> <button class="btn perigo" data-excluir-item="${item.id}">Excluir lançamento</button></div>`, "Nenhum item/lote registrado. O resultado geral pode ser informado manualmente.")}
+          ${lista(itens, item => `<div class="linha-registro"><span class="tag">${esc(item.tipo)} ${esc(item.identificador)}</span><strong>${esc(item.descricao || "Sem descrição")}</strong><small>${esc(rotulo(item.situacao))} · qtd.: ${esc(item.quantidade ?? "Não informada")} · proposta: ${valorOpcional(item.valor_proposta)} · homologado à empresa: ${valorOpcional(item.valor_homologado)}</small>${item.valor_unitario_proposta != null || item.valor_unitario_homologado != null ? `<small>Unitário proposto: ${valorOpcional(item.valor_unitario_proposta)} · unitário homologado: ${valorOpcional(item.valor_unitario_homologado)}</small>` : ""}${item.marca || item.modelo ? `<small>Marca: ${esc(item.marca || "—")} · Modelo: ${esc(item.modelo || "—")}</small>` : ""}${item.motivo ? `<small>${esc(item.motivo)}</small>` : ""}${origem(item.fonte_oficial)}${blocoAndamento(item)} <button class="btn" data-corrigir-item="${item.id}">Corrigir</button> <button class="btn perigo" data-excluir-item="${item.id}">Excluir lançamento</button></div>`, "Nenhum item/lote registrado. O resultado geral pode ser informado manualmente.")}
         </section>
         <section class="bloco-dossie"><h3>Relatório cronológico</h3><div class="acoes-bloco"><button class="btn" data-ocorrencia="${processo.id}">+ Ocorrência</button></div>
           ${lista(ocorrencias, evento => `<div class="linha-registro"><strong>${dataHora(evento.ocorrido_em)} · ${esc(evento.categoria)}</strong><small>${esc(evento.descricao)}</small>${origem(evento.fonte_oficial)} <button class="btn" data-editar-ocorrencia="${evento.id}">Corrigir registro</button></div>`, "Nenhuma ocorrência registrada. Anote sessões, mensagens, diligências e decisões com suas datas.")}
@@ -260,9 +286,10 @@
       $("form-contrato").addEventListener("submit", salvarContrato);
       $("form-anexo").addEventListener("submit", salvarAnexo);
       $("d-conteudo").addEventListener("click", async ev => {
-        const botao = ev.target.closest("[data-editar-processo],[data-resultado],[data-item],[data-corrigir-item],[data-excluir-item],[data-ocorrencia],[data-editar-ocorrencia],[data-editar-prazo],[data-contrato],[data-editar-contrato],[data-editar-empenho],[data-anexo],[data-abrir-anexo],[data-ler-evidencia],[data-concluir-prazo],[data-confirmar-sugestao]");
+        const botao = ev.target.closest("[data-editar-processo],[data-resultado],[data-item],[data-corrigir-item],[data-excluir-item],[data-ocorrencia],[data-editar-ocorrencia],[data-editar-prazo],[data-contrato],[data-editar-contrato],[data-editar-empenho],[data-anexo],[data-abrir-anexo],[data-ler-evidencia],[data-concluir-prazo],[data-confirmar-sugestao],[data-salvar-andamento]");
         if (!botao) return;
         const { editarProcesso: editar, resultado, item, corrigirItem, excluirItem: excluirId, ocorrencia, editarOcorrencia, editarPrazo, contrato, editarContrato, editarEmpenho, anexo, abrirAnexo: abrirId, concluirPrazo } = botao.dataset;
+        if (botao.dataset.salvarAndamento) { botao.disabled = true; await salvarAndamento(botao.dataset.salvarAndamento); botao.disabled = false; return; }
         if (botao.dataset.confirmarSugestao) { botao.disabled = true; await confirmarSugestao(botao.dataset.confirmarSugestao); return; }
         if (editar) { editarProcesso(editar); return; }
         if (excluirId) { await excluirItem(excluirId); return; }

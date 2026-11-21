@@ -33,6 +33,22 @@
     }
     return `\uFEFF${linhas.join('\r\n')}\r\n`;
   }
+  // "Baixar arquivo para importar no portal". N\u00E3o h\u00E1 layout p\u00FAblico confirmado de importa\u00E7\u00E3o de proposta por planilha
+  // do lado do fornecedor: os manuais do Compras.gov.br s\u00F3 descrevem o "Upload de itens" do \u00D3RG\u00C3O na fase interna
+  // (modelo baixado dentro do sistema; gov.br/compras, tutorial_licitacoes-eletronicas-no-novo-dc.pdf, passos 24-25),
+  // e o Portal de Compras P\u00FAblicas entrega o modelo por processo, dentro da conta do fornecedor. Por isso o arquivo \u00E9
+  // gen\u00E9rico, com as colunas que os dois pedem: a pessoa copia as colunas para o modelo do portal.
+  // shortcut: CSV gen\u00E9rico; quando um layout oficial for publicado, gerar no formato exato dele.
+  const COLUNAS_PORTAL = ['item', 'descricao', 'marca', 'modelo', 'unidade', 'quantidade', 'valor_unitario', 'valor_total'];
+  function gerarCsvPortal(itens) {
+    const linhas = [COLUNAS_PORTAL.join(';')];
+    for (const i of itens || []) {
+      const t = itensUi.totalCentavos(String(i.quantidade ?? ''), String(i.valorUnitario ?? ''));
+      const total = t === null ? '' : `${t / 100n},${String(t % 100n).padStart(2, '0')}`;
+      linhas.push([i.identificador, i.descricao, i.marca, i.modelo, i.unidade, virgula(String(i.quantidade ?? '').replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '')), virgula(i.valorUnitario), total].map(celula).join(';'));
+    }
+    return `\uFEFF${linhas.join('\r\n')}\r\n`;
+  }
 
   // ---------- leitura ----------
   // RFC 4180 com ';'. Aceita CRLF e LF (planilhas salvas em outros sistemas). Devolve registros ou erro.
@@ -158,7 +174,7 @@
     return `${i}.${f.padEnd(4, '0')}`;
   }
 
-  const api = { COLUNAS, MAX_LINHAS, MAX_BYTES, gerarCsv, lerCsv, validarLinhas, quatroCasas, registros, celula };
+  const api = { COLUNAS, COLUNAS_PORTAL, MAX_LINHAS, MAX_BYTES, gerarCsv, gerarCsvPortal, lerCsv, validarLinhas, quatroCasas, registros, celula };
   global.LicitaPlanilhaItens = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(globalThis);

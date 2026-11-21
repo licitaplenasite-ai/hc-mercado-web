@@ -176,6 +176,22 @@
       lucroTotal: qtd === null ? null : p.formatarReais(centavosDe4((lucro * qtd) / 1000n)),
     };
   }
+  // Cenários de margem (10%, 15%, 30% e a margem própria digitada): mesma conta do preço-alvo (custo + frete rateado,
+  // tributos e garantia sobre o preço), só trocando a margem. Preço arredondado para cima; lucro do preço, para baixo.
+  const MARGENS_CENARIO = ['10', '15', '30'];
+  function cenariosMargem(calc, quantidade, margemPropria) {
+    if (!calc || calc.base === undefined) return [];
+    const p = P(), qtd = decimalPositivo(quantidade, 3), propria = String(margemPropria ?? '').trim();
+    return [...MARGENS_CENARIO, ...(propria ? [propria] : [])].map((m, k) => {
+      const ehPropria = k >= MARGENS_CENARIO.length, pm = p.lerPercentual(m);
+      if (pm === null || pm >= 100000n) return { propria: ehPropria, erro: 'Margem própria: use um número de 0 a 99,999, com vírgula. Ex.: 12,5' };
+      const r = p.precoComMargem(calc.base, calc.fixo + pm);
+      if (!r.ok) return { propria: ehPropria, margem: p.formatarPercentual(pm), erro: r.erro };
+      const lucro4 = p.lucro(r.centavos * 100n, calc.base, calc.fixo);
+      return { propria: ehPropria, margem: p.formatarPercentual(pm), precoCentavos: r.centavos, preco: p.formatarReais(r.centavos),
+        lucroUnidade: p.formatarReais(centavosDe4(lucro4)), lucroTotal: qtd === null ? null : p.formatarReais(centavosDe4((lucro4 * qtd) / 1000n)) };
+    });
+  }
   // Linha opcional "CBS/IBS da Reforma" sobre o preço-alvo. Desligada (padrão): texto vazio e nada muda no preço,
   // que segue usando a alíquota de Tributos (%). CBS/IBS são por fora: a linha informa, não entra no alvo/limite.
   function linhaReforma(alvoCentavos, opcao) {
@@ -281,7 +297,7 @@
     if (!alvo || !contexto || !UUID.test(contexto.empresaId || '') || !UUID.test(contexto.processoId || '')) throw new Error('Contexto de itens inválido');
     let vivo = true, ocupado = false, edicao = null, tentativa = null, itens = [], cursor = null, maisItens = false, geracao = 0;
     let precoDisponivel = null, premissas = null, previa = null, numeroProcesso = '', filaPremissas = Promise.resolve(), filaRef = Promise.resolve();
-    const nos = new Map(), lances = new Map(), refEstado = new Map(), refTentada = new Set();
+    const nos = new Map(), lances = new Map(), margensProprias = new Map(), refEstado = new Map(), refTentada = new Set();
     let catalogoProdutos = [];
     // Opção CBS/IBS só na tela (não grava): começa desligada, ano corrente dentro da transição.
     const ANOS_REFORMA = modulo('LicitaReformaTributaria', './reforma-tributaria.js')?.ANOS || [];
@@ -321,9 +337,10 @@
         <div class="itens-acoes"><button type="submit" class="app-primario" data-item-salvar>Salvar item</button><button type="button" data-item-cancelar hidden>Cancelar edição</button></div>
       </form>
       <div class="itens-acoes"><button type="button" data-item-atualizar>Atualizar itens</button><button type="button" data-item-importar-abrir aria-expanded="false" aria-controls="itens-importar">Importar itens do edital (PNCP)</button>
-        <button type="button" data-planilha-baixar>Baixar planilha</button><button type="button" data-planilha-importar hidden>Importar planilha</button>
+        <button type="button" data-planilha-baixar>Baixar planilha</button><button type="button" data-portal-baixar>Baixar arquivo para importar no portal</button><button type="button" data-planilha-importar hidden>Importar planilha</button>
         <input type="file" accept=".csv,text/csv" data-planilha-arquivo aria-label="Arquivo da planilha de itens (CSV)" hidden></div>
       <p data-planilha-estado class="itens-planilha-estado" role="status" aria-live="polite"></p>
+      <p class="itens-apoio">O arquivo para o portal é uma planilha simples (item, descrição, marca, modelo, unidade, quantidade, valor unitário e valor total). O Compras.gov.br e o Portal de Compras Públicas não publicam um modelo oficial de importação da proposta: copie as colunas para o modelo que o portal oferece no processo.</p>
       <section data-planilha-previa class="itens-previa" aria-labelledby="itens-previa-titulo" hidden>
         <h3 id="itens-previa-titulo" tabindex="-1">Prévia da planilha</h3>
         <p data-previa-resumo></p>
@@ -381,7 +398,7 @@
       const c = campos(), t = totalCentavos(c.quantidade, c.valorUnitario);
       el('[data-item-total]').textContent = t === null ? 'Total do item: informe quantidade e valor válidos.' : `Total do item: ${reais(t)}`;
     }
-    function bloquear(v) { ocupado = v; for (const s of ['[data-item-salvar]', '[data-item-atualizar]', '[data-item-mais]', '[data-item-importar-enviar]', '[data-planilha-baixar]', '[data-planilha-importar]']) el(s).disabled = v; }
+    function bloquear(v) { ocupado = v; for (const s of ['[data-item-salvar]', '[data-item-atualizar]', '[data-item-mais]', '[data-item-importar-enviar]', '[data-planilha-baixar]', '[data-portal-baixar]', '[data-planilha-importar]']) el(s).disabled = v; }
 
     // ---------- premissas ----------
     function montarPremissas() {
@@ -470,7 +487,10 @@
         fonteEstado: h('p', { classe: 'itens-apoio', role: 'status', 'aria-live': 'polite' }),
         mercado: h('div', { classe: 'itens-mercado', hidden: true }),
         itemMercado: h('div', { classe: 'itens-mercado', hidden: true }),
+        margemPropria: h('input', { id: id('margem-propria'), 'data-margem-propria': i.id, inputmode: 'decimal', autocomplete: 'off', placeholder: 'Ex.: 12,5' }),
+        cenarios: h('div', { classe: 'itens-cenarios', 'data-cenarios': i.id, 'aria-live': 'polite' }),
       };
+      n.margemPropria.value = margensProprias.get(i.id) || '';
       n.custo.value = virgula(i.custoUnitario);
       n.lance.value = lances.get(i.id) || '';
       nos.set(i.id, n);
@@ -482,6 +502,8 @@
           h('div', {}, h('dt', { texto: 'Preço mínimo gravado' }), n.minimo)),
         n.aviso, n.reforma, n.referencia,
         h('div', { classe: 'itens-campo' }, h('label', { for: id('lance'), texto: 'Simular lance (R$)' }), n.lance), n.simulacao,
+        h('strong', { texto: 'Cenários de margem' }),
+        h('div', { classe: 'itens-campo' }, h('label', { for: id('margem-propria'), texto: 'Margem própria (%)' }), n.margemPropria), n.cenarios,
         h('div', { classe: 'itens-acoes' }, n.usar, n.usarEstado),
         fontesDoItem(i, n));
     }
@@ -516,12 +538,16 @@
     }
     // "Usar preço": a mediana entra no valor unitário pelo formulário do item (mesmo caminho do "Usar no valor unitário"); a pessoa confere e salva.
     function usarPrecoMercado(i, centavos) {
+      usarNoValorUnitario(i, MC.reais(centavos), `Mediana do mercado (${MC.brl(centavos)}) no valor unitário do formulário do item, no topo: confira e clique em Salvar item. É referência do que o governo pagou, não o seu custo.`);
+    }
+    // Preço entra pelo formulário do item: a pessoa confere e clica em Salvar item (mesma regra de preço mínimo do salvar).
+    function usarNoValorUnitario(i, valor, mensagem) {
       const n = nos.get(i.id);
       if (ocupado || (edicao && edicao !== i.id)) { marcar(n?.fonteEstado, 'Termine ou cancele a edição aberta antes de usar o preço.', 'erro'); return; }
       if (edicao !== i.id) editar(i.id);
-      form.elements.valorUnitario.value = MC.reais(centavos);
+      form.elements.valorUnitario.value = valor;
       atualizarTotal();
-      marcar(n?.fonteEstado, `Mediana do mercado (${MC.brl(centavos)}) no valor unitário do formulário do item, no topo: confira e clique em Salvar item. É referência do que o governo pagou, não o seu custo.`, 'ok');
+      marcar(n?.fonteEstado, mensagem, 'ok');
       el('#itens-titulo')?.focus?.();
     }
     // Marca e modelo entram pelo formulário do item (mesmo caminho de "Editar" + "Salvar item"): a pessoa confere antes de gravar.
@@ -618,7 +644,18 @@
         n.reforma.textContent = linhaReforma(c?.alvo, reforma);
         renderReferencia(i, c);
         renderSimulacao(i, c);
+        renderCenarios(i, c);
       }
+    }
+    function renderCenarios(i, c) {
+      const n = nos.get(i.id); if (!n) return;
+      const lista = cenariosMargem(c, i.quantidade, margensProprias.get(i.id));
+      if (!lista.length) { n.cenarios.replaceChildren(h('p', { classe: 'itens-apoio', texto: 'Informe o custo unitário para ver os cenários de margem.' })); return; }
+      n.cenarios.replaceChildren(h('ul', {}, ...lista.map((k) => (k.erro
+        ? h('li', { texto: k.erro })
+        : h('li', { 'data-cenario': k.margem },
+          h('span', { texto: `${k.propria ? 'Margem própria ' : 'Margem '}${k.margem}: preço unitário mínimo ${k.preco} · lucro por unidade ${k.lucroUnidade}${k.lucroTotal ? ` · lucro total ${k.lucroTotal}` : ''} ` }),
+          h('button', { type: 'button', 'data-usar-preco': i.id, 'data-centavos': String(k.precoCentavos), texto: 'Usar este preço' }))))));
     }
     function renderSimulacao(i, c) {
       const n = nos.get(i.id), digitado = lances.get(i.id) || '';
@@ -726,17 +763,19 @@
       throw new Error('O processo tem mais itens do que cabem numa planilha (limite de 1000).');
     }
     const avisoPlanilha = (t, tipo) => marcar(el('[data-planilha-estado]'), t, tipo);
-    async function baixarPlanilha() {
+    async function baixarPlanilha(paraPortal = false) {
       if (ocupado || !vivo) return;
       bloquear(true); avisoPlanilha('Preparando a planilha…', 'carregando');
       try {
-        const csv = planilha().gerarCsv(await todosItens());
+        const todos = await todosItens();
+        const csv = paraPortal ? planilha().gerarCsvPortal(todos) : planilha().gerarCsv(todos);
         if (!vivo) return;
         const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-        const a = h('a', { href: url, download: `itens-processo-${(numeroProcesso || 'processo').replace(/[^\w-]+/g, '-').slice(0, 60)}.csv`, hidden: true });
+        const a = h('a', { href: url, download: `${paraPortal ? 'proposta-portal' : 'itens-processo'}-${(numeroProcesso || 'processo').replace(/[^\w-]+/g, '-').slice(0, 60)}.csv`, hidden: true });
         doc.body.append(a); a.click(); a.remove();
         global.setTimeout(() => URL.revokeObjectURL(url), 1000);
-        avisoPlanilha(recursosPreco(precoDisponivel).importarPlanilha ? 'Planilha baixada. Preencha no Excel ou LibreOffice e use Importar planilha.' : 'Planilha baixada com os campos disponíveis.', 'ok');
+        if (paraPortal) avisoPlanilha(`Arquivo para o portal baixado (${todos.length} ${todos.length === 1 ? 'item' : 'itens'}). Confira marca, modelo e valor unitário antes de enviar.`, 'ok');
+        else avisoPlanilha(recursosPreco(precoDisponivel).importarPlanilha ? 'Planilha baixada. Preencha no Excel ou LibreOffice e use Importar planilha.' : 'Planilha baixada com os campos disponíveis.', 'ok');
       } catch (e) { if (vivo) avisoPlanilha(e.message || MSG.erroCarregar, 'erro'); }
       finally { if (vivo) bloquear(false); }
     }
@@ -872,6 +911,7 @@
     });
     formImportar.addEventListener('submit', importar);
     el('[data-planilha-baixar]').addEventListener('click', () => { void baixarPlanilha(); });
+    el('[data-portal-baixar]').addEventListener('click', () => { void baixarPlanilha(true); });
     el('[data-planilha-importar]').addEventListener('click', () => { const a = el('[data-planilha-arquivo]'); a.value = ''; a.click(); });
     el('[data-planilha-arquivo]').addEventListener('change', (ev) => { void lerArquivo(ev.target.files?.[0]); });
     el('[data-previa-aplicar]').addEventListener('click', () => { void aplicarPlanilha(); });
@@ -882,6 +922,10 @@
       if (!b) return;
       if (b.dataset.itemEditar) editar(b.dataset.itemEditar);
       else if (b.dataset.usarLimite && itemDe(b.dataset.usarLimite)) void usarLimite(itemDe(b.dataset.usarLimite));
+      else if (b.dataset.usarPreco && itemDe(b.dataset.usarPreco) && /^[0-9]+$/.test(b.dataset.centavos || '')) {
+        const c = BigInt(b.dataset.centavos);
+        usarNoValorUnitario(itemDe(b.dataset.usarPreco), canonico(c, 2), `Preço do cenário (${P().formatarReais(c)}) no valor unitário do formulário do item, no topo: confira e clique em Salvar item.`);
+      }
       else if (b.dataset.buscarReferencia && itemDe(b.dataset.buscarReferencia)) { const i = itemDe(b.dataset.buscarReferencia); filaRef = filaRef.then(() => buscarReferencia(i)); }
     });
     // "change" dispara ao sair do campo com valor alterado: é o "salva ao sair dele".
@@ -892,6 +936,7 @@
     });
     alvo.addEventListener('input', (ev) => {
       const d = ev.target?.dataset || {};
+      if (d.margemPropria && itemDe(d.margemPropria)) { margensProprias.set(d.margemPropria, ev.target.value); renderCenarios(itemDe(d.margemPropria), calcularPrecos(itens, premissas).get(d.margemPropria)); }
       if (d.lance && itemDe(d.lance)) { lances.set(d.lance, ev.target.value); renderSimulacao(itemDe(d.lance), calcularPrecos(itens, premissas).get(d.lance)); }
     });
     montarPremissas();
@@ -909,7 +954,7 @@
   }
 
   const api = { montar, validarItemCampos, abaixoDoMinimo, totalCentavos, reais, linhaQuantidade, decimalPositivo, numeroItemImportacao, respostaImportacao, MSG,
-    premissaDoCampo, premissaParaCampo, precoSinapi, calcularPrecos, simularLance, linhaReforma, corpoUsarLimite, unidadeCompras, referenciaDeResposta, decodificarPlanilha, previaPlanilha, recursosPreco };
+    premissaDoCampo, premissaParaCampo, precoSinapi, calcularPrecos, simularLance, cenariosMargem, linhaReforma, corpoUsarLimite, unidadeCompras, referenciaDeResposta, decodificarPlanilha, previaPlanilha, recursosPreco };
   global.LicitaItensProcesso = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(globalThis);

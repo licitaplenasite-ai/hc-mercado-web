@@ -30,3 +30,28 @@ test('preço vindo da busca SINAPI: só valor canônico de 2 casas e código num
     assert.equal(I.precoSinapi(ruim), null, String(ruim));
   }
 });
+
+test('cenários de margem: 10/15/30% e margem própria, com tributos e frete da regra do preço-alvo', () => {
+  const calc = I.calcularPrecos([{ id: 'a', custoUnitario: '100.00', quantidade: '10.000' }], { tributos: '10.000', garantia: '0', margem: '20', margemMinima: '5' }).get('a');
+  const c = I.cenariosMargem(calc, '10.000', '12,5');
+  assert.deepEqual(c.map((k) => [k.margem, k.preco, k.lucroUnidade, k.lucroTotal, k.propria]), [
+    ['10%', 'R$ 125,00', 'R$ 12,50', 'R$ 125,00', false],
+    ['15%', 'R$ 133,34', 'R$ 20,01', 'R$ 200,06', false],
+    ['30%', 'R$ 166,67', 'R$ 50,00', 'R$ 500,03', false],
+    ['12,5%', 'R$ 129,04', 'R$ 16,14', 'R$ 161,36', true],
+  ]);
+  assert.equal(c[1].precoCentavos, 13334n);
+  // Frete rateado entra na base: 2 unidades, frete R$ 10,00 → +R$ 5,00 por unidade.
+  const f = I.calcularPrecos([{ id: 'b', custoUnitario: '95.00', quantidade: '2.000' }], { tributos: '0', garantia: '0', frete: '10.00', margem: '10', margemMinima: '0' }).get('b');
+  assert.equal(I.cenariosMargem(f, '2.000')[0].preco, 'R$ 111,12');
+});
+
+test('cenários de margem: sem custo, margem própria inválida e soma de percentuais ≥ 100%', () => {
+  assert.deepEqual(I.cenariosMargem({ semCusto: true }, '1.000'), []);
+  assert.deepEqual(I.cenariosMargem(undefined, '1.000'), []);
+  const calc = I.calcularPrecos([{ id: 'a', custoUnitario: '10.00', quantidade: '1.000' }], { tributos: '75', garantia: '0', margem: '1', margemMinima: '1' }).get('a');
+  const c = I.cenariosMargem(calc, null, 'abc');
+  assert.equal(c[0].lucroTotal, null); // sem quantidade válida, sem lucro total
+  assert.match(c[2].erro, /menor que 100%/);
+  assert.match(c[3].erro, /Margem própria/);
+});

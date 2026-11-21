@@ -88,6 +88,7 @@ input::placeholder,textarea::placeholder{color:var(--text-secondary);opacity:1}
 @media(max-width:480px){.topo h1{font-size:24px;line-height:32px}.acoes .btn.tema-icone{display:inline-flex}}
 /* Contratos em fases (aba Empenhos e execução): Potencial → Empenhado → Entregue → Faturado → Recebido. Só tokens do DS. */
 #aba-empenhos .card+.card{margin-top:16px}
+.andamento-item{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px;margin:6px 0;padding:8px;border:1px solid var(--borda);border-radius:8px}.andamento-item small{flex-basis:100%}.andamento-item label{display:flex;flex-direction:column;gap:2px;font-size:12px;color:var(--fraco)}.andamento-item input{min-width:220px}
 .fases-filtro{display:flex;gap:8px;flex-wrap:wrap}
 .fases-filtro button{min-height:40px;padding:0 12px;border:1px solid var(--border-default);border-radius:var(--radius-control);background:var(--surface-default);color:var(--text-secondary);font:500 14px/20px var(--font-sans);cursor:pointer}
 .fases-filtro button[aria-pressed="true"]{border-color:var(--action-strong);background:var(--action-tint);color:var(--text-primary);font-weight:600}

@@ -191,6 +191,86 @@
     return { processos, totais: t };
   }
 
+  // ---------- catálogo em PDF (para mandar ao cliente) ----------
+  // Montado no navegador com o pdf-lib que a página já usa no "PDF único" (carregado sob demanda, versão fixa + SRI).
+  // Vai só o que o cliente deve ver: foto, nome, marca/modelo, unidade e descrição. Custo e fornecedor NUNCA entram.
+  const A4 = [595.28, 841.89], MARGEM = 40, FOTO_LADO = 90;
+  const MAX_PDF = 300; // shortcut: até 300 produtos por PDF (uma foto baixada por produto); acima disso, selecione por partes.
+  // Fonte padrão do PDF (Helvetica) só escreve o conjunto WinAnsi (Latin-1 + aspas tipográficas): o resto vira "?".
+  const WINANSI_EXTRA = new Set('€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ');
+  const textoPdf = (t) => [...String(t ?? '').normalize('NFC').replace(/[\r\n\t]+/g, ' ')]
+    .map((c) => (c.charCodeAt(0) >= 32 && c.charCodeAt(0) <= 255 && !(c.charCodeAt(0) >= 127 && c.charCodeAt(0) < 160)) || WINANSI_EXTRA.has(c) ? c : '?').join('').trim();
+  // Quebra por palavra na largura; palavra maior que a linha é cortada. maxLinhas: a última recebe "…".
+  function quebrarLinhas(texto, largura, medir, maxLinhas = Infinity) {
+    const linhas = []; let atual = '';
+    const empurrar = (l) => { if (linhas.length < maxLinhas) linhas.push(l); };
+    for (let palavra of textoPdf(texto).split(/\s+/).filter(Boolean)) {
+      while (medir(palavra) > largura && palavra.length > 1) {
+        let k = palavra.length - 1; while (k > 1 && medir(palavra.slice(0, k)) > largura) k--;
+        if (atual) { empurrar(atual); atual = ''; }
+        empurrar(palavra.slice(0, k)); palavra = palavra.slice(k);
+      }
+      const junto = atual ? `${atual} ${palavra}` : palavra;
+      if (medir(junto) <= largura) atual = junto; else { empurrar(atual); atual = palavra; }
+    }
+    if (atual) empurrar(atual);
+    const total = textoPdf(texto).split(/\s+/).filter(Boolean).join(' ');
+    if (linhas.length === maxLinhas && linhas.join(' ').length < total.length) {
+      let u = linhas[maxLinhas - 1];
+      while (u && medir(`${u}…`) > largura) u = u.slice(0, -1);
+      linhas[maxLinhas - 1] = `${u}…`;
+    }
+    return linhas;
+  }
+  const cnpjFormatado = (c) => (/^\d{14}$/.test(c || '') ? c.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') : c || '');
+  // Produtos do PDF: os marcados (na ordem do catálogo) ou, sem marcação, todos os ativos.
+  function produtosDoPdf(produtos, selecionados) {
+    const marcados = (produtos || []).filter((p) => selecionados?.has?.(p.id));
+    return marcados.length ? marcados : (produtos || []).filter((p) => p.ativo !== false);
+  }
+  // dados: { empresa: {razao_social, cnpj}, perfil: {nome_fantasia, telefone, email}, logo: {bytes, ext}|null,
+  //          produtos: [{ nome, marca, modelo, unidade, descricao, foto: {bytes, ext}|null }], hoje: 'dd/mm/aaaa' }
+  async function montarPdfCatalogo(PDFLib, dados) {
+    const pdf = await PDFLib.PDFDocument.create();
+    const fonte = await pdf.embedFont(PDFLib.StandardFonts.Helvetica), negrito = await pdf.embedFont(PDFLib.StandardFonts.HelveticaBold);
+    const cinza = PDFLib.rgb(0.35, 0.35, 0.35), preto = PDFLib.rgb(0, 0, 0);
+    const imagem = async (f) => { try { return f?.bytes ? (f.ext === 'png' ? await pdf.embedPng(f.bytes) : await pdf.embedJpg(f.bytes)) : null; } catch { return null; } };
+    let pagina, y;
+    const escrever = (t, x, tam, f = fonte, cor = preto) => { pagina.drawText(textoPdf(t), { x, y, size: tam, font: f, color: cor }); };
+    async function novaPagina() {
+      pagina = pdf.addPage(A4); y = A4[1] - MARGEM;
+      const logo = await imagem(dados.logo);
+      let x = MARGEM;
+      if (logo) { const e = Math.min(1, 140 / logo.width, 50 / logo.height); pagina.drawImage(logo, { x, y: y - logo.height * e, width: logo.width * e, height: logo.height * e }); x += logo.width * e + 12; }
+      const e = dados.empresa || {}, pf = dados.perfil || {};
+      y -= 14; escrever(pf.nome_fantasia || e.razao_social || 'Catálogo de produtos', x, 14, negrito);
+      const linhas = [pf.nome_fantasia && e.razao_social ? e.razao_social : '', e.cnpj ? `CNPJ ${cnpjFormatado(e.cnpj)}` : '', [pf.telefone, pf.email].filter(Boolean).join(' · ')].filter(Boolean);
+      for (const l of linhas) { y -= 13; escrever(l, x, 9, fonte, cinza); }
+      y = Math.min(y, A4[1] - MARGEM - 50) - 22;
+      escrever(`Catálogo de produtos${dados.hoje ? ` · ${dados.hoje}` : ''}`, MARGEM, 12, negrito);
+      y -= 12; pagina.drawLine({ start: { x: MARGEM, y }, end: { x: A4[0] - MARGEM, y }, thickness: 0.5, color: cinza }); y -= 16;
+    }
+    await novaPagina();
+    const largTexto = A4[0] - 2 * MARGEM - FOTO_LADO - 14;
+    for (const p of dados.produtos || []) {
+      const nome = quebrarLinhas(p.nome, largTexto, (t) => negrito.widthOfTextAtSize(t, 11), 2);
+      const extra = [[p.marca, p.modelo].filter(Boolean).join(' / ') ? `Marca / modelo: ${[p.marca, p.modelo].filter(Boolean).join(' / ')}` : '', p.unidade ? `Unidade: ${p.unidade}` : ''].filter(Boolean);
+      const desc = quebrarLinhas(p.descricao, largTexto, (t) => fonte.widthOfTextAtSize(t, 9), 6);
+      const altura = Math.max(FOTO_LADO, nome.length * 14 + extra.length * 12 + desc.length * 11 + 4) + 16;
+      if (y - altura < MARGEM) await novaPagina();
+      const topo = y, foto = await imagem(p.foto);
+      if (foto) { const e = Math.min(FOTO_LADO / foto.width, FOTO_LADO / foto.height); pagina.drawImage(foto, { x: MARGEM + (FOTO_LADO - foto.width * e) / 2, y: topo - FOTO_LADO + (FOTO_LADO - foto.height * e) / 2, width: foto.width * e, height: foto.height * e }); }
+      else pagina.drawRectangle({ x: MARGEM, y: topo - FOTO_LADO, width: FOTO_LADO, height: FOTO_LADO, borderColor: cinza, borderWidth: 0.5 });
+      const x = MARGEM + FOTO_LADO + 14;
+      y = topo - 11; for (const l of nome) { escrever(l, x, 11, negrito); y -= 14; }
+      for (const l of extra) { escrever(l, x, 9, fonte, cinza); y -= 12; }
+      for (const l of desc) { escrever(l, x, 9); y -= 11; }
+      y = topo - altura + 8;
+      pagina.drawLine({ start: { x: MARGEM, y }, end: { x: A4[0] - MARGEM, y }, thickness: 0.3, color: cinza }); y -= 10;
+    }
+    return pdf.save({ useObjectStreams: false }); // sem object streams (PDF 1.5): abre em leitores antigos de órgão e cliente
+  }
+
   // ---------- tela ----------
   const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   const brl = (c) => (c === null ? '—' : (c / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
@@ -199,15 +279,16 @@
 
   const SO_LEITURA = 'Seu papel nesta empresa é só de leitura: peça a um gestor para cadastrar.';
   // sb = cliente Supabase da página. abrir({ orgId, empresaId }) recarrega para a empresa ativa.
-  function montar({ alvo, sb, doc = global.document }) {
-    const estado = { orgId: null, empresaId: null, leitura: false, produtos: [], busca: '', editando: null, foto: null, importacao: null, referencia: null, mercado: null };
+  // carregarPdfLib: () => Promise<PDFLib> da página (o mesmo do "PDF único"); sem ele o botão do PDF fica oculto.
+  function montar({ alvo, sb, doc = global.document, carregarPdfLib = null }) {
+    const estado = { orgId: null, empresaId: null, leitura: false, produtos: [], busca: '', editando: null, foto: null, importacao: null, referencia: null, mercado: null, selecionados: new Set() };
     const $ = (s) => alvo.querySelector(s);
     alvo.innerHTML = `<div class="card-topo"><div><h2>Catálogo de produtos</h2><p>Cadastre uma vez custo, marca, modelo e fornecedor. No preço por item do processo, "Usar do catálogo" preenche esses campos.</p></div>
-      <div class="pdf-acoes"><button class="btn" data-acao="exportar">Baixar planilha</button><label class="btn" data-escrita>Importar planilha<input type="file" accept=".csv,text/csv" data-acao="importar" hidden></label><button class="btn" data-acao="mercado" aria-expanded="false">Buscar no mercado (Compras.gov)</button><button class="btn primario" data-acao="novo" data-escrita>+ Produto</button></div></div>
+      <div class="pdf-acoes"><button class="btn" data-acao="exportar">Baixar planilha</button><label class="btn" data-escrita>Importar planilha<input type="file" accept=".csv,text/csv" data-acao="importar" hidden></label><button class="btn" data-acao="mercado" aria-expanded="false">Buscar no mercado (Compras.gov)</button><button class="btn" data-acao="pdf"${carregarPdfLib ? '' : ' hidden'}>Baixar catálogo em PDF</button><button class="btn primario" data-acao="novo" data-escrita>+ Produto</button></div></div>
       <section class="catalogo-mercado card" hidden aria-label="Buscar no mercado"><h2>Buscar no mercado (Compras.gov)</h2><p class="nota">Produtos que órgãos públicos já compraram, com a marca declarada e o preço pago. "Adicionar ao catálogo" preenche nome, marca, modelo, unidade e o preço de referência; o custo continua sendo o do seu fornecedor.</p><div class="catalogo-mercado-busca"></div></section>
       <input type="search" class="catalogo-busca" placeholder="Buscar por nome, marca, modelo ou código" aria-label="Buscar no catálogo" style="width:100%;margin:6px 0 10px">
       <div class="catalogo-importacao" aria-live="polite"></div><form class="catalogo-form card" hidden></form>
-      <p class="nota catalogo-status" aria-live="polite"></p><div class="tabela-wrap"><table class="tabela"><thead><tr><th>Produto</th><th>Marca / modelo</th><th>Unidade</th><th>Custo</th><th>Fornecedor</th><th>Situação</th><th></th></tr></thead><tbody class="catalogo-lista"></tbody></table></div>`;
+      <p class="nota catalogo-status" aria-live="polite"></p><p class="nota catalogo-pdf-status" aria-live="polite">Catálogo em PDF: marque os produtos que quer mandar ao cliente, ou baixe sem marcar para levar todos os ativos. Custo e fornecedor não aparecem no PDF.</p><div class="tabela-wrap"><table class="tabela"><thead><tr><th aria-label="Incluir no PDF"></th><th>Produto</th><th>Marca / modelo</th><th>Unidade</th><th>Custo</th><th>Fornecedor</th><th>Situação</th><th></th></tr></thead><tbody class="catalogo-lista"></tbody></table></div>`;
     const status = (t) => { $('.catalogo-status').textContent = t; };
 
     function filtrados() {
@@ -216,13 +297,47 @@
     }
     function desenharLista() {
       const lista = filtrados();
-      $('.catalogo-lista').innerHTML = lista.length ? lista.map((p) => `<tr><td><strong>${esc(p.nome)}</strong>${p.codigo_interno ? `<br><span class="nota">Cód. ${esc(p.codigo_interno)}</span>` : ''}${p.foto_caminho ? '<br><span class="nota">Com foto</span>' : ''}</td>
+      $('.catalogo-lista').innerHTML = lista.length ? lista.map((p) => `<tr><td><input type="checkbox" data-selecionar="${esc(p.id)}" aria-label="Incluir ${esc(p.nome)} no PDF"${estado.selecionados.has(p.id) ? ' checked' : ''}></td><td><strong>${esc(p.nome)}</strong>${p.codigo_interno ? `<br><span class="nota">Cód. ${esc(p.codigo_interno)}</span>` : ''}${p.foto_caminho ? '<br><span class="nota">Com foto</span>' : ''}</td>
         <td>${esc([p.marca, p.modelo].filter(Boolean).join(' / ') || '—')}${p.fabricante ? `<br><span class="nota">${esc(p.fabricante)}</span>` : ''}</td><td>${esc(p.unidade || '—')}</td>
         <td>${p.custo_unitario === null || p.custo_unitario === undefined ? '<span class="tag pendente">Sem custo</span>' : esc(brl(centavos(p.custo_unitario)))}${p.preco_referencia ? `<br><span class="nota" title="${esc(p.referencia_fonte)}">Ref. mercado ${esc(brl(centavos(p.preco_referencia)))}</span>` : ''}</td>
         <td>${esc(p.fornecedor_nome || '—')}${p.fornecedor_contato ? `<br><span class="nota">${esc(p.fornecedor_contato)}</span>` : ''}</td>
         <td><span class="tag ${p.ativo === false ? 'pendente' : 'valido'}">${p.ativo === false ? 'Inativo' : 'Ativo'}</span></td><td>${estado.leitura ? '' : `<button class="btn" data-editar="${esc(p.id)}">Editar</button>`}</td></tr>`).join('')
-        : `<tr><td colspan="7" class="vazio">${estado.produtos.length ? 'Nenhum produto encontrado nesta busca.' : estado.leitura ? 'Nenhum produto no catálogo.' : 'Nenhum produto no catálogo. Use "+ Produto" ou importe uma planilha.'}</td></tr>`;
+        : `<tr><td colspan="8" class="vazio">${estado.produtos.length ? 'Nenhum produto encontrado nesta busca.' : estado.leitura ? 'Nenhum produto no catálogo.' : 'Nenhum produto no catálogo. Use "+ Produto" ou importe uma planilha.'}</td></tr>`;
       status(`${estado.produtos.length} produto(s) no catálogo${estado.busca ? ` · ${lista.length} na busca` : ''}.`);
+      rotuloPdf();
+    }
+    function rotuloPdf() {
+      const b = $('[data-acao="pdf"]'), n = estado.selecionados.size;
+      if (b) b.textContent = n ? `Baixar catálogo em PDF (${n} selecionado${n === 1 ? '' : 's'})` : 'Baixar catálogo em PDF';
+    }
+    async function baixarArquivo(caminho) {
+      if (!caminho) return null;
+      const { data, error } = await sb.storage.from('operacao-documentos').download(caminho);
+      if (error || !data) return null;
+      return { bytes: new Uint8Array(await data.arrayBuffer()), ext: /\.png$/i.test(caminho) ? 'png' : 'jpg' };
+    }
+    async function baixarPdf(botao) {
+      const aviso = (t) => { $('.catalogo-pdf-status').textContent = t; };
+      const lista = produtosDoPdf(estado.produtos, estado.selecionados);
+      if (!lista.length) { aviso('Nenhum produto ativo para o PDF. Cadastre ou marque produtos.'); return; }
+      if (lista.length > MAX_PDF) { aviso(`O PDF leva até ${MAX_PDF} produtos. Marque os que quer mandar.`); return; }
+      botao.disabled = true; aviso(`Montando o catálogo com ${lista.length} produto(s)…`);
+      try {
+        const empresaId = estado.empresaId;
+        const [PDFLib, emp, pf] = await Promise.all([carregarPdfLib(),
+          sb.from('operacao_empresas').select('razao_social,cnpj').eq('id', empresaId).maybeSingle(),
+          sb.from('operacao_perfil_empresa').select('nome_fantasia,telefone,email,logo_caminho').eq('empresa_id', empresaId).maybeSingle()]);
+        const produtos = [];
+        for (const p of lista) produtos.push({ ...p, foto: await baixarArquivo(p.foto_caminho) });
+        const bytes = await montarPdfCatalogo(PDFLib, { empresa: emp.data || {}, perfil: pf.data || {}, logo: await baixarArquivo(pf.data?.logo_caminho), produtos, hoje: new Date().toLocaleDateString('pt-BR') });
+        if (empresaId !== estado.empresaId) return;
+        const a = doc.createElement('a');
+        a.href = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+        a.download = 'catalogo-produtos.pdf'; a.click(); global.setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+        const semFoto = produtos.filter((p) => !p.foto).length;
+        aviso(`Catálogo em PDF baixado com ${produtos.length} produto(s)${semFoto ? `; ${semFoto} sem foto` : ''}${pf.data?.logo_caminho ? '' : '. Para sair com a logo, envie-a em Dados da empresa'}.`);
+      } catch { aviso('Não foi possível montar o PDF agora. Verifique a conexão e tente de novo.'); }
+      finally { botao.disabled = false; }
     }
     async function carregar() {
       if (!estado.empresaId) return;
@@ -349,10 +464,12 @@
       else if (acao === 'mercado') alternarMercado(e.target.closest('[data-acao]'));
       else if (acao === 'cancelar') { $('.catalogo-form').hidden = true; estado.editando = null; estado.referencia = null; }
       else if (acao === 'exportar') exportar();
+      else if (acao === 'pdf') baixarPdf(e.target.closest('[data-acao]'));
       else if (acao === 'fechar-importacao') { $('.catalogo-importacao').innerHTML = ''; estado.importacao = null; }
       else if (acao === 'confirmar-importacao') confirmarImportacao(e.target);
     });
     alvo.addEventListener('change', async (e) => {
+      if (e.target.dataset.selecionar) { if (e.target.checked) estado.selecionados.add(e.target.dataset.selecionar); else estado.selecionados.delete(e.target.dataset.selecionar); rotuloPdf(); return; }
       if (e.target.dataset.acao === 'importar' && e.target.files[0]) { await importar(e.target.files[0]); e.target.value = ''; }
       if (e.target.id === 'cat-foto' && e.target.files[0]) {
         const erro = $('.catalogo-form-erro');
@@ -368,7 +485,7 @@
 
     return {
       // papel vem de meu_acesso_operacao (mesma fonte da página). Leitura não vê ações de escrita; o banco (RLS) segue sendo a barreira.
-      abrir({ orgId, empresaId, papel }) { Object.assign(estado, { orgId, empresaId, leitura: papel === 'leitura', produtos: [], busca: '' }); for (const b of alvo.querySelectorAll('[data-escrita]')) b.hidden = estado.leitura; $('.catalogo-busca').value = ''; $('.catalogo-form').hidden = true; $('.catalogo-importacao').innerHTML = ''; return carregar(); },
+      abrir({ orgId, empresaId, papel }) { Object.assign(estado, { orgId, empresaId, leitura: papel === 'leitura', produtos: [], busca: '', selecionados: new Set() }); for (const b of alvo.querySelectorAll('[data-escrita]')) b.hidden = estado.leitura; $('.catalogo-busca').value = ''; $('.catalogo-form').hidden = true; $('.catalogo-importacao').innerHTML = ''; return carregar(); },
       produtos: () => estado.produtos,
     };
   }
@@ -398,7 +515,7 @@
       <div class="tabela-wrap"><table class="tabela"><thead><tr><th>Processo</th><th>Vendido</th><th>Custo</th><th>Lucro</th><th>Margem</th></tr></thead><tbody>${processos.map((p) => `<tr><td>${esc(p.rotulo)}${ROT[p.situacao] ? `<br>${ROT[p.situacao]}` : ''}</td><td>${brl(p.vendido)}</td><td>${brl(p.custo)}</td><td>${brl(p.lucro)}</td><td>${p.margem === null ? '—' : `${String(p.margem).replace('.', ',')}%`}</td></tr>`).join('')}</tbody></table></div>`;
   }
 
-  const api = { COLUNAS, MAX_LINHAS, FOTO, normalizar, sugerirProdutos, camposParaItem, gerarCsv, lerCsv, validarProduto, validarReferencia, validarLinhas, validarFoto, caminhoFoto, resumoCustosVendas, montar, carregarResumo, desenharResumo };
+  const api = { COLUNAS, MAX_LINHAS, FOTO, normalizar, sugerirProdutos, camposParaItem, gerarCsv, lerCsv, validarProduto, validarReferencia, validarLinhas, validarFoto, caminhoFoto, resumoCustosVendas, montar, carregarResumo, desenharResumo, textoPdf, quebrarLinhas, produtosDoPdf, montarPdfCatalogo };
   global.CatalogoProdutos = api;
   if (nodeJs) module.exports = api;
 })(globalThis);

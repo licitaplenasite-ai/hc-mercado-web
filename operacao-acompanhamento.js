@@ -37,7 +37,32 @@
     };
   }
 
-  const api = { apurarItens, resultadoEfetivo, totalPorQuantidade };
+  // Andamento do item ganho (supabase/operacao_itens_entrega.sql). Passo sem valor gravado = aguardando compra.
+  // Avançar grava hoje nos passos ainda sem data (mantém a já gravada); voltar apaga a data dos passos seguintes.
+  const PASSOS_ENTREGA = ["aguardando_compra", "comprado", "enviado", "entregue"];
+  const DATA_DO_PASSO = { comprado: "comprado_em", enviado: "enviado_em", entregue: "entregue_em" };
+  function andamentoItem(item, passo, hoje, rastreio) {
+    const indice = PASSOS_ENTREGA.indexOf(passo);
+    if (indice < 0) return { erro: "Escolha um passo do andamento." };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(hoje || "")) return { erro: "Data de hoje inválida." };
+    const r = String(rastreio ?? "").trim();
+    if (r.length > 500) return { erro: "O rastreio ou link pode ter até 500 caracteres." };
+    const dados = { entrega_situacao: passo, rastreio: r || null };
+    PASSOS_ENTREGA.slice(1).forEach((p, k) => { dados[DATA_DO_PASSO[p]] = k + 1 <= indice ? (item?.[DATA_DO_PASSO[p]] || hoje) : null; });
+    return { dados };
+  }
+  // Contador do resumo: só itens ganhos, por passo.
+  function contarAndamento(itens) {
+    const c = { aguardando_compra: 0, comprado: 0, enviado: 0, entregue: 0, total: 0 };
+    for (const item of itens || []) {
+      if (item.situacao !== "ganho") continue;
+      c[PASSOS_ENTREGA.includes(item.entrega_situacao) ? item.entrega_situacao : "aguardando_compra"] += 1;
+      c.total += 1;
+    }
+    return c;
+  }
+
+  const api = { apurarItens, resultadoEfetivo, totalPorQuantidade, PASSOS_ENTREGA, andamentoItem, contarAndamento };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else raiz.LicitaAcompanhamento = api;
 })(typeof window !== "undefined" ? window : globalThis);
