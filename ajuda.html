@@ -39,7 +39,7 @@ a{color:var(--action-text)}
   document.getElementById("tutoriais").append(window.LicitaPlenaAjuda.listaTutoriais(location.hash, false));
   // Busca: esconde os artigos que não têm a palavra (sem acento, sem maiúscula) e abre os que sobram.
   const limpar = (t) => String(t).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-  const itens = [...document.querySelectorAll("#tutoriais li")];
+  const itens = [...document.querySelectorAll("#tutoriais > ul > li")]; // só os artigos, não os passos de dentro
   document.getElementById("busca-ajuda").addEventListener("input", (e) => {
     const q = limpar(e.target.value.trim());
     let achou = 0;
