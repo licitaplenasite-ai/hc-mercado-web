@@ -172,7 +172,14 @@
     fundo.querySelector(".lp-gaveta-fechar").focus();
   }
 
+  // Item "Consultoria" do menu lateral (a[data-hc-site]): abre direto o site da HC quando configurado; vazio = hc.html.
+  function ligarConsultoria() {
+    const site = contatosHC().site;
+    if (site) document.querySelectorAll("a[data-hc-site]").forEach((a) => { a.href = site; });
+  }
+
   function instalarBotao() {
+    ligarConsultoria();
     if (document.body.dataset.semAjuda !== undefined) return;
     // Painel: o "?" do topo já chama abrirAjuda, mas o painel o esconde no celular; ali entra o flutuante só no celular.
     const doPainel = Boolean(document.getElementById("header-ajuda-btn"));
@@ -190,7 +197,7 @@
     botao.addEventListener("click", abrirAjuda);
   }
 
-  window.LicitaPlenaAjuda = { abrir: abrirAjuda, listaTutoriais, ordenarPorTela, TUTORIAIS, VIDEOS, videoDoTutorial, linkWhatsApp, contatosHC, chamadaHC };
+  window.LicitaPlenaAjuda = { abrir: abrirAjuda, listaTutoriais, ordenarPorTela, TUTORIAIS, VIDEOS, videoDoTutorial, linkWhatsApp, contatosHC, chamadaHC, ligarConsultoria };
   if (typeof document !== "undefined" && document.body) instalarBotao();
   else if (typeof document !== "undefined") document.addEventListener("DOMContentLoaded", instalarBotao);
   if (typeof module !== "undefined" && module.exports) module.exports = window.LicitaPlenaAjuda;

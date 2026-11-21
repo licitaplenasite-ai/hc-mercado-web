@@ -75,3 +75,22 @@ test("Central e página da HC carregam a configuração; a CSP libera o YouTube 
   }
   for (const f of ["_headers", "netlify.toml"]) assert.match(fs.readFileSync(path.join(__dirname, f), "utf8"), /frame-src [^;]*youtube-nocookie\.com/, f);
 });
+
+test("Consultoria do menu: troca hc.html pelo site da HC só quando a configuração é https", () => {
+  const links = [{ href: "hc.html" }, { href: "hc.html" }];
+  const janela = {};
+  const documento = { querySelectorAll: (s) => (s === "a[data-hc-site]" ? links : []), addEventListener() {} };
+  const ctx = { window: janela, document: documento };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, "ajuda-ui.js"), "utf8"), ctx);
+  const ajuda = janela.LicitaPlenaAjuda;
+  {
+    ajuda.ligarConsultoria();
+    assert.deepEqual(links.map((l) => l.href), ["hc.html", "hc.html"]);
+    janela.LICITAPLENA_HC_SITE = "http://inseguro.exemplo";
+    ajuda.ligarConsultoria();
+    assert.equal(links[0].href, "hc.html");
+    janela.LICITAPLENA_HC_SITE = "https://hc.exemplo.com.br";
+    ajuda.ligarConsultoria();
+    assert.deepEqual(links.map((l) => l.href), ["https://hc.exemplo.com.br", "https://hc.exemplo.com.br"]);
+  }
+});

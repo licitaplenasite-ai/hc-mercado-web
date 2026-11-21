@@ -1,11 +1,11 @@
 'use strict';
 // Todas as páginas com menu lateral precisam trazer os mesmos itens, na mesma ordem (Prospecção, BDI, SINAPI, Hoje,
-// Processos, Calendário, Licitação anterior e Extensão incluídos).
+// Processos, Calendário, Licitação anterior, Extensão, Mão de obra e Consultoria incluídos).
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 
-const paginas = ['painel', 'sistema', 'operacao', 'processos', 'prospeccao', 'bdi', 'sinapi', 'quadros'];
+const paginas = ['painel', 'sistema', 'operacao', 'processos', 'prospeccao', 'bdi', 'sinapi', 'quadros', 'mao-de-obra'];
 
 for (const p of paginas) {
   test(`menu lateral de ${p}.html tem Prospecção e Calculadora de BDI`, () => {
@@ -16,9 +16,15 @@ for (const p of paginas) {
     assert.match(nav, /<a href="sinapi\.html"[^>]*>[\s\S]*?Preços SINAPI/);
     assert.ok(nav.indexOf('Calculadora de BDI') < nav.indexOf('Preços SINAPI'), 'SINAPI logo após BDI');
     assert.ok(nav.indexOf('Inteligência de Mercado') < nav.indexOf('Prospecção'), 'Prospecção logo após Inteligência de Mercado');
-    const ativos = { prospeccao: 'prospeccao.html', bdi: 'bdi.html', sinapi: 'sinapi.html' };
+    assert.match(nav, /<a href="mao-de-obra\.html"[^>]*>[\s\S]*?Mão de obra/);
+    assert.ok(nav.indexOf('Preços SINAPI') < nav.indexOf('Mão de obra'), 'Mão de obra logo após SINAPI');
+    // Consultoria abre o site da HC em nova aba: hc.html enquanto LICITAPLENA_HC_SITE estiver vazia (ajuda-ui.js troca o href).
+    assert.ok(nav.includes('<a href="hc.html" target="_blank" rel="noopener" data-hc-site title="Consultoria">'), 'Consultoria');
+    assert.match(html, /<script src="supabase-config\.js"><\/script>/);
+    assert.match(html, /<script src="ajuda-ui\.js"/);
+    const ativos = { prospeccao: 'prospeccao.html', bdi: 'bdi.html', sinapi: 'sinapi.html', 'mao-de-obra': 'mao-de-obra.html' };
     if (ativos[p]) assert.match(nav, new RegExp(`<a href="${ativos[p]}" class="ativo"`));
-    else assert.doesNotMatch(nav, /href="(prospeccao|bdi|sinapi)\.html" class="ativo"/);
+    else assert.doesNotMatch(nav, /href="(prospeccao|bdi|sinapi|mao-de-obra)\.html" class="ativo"/);
   });
 }
 
@@ -29,7 +35,7 @@ const rotulos = (p) => {
 
 test('todas as páginas têm o mesmo conjunto e ordem de itens no menu (o painel só soma o Dashboard)', () => {
   const referencia = rotulos('sistema');
-  for (const item of ['Hoje', 'Calendário', 'Licitação anterior', 'Processos', 'Extensão']) assert.ok(referencia.includes(item), item);
+  for (const item of ['Hoje', 'Calendário', 'Licitação anterior', 'Processos', 'Extensão', 'Mão de obra', 'Consultoria']) assert.ok(referencia.includes(item), item);
   for (const p of paginas) {
     const lista = rotulos(p).filter((r) => r !== 'Dashboard').map((r) => (r === 'Status das Ferramentas' ? 'Status' : r));
     assert.deepEqual(lista, referencia, p);
@@ -50,7 +56,7 @@ test('painel leva Hoje, Processos e Extensão para as páginas certas e Calendá
 test('ícones novos do menu existem nos dois sprites', () => {
   const sprite = fs.readFileSync('menu-icones.svg', 'utf8');
   const painel = fs.readFileSync('painel.html', 'utf8');
-  for (const id of ['ph-calendar', 'ph-clock-counter-clockwise', 'ph-puzzle-piece']) {
+  for (const id of ['ph-calendar', 'ph-clock-counter-clockwise', 'ph-puzzle-piece', 'ph-clipboard-text', 'ph-handshake']) {
     assert.match(sprite, new RegExp(`<symbol id="${id}"`), id);
     assert.match(painel, new RegExp(`<symbol id="${id}"`), id);
   }
