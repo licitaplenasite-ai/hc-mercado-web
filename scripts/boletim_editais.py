@@ -648,7 +648,7 @@ def _titulo_quantidade(quantidade):
 def montar_assunto(quantidade):
     if quantidade:
         return _titulo_quantidade(quantidade) + " no seu boletim"
-    return "Nenhuma oportunidade nova hoje"
+    return "Nenhuma licitação nova desde o último aviso"
 
 
 URL_LOGO = "https://licitaplena.com.br/logo.png"  # PNG branco 1000x1000, publicado por montar_publico.js (SVG nao abre no Gmail/Outlook)
@@ -667,7 +667,7 @@ def montar_resumo(editais):
         if uf:
             ufs[uf] = ufs.get(uf, 0) + 1
     for uf, n in sorted(ufs.items(), key=lambda x: (-x[1], x[0]))[:3]:
-        partes.append(str(n) + " no " + uf)
+        partes.append(str(n) + " em " + uf)
     exclusivas = sum(1 for e in editais if ME_EPP.search(_norm(e.get("objetoCompra") or "")))
     if exclusivas:
         partes.append(str(exclusivas) + (" exclusiva ME/EPP" if exclusivas == 1 else " exclusivas ME/EPP"))
@@ -700,7 +700,7 @@ def montar_email_html(nome_empresa, filtro, edicao, quantidade, link, resumo=Non
         )
     else:
         corpo = (
-            '<tr><td align="center" style="' + fonte + 'font-size:20px;color:#202124;padding:0 0 8px 0;">Nenhuma oportunidade nova hoje</td></tr>'
+            '<tr><td align="center" style="' + fonte + 'font-size:20px;color:#202124;padding:0 0 8px 0;">Nenhuma licitação nova desde o último aviso</td></tr>'
             '<tr><td align="center" style="' + fonte + 'font-size:14px;color:#5f6368;">no filtro <b>' + esc(filtro)
             + '</b> da empresa <b>' + esc(nome_empresa) + '</b>.</td></tr>'
         )
@@ -739,7 +739,7 @@ def montar_email_texto(nome_empresa, filtro, edicao, quantidade, link, resumo=No
               "Ajustar meus filtros ou parar os avisos: " + URL_AJUSTAR_FILTROS + "\n"
               "Dúvidas: " + EMAIL_SUPORTE + "\nAviso automático: não responda este e-mail.\n" + RODAPE_EMPRESA + "\n")
     if not quantidade:
-        return "LicitaPlena\n\nNenhuma oportunidade nova hoje no filtro " + filtro + " da empresa " + nome_empresa + ".\n" + rodape
+        return "LicitaPlena\n\nNenhuma licitação nova desde o último aviso no filtro " + filtro + " da empresa " + nome_empresa + ".\n" + rodape
     return ("LicitaPlena\n\n" + _titulo_quantidade(quantidade) + " no filtro " + filtro + " da empresa " + nome_empresa + ".\n"
             "Edição de " + edicao.strftime("%d/%m/%Y") + ".\n"
             + ((" · ".join(resumo) + "\n") if resumo else "") + "\n"

@@ -137,7 +137,7 @@ def test_enviar_email_usa_zeptomail_quando_ha_token(monkeypatch):
     monkeypatch.setenv("ZEPTOMAIL_TOKEN", "token-falso")
     be.enviar_email("a@b.com", "Ana", [], "[Teste] ")
     assert [e[0] for e in envios] == ["zepto"]
-    assert envios[0][2] == "[Teste] Nenhuma oportunidade nova hoje"
+    assert envios[0][2] == "[Teste] Nenhuma licitação nova desde o último aviso"
 
 
 def test_enviar_email_cai_no_gmail_sem_token_ou_com_falha_e_mantem_o_conteudo(monkeypatch):
@@ -190,9 +190,9 @@ def test_resumo_so_numeros_sem_objeto():
         {"objetoCompra": "Tinta", "unidadeOrgao": {"ufSigla": "PA"}},
     ]
     r = b.montar_resumo(editais)
-    assert r[:2] == ["2 no AM", "1 no PA"] and "1 exclusiva ME/EPP" in r and r[-1].startswith("maior valor")
+    assert r[:2] == ["2 em AM", "1 em PA"] and "1 exclusiva ME/EPP" in r and r[-1].startswith("maior valor")
     html = b.montar_email_html("X", "f", EDICAO, 3, LINK, r)
-    assert "2 no AM" in html and "Papel" not in html and b.montar_resumo([]) == []
+    assert "2 em AM" in html and "Papel" not in html and b.montar_resumo([]) == []
 
 
 def test_assunto_e_singular_ou_plural():
