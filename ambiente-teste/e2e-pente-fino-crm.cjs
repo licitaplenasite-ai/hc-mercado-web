@@ -100,7 +100,8 @@ async function clicarTudo(p, tela, papel, largura, urlInicial) {
     } else {
       const mud = await p.evaluate(() => window.__mud || 0);
       r.efeito = mud ? `mudou a tela (${mud})` : 'NADA';
-      await p.keyboard.press('Escape').catch(() => {});
+      // Painel aberto (ajuda, IA, janela) cobriria os próximos controles: volta a tela ao estado inicial.
+      if (mud) { await p.goto(urlInicial); await p.waitForTimeout(2500); await marcar(p); }
     }
     cliques.push(r);
   }
