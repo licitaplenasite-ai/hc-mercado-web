@@ -3193,6 +3193,9 @@
     renderizarCartoesTopoIA(est);
     const conversa = document.getElementById("modal-ia-conversa");
     const anterior = conversa.querySelector("[data-resumo-estrutura]");
+    // O resumo é remontado quando chegam itens, CAPAG e a leitura da IA: a seção que o cliente abriu (ou fechou)
+    // fica como ele deixou, senão "Consultar itens" se fechava sozinha no meio do clique.
+    const abertas = new Map([...(anterior?.querySelectorAll("details.secao-ia[data-resumo-secao]") || [])].map(d => [d.dataset.resumoSecao, d.open]));
     const wrap = document.createElement("div");
     wrap.className = "msg-ia";
     wrap.dataset.resumoEstrutura = "1";
@@ -3210,7 +3213,7 @@
       const secao = document.createElement("details");
       secao.className = "secao-ia" + (def.destaque ? " destaque" : "") + (def.apoio ? " apoio" : "");
       secao.dataset.resumoSecao = def.titulo;
-      secao.open = !def.recolhida;
+      secao.open = abertas.has(def.titulo) ? abertas.get(def.titulo) : !def.recolhida;
       const titulo = document.createElement("summary");
       titulo.className = "secao-ia-titulo";
       const icone = document.createElement("span");
@@ -3290,7 +3293,7 @@
       }
       };
       if (def.recolhida) secao.addEventListener("toggle", () => { if (secao.open) preencher(); });
-      else preencher();
+      if (!def.recolhida || secao.open) preencher();
       wrap.appendChild(secao);
     }
 
