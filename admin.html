@@ -198,6 +198,9 @@
   .bloco-detalhe h4 { margin: 0 0 8px; font-size: 14px; }
   .bloco-detalhe ul { margin: 0; padding-left: 18px; font-size: 13px; }
   .grade-plano { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 12px; }
+  .extras-assinatura { border: 1px solid var(--border-strong); border-radius: 8px; padding: 8px 12px; margin: 8px 0 12px; display: flex; flex-wrap: wrap; gap: 8px 16px; }
+  .extras-assinatura legend { font-size: 13px; padding: 0 4px; }
+  .extras-assinatura .sub { flex-basis: 100%; margin: 0; }
   .btn-secundario { background: var(--cartao); color: var(--action-text); border: 1px solid var(--border-strong); padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
   .aviso-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--borda); font-size: 14px; }
   .aviso-item:last-child { border-bottom: none; }
@@ -548,13 +551,15 @@
   const dataBr = (v) => v ? new Date(v.length === 10 ? v + "T12:00:00" : v).toLocaleDateString("pt-BR") : "-";
   const reais = (centavos) => centavos == null ? "-" : (centavos / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   const numeroOuVazio = (v) => { const t = String(v ?? "").trim(); return t === "" ? null : Number.parseInt(t, 10); };
+  // 1º dia do mês corrente (IA extra vale só no mês dela; supabase/planos_e_recursos.sql).
+  const mesAtual = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`; })();
 
   async function montarBlocoPlano(c) {
     const alvo = document.getElementById("bloco-plano");
     const a = c.assinatura || {}, e = c.efetivo || {};
     const salvo = mensagemPlano ? `<p role="status" id="resultado-plano-salvo"><strong>${escapeHtml(mensagemPlano)}</strong></p>` : "";
     mensagemPlano = "";
-    const resumo = salvo + `<p class="sub">Agora vale: <strong>${escapeHtml(e.nome || "-")}</strong>${e.em_teste ? ` (teste até ${dataBr(e.teste_ate)})` : ""} · ${c.cnpjs_ativos} de ${e.max_cnpjs ?? "∞"} CNPJs · ${c.usuarios} de ${e.max_usuarios ?? "∞"} usuários · ${c.processos_ativos} processos${e.max_processos != null ? " de " + e.max_processos : ""}${a.plano_solicitado ? ` · <strong>pediu o plano ${escapeHtml(a.plano_solicitado)}</strong>` : ""}</p>`;
+    const resumo = salvo + `<p class="sub">Agora vale: <strong>${escapeHtml(e.nome || "-")}</strong>${e.em_teste ? ` (teste até ${dataBr(e.teste_ate)})` : ""} · ${c.cnpjs_ativos} de ${e.max_cnpjs ?? "∞"} CNPJs · ${c.usuarios} de ${e.max_usuarios ?? "∞"} usuários · ${c.processos_ativos} processos${e.max_processos != null ? " de " + e.max_processos : ""}${c.ia_mes_uso != null ? ` · IA no mês: ${c.ia_mes_uso} de ${e.ia_mes ?? "∞"} (passou = IA mais barata)` : ""}${a.plano_solicitado ? ` · <strong>pediu o plano ${escapeHtml(a.plano_solicitado)}</strong>` : ""}</p>`;
     if (adminAtual?.role !== "owner") { alvo.innerHTML = resumo + '<p class="sub">Só o proprietário muda plano e limites.</p>'; return; }
     const planos = await carregarPlanosCatalogo();
     if (clienteEmEdicao?.id !== c.id) return;
@@ -572,7 +577,13 @@
       <div><label for="ass-max-cnpjs">CNPJs (ajuste)</label><input type="text" inputmode="numeric" id="ass-max-cnpjs" placeholder="do plano" value="${a.max_cnpjs ?? ""}"></div>
       <div><label for="ass-max-usuarios">Usuários (ajuste)</label><input type="text" inputmode="numeric" id="ass-max-usuarios" placeholder="do plano" value="${a.max_usuarios ?? ""}"></div>
       <div><label for="ass-max-processos">Processos (ajuste)</label><input type="text" inputmode="numeric" id="ass-max-processos" placeholder="do plano" value="${a.max_processos ?? ""}"></div>
+      <div><label for="ass-ia-extra">IA extra no mês (usos)</label><input type="text" inputmode="numeric" id="ass-ia-extra" placeholder="0" value="${a.ia_extra_mes === mesAtual ? a.ia_extra_usos ?? "" : ""}"></div>
     </div>
+    <fieldset class="extras-assinatura"><legend>Extras contratados</legend>
+      <label class="inline"><input type="checkbox" id="ass-extra-lance"${(a.extras || []).includes("lance_assistido") ? " checked" : ""}> Lance assistido (R$ 97)</label>
+      <label class="inline"><input type="checkbox" id="ass-extra-operacao"${(a.extras || []).includes("pacote_operacao") ? " checked" : ""}> Pacote Operação (R$ 49)</label>
+      <p class="sub">IA extra: R$ 49 por mais 500 usos, só no mês atual. Preço de fundador ou CNPJ extra: ajuste o Valor e os CNPJs acima.</p>
+    </fieldset>
     <label for="ass-observacoes">Observação da assinatura</label><textarea id="ass-observacoes">${escapeHtml(a.observacoes || "")}</textarea>
     <div class="acoes" style="margin-top:12px;"><button type="button" class="btn-aprovar" id="btn-salvar-plano">Salvar plano e limites</button>
       ${c.status === "aprovado" ? '<button type="button" class="btn-rejeitar" id="btn-suspender">Suspender conta</button>' : ""}
@@ -593,6 +604,9 @@
         max_usuarios: numeroOuVazio(document.getElementById("ass-max-usuarios").value),
         max_processos: numeroOuVazio(document.getElementById("ass-max-processos").value),
         observacoes: document.getElementById("ass-observacoes").value.trim() || null,
+        extras: [["ass-extra-lance", "lance_assistido"], ["ass-extra-operacao", "pacote_operacao"]].filter(([id]) => document.getElementById(id).checked).map(([, codigo]) => codigo),
+        ia_extra_usos: numeroOuVazio(document.getElementById("ass-ia-extra").value),
+        ia_extra_mes: mesAtual,
       };
       if (Object.values(dados).some((v) => typeof v === "number" && !Number.isFinite(v))) { resultado.textContent = "Confira os números."; return; }
       botao.disabled = true;
@@ -1059,7 +1073,7 @@
     if (error) { cards.innerHTML = '<div class="vazio">Resumo indisponível: ' + escapeHtml(error.message) + '</div>'; avisos.textContent = ""; return; }
     const porPlano = data.por_plano || {};
     cards.innerHTML = [["Pendentes", data.pendentes], ["Em teste", data.em_teste], ["Ativas", data.ativas], ["Suspensas", data.suspensas],
-      ["Empresa", porPlano.empresa || 0], ["Assessoria", porPlano.assessoria || 0], ["Grátis", porPlano.gratis || 0]]
+      ["Essencial", porPlano.essencial || 0], ["Empresa", porPlano.empresa || 0], ["Assessoria", porPlano.assessoria || 0], ["Teste encerrado", porPlano.gratis || 0]]
       .map(([rotulo, n]) => `<div class="card-num"><strong>${Number(n) || 0}</strong><span>${rotulo}</span></div>`).join("");
     const lista = data.avisos || [];
     avisos.className = "";
@@ -1078,11 +1092,12 @@
     if (recursos.error || matriz.error) { alvo.innerHTML = '<div class="vazio">Planos indisponíveis: ' + escapeHtml((recursos.error || matriz.error).message) + '</div>'; return; }
     const celula = (p, r) => matriz.data.find((x) => x.plano === p && x.recurso === r) || { permitido: false, limite_diario: null };
     const campo = (id, valor, rotulo) => `<input type="text" inputmode="numeric" id="${id}" value="${valor ?? ""}" placeholder="∞" aria-label="${escapeHtml(rotulo)}">`;
-    alvo.innerHTML = `<table><thead><tr><th>Plano</th><th>CNPJs</th><th>Usuários</th><th>Processos</th><th>Mensal (R$)</th><th>Anual (R$)</th>${recursos.data.map((r) => `<th title="${escapeHtml(r.nome)}">${escapeHtml(r.nome.split(" (")[0])}<br><span class="sub">por dia</span></th>`).join("")}<th></th></tr></thead><tbody>${planos.map((p) => `<tr>
+    alvo.innerHTML = `<table><thead><tr><th>Plano</th><th>CNPJs</th><th>Usuários</th><th>Processos</th><th>IA/mês por CNPJ</th><th>Mensal (R$)</th><th>Anual (R$)</th>${recursos.data.map((r) => `<th title="${escapeHtml(r.nome)}">${escapeHtml(r.nome.split(" (")[0])}<br><span class="sub">teto por pessoa/dia</span></th>`).join("")}<th></th></tr></thead><tbody>${planos.map((p) => `<tr>
       <td><strong>${escapeHtml(p.nome)}</strong><br><span class="sub">${escapeHtml(p.codigo)}</span></td>
       <td>${campo(`pl-${p.codigo}-max_cnpjs`, p.max_cnpjs, p.nome + " CNPJs")}</td>
       <td>${campo(`pl-${p.codigo}-max_usuarios`, p.max_usuarios, p.nome + " usuários")}</td>
       <td>${campo(`pl-${p.codigo}-max_processos`, p.max_processos, p.nome + " processos")}</td>
+      <td>${campo(`pl-${p.codigo}-ia_mes_por_cnpj`, p.ia_mes_por_cnpj, p.nome + " IA por mês por CNPJ")}</td>
       <td>${campo(`pl-${p.codigo}-preco_mensal_centavos`, p.preco_mensal_centavos != null ? p.preco_mensal_centavos / 100 : null, p.nome + " mensal")}</td>
       <td>${campo(`pl-${p.codigo}-preco_anual_centavos`, p.preco_anual_centavos != null ? p.preco_anual_centavos / 100 : null, p.nome + " anual")}</td>
       ${recursos.data.map((r) => { const c = celula(p.codigo, r.codigo); return `<td><label class="inline"><input type="checkbox" id="pr-${p.codigo}-${r.codigo}"${c.permitido ? " checked" : ""} aria-label="${escapeHtml(p.nome + ": " + r.nome)}"> sim</label><br>${campo(`prl-${p.codigo}-${r.codigo}`, c.limite_diario, p.nome + " limite " + r.nome)}</td>`; }).join("")}
@@ -1090,7 +1105,7 @@
     alvo.querySelectorAll("[data-salvar-plano]").forEach((b) => b.addEventListener("click", async () => {
       const codigo = b.dataset.salvarPlano, resultado = document.getElementById("resultado-planos");
       const ler = (id) => numeroOuVazio(document.getElementById(id).value.replace(",", "."));
-      const dados = { max_cnpjs: ler(`pl-${codigo}-max_cnpjs`), max_usuarios: ler(`pl-${codigo}-max_usuarios`), max_processos: ler(`pl-${codigo}-max_processos`) };
+      const dados = { max_cnpjs: ler(`pl-${codigo}-max_cnpjs`), max_usuarios: ler(`pl-${codigo}-max_usuarios`), max_processos: ler(`pl-${codigo}-max_processos`), ia_mes_por_cnpj: ler(`pl-${codigo}-ia_mes_por_cnpj`) };
       for (const k of ["preco_mensal_centavos", "preco_anual_centavos"]) {
         const t = document.getElementById(`pl-${codigo}-${k}`).value.trim().replace(/\./g, "").replace(",", ".");
         dados[k] = t ? Math.round(Number(t) * 100) : null;
