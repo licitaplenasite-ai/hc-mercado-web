@@ -184,13 +184,18 @@ async function main() {
           return `${n} links`;
         });
       }
-      await passo(`${tam} logado: SINAPI busca, lista de orçamento e total conferido`, p, async () => {
+      await passo(`${tam} logado: SINAPI busca curta avisa, busca por descrição responde, título no topo`, p, async () => {
+        p.erros.length = 0;
         await p.goto(SITE + '/sinapi.html');
         await p.waitForFunction(() => !/…/.test(document.getElementById('data-base').innerText), null, { timeout: 20000 });
         await p.fill('#f-busca', 'a'); await p.click('#form-busca button[type=submit]');
-        await p.waitForFunction(() => !/Busque pelo código/.test(document.getElementById('tabela-corpo').innerText), null, { timeout: 20000 });
-        const corpo = await p.innerText('#tabela-corpo');
-        return corpo.split('\n')[0].slice(0, 100);
+        exigir(/Digite o código/.test(await p.innerText('#aviso')), 'busca curta sem aviso');
+        await p.fill('#f-busca', 'alvenaria'); await p.click('#form-busca button[type=submit]');
+        await p.waitForFunction(() => !/Busque pelo código|Buscando/.test(document.getElementById('tabela-corpo').innerText), null, { timeout: 20000 });
+        // Página curta: o título fica logo abaixo do topo (antes ficava centralizado, com um vão em cima).
+        exigir(await p.evaluate(() => document.querySelector('main').getBoundingClientRect().top) < 120, 'vão acima do título');
+        exigir(errosJs(p).length === 0, errosJs(p).join(' | '));
+        return (await p.innerText('#tabela-corpo')).split('\n')[0].slice(0, 100);
       });
       await p.context().close();
     }
@@ -209,7 +214,7 @@ async function main() {
       await p.goto(SITE + '/login.html' + destino.slice(destino.indexOf('#')));
       await p.waitForSelector('#form-nova-senha:not([hidden])', { timeout: 15000 });
       exigir(/Criar nova senha/.test(await p.innerText('h1')), 'título');
-      await p.fill('#nova-senha', 'SenhaNova456'); await p.fill('#nova-senha-confirmar', 'outra');
+      await p.fill('#nova-senha', 'SenhaNova456'); await p.fill('#nova-senha-confirmar', 'outra-senha');
       await p.click('#btn-nova-senha');
       exigir(/não coincidem/.test(await p.innerText('#aviso')), 'senhas diferentes');
       await p.fill('#nova-senha-confirmar', 'SenhaNova456'); await p.click('#btn-nova-senha');
