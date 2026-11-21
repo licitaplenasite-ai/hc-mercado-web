@@ -80,7 +80,8 @@ async function main() {
       await passo(`${nome}: tela mostra cadastro, alerta de vulnerabilidade e contratos por estado (prints 1280 e 375)`, null, async () => {
         await analisar(p, cnpj);
         const texto = await p.locator('#emp-analise-cnpj').innerText();
-        for (const t of ['Alerta de vulnerabilidade', 'Contratos e valores faturados', 'Contratos por estado', 'Capital social', 'CNAE principal']) exigir(texto.includes(t), `faltou "${t}"`);
+        // Títulos da tela em seções (fa45aaa): Alertas, Contratos com o governo, Estados onde tem contrato.
+        for (const t of ['Alertas', 'Contratos com o governo', 'Estados onde tem contrato', 'Capital social', 'CNAE principal']) exigir(texto.includes(t), `faltou "${t}"`);
         await imprimir(p, `analise-cnpj-v2-${nome}`);
         const fed = await banco(`historico_contratos_fornecedor?fornecedor_ni=eq.${cnpj}&valor_empenhado=not.is.null&select=numero_controle_pncp,valor_global,valor_empenhado,valor_pago,valor_faturado`);
         return `${fed.length} contrato(s) federal(is) com empenho: ${fed.slice(0, 3).map((f) => `${f.numero_controle_pncp} global ${f.valor_global} emp ${f.valor_empenhado} pago ${f.valor_pago} fat ${f.valor_faturado}`).join('; ')}`;

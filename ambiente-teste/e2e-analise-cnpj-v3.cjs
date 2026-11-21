@@ -17,7 +17,8 @@ async function analisar(p, cnpj) {
   await p.click('nav button[data-alvo="empresa"]');
   await p.fill('#emp-cnpj', cnpj);
   await p.click('#emp-buscar');
-  await p.waitForSelector('#emp-analise-cnpj .acn-motivos', { timeout: 240000 });
+  // Tela em seções (fa45aaa): motivos e sazonalidade ficam em detalhes fechados do Desempenho; a última seção é Onde atua.
+  await p.waitForSelector('#emp-analise-cnpj .acn-onde-atua', { timeout: 240000 });
 }
 
 async function imprimir(p, nome) {
@@ -42,14 +43,18 @@ async function main() {
       await passo(`${nome}: tela mostra valor disputado x vencido, sazonalidade, materiais, marcas e motivos com fonte (prints 1280 e 375)`, null, async () => {
         await analisar(p, cnpj);
         const texto = await p.locator('#emp-analise-cnpj').innerText();
-        for (const t of ['Valor disputado', 'Valor vencido', 'Por modalidade', 'Sazonalidade', 'Onde ela ganha', 'Marcas que ela usa', 'Motivos de desclassificação', 'Baixar planilha', 'Imprimir / Gerar PDF']) {
+        exigir(!texto.includes('Não conseguimos buscar licitações novas'), 'coleta falhou (cota diária? rode logo depois de subir.cjs)');
+        // Valor disputado e Por modalidade saíram da tela de propósito (fa45aaa) e seguem na planilha (passo seguinte).
+        for (const t of ['Valor ganho', 'Desclassificações e inabilitações', 'Em que meses ela disputa', 'Produtos que ela mais ganha', 'Marcas que ela oferece', 'Baixar planilha', 'Imprimir / Gerar PDF']) {
           exigir(texto.includes(t), `faltou "${t}"`);
         }
         const colunas = await p.locator('#emp-analise-cnpj .acn-sazonalidade .mini-grafico-coluna').count();
         exigir(colunas === 12, `sazonalidade com ${colunas} colunas`);
         const marcasBanco = await banco(`historico_participacoes?fornecedor_ni=eq.${cnpj}&marca=not.is.null&select=marca&limit=1`);
-        const marcasTela = await p.locator('#emp-analise-cnpj .acn-materiais table').count();
-        exigir(!marcasBanco.length || marcasTela === 2, 'marca gravada pelo robô não apareceu na tela');
+        const marcasTela = Number((/Marcas que ela oferece \((\d+)\)/.exec(texto) || [])[1] || 0);
+        exigir(!marcasBanco.length || marcasTela > 0, 'marca gravada pelo robô não apareceu na tela');
+        await p.locator('#emp-analise-cnpj .acn-desempenho details').evaluateAll((ds) => ds.forEach((d) => { d.open = true; }));
+        exigir(/Motivos de desclassificação/.test(await p.locator('#emp-analise-cnpj .acn-motivos').innerText()), 'motivos não aparecem ao abrir o detalhe');
         await imprimir(p, `analise-empresa-v3-${nome}`);
         return texto.split('\n').filter((l) => /^(Disputas|Vencidas|Valor disputado|Valor vencido|% de vitória)/.test(l)).slice(0, 5).join(' | ').slice(0, 400) || 'ok';
       });
@@ -59,7 +64,9 @@ async function main() {
         await baixa.saveAs(arquivo);
         const zip = new AdmZip(arquivo);
         const abas = [...zip.readAsText('xl/workbook.xml').matchAll(/<sheet [^>]*name="([^"]+)"/g)].map((m) => m[1]);
-        exigir(abas.length === 9 && abas.includes('Motivos') && abas.includes('Sazonalidade'), `abas: ${abas.join(', ')}`);
+        exigir(abas.length === 9 && abas.includes('Motivos') && abas.includes('Sazonalidade') && abas.includes('Por modalidade'), `abas: ${abas.join(', ')}`);
+        const celulas = zip.getEntries().filter((e) => /^xl\/(sharedStrings|worksheets\/sheet1)\.xml$/.test(e.entryName)).map((e) => zip.readAsText(e)).join(' ');
+        exigir(celulas.includes('Valor disputado (R$)') && celulas.includes('Valor vencido (R$)'), 'planilha sem valor disputado x vencido');
         await p.emulateMedia({ media: 'print' });
         await p.pdf({ path: path.join(PRINTS, `relatorio-${nome}.pdf`), format: 'A4', printBackground: true });
         await p.emulateMedia({ media: 'screen' });
