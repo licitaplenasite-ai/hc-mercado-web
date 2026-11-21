@@ -30,7 +30,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" crossorigin="anonymous"></script>
 <script src="supabase-config.js"></script>
 <script src="fetch-sessao.js"></script>
-<script src="resumo-modelo.js?v=31e52fa09b74"></script>
+<script src="resumo-modelo.js?v=d3ae47f64437"></script>
 <script src="resumo-email.js?v=bac81f5d9b2d"></script>
 <script src="capag.js?v=167fac74e421"></script>
 <script src="defesa-licitante.js?v=0fc91f5a970b"></script>
@@ -1202,7 +1202,7 @@
 
   /* ---- Alertas de Licitações: cards estilo "boletim" (inspirado no ConLicitação) ---- */
   .boletim-resumo { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }
-  .boletim-filtros-rapidos { display: flex; gap: 8px; flex-wrap: wrap; }
+  .boletim-filtros-rapidos { display: flex; gap: 8px; flex-wrap: wrap; min-width: 0; max-width: 100%; }
   .btn-filtro-rapido {
     background: var(--cartao-claro); border: 1px solid var(--borda); color: var(--texto-fraco);
     padding: 7px 14px; border-radius: 999px; font-size: 12px; font-weight: 600; cursor: pointer;
@@ -1222,7 +1222,8 @@
   .boletim-card.lido { border-left-color: var(--borda); opacity: 0.82; }
   .boletim-card.favorito { border-left-color: var(--laranja); }
   .boletim-card.oculto, .boletim-card.oculto-portal { display: none; }
-  .boletim-filtro-portal { min-height: 36px; max-width: 100%; padding: 4px 10px; border-radius: var(--raio-pq); border: 1px solid var(--input-borda); background: var(--cartao); color: var(--texto); font-size: 13px; }
+  /* min-width:0: nome de portal comprido empurrava a tela para o lado no celular. */
+  .boletim-filtro-portal { min-height: 36px; max-width: 100%; min-width: 0; padding: 4px 10px; border-radius: var(--raio-pq); border: 1px solid var(--input-borda); background: var(--cartao); color: var(--texto); font-size: 13px; }
 
   .boletim-topo {
     display: flex; align-items: center; justify-content: space-between; gap: 10px;
@@ -1355,7 +1356,7 @@
     padding: 18px; margin-bottom: 22px; box-shadow: var(--sombra);
   }
   .bol-cal-topo { display: flex; align-items: center; justify-content: center; gap: 18px; margin-bottom: 14px; }
-  .bol-cal-titulo { font-size: 15px; font-weight: 700; text-transform: capitalize; min-width: 160px; text-align: center; }
+  .bol-cal-titulo { font-size: 15px; font-weight: 700; min-width: 160px; text-align: center; }
   .bol-cal-nav {
     background: var(--cartao-claro); border: 1px solid var(--borda); color: var(--texto);
     width: 30px; height: 30px; border-radius: var(--raio-pq); cursor: pointer; font-size: 16px; line-height: 1;
@@ -1428,6 +1429,7 @@
   .dash-barra-col { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; min-width: 16px; height: 100%; flex: 1; }
   .dash-barra { width: 100%; max-width: 18px; background: linear-gradient(180deg, var(--azul), var(--azul-escuro)); border-radius: 3px 3px 0 0; min-height: 2px; }
   .dash-barra-dia { font-size: 9px; color: var(--texto-fraco); margin-top: 4px; }
+  @media (max-width: 600px) { .dash-barras { gap: 2px; } .dash-barra-col { min-width: 0; } .dash-barra-dia { font-size: 7px; } }
   .dash-duas-colunas { display: grid; grid-template-columns: 1.1fr 1fr; gap: 16px; }
   @media (max-width: 900px) { .dash-duas-colunas { grid-template-columns: 1fr; } }
   .dash-perfil-wrap { display: flex; align-items: center; gap: 20px; }
@@ -1753,12 +1755,12 @@
 
     <div style="margin-top:20px;">
       <div class="dash-painel-titulo" style="margin-bottom:4px;"><svg class='icone-ph'><use href='#ph-chart-line-up'></use></svg> Vis&atilde;o geral do mercado</div>
-      <p style="margin:0 0 14px;font-size:13px;color:var(--texto-fraco);">N&uacute;meros da base que o LicitaPlena j&aacute; coletou do PNCP (contratos assinados e editais abertos) &mdash; n&atilde;o s&oacute; as oportunidades do seu boletim.</p>
+      <p style="margin:0 0 14px;font-size:13px;color:var(--texto-fraco);">N&uacute;meros de todas as licita&ccedil;&otilde;es e contratos p&uacute;blicos que o LicitaPlena acompanha no Brasil &mdash; n&atilde;o s&oacute; as oportunidades do seu boletim.</p>
       <div class="dash-cards-mercado">
         <div class="dash-card">
           <div class="dash-card-ico"><svg class='icone-ph'><use href='#ph-files'></use></svg></div>
           <div class="dash-card-num" id="dash-mercado-total">&ndash;</div>
-          <div class="dash-card-label">Contratos do PNCP na base</div>
+          <div class="dash-card-label">Contratos p&uacute;blicos acompanhados</div>
         </div>
         <div class="dash-card">
           <div class="dash-card-ico"><svg class='icone-ph'><use href='#ph-calendar'></use></svg></div>
@@ -1850,7 +1852,7 @@
         <div class="campo"><label for="op-numero-num">Número/ano</label><input id="op-numero-num" maxlength="12" placeholder="Ex: 90012/2026" autocomplete="off"></div>
         <div class="campo"><label for="op-numero-mod">Modalidade</label><select id="op-numero-mod"><option value="pregao">Pregão eletrônico</option><option value="dispensa">Dispensa eletrônica</option></select></div>
         <button type="submit" class="btn-buscar" id="op-numero-buscar">Achar</button>
-        <p class="dica-clique op-linha-dica" id="op-numero-status" role="status" aria-live="polite">Para compras do Compras.gov.br. Procuramos na nossa base e no PNCP e mostramos o link oficial.</p>
+        <p class="dica-clique op-linha-dica" id="op-numero-status" role="status" aria-live="polite">Para compras do Compras.gov.br. Procuramos nas licitações publicadas e mostramos o link oficial.</p>
       </form>
     </details>
     <div class="painel-filtros painel-filtros-recolhivel" id="op-filtros-principais">
@@ -1973,7 +1975,7 @@
         </div>
         <div class="campo">
           <label for="op-codigo">Código/número da licitação</label>
-          <input id="op-codigo" placeholder="Ex: 91077/2025 ou número de controle PNCP">
+          <input id="op-codigo" placeholder="Ex: 91077/2025">
         </div>
         <div class="campo" style="flex:2">
           <label for="op-orgao">Nome do órgão</label>
@@ -2018,9 +2020,9 @@
         </div>
       </div>
       <p class="dica-clique" id="op-itens-nota" style="margin:8px 2px 0;" role="status" hidden></p>
-      <p class="dica-clique" style="margin:8px 2px 0;">Palavras-chave: cada termo entre vírgulas é procurado como frase exata (ex.: "papel sulfite"); basta um deles aparecer. Use "Precisa ter também" para exigir todos e "Não quero ver" para excluir. ME/EPP e SRP são lidos do texto do objeto e do cadastro do PNCP; o filtro de órgãos sem disputa só aparece quando já temos o histórico de pregões anteriores desse órgão.</p>
-      <p class="dica-clique" style="margin:8px 2px 0;">Deixe as duas datas em branco pra buscar em todo o histórico coletado. Preencha pra buscar num período específico (ex: últimos 30 ou 60 dias) — inclui licitações já encerradas nesse período, não só as que ainda estão com prazo aberto.</p>
-      <p class="dica-clique" style="margin:8px 2px 0;">Esfera: quando o dado direto do PNCP não está disponível (licitações ainda não recapturadas pelo robô), classificamos pelo nome do órgão — pode ficar "Não classificado" em casos raros. Valor, código e modo de disputa dependem de dados que só a busca já coletada pelo robô traz completos; licitações vindas só da busca ao vivo podem não ter esses campos ainda (com o filtro de modo de disputa, elas ficam de fora). Produto ou serviço e valor do item são conferidos nos itens do PNCP das 40 primeiras licitações da lista.</p>
+      <p class="dica-clique" style="margin:8px 2px 0;">Palavras-chave: cada termo entre vírgulas é procurado como frase exata (ex.: "papel sulfite"); basta um deles aparecer. Use "Precisa ter também" para exigir todos e "Não quero ver" para excluir. ME/EPP e SRP são lidos do texto e do cadastro oficial da licitação; o filtro de órgãos sem disputa só aparece quando já temos o histórico de pregões anteriores desse órgão.</p>
+      <p class="dica-clique" style="margin:8px 2px 0;">Deixe as duas datas em branco para buscar em todo o histórico. Preencha pra buscar num período específico (ex: últimos 30 ou 60 dias) — inclui licitações já encerradas nesse período, não só as que ainda estão com prazo aberto.</p>
+      <p class="dica-clique" style="margin:8px 2px 0;">Esfera: quando o portal oficial não informa, classificamos pelo nome do órgão — em casos raros pode ficar "Não classificado". Licitações publicadas há poucas horas podem ainda não ter valor, código e modo de disputa (com o filtro de modo de disputa, elas ficam de fora). Produto ou serviço e valor do item são conferidos nos itens oficiais das 40 primeiras licitações da lista.</p>
     </details>
     <details class="painel-filtros-avancados" id="op-orgaos" style="margin:8px 2px 0;">
       <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--azul-texto,#1c63c7);"><svg class='icone-ph'><use href='#ph-map-pin'></use></svg> Órgãos compradores (por estado e portal, com CAPAG)</summary>
@@ -2029,7 +2031,7 @@
         <div class="campo"><label for="op-orgaos-portal">Portal</label><select id="op-orgaos-portal"><option value="">Todos</option></select></div>
         <div class="campo campo-largo"><label for="op-orgaos-texto">Nome ou UASG (opcional)</label><input id="op-orgaos-texto" maxlength="80" autocomplete="off" placeholder="Ex: prefeitura, 158465"></div>
         <button type="submit" class="btn-buscar">Ver órgãos</button>
-        <p class="dica-clique op-linha-dica" id="op-orgaos-status" role="status" aria-live="polite">Órgãos com licitação aberta na nossa base. CAPAG é a nota fiscal do Tesouro e só existe para prefeituras; não mede pontualidade de pagamento.</p>
+        <p class="dica-clique op-linha-dica" id="op-orgaos-status" role="status" aria-live="polite">Órgãos com licitação aberta agora. CAPAG é a nota fiscal do Tesouro e só existe para prefeituras; não mede pontualidade de pagamento.</p>
       </form>
       <div id="op-orgaos-resultado"></div>
     </details>
@@ -3555,7 +3557,7 @@
         if (dados.geradoEm) estruturaRecebida.geradoEm = dados.geradoEm;
         renderizarEstruturaIA(estruturaRecebida);
         if (opcoes.novaLeitura) {
-          const aviso = escreverMensagemIA(dados.dossieEmPreparacao ? "Nova leitura pedida. O resumo se atualiza sozinho quando o robô terminar, em geral dentro de 1 hora." : "Este edital foi lido há menos de 1 hora. Peça a nova leitura mais tarde.", "");
+          const aviso = escreverMensagemIA(dados.dossieEmPreparacao ? "Nova leitura pedida. O resumo se atualiza sozinho quando a leitura terminar, em geral dentro de 1 hora." : "Este edital foi lido há menos de 1 hora. Peça a nova leitura mais tarde.", "");
           aviso.dataset.avisoNovaLeitura = "1";
           const cobertura = document.querySelector('[data-resumo-secao="Cobertura da análise"]');
           if (cobertura) { cobertura.after(aviso); aviso.scrollIntoView({ block: "nearest" }); }
@@ -4180,6 +4182,10 @@
   }
 
   document.getElementById("modal-ia-fechar").addEventListener("click", fecharModalIA);
+  // Esc fecha o resumo, como a gaveta do menu (antes só o ✕ fechava; a pergunta ao edital trata o próprio Esc antes).
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape" && document.getElementById("modal-ia-fundo").classList.contains("aberto")) fecharModalIA();
+  });
   document.getElementById("modal-ia-fundo").addEventListener("click", (ev) => {
     if (ev.target.id === "modal-ia-fundo") fecharModalIA();
   });
@@ -7218,15 +7224,14 @@
     return { ...oportunidades, atualizadoEm: meta?.atualizadoEm || null, coberturaPorUf: meta?.coberturaPorUf || {} };
   }
 
+  // Uma data só (a mais antiga entre os estados): a lista por estado ("AM: ...; RR: ...") virava um parágrafo técnico.
   function frescorBaseBoletim(base) {
-    const cobertura = Object.entries(base?.coberturaPorUf || {});
-    const datas = cobertura.length ? cobertura : [["base", { atualizadoEm: base?.atualizadoEm }]];
-    const desatualizada = datas.some(([, dado]) => !dado?.atualizadoEm || !Number.isFinite(Date.parse(dado.atualizadoEm)) || Date.now() - Date.parse(dado.atualizadoEm) > BOL_FRESCOR_MS);
-    const descricao = datas.map(([uf, dado]) => {
-      const data = new Date(dado?.atualizadoEm || NaN);
-      return `${uf}: ${isNaN(data) ? "coleta sem data confirmada" : data.toLocaleString("pt-BR")}`;
-    }).join("; ");
-    return ` · última coleta: ${descricao}${desatualizada ? ' · A base pode estar desatualizada. Use "Atualizar boletim" para consultar o PNCP.' : ""}`;
+    const cobertura = Object.values(base?.coberturaPorUf || {});
+    const datas = (cobertura.length ? cobertura : [{ atualizadoEm: base?.atualizadoEm }]).map((dado) => Date.parse(dado?.atualizadoEm || ""));
+    const desatualizada = datas.some((t) => !Number.isFinite(t) || Date.now() - t > BOL_FRESCOR_MS);
+    const validas = datas.filter(Number.isFinite);
+    const descricao = validas.length ? `lista atualizada em ${new Date(Math.min(...validas)).toLocaleString("pt-BR")}` : "lista sem data confirmada de atualização";
+    return ` · ${descricao}${desatualizada ? ' · Pode haver editais mais novos: clique em "Atualizar boletim" para buscar agora.' : ""}`;
   }
 
   function precisaAtualizarBoletim(base, cache, ultimaTentativa = 0) {
@@ -7282,7 +7287,7 @@
       // dependem da rede para ter conteúdo na tela.
       renderizarBoletimComCalendario(filtrarResultadosDoBoletim(cacheInicial.resultados), "");
       const quando = new Date(cacheInicial.salvoEm || Date.now());
-      metaEl.textContent = metaBoletim(ufs, palavras, ` · edição salva no navegador em ${quando.toLocaleString("pt-BR")}; verificando a última coleta`);
+      metaEl.textContent = metaBoletim(ufs, palavras, ` · lista salva em ${quando.toLocaleString("pt-BR")}; buscando editais novos`);
     } else {
       alvo.innerHTML = '<div class="carregando">Carregando a primeira edição do boletim...</div>';
       document.getElementById("bol-calendario").innerHTML = "";
@@ -7321,7 +7326,7 @@
         metaEl.textContent = metaBoletim(ufs, palavras, sufixo);
         if (resultados.length === 0) {
           salvarCacheResultadoBoletim(filtro, [], cacheInicial?.atualizadoAoVivoEm || null);
-          renderizarBoletimComCalendario([], '<div class="aviso">Nenhuma oportunidade encontrada para o seu filtro na última coleta do robô.</div>');
+          renderizarBoletimComCalendario([], '<div class="aviso">Nenhuma oportunidade encontrada para o seu filtro na lista mais recente.</div>');
         } else {
           salvarCacheResultadoBoletim(filtro, resultados, cacheInicial?.atualizadoAoVivoEm || null);
           renderizarBoletimComCalendario(resultados, "");
@@ -7334,7 +7339,7 @@
 
       // A edição fica visível durante a recuperação; falhas não apagam o que já havia.
       bolAtualizacao.tentativas.set(chaveEdicao, Date.now());
-      metaEl.textContent = metaBoletim(ufs, palavras, `${frescorBaseBoletim(cacheOportunidades)} · conferindo atualizações no PNCP`);
+      metaEl.textContent = metaBoletim(ufs, palavras, `${frescorBaseBoletim(cacheOportunidades)} · buscando editais novos`);
       const resp = await buscarOportunidadesAbertas(ufs, palavras, 15);
       if (chaveCacheBoletim(lerFiltroBoletim() || {}) !== chaveEdicao) return;
       let resultadosBrutos = resp.encontrados;
@@ -7345,7 +7350,7 @@
       if (resp.falhaConexao) resultados = combinarResultadosDoBoletim(resultados, resultadosAnteriores);
       metaEl.textContent = metaBoletim(ufs, palavras);
       let avisoHtml = resp.falhaConexao
-        ? '<div class="aviso">A API pública do PNCP não respondeu agora — mostrando também o que o robô já tinha coletado, então a lista abaixo pode estar desatualizada.</div>'
+        ? '<div class="aviso">O portal do governo não respondeu agora. Mostramos também a última lista que já tínhamos; ela pode não ter os editais mais novos.</div>'
         : "";
 
       resultados = combinarResultadosDoBoletim(resultados, await buscarExtrasSistemaS(ufs, palavras))
@@ -7368,7 +7373,7 @@
       salvarCacheResultadoBoletim(filtro, resultados, atualizadoAoVivoEm);
       metaEl.textContent = metaBoletim(ufs, palavras, resp.falhaConexao
         ? frescorBaseBoletim(cacheOportunidades)
-        : ` · consulta ao PNCP em ${new Date(atualizadoAoVivoEm).toLocaleString("pt-BR")}`);
+        : ` · atualizado em ${new Date(atualizadoAoVivoEm).toLocaleString("pt-BR")}`);
       renderizarBoletimComCalendario(resultados, avisoHtml);
     } catch (e) {
       if (chaveCacheBoletim(lerFiltroBoletim() || {}) !== chaveEdicao) return;
@@ -7376,7 +7381,7 @@
         metaEl.textContent = metaBoletim(ufs, palavras, " · não foi possível atualizar agora; mantendo a última edição disponível");
         return;
       }
-      alvo.innerHTML = `<div class="aviso">Erro ao gerar boletim: ${escapeHtml(String(e))}</div>`;
+      alvo.innerHTML = '<div class="aviso">Não foi possível montar o boletim agora. Tente de novo em instantes.</div>';
     } finally {
       bolAtualizacao.emAndamento = false;
       if (chaveCacheBoletim(lerFiltroBoletim() || {}) !== chaveEdicao) void gerarBoletim();
@@ -7550,7 +7555,7 @@
       if (!window.__bolEdicaoAberta) return; // saiu da edição enquanto carregava
       const encerradas = (edicao.numeros || []).length - registros.length;
       const aviso = encerradas > 0
-        ? `<div class="aviso">${encerradas} de ${(edicao.numeros || []).length} licitações desta edição já saíram da base (encerradas ou removidas) e não aparecem abaixo.</div>` : "";
+        ? `<div class="aviso">${encerradas} de ${(edicao.numeros || []).length} licitações desta edição já foram encerradas ou retiradas do portal e não aparecem abaixo.</div>` : "";
       renderizarPainelBoletim(alvo, registros, aviso, { porPrazo: true });
     }
 
@@ -7844,7 +7849,7 @@
   function desenharBotaoRestaurar() {
     const b = $op("op-sem-interesse-restaurar");
     b.hidden = semInteresse.size === 0;
-    b.textContent = `Restaurar ${semInteresse.size} edital(is) sem interesse`;
+    b.textContent = `Restaurar ${semInteresse.size} ${semInteresse.size === 1 ? "edital marcado" : "editais marcados"} como sem interesse`;
   }
   function redesenharPaineis() {
     paineisRenderizados.forEach((args, alvo) => { if (alvo.isConnected) renderizarPainelBoletim(...args); else paineisRenderizados.delete(alvo); });
@@ -8099,10 +8104,10 @@
     } catch (e) {
       if (seq !== opBuscaSeq) return;
       if (anterior) {
-        definirNotaResultadoOportunidades(alvo, `Resultado da busca das ${horaAnterior} · não foi possível conferir o PNCP agora.`);
+        definirNotaResultadoOportunidades(alvo, `Resultado da busca das ${horaAnterior} · não foi possível buscar editais novos agora.`);
         return;
       }
-      alvo.innerHTML = `<div class="aviso">Erro ao buscar: ${escapeHtml(String(e))}</div>`;
+      alvo.innerHTML = '<div class="aviso">Não foi possível buscar agora. Tente de novo em instantes.</div>';
     } finally {
       if (seq === opBuscaSeq) btn.disabled = false;
     }
@@ -9068,7 +9073,7 @@
     { tag: "novo", data: "2026-11-20", titulo: "Pesquisa avançada e busca pelo número", desc: "Modalidade, portal, ME/EPP, excluir SRP, data de abertura, palavras obrigatórias, sugestões enquanto digita, UASG + número do pregão e lista de órgãos com CAPAG." },
     { tag: "novo", data: "2026-08-20", titulo: "Dashboard com visão geral do mercado", desc: "Total de licitações monitoradas, novas do dia, estados cobertos e ranking dos principais estados e segmentos, direto na tela inicial." },
     { tag: "novo", data: "2026-08-20", titulo: "Tags automáticas nos cards", desc: "Cada licitação agora mostra etiquetas automáticas (Material, Limpeza, Hospitalar, Engenharia etc.) pra identificar do que se trata sem precisar ler o texto inteiro." },
-    { tag: "melhoria", data: "2026-08-20", titulo: "Mais campos preenchidos nos cards", desc: "Amparo legal, valor estimado, processo e outros dados do PNCP agora aparecem preenchidos em mais cartões, quando o PNCP informa." },
+    { tag: "melhoria", data: "2026-08-20", titulo: "Mais campos preenchidos nos cards", desc: "Amparo legal, valor estimado, processo e outros dados oficiais agora aparecem preenchidos em mais cartões, quando o órgão informa." },
     { tag: "melhoria", data: "2026-08-20", titulo: "Ícones renovados", desc: "Visual mais limpo e profissional em todo o painel." },
     { tag: "novo", data: "2026-08-20", titulo: "Tema claro e escuro", desc: "Escolha o visual que preferir, com o botão de sol/lua no cabeçalho." },
     { tag: "novo", data: "2026-08-20", titulo: "Filtros avançados em Encontrar Licitações", desc: "Agora dá pra filtrar por esfera (federal/estadual/municipal), faixa de valor estimado, código da licitação e nome do órgão." },
@@ -9217,7 +9222,7 @@ window.__atualizarDashboard = function () {
           <span class="boletim-prazo prazo-${classePrazoKanban(item.encerramento)}">${escapeHtml(textoPrazo(item.encerramento))}</span>
           <span class="dash-semana-texto"><strong>${escapeHtml(item.objeto || "Licitação sem título")}</strong><small>${escapeHtml(item.orgao || "Órgão não informado")} · ${escapeHtml(formatarPrazoPropostas(item.encerramento).split(" (")[0])}</small></span>
           <button type="button" class="btn-filtro-rapido" data-ir-para="${item.origem === "funil" ? "kanban" : "boletim"}">${item.origem === "funil" ? "Ver no Funil" : "Ver no Boletim"}</button>
-        </li>`).join("")}</ul>${itens.length > 8 ? `<p class="dica-clique" style="margin:8px 0 0;">E mais ${itens.length - 8} edital(is) vencendo nesta semana.</p>` : ""}`;
+        </li>`).join("")}</ul>${itens.length > 8 ? `<p class="dica-clique" style="margin:8px 0 0;">E mais ${itens.length - 8} ${itens.length - 8 === 1 ? "edital vencendo" : "editais vencendo"} nesta semana.</p>` : ""}`;
       } else if (!temFiltro && !Object.keys(statusFunil).length) {
         elSemana.innerHTML = '<p style="margin:0;font-size:14px;">Ainda não há prazos para mostrar. <button type="button" class="btn-filtro-rapido" data-ir-para="boletim">Montar meu boletim</button></p>';
       } else {
@@ -9296,6 +9301,9 @@ window.__atualizarDashboard = function () {
 // planos formal ainda não foi fechada) — quando isso existir, plugar a contagem real aqui
 // em vez de só ler o teto fixo.
 const LIMITE_VISUALIZACOES_POR_PLANO = { "Padrão": 20 };
+// clientes.plano guarda o código (supabase/planos_e_recursos.sql); na tela vai o nome do plano.
+const NOMES_PLANO = { gratis: "Grátis", teste: "Teste grátis", empresa: "Empresa", assessoria: "Assessoria", dono: "Dono (ilimitado)" };
+function nomePlano(codigo) { const t = String(codigo || "").trim(); return NOMES_PLANO[t.toLowerCase()] || t || "Padrão"; }
 
 window.__preencherIdentidadeUsuario = function () {
   try {
@@ -9332,7 +9340,7 @@ window.__preencherIdentidadeUsuario = function () {
     }
     const elBadgePlano = document.getElementById("header-badge-plano");
     if (elBadgePlano) {
-      elBadgePlano.textContent = (c.plano && String(c.plano).trim()) || "Padrão";
+      elBadgePlano.textContent = nomePlano(c.plano);
     }
 
     // Banner de limite diário de visualizações (Boletim / Encontrar Licitações): ainda
@@ -9340,7 +9348,7 @@ window.__preencherIdentidadeUsuario = function () {
     // só mostra o teto do plano atual pra já preparar o terreno do upsell (ver LIMITE_VISUALIZACOES_POR_PLANO).
     const planoAtual = (c.plano && String(c.plano).trim()) || "Padrão";
     const limiteAtual = LIMITE_VISUALIZACOES_POR_PLANO[planoAtual] ?? LIMITE_VISUALIZACOES_POR_PLANO.Padrão;
-    document.querySelectorAll(".banner-limite-plano").forEach((el) => { el.textContent = planoAtual; });
+    document.querySelectorAll(".banner-limite-plano").forEach((el) => { el.textContent = nomePlano(planoAtual); });
     document.querySelectorAll(".banner-limite-valor").forEach((el) => { el.textContent = String(limiteAtual); });
 
     if (typeof preencherContatoDuvida === "function") preencherContatoDuvida();
@@ -9463,6 +9471,18 @@ window.__preencherIdentidadeUsuario();
   const modalCorpo = document.getElementById("modal-conta-corpo");
   const modalFechar = document.getElementById("modal-conta-fechar");
 
+  // Feedback e planos: em vez de mailto (sem programa de e-mail o clique não fazia nada), abre o
+  // formulário de dúvidas (Jurídico & Dúvidas), que já envia para a equipe, com o texto iniciado.
+  function abrirMensagemEquipe(inicio) {
+    const nav = document.querySelector('nav button[data-alvo="juridico"]');
+    if (nav) nav.click();
+    const msg = document.getElementById("duvida-mensagem");
+    if (!msg) return;
+    if (!msg.value.trim()) msg.value = inicio;
+    msg.scrollIntoView({ block: "center" });
+    msg.focus();
+  }
+
   function abrirModalConta(titulo, htmlCorpo) {
     // titulo é sempre string fixa do código nos pontos que chamam essa função (nunca dado
     // do usuário) — innerHTML em vez de textContent pra suportar ícone SVG embutido no título.
@@ -9534,13 +9554,18 @@ window.__preencherIdentidadeUsuario();
           : "";
         abrirModalConta("Minha conta", linhasHtml + atividadesHtml);
       } else if (acao === "planos") {
-        const plano = c.plano || "Padrão";
+        const plano = nomePlano(c.plano);
         const html = `
           <div style="font-size:13.5px;line-height:1.6;">
             <p style="margin:0 0 10px;">Seu plano atual: <strong>${escapeHtml(String(plano))}</strong></p>
-            <p style="margin:0;color:var(--text-secondary);">Pra conhecer outros planos ou fazer upgrade, fale com a gente pelo WhatsApp ou e-mail.</p>
+            <p style="margin:0 0 12px;color:var(--text-secondary);">Para conhecer outros planos ou mudar o seu, mande uma mensagem para a equipe.</p>
+            <button type="button" class="btn-buscar" id="planos-falar-equipe">Falar com a equipe</button>
           </div>`;
         abrirModalConta("Planos e preços", html);
+        document.getElementById("planos-falar-equipe").addEventListener("click", () => {
+          modalFundo.classList.remove("aberto");
+          abrirMensagemEquipe("Quero saber sobre os planos do LicitaPlena. Meu plano atual: " + plano + ".");
+        });
       } else if (acao === "lembretes") {
         abrirModalConta("<svg class='icone-ph'><use href='#ph-bell'></use></svg> Meus lembretes", `<p class="itens-vazio">Carregando...</p>`);
         const { data: lembretes, error } = await window.__sbClient
@@ -9573,9 +9598,7 @@ window.__preencherIdentidadeUsuario();
           });
         }
       } else if (acao === "feedback") {
-        const assunto = encodeURIComponent("Feedback - LicitaPlena");
-        const corpo = encodeURIComponent("Olá! Meu feedback:\n\n");
-        window.location.href = `mailto:licitaplena.site@gmail.com?subject=${assunto}&body=${corpo}`;
+        abrirMensagemEquipe("Meu feedback sobre o LicitaPlena: ");
       }
     });
   });

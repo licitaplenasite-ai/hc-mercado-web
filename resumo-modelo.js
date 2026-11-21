@@ -14,9 +14,14 @@ const CAMPOS = {
     itens: { titulo: "Resumo dos Itens", campos: { totalItens: "Total de itens", descricaoGeral: "Descrição geral", categoriasPrincipais: "Categorias principais", observacoes: "Observações" } },
     analiseCritica: { titulo: "Análise Crítica", campos: { conflitoObjetoMinuta: "Conflito objeto/minuta", conflitoPrazoVigenciaArp: "Conflito prazo vigência/ARP", conflitoPrazosEntrega: "Conflito prazos de entrega", permiteSubcontratacao: "Permite subcontratação", previsaoReajuste: "Previsão de reajuste/repactuação", permiteRenovacao: "Permite renovação de contrato", estabeleceCondicoesPagamento: "Estabelece condições de pagamento" } },
   };
+  // Alguns cadastros do portal chegam com acento quebrado ("POLICLÃ\u008dNICA"): UTF-8 lido como Latin-1. Desfaz só quando a volta dá certo.
+  function consertarAcentos(t) {
+    if (!/[\u00c3\u00c2][\u0080-\u00bf]/.test(t)) return t;
+    try { return decodeURIComponent(escape(t)); } catch { return t; }
+  }
   function texto(valor) {
     if (valor == null) return "";
-    if (typeof valor !== "object") return String(valor).trim();
+    if (typeof valor !== "object") return consertarAcentos(String(valor).trim());
     return texto(valor.texto || valor.titulo || valor.pergunta || valor.descricao || valor.item || valor.conteudo || valor.motivo);
   }
   function util(valor) {

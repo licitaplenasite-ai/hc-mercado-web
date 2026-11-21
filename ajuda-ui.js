@@ -134,16 +134,15 @@
     const fechar = criar("button", { type: "button", className: "lp-gaveta-fechar", title: "Fechar", textContent: "✕" });
     fechar.setAttribute("aria-label", "Fechar central de ajuda");
     const zap = linkWhatsApp();
-    const botaoZap = zap
-      ? criar("a", { className: "lp-botao lp-primario", href: zap, target: "_blank", rel: "noopener", textContent: "Falar no WhatsApp" })
-      : criar("button", { type: "button", disabled: true, title: "WhatsApp do suporte ainda não configurado", textContent: "WhatsApp (em breve)" });
+    // Sem número configurado não mostra botão desativado "em breve" (parecia quebrado): fica só "Mandar dúvida".
+    const botaoZap = zap ? criar("a", { className: "lp-botao lp-primario", href: zap, target: "_blank", rel: "noopener", textContent: "Falar no WhatsApp" }) : null;
     const duvida = criar("a", { className: "lp-botao", href: "painel.html#juridico", textContent: "Mandar dúvida à equipe" });
     duvida.addEventListener("click", (e) => {
       const nav = document.querySelector('nav button[data-alvo="juridico"]');
       if (nav) { e.preventDefault(); fundo.hidden = true; nav.click(); }
     });
     const corpo = criar("div", { className: "lp-gaveta-corpo" }, [
-      criar("div", { className: "lp-acoes-ajuda" }, [botaoZap, duvida]),
+      criar("div", { className: "lp-acoes-ajuda" }, [botaoZap, duvida].filter(Boolean)),
       criar("p", { style: "margin:0 0 16px" }, [criar("a", { href: "ajuda.html", target: "_blank", rel: "noopener", textContent: "Abrir o Guia de uso completo" }), " · ", criar("a", { href: "hc.html", textContent: "Assessoria e cursos (HC Licitações)" })]),
       criar("h3", { textContent: "Tutoriais por tela", style: "margin:0 0 8px;font:600 16px/24px var(--font-sans)" }),
       criar("p", { className: "lp-dica", textContent: "Os da tela onde você está aparecem primeiro. Alguns têm vídeo curto.", style: "margin-bottom:12px" }),

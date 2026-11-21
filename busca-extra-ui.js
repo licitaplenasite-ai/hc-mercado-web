@@ -123,7 +123,7 @@
         window.__buscaPainel.renderizar($("op-resultado"), achados, aviso);
         status.textContent = `Achamos ${achados.length === 1 ? "a licitação" : `${achados.length} registros`} desse número. Veja abaixo.`;
       } else {
-        status.innerHTML = `Não achamos esse número no PNCP. <a href="${esc(link)}" target="_blank" rel="noopener noreferrer">Abrir direto no Compras.gov.br</a>.`;
+        status.innerHTML = `Não achamos esse número nas licitações publicadas. <a href="${esc(link)}" target="_blank" rel="noopener noreferrer">Abrir direto no Compras.gov.br</a>.`;
       }
     } catch {
       status.innerHTML = `Não deu para procurar agora. <a href="${esc(link)}" target="_blank" rel="noopener noreferrer">Abrir direto no Compras.gov.br</a>.`;
@@ -156,7 +156,7 @@
       const capag = (g) => (window.Capag ? window.Capag.consultarCapag(capagBase, { orgao: g.orgao, municipio: g.municipio, uf: g.uf, esferaId: g.esferaId }) : null);
       const orgaos = BX.agruparOrgaos(linhas, capag)
         .filter((g) => (!portal || g.portais.includes(portal)) && (!texto || BX.norm(g.orgao).includes(texto) || g.uasgs.some((u) => u.includes(texto))));
-      status.textContent = `${orgaos.length} órgão(s) com licitação aberta em ${uf}${portal ? ` no ${portal}` : ""}. Estimativa de dias para pagar: ainda não temos base pública suficiente; mostramos só a CAPAG.`;
+      status.textContent = `${orgaos.length} órgão(s) com licitação aberta em ${uf}${portal ? ` no ${portal}` : ""}. Ainda não há dados públicos suficientes para estimar em quantos dias cada órgão paga; por isso mostramos só a CAPAG.`;
       alvo.innerHTML = orgaos.length ? `<div class="tabela-rolavel"><table><tr><th>Órgão</th><th>Município</th><th>UASG</th><th>Portal</th><th>Abertas</th><th>CAPAG</th></tr>${orgaos.slice(0, 200).map((g) => `<tr>
         <td>${esc(g.orgao)}</td><td>${esc(g.municipio)}</td><td>${esc(g.uasgs.join(", ") || "-")}</td><td>${esc(g.portais.join(", ") || "-")}</td><td>${g.abertas}</td>
         <td>${g.capag ? `<span class="badge-modalidade">${esc(g.capag)}</span>` : '<span class="dica-clique">não se aplica</span>'}</td></tr>`).join("")}</table></div>${orgaos.length > 200 ? '<p class="dica-clique">Mostrando os 200 com mais licitações abertas. Use o nome ou a UASG para achar outro.</p>' : ""}` : "";

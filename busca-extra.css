@@ -15,7 +15,8 @@
 .op-jornal-nome small { color: var(--texto-fraco); }
 .op-jornal-email { display: flex; gap: 6px; align-items: center; font-size: 13px; }
 #op-orgaos-resultado table { width: 100%; font-size: 13px; }
-.tabela-rolavel { overflow-x: auto; }
+.tabela-rolavel { overflow-x: auto; max-width: 100%; }
+#op-orgaos, #op-orgaos-resultado { min-width: 0; max-width: 100%; }
 .dash-faixa-hoje { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; margin-bottom: 16px; padding: 10px 14px; border: 1px solid var(--borda); border-radius: var(--raio); background: var(--cartao); font-size: 14px; }
 .dash-faixa-num strong { font-size: 20px; color: var(--azul-texto); margin-right: 4px; }
 .dash-faixa-novidade { color: var(--texto-fraco); }
