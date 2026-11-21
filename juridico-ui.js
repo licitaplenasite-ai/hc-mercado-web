@@ -51,7 +51,7 @@
           h(doc, 'summary', { texto: q.pergunta }),
           h(doc, 'p', { texto: q.resposta }),
           h(doc, 'p', { classe: 'jur-base' }, 'Base: ', ...q.bases.flatMap((b, i) => [i ? ' · ' : '', linkOficial(doc, b)])),
-          h(doc, 'p', { classe: 'jur-selo', texto: `${base.CATEGORIAS[q.categoria]} · revisão jurídica pendente` })));
+          h(doc, 'p', { classe: 'jur-selo', texto: `${base.CATEGORIAS[q.categoria]} · conteúdo informativo, confira com um advogado` })));
       }
       if (!achadas.length) lista.append(h(doc, 'p', { texto: 'Nada encontrado. Tente outra palavra ou envie sua dúvida no formulário abaixo.' }));
     };
@@ -131,7 +131,7 @@
     };
     pdf.onclick = () => { if (!pdf.disabled) ctx.imprimir(base.obterModelo(seletor.value).titulo, texto.value); };
     alvo.append(
-      h(doc, 'p', { classe: 'jur-pendente', texto: 'Modelo-base com revisão jurídica pendente. Adapte aos fatos do seu caso e confira prazo e canal no edital.' }),
+      h(doc, 'p', { classe: 'jur-pendente', texto: 'Modelo-base informativo, não substitui advogado. Adapte aos fatos do seu caso e confira prazo e canal no edital.' }),
       h(doc, 'div', { classe: 'jur-linha' },
         h(doc, 'div', { classe: 'jur-campo' }, h(doc, 'label', { for: 'jur-modelo', texto: 'Peça' }), seletor),
         h(doc, 'div', { classe: 'jur-campo' }, h(doc, 'label', { for: 'jur-processo', texto: 'Processo do Funil' }), processo)),

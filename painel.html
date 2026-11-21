@@ -2369,8 +2369,8 @@
     <h2>O que o LicitaPlena faz hoje e o que ainda não faz</h2>
     <div class="secao-conteudo-principal">
     <div class="caixa-interna limites-sistema">
-      <p><strong>Faz hoje:</strong> reúne editais publicados no PNCP (e do Sistema S no Amazonas) no seu Boletim e em Encontrar Licitações, resume o edital a partir dos documentos públicos, guarda o acompanhamento no Funil e mostra preços, contratos e concorrentes da base já coletada. A base é atualizada pelas coletas diárias; veja em Status das Ferramentas quando cada fonte foi atualizada.</p>
-      <p><strong>Ainda não faz:</strong> não dá lances por você (não há robô de lances), não envia a proposta ao portal e não acompanha o chat do pregoeiro. A disputa, o envio e as mensagens da sessão continuam no portal da licitação, com você.</p>
+      <p><strong>Faz hoje:</strong> reúne editais publicados no PNCP (e do Sistema S no Amazonas) no seu Boletim e em Encontrar Licitações, resume o edital a partir dos documentos públicos, guarda o acompanhamento no Funil e mostra preços, contratos e concorrentes com os dados públicos que já reunimos. Os dados são atualizados todos os dias; veja em Status das Ferramentas quando cada fonte foi atualizada. Com a Extensão, preenche a proposta no Compras.gov, avisa quando o pregoeiro escreve no chat e sugere o próximo lance.</p>
+      <p><strong>Ainda não faz:</strong> não dá lance sozinho (cada lance só sai com o seu clique em "Sim, dar lance" na Extensão), não envia a proposta por você e não responde ao pregoeiro. A disputa, o envio e as mensagens da sessão continuam com você, no portal da licitação.</p>
       <p>O LicitaPlena ajuda a encontrar e organizar oportunidades; não garante vitória em nenhuma licitação.</p>
     </div>
     </div>
@@ -2670,7 +2670,7 @@
         formDuvida.reset();
         preencherContatoDuvida();
       } catch (e) {
-        aviso.textContent = "Não deu pra enviar agora — tenta de novo em instantes.";
+        aviso.textContent = "Não foi possível enviar agora. Tente de novo em instantes.";
         aviso.style.color = "var(--vermelho)";
         aviso.style.display = "block";
       } finally {
@@ -2763,7 +2763,7 @@
       const haQuanto = r.ok ? formatarHaQuanto(r.atualizadoEm) : null;
       const horas = r.atualizadoEm ? (Date.now() - new Date(r.atualizadoEm).getTime()) / (1000 * 60 * 60) : Infinity;
       // Sem leitura não dá para afirmar que a fonte parou: fica cinza, não vermelho.
-      let cor = "var(--texto-fraco)", texto = "Sem leitura agora", detalhe = "", marca = "○";
+      let cor = "var(--texto-fraco)", texto = "Não foi possível verificar agora", detalhe = "", marca = "○";
       if (r.ok && haQuanto) {
         marca = "●";
         if (horas <= 30) { cor = "var(--verde)"; texto = `Em dia — atualizado ${haQuanto}`; }
@@ -2775,16 +2775,16 @@
         const totalUfs = 27;
         if (r.saudeFonte === "indisponivel") {
           cor = "var(--laranja)";
-          texto = "PNCP instável — última base válida preservada";
-          detalhe = "A fonte não respondeu na coleta recente. O robô vai retentar automaticamente sem apagar os editais já disponíveis.";
+          texto = "Portal do governo (PNCP) instável — mostramos os editais da última atualização";
+          detalhe = "O portal não respondeu na última atualização. Tentamos de novo sozinhos, sem apagar os editais que você já vê.";
         } else {
           cor = r.ufsComFalha.length >= totalUfs ? "var(--vermelho)" : "var(--laranja)";
           texto = r.ufsComFalha.length >= totalUfs
-            ? "Coleta sem cobertura nas UFs"
-            : `Cobertura parcial — ${r.ufsComFalha.length} UF(s) pendente(s)`;
+            ? "Sem editais novos de nenhum estado"
+            : `Atualização parcial — ${r.ufsComFalha.length} estado(s) pendente(s)`;
           detalhe = r.ufsComFalha.length >= totalUfs
-            ? "A última execução não trouxe oportunidades novas; mostramos a última base válida."
-            : `UFs pendentes: ${r.ufsComFalha.join(", ")}.`;
+            ? "A última atualização não trouxe editais novos; mostramos os da atualização anterior."
+            : `Estados pendentes: ${r.ufsComFalha.join(", ")}.`;
         }
       }
       return `<div class="cartao" style="border-top-color:${cor};">
