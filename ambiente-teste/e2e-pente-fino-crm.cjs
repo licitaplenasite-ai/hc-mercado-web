@@ -83,6 +83,7 @@ async function clicarTudo(p, tela, papel, largura, urlInicial) {
     if (!(await el.count()) || !(await el.isVisible().catch(() => false))) { r.efeito = 'escondido (janela aberta ou seção fechada)'; cliques.push(r); continue; }
     await p.evaluate(() => { window.__mud = 0; window.__obs?.disconnect(); window.__obs = new MutationObserver((m) => { window.__mud += m.length; }); window.__obs.observe(document.documentElement, { subtree: true, childList: true, attributes: true, characterData: true }); });
     const antes = p.url();
+    p.escolhaArquivo = false;
     const popup = p.context().waitForEvent('page', { timeout: 1500 }).catch(() => null);
     try { await el.click({ timeout: 3000 }); } catch {
       // Janela aberta por cima (ex.: o processo aberto pelo link): fecha e tenta de novo uma vez.
@@ -91,7 +92,8 @@ async function clicarTudo(p, tela, papel, largura, urlInicial) {
     }
     await p.waitForTimeout(700);
     const nova = await popup;
-    if (nova) { await nova.waitForLoadState('domcontentloaded').catch(() => {}); const st = nova.url(); r.efeito = 'abriu janela ' + st.replace(SITE, ''); if (/404|não encontrad/i.test(await nova.title().catch(() => ''))) anotar(tela, papel, largura, 'link 404', a.rotulo + ' → ' + st); await nova.close(); }
+    if (p.escolhaArquivo) r.efeito = 'abriu a escolha de arquivo';
+    else if (nova) { await nova.waitForLoadState('domcontentloaded').catch(() => {}); const st = nova.url(); r.efeito = 'abriu janela ' + st.replace(SITE, ''); if (/404|não encontrad/i.test(await nova.title().catch(() => ''))) anotar(tela, papel, largura, 'link 404', a.rotulo + ' → ' + st); await nova.close(); }
     else if (p.url() !== antes) {
       r.efeito = 'foi para ' + p.url().replace(SITE, '');
       const resp = await p.evaluate(() => document.title + ' ' + (document.body.innerText || '').slice(0, 80)).catch(() => '');
@@ -110,6 +112,9 @@ async function clicarTudo(p, tela, papel, largura, urlInicial) {
 async function visitar(nav, papel) {
   const p = await novaPagina(nav, U[papel]);
   p.on('dialog', (d) => d.dismiss());
+  // "Importar planilha" abre a escolha de arquivo: com ouvinte o Playwright intercepta (sem janela nativa, que travava
+  // o teste por mais de 20 min no Edge headless) e o clique conta como efeito.
+  p.on('filechooser', () => { p.escolhaArquivo = true; });
   for (const largura of [1280, 375]) {
     await p.setViewportSize({ width: largura, height: largura === 375 ? 812 : 900 });
     for (const t of TELAS) {
