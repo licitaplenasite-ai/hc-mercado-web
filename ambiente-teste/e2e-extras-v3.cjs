@@ -74,15 +74,15 @@ function limpar() {
       return 'site provável, contato, aderência e "2 de 3" na tela';
     });
 
-    await passo('Ajuda: lugar do vídeo em cada tutorial e WhatsApp desligado sem número configurado', p, async () => {
+    await passo('Ajuda: sem botão morto de WhatsApp nem "em breve" quando não há número configurado', p, async () => {
       await p.evaluate(() => window.LicitaPlenaAjuda.abrir());
-      await p.waitForSelector('.lp-tutorial-video-vazio', { timeout: 10000 });
+      await p.waitForSelector('.lp-gaveta-fundo:not([hidden]) .lp-lista-tutoriais', { timeout: 10000 });
       const t = await p.innerText('.lp-gaveta-fundo:not([hidden]) .lp-gaveta');
-      exigir(/WhatsApp \(em breve\)/.test(t) && /Vídeo deste tutorial: em breve/.test(t), `ajuda: ${t.slice(0, 300)}`);
-      // O servidor local serve um supabase-config.js próprio (URL/chave locais), sem o número: aqui só o botão desligado.
+      exigir(!/em breve/i.test(t) && !/WhatsApp/.test(t) && /Mandar dúvida à equipe/.test(t), `ajuda: ${t.slice(0, 300)}`);
+      // O servidor local serve um supabase-config.js próprio (URL/chave locais), sem o número: o botão do WhatsApp não aparece.
       await p.locator('.lp-gaveta-fundo:not([hidden]) .lp-gaveta').screenshot({ path: path.join(PRINTS, 'v3-03-ajuda-video-whatsapp-1280.png') });
       await p.keyboard.press('Escape');
-      return 'vídeo: em breve · WhatsApp: em breve (número vem de supabase-config.js)';
+      return 'sem "em breve" · sem WhatsApp sem número · "Mandar dúvida" presente';
     });
 
     await passo('Celular: tipo "Oportunidade nova no boletim" nas preferências de aviso', p, async () => {
