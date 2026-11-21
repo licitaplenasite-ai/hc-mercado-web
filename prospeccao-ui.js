@@ -5,8 +5,8 @@
 (function () {
   'use strict';
   const ABAS = {
-    pca: { titulo: 'Planos de contratação', data: 'Data prevista', vazio: 'Nenhum item de PCA/PGC com data prevista no período.' },
-    irp: { titulo: 'IRP abertas', data: 'Prazo para participar', vazio: 'Nenhuma Intenção de Registro de Preço aberta com esse filtro. O módulo de IRP do PNCP é de 31/08/2026 e ainda tem poucas IRPs.' },
+    pca: { titulo: 'Planos de contratação', data: 'Data prevista', vazio: 'Nenhuma compra planejada com data prevista no período. Tente outro estado, outras palavras ou um período maior.' },
+    irp: { titulo: 'IRP abertas', data: 'Prazo para participar', vazio: 'Nenhuma Intenção de Registro de Preço aberta com esse filtro. Os órgãos só passaram a publicar esses avisos no portal oficial em agosto de 2026, por isso ainda há poucos.' },
     ata: { titulo: 'Atas para adesão', data: 'Vigente até', vazio: 'Nenhuma ata vigente que permita adesão com esse filtro.' },
     contrato: { titulo: 'Contratos vencendo', data: 'Vence em', vazio: 'Nenhum contrato vencendo no período com esse filtro.' },
   };
@@ -98,7 +98,7 @@
   async function autenticar() {
     const { data: { session } } = await sb.auth.getSession();
     if (!session) { location.replace('login.html?voltar=/prospeccao'); return null; }
-    const { data: cliente } = await sb.from('clientes').select('status,boletim_filtro').eq('id', session.user.id).maybeSingle();
+    const { data: cliente } = await sb.from('clientes').select('status,boletim_filtro,estados_interesse').eq('id', session.user.id).maybeSingle();
     if (!cliente || cliente.status !== 'aprovado') { await sb.auth.signOut(); location.replace('login.html?voltar=/prospeccao'); return null; }
     return cliente;
   }
@@ -157,13 +157,20 @@
     try { localStorage.setItem('licitaplena_tema', claro ? 'claro' : 'escuro'); } catch { /* segue sem persistir */ }
   });
 
-  autenticar().then((cliente) => {
+  autenticar().then(async (cliente) => {
     if (!cliente) return;
-    const filtro = cliente.boletim_filtro;
+    // O filtro do Boletim agora fica por empresa (boletim_filtros_empresa); o da conta é o formato antigo.
+    let filtro = cliente.boletim_filtro;
+    if (!filtro || !filtro.palavrasRaw) {
+      const { data } = await sb.from('boletim_filtros_empresa').select('filtro').limit(1);
+      filtro = (data && data[0] && data[0].filtro) || filtro;
+    }
+    const estados = Array.isArray(cliente.estados_interesse) ? cliente.estados_interesse : [];
+    if (estados.length === 1 && !(filtro && Array.isArray(filtro.ufs) && filtro.ufs[0])) $('f-uf').value = String(estados[0]).toUpperCase();
     if (filtro && Array.isArray(filtro.ufs) && filtro.ufs[0]) $('f-uf').value = filtro.ufs[0];
     if (filtro && filtro.palavrasRaw) {
       $('f-palavras').value = filtro.palavrasRaw.slice(0, 300);
-      $('origem-filtro').textContent = 'UF e palavras vieram do filtro do seu boletim. Ajuste à vontade.';
+      $('origem-filtro').textContent = 'Estado e palavras vieram do filtro do seu Boletim. Ajuste à vontade.';
     }
     carregar('pca');
   }).catch(() => aviso('Não foi possível validar a sessão. Recarregue a página.', 'erro'));
