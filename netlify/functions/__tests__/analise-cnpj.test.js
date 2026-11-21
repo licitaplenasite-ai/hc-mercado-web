@@ -96,7 +96,7 @@ test("coleta na hora: orçamento curto não perde o que já achou e avisa", asyn
     : resposta({ total: 1, items: [{ item_url: "/compras/00394502002864/2025/3596", link_sistema_origem: "?compra=78882005900332025" }] }));
   const r = await coletarNaHora("48885922000150", { fetchImpl, orcamento: 2 });
   assert.deepEqual(r.pendentes, ["78882005900332025"]);
-  assert.match(r.avisos.join(" "), /robô completa/);
+  assert.match(r.avisos.join(" "), /o restante aparece aqui nos próximos dias/);
 });
 
 test("CNPJ sem resultado no PNCP: nada de compra, mas os meses do arquivo entram na fila", async () => {

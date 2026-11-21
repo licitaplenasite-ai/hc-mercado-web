@@ -200,7 +200,7 @@ test("coleta: orçamento esgotado devolve o que tem, marcado parcial, sem passar
   const r = await L.coletar({ uasg: "788820", alvos: [{ catmat: "463574" }], desdeAno: 2023, fetchImpl, orcamento: 3 });
   assert.equal(chamadas.length, 3);
   assert.equal(r.parcial, true);
-  assert.ok(r.avisos.some((a) => /robô completa/.test(a)));
+  assert.ok(r.avisos.some((a) => /o restante aparece aqui nos próximos dias/.test(a)));
   // Participação só entra com o item (FK do banco).
   const itens = new Set(r.itens.map((i) => `${i.id_compra}|${i.numero_item}`));
   assert.ok(r.participacoes.every((p) => itens.has(`${p.id_compra}|${p.numero_item}`)));
@@ -210,7 +210,7 @@ test("coleta: fonte fora do ar vira aviso, não exceção", async () => {
   const r = await L.coletar({ uasg: "788820", alvos: [{ catmat: "463574" }], desdeAno: 2023,
     fetchImpl: async () => ({ ok: false, status: 503, json: async () => ({}) }) });
   assert.deepEqual(r.compras, []);
-  assert.ok(r.avisos.some((a) => /Pesquisa de Preços indisponível/.test(a)));
+  assert.ok(r.avisos.some((a) => /Pesquisa de Preços não respondeu/.test(a)));
 });
 
 test("gravar: upsert por grupo de colunas, na ordem compra -> item -> participação", async () => {
