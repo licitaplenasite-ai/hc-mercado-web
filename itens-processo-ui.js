@@ -445,7 +445,7 @@
       const caixa = el('[data-reforma]');
       if (!ANOS_REFORMA.length) { caixa.hidden = true; return; }
       const ano = el('[data-reforma-campo="ano"]');
-      ano.replaceChildren(...ANOS_REFORMA.map((a) => h('option', { value: a, texto: a === 2026 ? '2026 (teste)' : `${a} (provisória)` })));
+      ano.replaceChildren(...ANOS_REFORMA.map((a) => h('option', { value: a, texto: a === 2026 ? '2026 (ano de teste da reforma)' : `${a} (provisória)` })));
       ano.value = String(reforma.ano);
       caixa.addEventListener('change', (ev) => {
         const alvoEv = ev.target;

@@ -411,7 +411,7 @@
   // "lido por usuário, não verificado" / "verificado" + data; "fonte sem HTTPS" quando a leitura veio de página http.
   function seloLeitura(s) {
     const caixa = el('span', 'la-selo-leitura' + (s.verificado ? ' la-verificado' : ' la-nao-verificado'), textoSelo(s));
-    if (s.semHttps) caixa.append(' ', el('span', 'la-sem-https', 'fonte sem HTTPS (página http do ComprasNet antigo; pode ter sido alterada no caminho)'));
+    if (s.semHttps) caixa.append(' ', el('span', 'la-sem-https', 'lido no site antigo do ComprasNet, sem conexão segura: confira no documento original'));
     return caixa;
   }
   function linhaMotivo(m) {
@@ -609,7 +609,7 @@
       raiz.append(art);
     });
     if (filtrando && !mostrados) raiz.append(el('p', 'la-apoio', 'Nenhum item com esses filtros. A classificação e o nº de licitantes só existem nos itens com a lista de participantes (arquivo de propostas ou pregão gravado pela extensão).'));
-    raiz.append(el('p', 'la-fonte', 'Fontes: PNCP (itens e resultados), Pesquisa de Preços e arquivo semanal de propostas do Compras.gov (dados abertos). ' + rodape));
+    raiz.append(el('p', 'la-fonte', 'Fontes: PNCP (itens e resultados), Pesquisa de Preços e as propostas publicadas pelo Compras.gov. ' + rodape));
     alvo.replaceChildren(raiz);
   }
 

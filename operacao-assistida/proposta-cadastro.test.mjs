@@ -196,7 +196,7 @@ test('UI existente abre proposta real revisada e mostra bloqueio autenticado sem
  node('[data-revisado]').events.change({target:{checked:true}});await flush();
  assert.equal(node('[data-preparar-operacao]').hidden,false,JSON.stringify({actions,estado:node('[data-estado]').textContent,aviso:node('[data-aviso]').textContent,descarte:node('[data-descarte]').hidden}));
  node('[data-preparar-operacao]').events.click();await flush();
- assert.ok(actions.includes('prepararOperacao'));assert.match(node('[data-operacao]').textContent,/vínculo com o Compras.gov ainda não verificado/);assert.match(node('[data-operacao]').textContent,/11.222.333\/0001-81/);assert.equal(node('[data-exportar]').disabled,false);
+ assert.ok(actions.includes('prepararOperacao'));assert.match(node('[data-operacao]').textContent,/falta confirmar que este processo é o mesmo do Compras.gov/);assert.match(node('[data-operacao]').textContent,/11.222.333\/0001-81/);assert.equal(node('[data-exportar]').disabled,false);
  operacional=positivo;node('[data-preparar-operacao]').events.click();await flush();assert.match(node('[data-operacao]').textContent,/Item 201/);assert.match(node('[data-operacao]').textContent,/Nenhuma proposta ou lance enviado/);
  adiar=true;node('[data-preparar-operacao]').events.click();await flush();
  form.events.input({target:{name:'validade',dataset:{}}});assert.equal(node('[data-operacao]').hidden,true);liberar();await flush();assert.equal(node('[data-operacao]').hidden,true);assert.equal(node('[data-preparar-operacao]').hidden,true);

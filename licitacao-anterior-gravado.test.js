@@ -51,10 +51,10 @@ test("duas organizações concordando: selo 'verificado'; a data vem da leitura 
 
 test("fonte sem HTTPS: selo quando a leitura veio de página http do ComprasNet antigo", () => {
   const raiz = desenhar({ gravado: U.indexarGravado({ pregoes: [pregao({ fonte: "comprasnet", fonte_sem_https: true })], propostas: [prop()], mensagens: [msg()] }) });
-  assert.match(raiz.textContent, /fonte sem HTTPS/);
+  assert.match(raiz.textContent, /sem conexão segura/);
   assert.equal(raiz.procurar((n) => n.className === "la-sem-https").length >= 2, true, "no pregão e em cada leitura");
   const sem = desenhar({ gravado: U.indexarGravado({ pregoes: [pregao()], propostas: [prop()], mensagens: [msg()] }) });
-  assert.doesNotMatch(sem.textContent, /fonte sem HTTPS/);
+  assert.doesNotMatch(sem.textContent, /sem conexão segura/);
 });
 
 test("sem gravação: mantém 'abra o pregão (exige captcha)' com link oficial e a dica 'grave com a extensão'", () => {

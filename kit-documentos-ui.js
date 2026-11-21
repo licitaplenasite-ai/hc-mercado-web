@@ -156,7 +156,7 @@
       const visiveis = selecionados ? ids.slice(paginaSelecao * 100, (paginaSelecao + 1) * 100).map(id => conhecidos.get(id) || { id, tipo: 'item', identificador: id, descricao: 'Selecionado salvo; dados serão conferidos ao preparar.' }) : (dados?.itens || []);
       el('[data-itens]').innerHTML = visiveis.map(item => `<div class="kit-item"><label><input type="checkbox" data-item value="${esc(item.id)}" ${item.tipo !== 'item' ? 'data-bloqueado="true" disabled' : ''}> ${esc(item.identificador)} — ${esc(item.descricao)}</label><p>Quantidade: ${esc(quantidadeTexto(item.quantidade))}${item.unidade ? ' ' + esc(item.unidade) : ''} · Unitário ofertado: R$ ${esc(decimalTexto(item.valorUnitario))} · Marca: ${esc(item.marca || 'não informada')} · Modelo: ${esc(item.modelo || 'não informado')}${item.tipo !== 'item' ? ' · Lote pendente de detalhamento' : ''}</p>${campo(`unidade-${esc(item.id)}`, 'Unidade deste item', 'maxlength="40"')}</div>`).join('') || '<p>Nenhum item cadastrado. Cadastre os itens no acompanhamento.</p>';
       for (const input of alvo.querySelectorAll('[data-item]')) { input.checked = selecao.tem(input.value); form.elements['unidade-' + input.value].value = selecao.tem(input.value) ? selecao.unidade(input.value) : conhecidos.get(input.value)?.unidade || ''; }
-      el('[data-contagem-itens]').textContent = ids.length + ' selecionados · limite técnico: ' + (dados?.limitesProposta?.itens || 'consultar servidor') + ' · tamanho total também limitado';
+      el('[data-contagem-itens]').textContent = ids.length + ' selecionados' + (dados?.limitesProposta?.itens ? ' · até ' + dados.limitesProposta.itens + ' itens por proposta' : '');
       el('[data-itens-anterior]').disabled = ocupado || (selecionados ? paginaSelecao === 0 : pagina === 0);
       el('[data-itens-proxima]').disabled = ocupado || (selecionados ? (paginaSelecao + 1) * 100 >= ids.length : !maisItens);
       el('[data-ver-selecionados]').textContent = selecionados ? 'Ver catálogo de itens' : 'Ver selecionados';
@@ -249,7 +249,7 @@
       if (acao === 'salvar') {
         if (e.status && e.status !== 503) tentativa = null;
         estado = e.status === 409 ? 'Conflito · alterações locais preservadas' : 'Falha ao salvar · alterações locais preservadas';
-      } else estado = e.status === 422 ? 'Rascunho incompleto' : e.status === 409 ? 'Revisão desatualizada · confira a versão do servidor' : 'Falha na operação';
+      } else estado = e.status === 422 ? 'Rascunho incompleto' : e.status === 409 ? 'Outra pessoa mudou este documento · recarregue para ver a versão atual' : 'Não foi possível concluir · tente de novo';
       if (e.status === 409) el('[data-recarregar]').hidden = false;
       aviso(e.message); atualizar();
     }
@@ -292,7 +292,7 @@
           if (typeof r.previa?.texto !== 'string' || !Array.isArray(r.previa.fontes) || !r.revisaoHash) throw new Error('Prévia indisponível. Tente novamente.');
           controle.preparada(r.revisaoHash, g); el('[data-revisado]').checked = false; el('[data-previa]').textContent = r.previa.texto;
           el('[data-fontes]').textContent = `Referências: ${r.previa.fontes.join(' · ') || 'nenhuma informada'}`;
-          el('[data-titulo-previa]').focus(); estado = 'Prévia pronta · pendente de revisão'; pendencias([]); aviso('Confira o conteúdo integral e as referências. A confirmação será registrada no servidor.');
+          el('[data-titulo-previa]').focus(); estado = 'Prévia pronta · pendente de revisão'; pendencias([]); aviso('Confira o conteúdo integral e as referências. A sua confirmação fica registrada no processo.');
         } else if (acao === 'confirmarRevisao') {
           const d = validarDocumento(r.documento, id); if (!controle.confirmada(d, g)) throw new Error('A confirmação não corresponde à peça e versão atuais. Prepare novamente.');
           peca = d; atualizarLista(d); estado = 'Revisão confirmada nesta abertura'; aviso('Revisão registrada. DOCX disponível para esta peça.');
@@ -312,7 +312,7 @@
         resultado.textContent = cabecalho + '\nPregão no portal: ' + r.contexto.purchaseId + '\n' + r.lote.itens.map(i => `Item ${i.id} · quantidade ${i.quantidade} · unitário ${i.unitario} · marca ${i.marca || 'não exigida'} · modelo ${i.modelo || 'não exigido'}`).join('\n') + '\nSomente conferência. Nenhuma proposta ou lance enviado.';
       } catch (e) {
         if (!vivo(g)) return;
-        if (e.motivo === 'vinculo_portal_indisponivel') resultado.textContent = cabecalho + '\nCadastro indisponível: vínculo com o Compras.gov ainda não verificado. Origem PNCP não confirma esse vínculo. Nenhuma proposta ou lance enviado.';
+        if (e.motivo === 'vinculo_portal_indisponivel') resultado.textContent = cabecalho + '\nAinda não dá para cadastrar: falta confirmar que este processo é o mesmo do Compras.gov (o link do PNCP não basta). Nenhuma proposta ou lance foi enviado.';
         else { falhar(e, 'prepararOperacao'); resultado.hidden = false; resultado.textContent = cabecalho + '\n' + e.message + '\nPrepare e revise novamente. Nenhum cadastro enviado.'; }
       } finally { if (vivo(g)) { ocupado = false; atualizar(); } }
     }
