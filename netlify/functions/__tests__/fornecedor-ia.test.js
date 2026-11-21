@@ -37,7 +37,7 @@ test("sem IA: 3 fornecedores com aderência pelos dados, contato só da Receita,
   const d = JSON.parse(r.body);
   assert.equal(d.fornecedores.length, 3);
   assert.equal(d.maisDisponiveis, true);
-  assert.deepEqual(d.uso, { usadas: 3, limite: 20 });
+  assert.equal(d.uso, undefined, "a tela não recebe contagem de IA");
   const um = d.fornecedores.find((f) => f.cnpj === "11111111000111");
   assert.equal(um.aderencia, 100);
   // Site: só o provável, pelo domínio próprio do e-mail da Receita.

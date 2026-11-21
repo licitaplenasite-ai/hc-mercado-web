@@ -67,6 +67,10 @@ async function exigirUsuarioLogado(event) {
   }
 }
 
+const ERRO_TESTE_ENCERRADO = "Seu teste grátis terminou. Você continua recebendo o boletim por e-mail. Para voltar a usar esta ferramenta, assine um plano. O que você salvou continua guardado.";
+const ERRO_TETO_IA = "Você chegou ao limite de uso justo da IA por hoje. Ela volta amanhã. Se a sua equipe precisa de mais, peça a IA extra.";
+const ERRO_TETO_DIARIO = "Você chegou ao limite de uso desta ferramenta por hoje. Ela volta amanhã. Se precisar de mais, fale com a gente.";
+
 function recursoForaDoPlano(plano) {
   return {
     ok: false,
@@ -113,6 +117,7 @@ async function verificarLimiteDiario(userId, nomeFuncao, limite) {
     // Plano da conta (supabase/planos_e_recursos.sql): recurso incluso? Limite do plano ou o desta rota.
     const plano = await consumirUsoPlano(opcoes({ p_usuario_id: userId, p_funcao: nomeFuncao, p_limite_padrao: limite }));
     if (plano?.motivo === "plano") return recursoForaDoPlano(plano);
+    if (plano?.motivo === "assinatura") return { ok: false, status: 403, erro: ERRO_TESTE_ENCERRADO };
     let resultado;
     if (plano) {
       limite = plano.limite;
@@ -127,14 +132,12 @@ async function verificarLimiteDiario(userId, nomeFuncao, limite) {
     }
     const contagem = resultado;
     if (ehIA && (!Number.isSafeInteger(contagem) || contagem < 1)) return indisponivel;
+    // Sem número na mensagem: o cliente não vê cota (uso justo, 21/11).
     if (typeof contagem === "number" && contagem > limite) {
-      return {
-        ok: false,
-        status: 429,
-        erro: `Limite diário de uso desta ferramenta atingido (${limite}/dia). Volta amanhã ou fala com a gente pra ajustar seu plano.`,
-      };
+      return { ok: false, status: 429, erro: ehIA ? ERRO_TETO_IA : ERRO_TETO_DIARIO };
     }
-    // usadas/limite: a tela mostra "N de X hoje" (contador de perguntas da IA).
+    // IA: nunca devolve contagem nem limite à tela. economico = passou do uso justo do mês: a rota usa a IA mais barata.
+    if (ehIA) return { ok: true, economico: plano?.economico === true };
     return typeof contagem === "number" ? { ok: true, usadas: contagem, limite } : { ok: true };
   } catch (e) {
     return indisponivel;

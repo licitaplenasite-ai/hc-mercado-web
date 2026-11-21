@@ -132,3 +132,18 @@ test("corpoExtra (contrato estruturado) vai no corpo do provedor compatível", a
   assert.equal(texto, "{}");
   assert.deepEqual([corpo.model, corpo.response_format, corpo.reasoning_effort, corpo.max_tokens], ["g1", { type: "json_object" }, "low", 50]);
 });
+
+// Uso justo (21/11): passou da IA do mês, as opções baratas vêm antes e o Gemini fica de última reserva.
+test("modo econômico: OpenRouter e Groq antes do Gemini; só com Gemini ele ainda responde", async () => {
+  const chamadas = [];
+  const env = { GROQ_API_KEY: "g", GEMINI_API_KEY: "k", OPENROUTER_API_KEY: "o", OPENROUTER_MODELOS: "barato" };
+  let r = await responderComFallback(MENSAGENS, { ...OPCOES, economico: true }, {
+    env, groq: groqFalha, fetchFn: fetchPorHost({ [HOST_OR]: resp(429), [HOST_GEMINI]: ok("gemini no fim") }, chamadas) });
+  assert.deepEqual([r.ok, r.provedor], [true, "gemini"]);
+  assert.deepEqual(chamadas, ["openrouter/barato", "generativelanguage/gemini-3.8-flash"]);
+  r = await responderComFallback(MENSAGENS, { ...OPCOES, economico: true }, {
+    env, groq: async () => ({ ok: true, texto: "groq barata" }), fetchFn: fetchPorHost({ [HOST_OR]: resp(500), [HOST_GEMINI]: () => assert.fail("Gemini não entra antes da Groq") }) });
+  assert.deepEqual([r.ok, r.provedor], [true, "groq"]);
+  r = await responderComFallback(MENSAGENS, { ...OPCOES, economico: true }, { env: { GEMINI_API_KEY: "k" }, fetchFn: fetchPorHost({ [HOST_GEMINI]: ok("só gemini") }) });
+  assert.deepEqual([r.ok, r.texto], [true, "só gemini"]);
+});

@@ -36,7 +36,7 @@ test('IA mantém limite 40 e prazo de consulta; indisponibilidade de outras fun�
     for (const n of [1, 40, 41]) {
       global.fetch = async (url, opcoes) => { assert(opcoes.signal instanceof globalThis.AbortSignal); return new Response(JSON.stringify(String(url).endsWith('/rpc/incrementar_uso_ip') ? 1 : n)); };
       const r = await verificarLimiteDiario('usuario', 'ia-edital', 40);
-      assert.equal(r.ok, n <= 40); if (n === 41) assert.equal(r.status, 429); if (n === 1) assert.deepEqual(r, { ok: true, usadas: 1, limite: 40 });
+      assert.equal(r.ok, n <= 40); if (n === 41) assert.equal(r.status, 429); if (n === 1) assert.deepEqual(r, { ok: true, economico: false }); if (n === 41) assert.doesNotMatch(r.erro, /\d/);
     }
     global.fetch = async () => new Response('{}', { status: 503 });
     for (const nome of ['enviar_resumo_edital', 'enviar_duvida', 'sancoes', 'despesas-fornecedor']) assert.equal((await verificarLimiteDiario('usuario', nome, 20)).ok, true);
@@ -148,10 +148,17 @@ test('plano: recurso fora do plano é 403, limite do plano vale e sem consumir_u
     global.fetch = fetchCom({ permitido: true, contagem: 4, limite: 3 });
     assert.equal((await verificarLimiteDiario('u', 'ia-edital', 40)).status, 429, 'limite do plano (3) vale sobre o da rota (40)');
     global.fetch = fetchCom({ permitido: true, contagem: 2, limite: 3 });
-    assert.deepEqual(await verificarLimiteDiario('u', 'ia-edital', 40), { ok: true, usadas: 2, limite: 3 });
+    assert.deepEqual(await verificarLimiteDiario('u', 'ia-edital', 40), { ok: true, economico: false }, 'a IA não devolve contagem à tela');
+    global.fetch = fetchCom({ permitido: true, contagem: 2, limite: 100, economico: true });
+    assert.deepEqual(await verificarLimiteDiario('u', 'chat-ia', 15), { ok: true, economico: true }, 'passou do uso justo do mês: IA barata, sem bloquear');
+    global.fetch = fetchCom({ permitido: false, motivo: 'assinatura', plano: 'Teste encerrado' });
+    const encerrado = await verificarLimiteDiario('u', 'ia-edital', 40);
+    assert.equal(encerrado.status, 403); assert.match(encerrado.erro, /teste grátis terminou.*boletim.*assine/i);
+    global.fetch = fetchCom({ permitido: true, contagem: 9, limite: 20 });
+    assert.deepEqual(await verificarLimiteDiario('u', 'sancoes', 20), { ok: true, usadas: 9, limite: 20 }, 'rotas fora da IA continuam iguais');
     chamadas.length = 0;
     global.fetch = fetchCom(undefined, 5);
-    assert.deepEqual(await verificarLimiteDiario('u', 'ia-edital', 40), { ok: true, usadas: 5, limite: 40 });
+    assert.deepEqual(await verificarLimiteDiario('u', 'ia-edital', 40), { ok: true, economico: false });
     assert.deepEqual(chamadas, ['incrementar_uso_ip', 'consumir_uso_plano', 'incrementar_uso']);
   } finally {
     global.fetch = fetchAnterior;

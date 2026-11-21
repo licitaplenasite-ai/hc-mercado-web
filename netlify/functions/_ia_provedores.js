@@ -77,25 +77,33 @@ async function chamarCompat(provedor, modelo, mensagens, opcoes, fetchFn, timeou
 // `groq` = chamarGroq já pronto para uso ((apiKey, mensagens, opts) => {ok,texto,erro}).
 // Retorna { ok, texto, provedor, modelo } ou { ok:false, erro } (erro da Groq quando ela falhou,
 // para manter a mensagem ao usuário de antes).
+// opcoes.economico (uso justo do mês passou, consumir_uso_plano): as opções baratas vêm primeiro e o Gemini vira a
+// última reserva. Não bloqueia: se só o Gemini estiver configurado, ele continua respondendo.
 async function responderComFallback(mensagens, opcoes, { env = process.env, fetchFn = fetch, groq, agora = Date.now } = {}) {
   const prazo = agora() + ORCAMENTO_TOTAL_MS;
   let erroGroq = null;
   const tempoDaTentativa = () => Math.min(TIMEOUT_CHAMADA_MS, prazo - agora());
+  const compat = montarProvedoresCompat(env);
+  const ordem = opcoes.economico
+    ? [...compat.filter((p) => p.nome !== "gemini"), "groq", ...compat.filter((p) => p.nome === "gemini")]
+    : [...compat, "groq"];
 
-  for (const provedor of montarProvedoresCompat(env)) {
+  for (const provedor of ordem) {
+    if (provedor === "groq") {
+      if (!env.GROQ_API_KEY || !groq || tempoDaTentativa() < MINIMO_POR_TENTATIVA_MS) continue;
+      const r = await groq(env.GROQ_API_KEY, mensagens, { ...opcoes, timeoutMs: Math.min(opcoes.timeoutMs || TIMEOUT_CHAMADA_MS, tempoDaTentativa()) }) || {};
+      const texto = textoResposta(r.texto);
+      if (r.ok && texto) return { ok: true, texto, provedor: "groq", modelo: r.modelo || null };
+      erroGroq = r.erro || null;
+      console.warn("ia-provedores: groq também falhou");
+      continue;
+    }
     for (const modelo of provedor.modelos) {
       const timeoutMs = tempoDaTentativa();
-      if (timeoutMs < MINIMO_POR_TENTATIVA_MS) return { ok: false, erro: ERRO_TODOS_FALHARAM };
+      if (timeoutMs < MINIMO_POR_TENTATIVA_MS) return { ok: false, erro: erroGroq || ERRO_TODOS_FALHARAM };
       const texto = await chamarCompat(provedor, modelo, mensagens, opcoes, fetchFn, timeoutMs);
       if (texto) return { ok: true, texto, provedor: provedor.nome, modelo };
     }
-  }
-  if (env.GROQ_API_KEY && groq && tempoDaTentativa() >= MINIMO_POR_TENTATIVA_MS) {
-    const r = await groq(env.GROQ_API_KEY, mensagens, { ...opcoes, timeoutMs: Math.min(opcoes.timeoutMs || TIMEOUT_CHAMADA_MS, tempoDaTentativa()) }) || {};
-    const texto = textoResposta(r.texto);
-    if (r.ok && texto) return { ok: true, texto, provedor: "groq", modelo: r.modelo || null };
-    erroGroq = r.erro || null;
-    console.warn("ia-provedores: groq (última reserva) também falhou");
   }
   return { ok: false, erro: erroGroq || ERRO_TODOS_FALHARAM };
 }

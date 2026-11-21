@@ -1,6 +1,6 @@
 // "Encontrar fornecedor com IA" (painel lateral "Prospecção de fornecedores", item 24 da análise do Siga Pregão).
 //   POST /api/fornecedor-ia  {descricao, pular?: [cnpj...]}  (Authorization: Bearer <sessão>)
-//   -> { fornecedores: [até 3], maisDisponiveis, uso: {usadas, limite}, analise: "ia"|"dados" }
+//   -> { fornecedores: [até 3], maisDisponiveis, analise: "ia"|"dados" }
 // De onde vem cada coisa (nada é inventado):
 //   - candidatos: empresas que JÁ ASSINARAM contrato com o governo para objeto parecido (tabela contratos, PNCP,
 //     lida com o token do próprio usuário; a RLS é a barreira);
@@ -169,19 +169,18 @@ exports.handler = async (event, deps = {}) => {
 
   const limite = await (deps.limitar || verificarLimiteDiario)(auth.userId, "fornecedor-ia", LIMITE_DIARIO);
   if (!limite.ok) return resposta(limite.status, { erro: limite.erro });
-  const uso = limite.usadas ? { usadas: limite.usadas, limite: limite.limite } : null;
 
   let linhas;
   try {
     linhas = await lerContratos(fetchFn, termos, event.headers?.authorization || event.headers?.Authorization);
   } catch (e) {
     console.warn("fornecedor-ia: contratos", e.message);
-    return resposta(503, { erro: "Não foi possível consultar os contratos agora. Tente de novo em instantes.", uso });
+    return resposta(503, { erro: "Não foi possível consultar os contratos agora. Tente de novo em instantes." });
   }
 
   const candidatos = agruparCandidatos(linhas, termos).filter((c) => !pular.has(c.cnpj));
   const escolhidos = candidatos.slice(0, POR_VEZ);
-  if (!escolhidos.length) return resposta(200, { fornecedores: [], maisDisponiveis: false, uso, analise: "dados" });
+  if (!escolhidos.length) return resposta(200, { fornecedores: [], maisDisponiveis: false, analise: "dados" });
 
   const cadastros = await Promise.all(escolhidos.map((c) => cadastroPublico(fetchFn, c.cnpj)));
   let avaliacao = new Map();
@@ -189,12 +188,12 @@ exports.handler = async (event, deps = {}) => {
     const lista = escolhidos.map((c, i) => ({ id: `C${i + 1}`, nome: c.nome, contratos: c.contratos, objetos: c.exemplos, cnae: cadastros[i]?.cnae || null }));
     const r = await (deps.responder || responderComFallback)(
       [{ role: "system", content: INSTRUCOES }, { role: "user", content: `<produto>${descricao}</produto>\n${JSON.stringify(lista)}` }],
-      { maxTokens: 1200, timeoutMs: 12000, json: true }, { groq: chamarGroq, env });
+      { maxTokens: 1200, timeoutMs: 12000, json: true, economico: limite.economico === true }, { groq: chamarGroq, env });
     if (r.ok) avaliacao = lerAvaliacaoIA(r.texto, new Set(lista.map((l) => l.id)));
   }
 
   const fornecedores = escolhidos.map((c, i) => montarFornecedor(c, cadastros[i], avaliacao.get(`C${i + 1}`), termos)).sort((a, b) => b.aderencia - a.aderencia);
-  return resposta(200, { fornecedores, maisDisponiveis: candidatos.length > POR_VEZ, uso, analise: avaliacao.size ? "ia" : "dados" });
+  return resposta(200, { fornecedores, maisDisponiveis: candidatos.length > POR_VEZ, analise: avaliacao.size ? "ia" : "dados" });
 };
 exports.termosDaDescricao = termosDaDescricao;
 exports.agruparCandidatos = agruparCandidatos;

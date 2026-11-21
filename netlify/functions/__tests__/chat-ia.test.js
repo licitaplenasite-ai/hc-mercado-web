@@ -41,7 +41,7 @@ test("dúvida jurídica: responde pela IA e a citação vem da base (Lei 14.133 
   assert.match(d.resposta, /3 dias úteis/);
   assert.ok(d.fontes.some((f) => f.tipo === "lei" && f.titulo === "Lei 14.133/2021" && f.url.startsWith("https://www.planalto.gov.br/")));
   assert.match(d.aviso, /IA pode errar/);
-  assert.deepEqual(d.uso, { usadas: 2, limite: 15 });
+  assert.equal(d.uso, undefined, "a tela não recebe contagem de IA");
   assert.equal(chamadas.tokenContextos, undefined, "pergunta de lei não lê dados da conta");
 });
 
@@ -128,4 +128,13 @@ test("histórico do pedido: só papéis válidos, últimas 6 mensagens, sem assi
   const m = Chat.montarMensagens({ pergunta: "oi", historico, fontes: { juridico: [], ajuda: [] }, dados: null });
   assert.equal(m.length, 2);
   assert.match(m[1].content, /<historico>/);
+});
+
+test("uso justo do mês passou: o chat continua e pede a IA mais barata", async () => {
+  const opcoes = [];
+  const { deps } = base({ deps: { limitar: async () => ({ ok: true, economico: true }),
+    responder: async (_m, op) => { opcoes.push(op); return { ok: true, texto: '{"resposta":"O prazo é de 3 dias úteis.","fontes":["J1"],"naoSei":false}' }; } } });
+  const r = await handler(evento({ pergunta: "Qual o prazo para apresentar recurso?" }), deps);
+  assert.equal(r.statusCode, 200);
+  assert.equal(opcoes[0].economico, true);
 });

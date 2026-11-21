@@ -45,7 +45,7 @@ exports.handler = async (event, deps = {}) => {
   if (!limite.ok) return resposta(limite.status, { erro: limite.erro });
   const r = await (deps.responder || responderComFallback)(
     [{ role: "system", content: INSTRUCOES }, { role: "user", content: `<vendo>${descricao}</vendo>` }],
-    { maxTokens: 1500, timeoutMs: 12000, json: true }, { groq: chamarGroq, env: deps.env || process.env });
+    { maxTokens: 1500, timeoutMs: 12000, json: true, economico: limite.economico === true }, { groq: chamarGroq, env: deps.env || process.env });
   if (!r.ok) return resposta(502, { erro: "A IA não respondeu agora. Tente de novo em instantes ou digite as palavras direto." });
   const sugestao = sanitizarSugestao(extrairJson(r.texto));
   if (!sugestao.palavras.length) return resposta(502, { erro: "A IA não devolveu palavras utilizáveis. Tente descrever de outro jeito." });

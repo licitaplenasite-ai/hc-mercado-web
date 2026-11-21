@@ -1,7 +1,7 @@
 // Chat com IA do LicitaPlena (botão "IA · BETA" no canto de baixo à direita; equivalente ao "B2G Talk" do Siga Pregão).
 //   POST /api/chat-ia  (Authorization: Bearer <sessão>)
 //     {acao:"perguntar", pergunta, historico?:[{papel,texto}], empresaId?, salvar?, conversaId?}
-//       -> {resposta, fontes:[{tipo,titulo,detalhe,url?}], naoSei, modo:"ia"|"base", aviso, uso, salvo}
+//       -> {resposta, fontes:[{tipo,titulo,detalhe,url?}], naoSei, modo:"ia"|"base", aviso, salvo}  (sem contagem de uso: IA com uso justo, 21/11)
 //     {acao:"historico"} -> {mensagens:[...]}      {acao:"apagar"} -> {apagado:true}
 // Regras:
 //   - Dúvida de licitação: responde só com a base jurídica (juridico-base.js) e os tutoriais (ajuda-ui.js), citando a
@@ -47,10 +47,10 @@ async function lerDadosDaConta(event, deps, ler) {
 }
 
 // Sem base nenhuma não chama a IA (economiza cota e evita resposta inventada). null = cair no modo base.
-async function responderPelaIA(deps, { pergunta, historico, fontes, dados }) {
+async function responderPelaIA(deps, { pergunta, historico, fontes, dados, economico }) {
   const env = deps.env || process.env;
   if (!(fontes.juridico.length || fontes.ajuda.length || dados) || !haProvedorConfigurado(env)) return null;
-  const r = await (deps.responder || responderComFallback)(Chat.montarMensagens({ pergunta, historico, fontes, dados }), { maxTokens: 900, timeoutMs: 12000, json: true }, { env });
+  const r = await (deps.responder || responderComFallback)(Chat.montarMensagens({ pergunta, historico, fontes, dados }), { maxTokens: 900, timeoutMs: 12000, json: true, economico }, { env });
   const ids = new Set([...fontes.juridico, ...fontes.ajuda].map((f) => f.id).concat(dados ? ["D"] : []));
   return r?.ok ? Chat.lerRespostaIA(r.texto, ids) : null;
 }
@@ -60,7 +60,6 @@ async function perguntar(corpo, event, deps, ler, auth) {
   if (pergunta.length < 2) return [400, { erro: "Escreva sua pergunta." }];
   const limite = await (deps.limitar || verificarLimiteDiario)(auth.userId, "chat-ia", LIMITE_DIARIO);
   if (!limite.ok) return [limite.status, { erro: limite.erro }];
-  const uso = limite.usadas ? { usadas: limite.usadas, limite: limite.limite } : null;
 
   const pedirDados = Chat.querDados(pergunta);
   const lidos = pedirDados ? await lerDadosDaConta(event, deps, ler).catch(() => null) : null;
@@ -68,11 +67,11 @@ async function perguntar(corpo, event, deps, ler, auth) {
   const dados = lidos ? Chat.resumirDados(lidos.ctx, empresaAtiva, lidos.boletins) : null;
   const fontes = Chat.recuperarFontes(pergunta);
 
-  const daIA = await responderPelaIA(deps, { pergunta, historico, fontes, dados });
+  const daIA = await responderPelaIA(deps, { pergunta, historico, fontes, dados, economico: limite.economico === true });
   let saida = daIA || Chat.respostaSemIA(fontes, dados, pedirDados);
   if (pedirDados && !lidos && saida.naoSei) saida = { ...saida, resposta: "Não consegui ler os dados da sua conta agora. Tente de novo em instantes." };
 
-  const resposta = { resposta: saida.resposta, fontes: Chat.citacoes(saida.ids, fontes, dados), naoSei: saida.naoSei, modo: daIA ? "ia" : "base", aviso: Chat.AVISO_IA, uso, salvo: false };
+  const resposta = { resposta: saida.resposta, fontes: Chat.citacoes(saida.ids, fontes, dados), naoSei: saida.naoSei, modo: daIA ? "ia" : "base", aviso: Chat.AVISO_IA, salvo: false };
   if (corpo.salvar === true) resposta.salvo = await salvar(ler, { corpo, pergunta, resposta, empresaAtiva: dados?.empresaAtiva ? empresaAtiva : null });
   return [200, resposta];
 }
