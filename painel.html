@@ -2206,45 +2206,21 @@
     <div class="boletim-cabecalho">
       <div>
         <h2 style="margin:0;"><svg class='icone-ph'><use href='#ph-buildings'></use></svg> Analisar concorrente</h2>
-        <p class="dica-clique" style="margin:4px 0 0;">Consulte o CNPJ e aprofunde o dossiê da empresa, com participação, histórico e cruzamentos do segmento selecionado.</p>
+        <p class="dica-clique" style="margin:4px 0 0;">Digite o CNPJ ou o nome do concorrente: mostramos os dados da empresa, alertas, como ela se sai nas licitações, contratos, quanto já recebeu do governo federal e onde atua.</p>
       </div>
     </div>
     <div class="painel-filtros painel-filtros-recolhivel" id="emp-filtros-principais">
       <div class="painel-filtros-recolhivel-cabecalho">
-        <h3 class="painel-filtros-recolhivel-titulo">Dados da empresa</h3>
+        <h3 class="painel-filtros-recolhivel-titulo">Buscar empresa</h3>
         <span id="emp-filtros-resumo" class="painel-filtros-recolhivel-resumo"></span>
         <button type="button" id="emp-filtros-colapsar-btn" class="filtros-lateral-colapsar-btn" title="Recolher filtros" aria-expanded="true">«</button>
       </div>
       <div class="campo">
         <label for="emp-cnpj">CNPJ ou nome da empresa</label>
         <input id="emp-cnpj" placeholder="Ex: 12345678000199 ou parte do nome">
-        <div id="emp-minhas" class="dica-clique" style="margin-top:4px;"></div>
-      </div>
-      <div class="campo" style="flex:2">
-        <label for="emp-segmento">Segmento p/ cruzar histórico (opcional)</label>
-        <input id="emp-segmento" placeholder="Ex: hospitalar, limpeza">
-      </div>
-      <div class="campo">
-        <label for="emp-dias">Período de análise</label>
-        <select id="emp-dias">
-          <option value="3">Últimos 3 dias</option>
-          <option value="7">Últimos 7 dias</option>
-          <option value="15">Últimos 15 dias</option>
-          <option value="30" selected>Últimos 30 dias</option>
-          <option value="60">Últimos 2 meses</option>
-          <option value="90">Últimos 3 meses</option>
-          <option value="180">Últimos 6 meses</option>
-          <option value="365">Últimos 12 meses</option>
-          <option value="730">Últimos 24 meses</option>
-        </select>
       </div>
       <button class="btn-buscar" id="emp-buscar">Analisar empresa</button>
     </div>
-    <div class="op-receber-boletim">
-      <button type="button" class="btn-imprimir" id="emp-ir-raiox"><svg class='icone-ph'><use href='#ph-coins'></use></svg> Ver pagamentos federais no Raio-X Financeiro</button>
-      <p class="dica-clique" style="margin:0;">Leva o CNPJ acima para o Raio-X, em Convênios e Emendas Federais: quanto essa empresa já recebeu de fato do governo federal.</p>
-    </div>
-    <div class="dg-topo-acoes"><span></span><button class="btn-imprimir btn-imprimir-generico" title="Gerar PDF/impressão desta tela"><svg class='icone-ph'><use href='#ph-printer'></use></svg> Imprimir / Gerar PDF</button></div>
     <div id="emp-resultado"></div>
     </div>
   </section>
@@ -2835,7 +2811,7 @@
   // que a consulta foi configurada, sem perder a referência dos critérios aplicados.
   (function () {
     const configuracoes = [
-      { painel: "emp-filtros-principais", botao: "emp-filtros-colapsar-btn", resumo: "emp-filtros-resumo", campos: ["emp-cnpj", "emp-segmento"], chave: "hc_empresa_filtros_colapsado" },
+      { painel: "emp-filtros-principais", botao: "emp-filtros-colapsar-btn", resumo: "emp-filtros-resumo", campos: ["emp-cnpj"], chave: "hc_empresa_filtros_colapsado" },
       { painel: "cv-filtros-principais", botao: "cv-filtros-colapsar-btn", resumo: "cv-filtros-resumo", campos: ["cv-uf", "cv-municipio", "cv-palavras"], chave: "hc_convenios_filtros_colapsado" },
       { painel: "fn-filtros-principais", botao: "fn-filtros-colapsar-btn", resumo: "fn-filtros-resumo", campos: ["fn-cnpj"], chave: "hc_fornecedor_filtros_colapsado" },
     ];
@@ -4632,149 +4608,6 @@
     return `${dia}/${mes}/${ano} ${hora}:${min} (horário de Brasília)`;
   }
 
-  function formatarTelefone(ddd, numero) {
-    if (!numero) return null;
-    return ddd ? `(${ddd}) ${numero}` : numero;
-  }
-
-  // Monta o HTML de uma ficha cadastral completa a partir da resposta da BrasilAPI
-  // (endpoint /api/cnpj/v1/{cnpj}). Inspirado no modal "Concorrente" do ConLicitação:
-  // dados básicos + endereço/contato + sócios (QSA) + CNAEs secundários (segmentos de atuação).
-  // Componente de acordeão (inspirado nos painéis clicáveis "Análise administrativa /
-  // Participações / Sanções / Aspectos estratégicos" do ConLicitação). idAcc precisa ser
-  // único dentro do container onde o acordeão for inserido.
-  function montarAcordeon(idAcc, icone, titulo, corpoHtml, opcoes) {
-    opcoes = opcoes || {};
-    const aberto = !!opcoes.aberto;
-    const contagem = opcoes.contagem !== undefined && opcoes.contagem !== null
-      ? `<span class="acc-contagem">${escapeHtml(String(opcoes.contagem))}</span>`
-      : "";
-    return `<div class="acc${aberto ? " aberto" : ""}" data-acc="${escapeHtml(idAcc)}">
-      <div class="acc-cab">
-        <div class="acc-titulo"><span class="acc-icone">${icone}</span> ${escapeHtml(titulo)}${contagem}</div>
-        <div class="acc-seta">▾</div>
-      </div>
-      <div class="acc-corpo">${corpoHtml}</div>
-    </div>`;
-  }
-
-  // Liga o clique de abrir/fechar em todos os acordeões dentro de um container.
-  function ligarAcordeons(container) {
-    container.querySelectorAll(".acc > .acc-cab").forEach((cab) => {
-      cab.addEventListener("click", () => {
-        cab.parentElement.classList.toggle("aberto");
-      });
-    });
-  }
-
-  function montarFichaCadastral(ficha) {
-    const ativa = (ficha.descricao_situacao_cadastral || "").toUpperCase() === "ATIVA";
-    const endereco = [
-      ficha.descricao_tipo_de_logradouro, ficha.logradouro, ficha.numero,
-    ].filter(Boolean).join(" ") + (ficha.bairro ? `, ${ficha.bairro}` : "");
-    const telefone = formatarTelefone(ficha.ddd_telefone_1 && ficha.ddd_telefone_1.slice(0, 2), ficha.ddd_telefone_1 && ficha.ddd_telefone_1.slice(2));
-
-    let html = `<div class="ficha-empresa">
-      <div class="campo-ficha"><label>Razão social</label><div>${escapeHtml(ficha.razao_social || "-")}</div></div>
-      <div class="campo-ficha"><label>Nome fantasia</label><div>${escapeHtml(ficha.nome_fantasia || "-")}</div></div>
-      <div class="campo-ficha"><label>Situação cadastral</label><div class="${ativa ? "situacao-ativa" : "situacao-outra"}">${escapeHtml(ficha.descricao_situacao_cadastral || "-")}</div></div>
-      <div class="campo-ficha"><label>Porte</label><div>${escapeHtml(ficha.descricao_porte || ficha.porte || "-")}</div></div>
-      <div class="campo-ficha"><label>Natureza jurídica</label><div>${escapeHtml(ficha.natureza_juridica || "-")}</div></div>
-      <div class="campo-ficha"><label>Data de abertura</label><div>${escapeHtml(ficha.data_inicio_atividade || "-")}</div></div>
-      <div class="campo-ficha"><label>CNAE principal</label><div>${escapeHtml((ficha.cnae_fiscal_descricao || "-"))}</div></div>
-      <div class="campo-ficha"><label>Município/UF</label><div>${escapeHtml((ficha.municipio || "-") + " / " + (ficha.uf || "-"))}</div></div>
-      <div class="campo-ficha"><label>Endereço</label><div>${escapeHtml(endereco || "-")}${ficha.cep ? " · CEP " + escapeHtml(ficha.cep) : ""}</div></div>
-      <div class="campo-ficha"><label>Telefone</label><div>${escapeHtml(telefone || "-")}</div></div>
-      <div class="campo-ficha"><label>Capital social</label><div>${escapeHtml(formatarValor(ficha.capital_social || 0))}</div></div>
-    </div>`;
-
-    if (Array.isArray(ficha.qsa) && ficha.qsa.length > 0) {
-      html += `<div class="ficha-secao"><h4>Sócios / administradores</h4><ul class="ficha-lista">`;
-      for (const s of ficha.qsa) {
-        html += `<li>${escapeHtml(s.nome_socio || "-")} <span class="socio-qualif">— ${escapeHtml(s.qualificacao_socio || "-")}</span></li>`;
-      }
-      html += `</ul></div>`;
-    }
-
-    if (Array.isArray(ficha.cnaes_secundarios) && ficha.cnaes_secundarios.length > 0) {
-      html += `<div class="ficha-secao"><h4>Outros segmentos de atuação (CNAEs secundários)</h4><ul class="ficha-lista">`;
-      for (const c of ficha.cnaes_secundarios) {
-        html += `<li><span class="cnae-codigo">${escapeHtml(String(c.codigo || ""))}</span> — ${escapeHtml(c.descricao || "-")}</li>`;
-      }
-      html += `</ul></div>`;
-    }
-
-    return html;
-  }
-
-  // Consulta a Netlify Function que busca sanções (CEIS/CNEP) por CNPJ no Portal da
-  // Transparência. O token fica só no servidor (variável de ambiente do Netlify),
-  // nunca é exposto no navegador. Retorna null se a function não estiver disponível
-  // (ex: TRANSPARENCIA_TOKEN ainda não configurado no Netlify).
-  async function carregarSancoes(cnpj) {
-    try {
-      const token = await obterTokenSessao();
-      const resp = await fetch(`/api/sancoes?cnpj=${cnpj}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!resp.ok) return null;
-      return await resp.json();
-    } catch (e) {
-      return null;
-    }
-  }
-
-  // Monta o link direto pro registro oficial da sanção no Portal da Transparência
-  // (mesma fonte primária que o ConLicitação usa pra gerar o PDF "Sanção Aplicada").
-  function linkSancaoOficial(id) {
-    if (!id) return null;
-    return `https://portaldatransparencia.gov.br/sancoes/consulta/${id}`;
-  }
-
-  function montarHtmlSancoes(sancoes) {
-    if (!sancoes) {
-      return '<p style="color:var(--texto-fraco);font-size:13px;">Consulta de sanções indisponível no momento.</p>';
-    }
-    if (sancoes.erro) {
-      return `<div class="aviso">${escapeHtml(sancoes.erro)}</div>`;
-    }
-    if (!sancoes.temSancao) {
-      return '<p style="color:var(--verde);font-size:13px;">Nenhuma sanção encontrada para este CNPJ no CEIS/CNEP (Portal da Transparência).</p>';
-    }
-    let html = '<table><tr><th>Órgão sancionador</th><th>Sanção</th><th>Início</th><th>Fim</th><th>Registro oficial</th></tr>';
-    for (const s of [...sancoes.ceis, ...sancoes.cnep]) {
-      const tipo = s.tipoSancao && s.tipoSancao.descricaoResumida || s.categoriaSancao || "Sanção";
-      const orgao = s.orgaoSancionador && s.orgaoSancionador.nome || "-";
-      const inicio = s.dataInicioSancao || "-";
-      const fim = s.dataFimSancao || "-";
-      const link = linkSancaoOficial(s.id);
-      html += `<tr>
-        <td>${escapeHtml(orgao)}</td>
-        <td style="color:var(--vermelho)">${escapeHtml(tipo)}</td>
-        <td>${escapeHtml(inicio)}</td>
-        <td>${escapeHtml(fim)}</td>
-        <td>${link ? `<a class="link-pncp" href="${escapeHtml(link)}" target="_blank" rel="noopener">Ver no Portal da Transparência <svg class='icone-ph'><use href='#ph-arrow-square-out'></use></svg></a>` : "-"}</td>
-      </tr>`;
-    }
-    html += "</table>";
-    return html;
-  }
-
-  // "Aspectos estratégicos" (desclassificações/inabilitações item a item, com motivo) é um
-  // painel que o ConLicitação mostra porque eles mantêm um rastreador próprio, item por item,
-  // de resultados de disputa em vários portais (ComprasNet etc.) — dado que não existe pronto
-  // em nenhuma API pública gratuita que encontramos até agora. O PNCP até publica resultado por
-  // item (endpoint /itens/{n}/resultados), mas não tem busca por CNPJ: seria preciso varrer
-  // item a item de todas as compras publicadas pra achar as que essa empresa participou, o que
-  // é um robô novo e bem mais pesado que o que já roda hoje (que só olha contratos assinados).
-  function montarHtmlAspectosEstrategicos() {
-    return `<p style="color:var(--texto-fraco);font-size:13px;">
-      As desclassificações, inabilitações e propostas recusadas item a item, com o motivo literal
-      quando o pregão foi gravado pela extensão, estão no bloco "Motivos de desclassificação /
-      inabilitação" no topo desta análise.
-    </p>`;
-  }
-
   function extrairUf(registro) {
     const caminhos = [
       ["unidadeOrgao", "ufSigla"],
@@ -6517,41 +6350,6 @@
     }
 
     return { encontrados: [...encontradosPorId.values()], falhaConexao };
-  }
-
-  // Escaneia contratos históricos do PNCP filtrando por CNPJ do fornecedor (para a aba Analisar Empresa)
-  async function buscarContratosPorCnpj(dataInicial, dataFinal, cnpj, inicioMs, tempoLimiteMs) {
-    const encontrados = [];
-    let pagina = 1;
-    let totalPaginas = 1;
-    let paginasVarridas = 0;
-    let parcial = false;
-    let falhaConexao = false;
-
-    while (pagina <= totalPaginas) {
-      if (Date.now() - inicioMs > tempoLimiteMs) { parcial = true; break; }
-      const url = `/api/pncp-proxy?url=${encodeURIComponent(`https://pncp.gov.br/api/consulta/v1/contratos?dataInicial=${dataInicial}&dataFinal=${dataFinal}&pagina=${pagina}&tamanhoPagina=100`)}`;
-      let resp;
-      try {
-        resp = await fetchComTimeout(url, { headers: { Accept: "application/json" } }, 18000);
-      } catch (e) { falhaConexao = true; break; }
-      if (!resp.ok) {
-        if (resp.status === 429) { await new Promise((r) => setTimeout(r, 500)); continue; }
-        falhaConexao = true;
-        break;
-      }
-      const texto = await resp.text();
-      if (!texto) break;
-      const dados = JSON.parse(texto);
-      const itens = dados.data || [];
-      totalPaginas = dados.totalPaginas || 1;
-      paginasVarridas += 1;
-      for (const item of itens) {
-        if (soDigitos(item.niFornecedor) === cnpj) encontrados.push(normalizarContrato(item));
-      }
-      pagina += 1;
-    }
-    return { encontrados, paginasVarridas, totalPaginas, parcial, falhaConexao };
   }
 
   // Monta um par rótulo:valor do dl.boletim-meta, mostrando "Não informado" em vez de
@@ -8820,12 +8618,11 @@
 
   document.getElementById("mk-form").addEventListener("submit", (ev) => { ev.preventDefault(); pesquisarMercado(); });
   document.getElementById("mk-resultado").addEventListener("click", (ev) => {
-    // "Analisar empresa" abre a análise do concorrente já com o CNPJ e o produto pesquisado.
+    // "Analisar empresa" abre a análise do concorrente já com o CNPJ.
     const botao = ev.target.closest("[data-mk-cnpj]");
     if (botao) {
       document.querySelector('nav button[data-alvo="empresa"]').click();
       document.getElementById("emp-cnpj").value = botao.dataset.mkCnpj;
-      document.getElementById("emp-segmento").value = document.getElementById("mk-termo").value.trim();
       document.getElementById("emp-buscar").click();
       return;
     }
@@ -8864,28 +8661,16 @@
   }
   document.querySelector('#dg-subabas [data-subaba="baixa-concorrencia"]').addEventListener("click", mkMontarBaixaConcorrencia);
 
-  // ---------- Analisar Empresa ----------
-  function salvarFiltroEmpresa(cnpj, segmentoRaw, dias) {
-    try { localStorage.setItem("hc_empresa_filtro", JSON.stringify({ cnpj, segmentoRaw, dias })); } catch (e) {}
+  // ---------- Analisar concorrente ----------
+  // Tela única (analise-cnpj-ui.js): o usuário digita o CNPJ ou o nome e tudo aparece aqui, em seções, sem atalho
+  // fixo de empresa e sem mandar para outra tela (o dono foi parar em Convênios pelo botão do Raio-X, 20/11/2026).
+  function salvarFiltroEmpresa(cnpj) {
+    try { localStorage.setItem("hc_empresa_filtro", JSON.stringify({ cnpj })); } catch (e) {}
   }
   function lerFiltroEmpresa() {
     try { const b = localStorage.getItem("hc_empresa_filtro"); return b ? JSON.parse(b) : null; } catch (e) { return null; }
   }
   let empJaBuscado = false;
-
-  // Analisar concorrente -> Raio-X Financeiro com o mesmo CNPJ, sem redigitar.
-  document.getElementById("emp-ir-raiox").addEventListener("click", () => {
-    const cnpj = soDigitos(document.getElementById("emp-cnpj").value);
-    if (cnpj) {
-      document.getElementById("fn-cnpj").value = cnpj;
-      fnJaBuscado = true; // evita que a abertura da aba restaure o CNPJ salvo por cima deste
-    }
-    document.querySelector('nav button[data-alvo="transparencia"]').click();
-    const bloco = document.getElementById("raio-x-financeiro");
-    if (bloco) bloco.scrollIntoView({ block: "start" });
-    if (cnpj) document.getElementById("fn-buscar").click();
-    else document.getElementById("fn-cnpj").focus();
-  });
 
   // /api/analise-cnpj exige login: vai o token da sessão.
   async function requisitarAnaliseCnpj(corpo) {
@@ -8896,29 +8681,9 @@
     return resp.ok ? json : { erro: json.erro || "Não foi possível consultar agora." };
   }
 
-  // Atalho "minha empresa": empresas que o usuário já cadastrou no sistema (RLS); sem nenhuma, nada aparece.
-  (async () => {
-    const caixa = document.getElementById("emp-minhas");
-    if (!caixa || !window.__sbClient) return;
-    const { data, error } = await window.__sbClient.from("operacao_empresas").select("razao_social,cnpj").not("cnpj", "is", null).order("razao_social").limit(6);
-    if (error || !data || !data.length) return;
-    caixa.append("Minha empresa: ");
-    for (const e of data) {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "btn-imprimir";
-      b.style.margin = "2px 4px 2px 0";
-      b.textContent = e.razao_social || e.cnpj;
-      b.addEventListener("click", () => { document.getElementById("emp-cnpj").value = String(e.cnpj).replace(/\D/g, ""); document.getElementById("emp-buscar").click(); });
-      caixa.append(b);
-    }
-  })().catch(() => {});
-
   document.getElementById("emp-buscar").addEventListener("click", async () => {
     empJaBuscado = true;
     const cnpj = soDigitos(document.getElementById("emp-cnpj").value);
-    const segmentoRaw = document.getElementById("emp-segmento").value.trim();
-    const dias = parseInt(document.getElementById("emp-dias").value, 10);
     const alvo = document.getElementById("emp-resultado");
     const btn = document.getElementById("emp-buscar");
 
@@ -8926,7 +8691,7 @@
     // Nome (não é um CNPJ de 14 dígitos): lista as empresas com resultado no PNCP para escolher.
     if (cnpj.length !== 14 && termo.replace(/\d/g, "").trim().length >= 3 && window.LicitaAnaliseCnpj) {
       btn.disabled = true;
-      alvo.innerHTML = '<div class="carregando">Procurando empresas com esse nome no PNCP...</div>';
+      alvo.innerHTML = '<div class="carregando">Procurando empresas com esse nome...</div>';
       const r = await requisitarAnaliseCnpj({ acao: "buscar", q: termo }).catch((e) => ({ erro: String(e.message || e) }));
       btn.disabled = false;
       if (r.erro) { alvo.innerHTML = `<div class="aviso">${escapeHtml(r.erro)}</div>`; return; }
@@ -8937,204 +8702,32 @@
       alvo.innerHTML = '<div class="aviso">Informe um CNPJ válido (14 dígitos, com ou sem pontuação) ou pelo menos 3 letras do nome.</div>';
       return;
     }
-    salvarFiltroEmpresa(document.getElementById("emp-cnpj").value, segmentoRaw, document.getElementById("emp-dias").value);
-
+    if (!window.LicitaAnaliseCnpj) {
+      alvo.innerHTML = '<div class="aviso">Não foi possível carregar a análise. Recarregue a página.</div>';
+      return;
+    }
+    salvarFiltroEmpresa(document.getElementById("emp-cnpj").value);
     btn.disabled = true;
-    alvo.innerHTML = '<div class="carregando">Consultando dados cadastrais e histórico de contratos...</div>';
-
+    alvo.innerHTML = '<div id="emp-analise-cnpj"><div class="carregando">Consultando os dados da empresa...</div></div>';
+    // Ficha da BrasilAPI: só cabeçalho provisório enquanto o cadastro guardado (/api/analise-cnpj) não chega.
+    const ficha = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    const comToken = async (url, opcoes = {}) => {
+      const token = await obterTokenSessao();
+      const resp = await fetch(url, { ...opcoes, headers: { ...(opcoes.headers || {}), Authorization: `Bearer ${token}` } });
+      const json = await resp.json().catch(() => ({}));
+      return resp.ok ? json : { erro: json.erro || "indisponível agora" };
+    };
     try {
-      let ficha = null;
-      let erroFicha = null;
-      try {
-        const resp = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`);
-        if (resp.ok) ficha = await resp.json();
-        else erroFicha = "Não foi possível obter os dados cadastrais desse CNPJ (verifique o número).";
-      } catch (e) {
-        erroFicha = "Erro ao consultar dados cadastrais: " + String(e);
-      }
-
-      const htmlFicha = ficha
-        ? montarFichaCadastral(ficha)
-        : `<div class="aviso">${escapeHtml(erroFicha || "Dados cadastrais indisponíveis.")}</div>`;
-
-      alvo.innerHTML =
-        '<div id="emp-analise-cnpj"></div>' +
-        montarAcordeon("emp-adm", "<svg class='icone-ph'><use href='#ph-clipboard-text'></use></svg>", "Análise administrativa", htmlFicha, { aberto: true }) +
-        montarAcordeon("emp-sanc", "<svg class='icone-ph'><use href='#ph-warning'></use></svg>", "Sanções / Penalizações", '<p class="carregando">Consultando sanções (CEIS/CNEP)...</p>', { aberto: false }) +
-        montarAcordeon("emp-part", "<svg class='icone-ph'><use href='#ph-chart-bar'></use></svg>", "Participações", '<div class="carregando">Cruzando com contratos no PNCP...</div>', { aberto: true }) +
-        montarAcordeon("emp-aspec", "<svg class='icone-ph'><use href='#ph-chart-line-up'></use></svg>", "Aspectos estratégicos", montarHtmlAspectosEstrategicos(), { aberto: false });
-      ligarAcordeons(alvo);
-      // Análise por CNPJ (analise-cnpj-ui.js): alertas, disputas por item e motivos; não bloqueia o resto da tela.
-      if (window.LicitaAnaliseCnpj) {
-        window.LicitaAnaliseCnpj.montar({ alvo: document.getElementById("emp-analise-cnpj"), cnpj, ficha, sb: window.__sbClient,
-          requisitar: requisitarAnaliseCnpj, LicitaSancoes: window.LicitaSancoes, hoje: new Date(Date.now() - 3 * 36e5).toISOString().slice(0, 10),
-          sancoes: async () => {
-            const token = await obterTokenSessao();
-            const resp = await fetch(`/api/sancoes-cnpj?cnpj=${cnpj}`, { headers: { Authorization: `Bearer ${token}` } });
-            const json = await resp.json().catch(() => ({}));
-            return resp.ok ? json : { erro: json.erro || "indisponível agora" };
-          },
-          // Selo de sanção nos vencedores das disputas perdidas: uma consulta em lote (até 200 CNPJs).
-          sancoesLote: async (cnpjs) => {
-            const token = await obterTokenSessao();
-            const resp = await fetch("/api/sancoes-cnpj", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ cnpjs }) });
-            return resp.ok ? resp.json() : null;
-          } }).catch((e) => console.warn("analise-cnpj:", e));
-      }
-
-      if (ficha) {
-        carregarSancoes(cnpj).then((sancoes) => {
-          const painel = alvo.querySelector('.acc[data-acc="emp-sanc"]');
-          if (!painel) return;
-          painel.querySelector(".acc-corpo").innerHTML = montarHtmlSancoes(sancoes);
-          if (sancoes && sancoes.temSancao) painel.classList.add("aberto");
-        });
-      } else {
-        const painel = alvo.querySelector('.acc[data-acc="emp-sanc"]');
-        if (painel) painel.querySelector(".acc-corpo").innerHTML = '<p style="color:var(--texto-fraco);font-size:13px;">Informe um CNPJ válido para consultar sanções.</p>';
-      }
-
-      const palavras = segmentoRaw ? segmentoRaw.split(",").map((p) => p.trim()).filter(Boolean) : null;
-
-      let encontrados, paginasVarridas, totalPaginas, parcial, falhaConexao, fonte;
-      const metaContratos = await carregarMeta("data/contratos_meta.json");
-      if (metaContratos) {
-        const res = await consultarContratosSupabase({ cnpjFornecedor: cnpj, dias, limite: 2000 });
-        encontrados = res.registros;
-        paginasVarridas = metaContratos.paginasVarridas;
-        totalPaginas = metaContratos.totalPaginasDisponiveis;
-        parcial = metaContratos.parcial;
-        falhaConexao = res.erro;
-        fonte = { tipo: "cache", atualizadoEm: metaContratos.atualizadoEm };
-      } else {
-        const painelPart = alvo.querySelector('.acc[data-acc="emp-part"] .acc-corpo');
-        if (painelPart) painelPart.innerHTML = '<div class="carregando">Dados em cache ainda não disponíveis — escaneando o PNCP ao vivo no seu navegador...</div>';
-        const inicioMs = Date.now();
-        const tempoLimiteMs = 40000;
-        const hoje = new Date();
-        const inicio = new Date(hoje.getTime() - dias * 24 * 60 * 60 * 1000);
-        const fmt = (dt) => dt.toISOString().slice(0, 10).replace(/-/g, "");
-        const res = await buscarContratosPorCnpj(fmt(inicio), fmt(hoje), cnpj, inicioMs, tempoLimiteMs);
-        encontrados = res.encontrados;
-        paginasVarridas = res.paginasVarridas;
-        totalPaginas = res.totalPaginas;
-        parcial = res.parcial;
-        falhaConexao = res.falhaConexao;
-        fonte = { tipo: "ao_vivo" };
-      }
-
-      const registrosFiltrados = palavras
-        ? encontrados.filter((c) => bateComSegmento(c.objeto, palavras))
-        : encontrados;
-
-      let totalContratado = 0;
-      const ufsAtuacao = new Set();
-      const porUf = {};
-      for (const c of registrosFiltrados) {
-        totalContratado += c.valor || 0;
-        if (c.uf) {
-          ufsAtuacao.add(c.uf);
-          if (!porUf[c.uf]) porUf[c.uf] = { contratos: 0, valor: 0 };
-          porUf[c.uf].contratos += 1;
-          porUf[c.uf].valor += c.valor || 0;
-        }
-      }
-      const rankingUf = Object.entries(porUf)
-        .map(([uf, dados]) => ({ uf, ...dados }))
-        .sort((a, b) => b.valor - a.valor);
-
-      let html2 = "";
-      if (fonte.tipo === "cache") {
-        html2 += `<div class="aviso" style="border-color:var(--aviso-neutro-borda);color:var(--aviso-neutro-texto);">Dados atualizados automaticamente em ${escapeHtml(new Date(fonte.atualizadoEm).toLocaleString("pt-BR"))}.</div>`;
-      }
-      if (falhaConexao) {
-        // Mesma correção de mensagem do Diagnóstico de Mercado: cache=Supabase, não PNCP ao vivo.
-        html2 += fonte.tipo === "cache"
-          ? '<div class="aviso"><strong>Não conseguimos consultar todos os dados agora</strong> (instabilidade pontual na nossa base). O histórico abaixo pode estar incompleto por causa disso. Tente novamente em alguns instantes.</div>'
-          : '<div class="aviso"><strong>A API pública do PNCP não respondeu direito nesta consulta</strong> (está lenta ou instável no momento). O histórico abaixo pode estar incompleto por causa disso. Tente novamente em alguns instantes.</div>';
-      } else if (parcial) {
-        html2 += `<div class="aviso">Amostra parcial: escaneadas ${paginasVarridas} de ${totalPaginas} páginas do período, dentro do limite de tempo. Aumente o período com cautela (buscas maiores demoram mais).</div>`;
-      }
-
-      html2 += `<div class="cartoes">
-        <div class="cartao"><h3>Contratos encontrados (amostra, ${escapeHtml(String(dias))} dia(s))</h3><div class="valor">${registrosFiltrados.length}</div></div>
-        <div class="cartao"><h3>Valor total contratado (amostra)</h3><div class="valor">${escapeHtml(formatarValor(totalContratado))}</div></div>
-        <div class="cartao"><h3>UFs onde atuou</h3><div class="valor">${ufsAtuacao.size ? escapeHtml(Array.from(ufsAtuacao).join(", ")) : "-"}</div></div>
-      </div>`;
-
-      if (rankingUf.length > 0) {
-        html2 += "<h2>Participação por estado (UF), na amostra</h2>";
-        const maxUf = rankingUf[0].valor || 1;
-        for (const r of rankingUf) {
-          const largura = Math.round((r.valor / maxUf) * 100);
-          html2 += `<div class="barra-item">
-            <div class="barra-label">${escapeHtml(r.uf)}</div>
-            <div class="barra-fundo"><div class="barra-preenchida" style="width:${largura}%">${escapeHtml(formatarValor(r.valor))}</div></div>
-            <div class="barra-meta">${r.contratos} contrato(s)</div>
-          </div>`;
-        }
-      }
-
-      html2 += "<h2>Contratos encontrados no período</h2>";
-      if (registrosFiltrados.length === 0) {
-        html2 += "<p>Nenhum contrato desse CNPJ encontrado no PNCP dentro da amostra do período selecionado. Tente aumentar o período.</p>";
-      } else {
-        html2 += "<table><tr><th>Objeto</th><th>Órgão</th><th>UF</th><th>Valor</th><th>Data</th><th>PNCP</th></tr>";
-        registrosFiltrados.forEach((r, i) => {
-          const link = linkPncpContrato(r.numeroControlePNCP);
-          html2 += `<tr class="linha-clicavel" data-idx="${i}">
-            <td>${escapeHtml(r.objeto || "-")}</td>
-            <td>${escapeHtml(r.orgao || "-")}</td>
-            <td>${escapeHtml(r.uf || "-")}</td>
-            <td>${escapeHtml(formatarValor(r.valor))}</td>
-            <td>${escapeHtml(String(r.dataAssinatura || "-"))}</td>
-            <td>${link ? `<a class="link-pncp" href="${escapeHtml(link)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Ver no PNCP <svg class='icone-ph'><use href='#ph-arrow-square-out'></use></svg></a>` : "-"}</td>
-          </tr>`;
-        });
-        html2 += "</table>";
-        html2 += '<div class="dica-clique">Clique numa linha para ver todos os detalhes desse contrato.</div>';
-      }
-
-      const painelPartFinal = alvo.querySelector('.acc[data-acc="emp-part"]');
-      if (painelPartFinal) {
-        painelPartFinal.querySelector(".acc-corpo").innerHTML = html2;
-        const contagem = painelPartFinal.querySelector(".acc-contagem");
-        const titulo = painelPartFinal.querySelector(".acc-titulo");
-        if (titulo && !contagem) {
-          titulo.insertAdjacentHTML("beforeend", `<span class="acc-contagem">${escapeHtml(String(registrosFiltrados.length))}</span>`);
-        } else if (contagem) {
-          contagem.textContent = String(registrosFiltrados.length);
-        }
-      }
-
-      if (registrosFiltrados.length > 0) {
-        alvo.querySelectorAll("tr.linha-clicavel").forEach((tr) => {
-          tr.addEventListener("click", () => {
-            const jaSelecionada = tr.classList.contains("linha-selecionada");
-            alvo.querySelectorAll("tr.linha-selecionada").forEach((x) => x.classList.remove("linha-selecionada"));
-            const detalheExistente = alvo.querySelector(".detalhe-drilldown");
-            if (detalheExistente) detalheExistente.remove();
-            if (jaSelecionada) return;
-            tr.classList.add("linha-selecionada");
-            const r = registrosFiltrados[Number(tr.dataset.idx)];
-            const link = linkPncpContrato(r.numeroControlePNCP);
-            const detalhe = document.createElement("div");
-            detalhe.className = "detalhe-drilldown";
-            detalhe.innerHTML = `<dl>
-              <div><dt>Objeto completo</dt><dd>${escapeHtml(r.objeto || "-")}</dd></div>
-              <div><dt>Órgão</dt><dd>${escapeHtml(r.orgao || "-")}</dd></div>
-              <div><dt>Município/UF</dt><dd>${escapeHtml((r.municipio || "-") + " / " + (r.uf || "-"))}</dd></div>
-              <div><dt>Valor</dt><dd>${escapeHtml(formatarValor(r.valor))}</dd></div>
-              <div><dt>Data de assinatura</dt><dd>${escapeHtml(String(r.dataAssinatura || "-"))}</dd></div>
-              <div><dt>Nº controle PNCP</dt><dd>${escapeHtml(r.numeroControlePNCP || "-")}</dd></div>
-              <div><dt>Link</dt><dd>${link ? `<a class="link-pncp" href="${escapeHtml(link)}" target="_blank" rel="noopener">Ver no PNCP <svg class='icone-ph'><use href='#ph-arrow-square-out'></use></svg></a>` : "-"}</dd></div>
-            </dl>`;
-            tr.after(detalhe);
-          });
-        });
-      }
+      await window.LicitaAnaliseCnpj.montar({ alvo: document.getElementById("emp-analise-cnpj"), cnpj, ficha, sb: window.__sbClient,
+        requisitar: requisitarAnaliseCnpj, LicitaSancoes: window.LicitaSancoes, hoje: new Date(Date.now() - 3 * 36e5).toISOString().slice(0, 10),
+        sancoes: () => comToken(`/api/sancoes-cnpj?cnpj=${cnpj}`),
+        // Selo de sanção nos vencedores das disputas perdidas: uma consulta em lote (até 200 CNPJs).
+        sancoesLote: (cnpjs) => comToken("/api/sancoes-cnpj", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cnpjs }) }),
+        // Pagamentos federais (mesma function do Raio-X Financeiro), mostrados dentro da análise.
+        pagamentos: () => comToken(`/api/despesas-fornecedor?cnpj=${cnpj}`) });
     } catch (e) {
-      alvo.innerHTML = `<div class="aviso">Erro ao analisar empresa: ${escapeHtml(String(e))}</div>`;
+      console.warn("analise-cnpj:", e);
+      alvo.innerHTML = '<div class="aviso">Não foi possível analisar esta empresa agora. Tente de novo em alguns instantes.</div>';
     } finally {
       btn.disabled = false;
     }
@@ -9421,8 +9014,6 @@
     const filtro = lerFiltroEmpresa();
     if (!filtro || !filtro.cnpj) return;
     document.getElementById("emp-cnpj").value = filtro.cnpj || "";
-    document.getElementById("emp-segmento").value = filtro.segmentoRaw || "";
-    if (filtro.dias) document.getElementById("emp-dias").value = filtro.dias;
     document.getElementById("emp-buscar").click();
   }
   document.querySelector('nav button[data-alvo="empresa"]').addEventListener("click", () => {

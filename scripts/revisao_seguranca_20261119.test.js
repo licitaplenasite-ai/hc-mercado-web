@@ -12,7 +12,8 @@ test("B2: painel limpa CNPJ com \\D e conta letras sem \\d (não /D/ nem /d/)", 
   const p = ler("painel.html");
   assert.doesNotMatch(p, /\.replace\(\/D\/g/);
   assert.doesNotMatch(p, /\.replace\(\/d\/g/);
-  assert.match(p, /String\(e\.cnpj\)\.replace\(\/\\D\/g, ""\)/);
+  // O atalho "Minha empresa" saiu da tela em 20/11/2026; o CNPJ digitado passa por soDigitos (\D).
+  assert.match(p, /return \(s \|\| ""\)\.replace\(\/\\D\/g, ""\)/);
   assert.match(p, /termo\.replace\(\/\\d\/g, ""\)\.trim\(\)\.length >= 3/);
 });
 

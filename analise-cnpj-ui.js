@@ -191,6 +191,7 @@
       porUf.set(k, a);
     }
     return { total: lista.length, valorContratado: soma('valor_global'), vigentes: lista.filter(vigente).length,
+      encerrados: lista.filter((c) => Boolean(c.vigencia_fim) && c.vigencia_fim < hoje).length,
       maiorContrato: lista.reduce((m, c) => Math.max(m, num(c.valor_global) || 0), 0),
       federaisComValores: comGov.length, valorContratadoFederal: soma('valor_global', comGov), empenhado: soma('valor_empenhado', comGov),
       liquidado: soma('valor_liquidado', comGov), pago: soma('valor_pago', comGov), faturado: soma('valor_faturado', comGov),
@@ -268,7 +269,7 @@
     const cnaes = [c.cnae_principal && `${c.cnae_principal.codigo} — ${c.cnae_principal.descricao || ''} (principal)`, ...(c.cnaes_secundarios || []).map((x) => `${x.codigo} — ${x.descricao || ''}`)].filter(Boolean);
     const campo = (rotulo, valor) => el(doc, 'li', {}, el(doc, 'strong', { texto: `${rotulo}: ` }), valor || '—');
     const fonte = cad ? `${cad.fonte === 'minhareceita' ? 'minhareceita.org' : 'BrasilAPI'}, consultada em ${dataBr(cad.consultado_em)}` : 'BrasilAPI';
-    caixa.append(el(doc, 'h3', { style: 'margin:0 0 4px', texto: c.razao_social || '—' }),
+    caixa.append(el(doc, 'h3', { texto: 'Dados da empresa' }), el(doc, 'h4', { style: 'margin:0 0 4px', texto: c.razao_social || '—' }),
       el(doc, 'p', { style: 'margin:0', texto: [`CNPJ ${cnpjFormatado(cnpj)}`, [c.municipio, c.uf].filter(Boolean).join('/'), c.porte, c.situacao && `Situação: ${c.situacao}`].filter(Boolean).join(' · ') }),
       el(doc, 'ul', { class: 'ficha-lista acn-cadastro' },
         campo('Situação cadastral', [c.situacao, c.data_situacao && `desde ${dataBr(c.data_situacao)}`, c.situacao_especial && `situação especial: ${c.situacao_especial}`].filter(Boolean).join(' · ')),
@@ -284,104 +285,138 @@
     return caixa;
   }
 
+  // Seções da tela, na ordem que o licitante lê (pedido do dono, 20/11/2026): dados, alertas, desempenho, contratos,
+  // pagamentos federais, onde atua. Título simples e números explicados em frase; nada de jargão de robô.
+  const secao = (doc, classe, titulo, ...filhos) => el(doc, 'div', { class: `acn-secao ${classe}` }, el(doc, 'h3', { texto: titulo }), ...filhos);
+  const dica = (doc, texto) => el(doc, 'p', { class: 'dica-clique', texto });
+
   const ROTULO_NIVEL = { alto: 'Alto', medio: 'Atenção', info: 'Info' };
-  function blocoVulnerabilidade(doc, alertas) {
-    const caixa = el(doc, 'div', { class: 'acn-vulnerabilidade' }, el(doc, 'h3', { texto: 'Alerta de vulnerabilidade' }));
-    if (!alertas.length) caixa.append(el(doc, 'p', { class: 'dica-clique', texto: 'Nenhum sinal de risco nas fontes consultadas (CEIS/CNEP, Receita, disputas e contratos guardados).' }));
-    else caixa.append(el(doc, 'ul', { class: 'ficha-lista' }, alertas.map((x) => el(doc, 'li', { class: x.nivel === 'alto' ? 'aviso' : null, 'data-nivel': x.nivel },
-      el(doc, 'strong', { texto: `${ROTULO_NIVEL[x.nivel]}: ` }), x.texto))));
-    caixa.append(el(doc, 'p', { class: 'dica-clique', texto: 'Certidões (CND federal, FGTS, trabalhista) não entram: as consultas oficiais exigem captcha. Confira no SICAF ou nos sites emissores.' }));
+  function blocoAlertas(doc, alertas, sanc, hoje, LicitaSancoes) {
+    const caixa = secao(doc, 'acn-alertas', 'Alertas');
+    if (sanc && sanc.erro) caixa.append(el(doc, 'p', { class: 'aviso', texto: 'Não foi possível consultar agora a lista de empresas punidas pelo governo (CEIS/CNEP). Tente de novo mais tarde.' }));
+    else if (sanc && LicitaSancoes) { const selo = LicitaSancoes.montarSelo(doc, sanc, hoje); if (selo) caixa.append(selo); }
+    if (alertas.length) {
+      caixa.append(el(doc, 'ul', { class: 'ficha-lista' }, alertas.map((x) => el(doc, 'li', { class: x.nivel === 'alto' ? 'aviso' : null, 'data-nivel': x.nivel },
+        el(doc, 'strong', { texto: `${ROTULO_NIVEL[x.nivel]}: ` }), x.texto))));
+    } else if (!(sanc && sanc.erro)) {
+      caixa.append(el(doc, 'p', { texto: 'Nenhum alerta: a empresa não está na lista de punidas do governo (CEIS/CNEP) e não encontramos problema no cadastro da Receita.' }));
+    }
+    caixa.append(dica(doc, 'Certidões (CND federal, FGTS, trabalhista) não são consultadas aqui: confira no SICAF.'));
     return caixa;
   }
 
-  function linhaContrato(doc, x) {
-    const gov = Number(x.contratos_gov_id);
-    return el(doc, 'tr', {},
-      el(doc, 'td', { texto: `${x.numero || '—'} · ${x.objeto || 'Objeto não informado'}` }),
-      el(doc, 'td', { texto: [x.unidade_nome || x.orgao_nome, x.municipio, x.uf].filter(Boolean).join(' / ') || '—' }),
-      el(doc, 'td', { texto: `${dataBr(x.vigencia_inicio || x.data_assinatura)} a ${dataBr(x.vigencia_fim)}` }),
-      el(doc, 'td', { texto: moeda(num(x.valor_global)) }),
-      el(doc, 'td', { texto: num(x.valor_empenhado) === null ? '—' : `${moeda(num(x.valor_empenhado))} / ${moeda(num(x.valor_pago))} / ${moeda(num(x.valor_faturado))}` }),
-      el(doc, 'td', {}, link(doc, x.link_pncp, 'PNCP'), gov > 0 ? ' · ' : null, gov > 0 ? link(doc, `https://contratos.comprasnet.gov.br/api/contrato/id/${gov}`, 'Contratos.gov.br') : null));
+  // Frases do desempenho em português simples (puro).
+  function explicarDesempenho(r) {
+    if (!r.disputas) return ['Ainda não encontramos disputas desta empresa no histórico.'];
+    const f = [`Ela disputou ${r.disputas} item(ns) em ${r.compras} licitação(ões) e ganhou ${r.vencidas}: ${pct(r.vitoria)} de vitória.`];
+    if (r.vencidas) f.push(`Somando os itens que ganhou, levou ${moeda(r.valorGanho)}.`);
+    if (Number.isFinite(r.descontoMedioGanha)) f.push(`Quando ganha, o preço dela fica em média ${pct(Math.abs(r.descontoMedioGanha))} ${r.descontoMedioGanha <= 0 ? 'abaixo' : 'acima'} do valor estimado pelo órgão.`);
+    if (r.paresComparados) f.push(`Quando perde, o preço dela fica em média ${pct(Math.abs(r.diferencaMediaPerde))} ${r.diferencaMediaPerde >= 0 ? 'acima' : 'abaixo'} do preço de quem ganhou (comparados ${r.paresComparados} item(ns)).`);
+    return f;
   }
+  // Órgãos onde ela mais perde (puro): mais derrotas primeiro.
+  const ondePerde = (r) => r.porOrgao.map((g) => ({ ...g, perdidas: g.disputas - g.vencidas })).filter((g) => g.perdidas > 0)
+    .sort((x, y) => y.perdidas - x.perdidas || y.disputas - x.disputas);
 
-  function blocoContratos(doc, c) {
-    const caixa = el(doc, 'div', { class: 'acn-contratos' }, el(doc, 'h3', { texto: 'Contratos e valores faturados' }));
-    if (!c.total) { caixa.append(el(doc, 'p', { class: 'dica-clique', texto: 'Nenhum contrato deste CNPJ guardado ainda (PNCP). O robô completa a leitura na fila.' })); return caixa; }
-    const fed = (v) => (c.federaisComValores ? moeda(v) : '—');
-    caixa.append(el(doc, 'div', { class: 'cartoes' },
-      cartao(doc, 'Contratos (PNCP)', `${c.total} · ${c.vigentes} vigente(s)`), cartao(doc, 'Valor contratado', moeda(c.valorContratado)),
-      cartao(doc, 'Empenhado (federal)', fed(c.empenhado)), cartao(doc, 'Pago (federal)', fed(c.pago)), cartao(doc, 'Faturado (notas no Contratos.gov.br)', fed(c.faturado))));
-    if (c.federaisComValores) {
-      caixa.append(el(doc, 'p', { class: 'dica-clique', texto: `Empenhado, liquidado (${moeda(c.liquidado)}), pago e faturado de ${c.federaisComValores} contrato(s) federal(is) que somam ${moeda(c.valorContratadoFederal)} contratados (Contratos.gov.br). Estados e municípios não publicam esses valores numa fonte aberta única.` }));
+  function blocoDesempenho(doc, r, motivos, selos) {
+    const perde = r.paresComparados ? `${pct(Math.abs(r.diferencaMediaPerde))} ${r.diferencaMediaPerde >= 0 ? 'acima' : 'abaixo'}` : null;
+    const caixa = secao(doc, 'acn-desempenho', 'Desempenho em licitações',
+      el(doc, 'div', { class: 'cartoes' }, cartao(doc, 'Itens disputados', String(r.disputas)), cartao(doc, 'Vitórias', String(r.vencidas)),
+        cartao(doc, '% de vitória', pct(r.vitoria)), cartao(doc, 'Valor ganho', moeda(r.valorGanho)), perde ? cartao(doc, 'Quando perde, preço dela vs. o vencedor', perde) : null),
+      el(doc, 'ul', { class: 'ficha-lista' }, explicarDesempenho(r).map((t) => el(doc, 'li', { texto: t }))));
+    const perdas = ondePerde(r);
+    if (perdas.length) {
+      caixa.append(el(doc, 'h4', { texto: 'Onde ela mais perde' }), rolavel(doc, el(doc, 'table', {},
+        el(doc, 'tr', {}, ['Órgão', 'Disputas', 'Perdeu', 'Ganhou'].map((t) => el(doc, 'th', { texto: t }))),
+        perdas.slice(0, 10).map((g) => el(doc, 'tr', {}, el(doc, 'td', { texto: g.chave }), el(doc, 'td', { texto: String(g.disputas) }),
+          el(doc, 'td', { texto: String(g.perdidas) }), el(doc, 'td', { texto: String(g.vencidas) }))))));
     }
-    caixa.append(el(doc, 'details', { class: 'acn-grupo', open: 'open' }, el(doc, 'summary', { texto: `Contratos por estado (${c.porUf.length})` }), rolavel(doc, el(doc, 'table', {},
-      el(doc, 'tr', {}, ['Estado (UF da unidade contratante)', 'Contratos', 'Vigentes', 'Valor contratado'].map((t) => el(doc, 'th', { texto: t }))),
-      c.porUf.map((g) => el(doc, 'tr', {}, el(doc, 'td', { texto: g.chave }), el(doc, 'td', { texto: String(g.contratos) }), el(doc, 'td', { texto: String(g.vigentes) }), el(doc, 'td', { texto: moeda(g.valor) })))))));
-    caixa.append(el(doc, 'details', { class: 'acn-grupo' }, el(doc, 'summary', { texto: `Lista de contratos (${c.total})` }), rolavel(doc, el(doc, 'table', {},
-      el(doc, 'tr', {}, ['Contrato', 'Contratante', 'Vigência', 'Valor', 'Empenhado / pago / faturado', 'Fonte'].map((t) => el(doc, 'th', { texto: t }))),
-      c.lista.slice(0, MAX_LINHAS).map((x) => linhaContrato(doc, x))))));
-    if (c.total > MAX_LINHAS) caixa.append(el(doc, 'p', { class: 'dica-clique', texto: `Lista: os ${MAX_LINHAS} mais recentes de ${c.total}; totais e estados contam todos.` }));
+    const detalhe = (titulo, ...filhos) => el(doc, 'details', { class: 'acn-grupo' }, el(doc, 'summary', { texto: titulo }), ...filhos);
+    caixa.append(
+      detalhe(`Itens que ela ganhou (${r.itensVencidos.length})`, tabelaItens(doc, 'Itens que ganhou', r.itensVencidos, false)),
+      detalhe(`Itens que ela perdeu e quem ganhou (${r.itensNaoVencidos.length})`, tabelaItens(doc, 'Itens que perdeu', r.itensNaoVencidos, true, selos)),
+      detalhe(`Desclassificações e inabilitações (${motivos.length})`, blocoMotivos(doc, motivos)),
+      detalhe('Em que meses ela disputa', blocoSazonalidade(doc, r)));
     return caixa;
   }
 
-  function blocoAlertas(doc, r, mot, sancoes, hoje, LicitaSancoes) {
-    const caixa = el(doc, 'div', { class: 'acn-alertas' }, el(doc, 'h3', { texto: 'Alertas' }));
-    if (sancoes && sancoes.erro) caixa.append(el(doc, 'p', { class: 'aviso', texto: `Sanções: ${sancoes.erro}` }));
-    else if (sancoes && LicitaSancoes) caixa.append(LicitaSancoes.montarSelo(doc, sancoes, hoje) || el(doc, 'p', { texto: 'Sem sanção no CEIS/CNEP (cadastro da CGU carregado diariamente).' }));
-    const recusasSemGravacao = r.recusadas.filter((p) => !mot.chaves.has(`${p.id_compra}|${p.numero_item}`));
-    caixa.append(el(doc, 'div', { class: 'cartoes' },
-      cartao(doc, 'Desclassificações (pregões gravados)', String(mot.desclassificacoes)),
-      cartao(doc, 'Inabilitações (pregões gravados)', String(mot.inabilitacoes)),
-      cartao(doc, 'Propostas recusadas (arquivo do Compras.gov)', String(recusasSemGravacao.length)),
-      cartao(doc, 'Itens fracassados sendo o 1º colocado', String(r.fracassados1.length))));
-    if (mot.naoVerificados) caixa.append(el(doc, 'p', { class: 'aviso', texto: `Desclassificações/inabilitações de pregões gravados: ${mot.naoVerificados} registro(s) lido(s) por usuário, não verificado(s) — confira no pregão.` }));
-    caixa.append(el(doc, 'p', { class: 'dica-clique', texto: 'Recusada = situação "2" no arquivo semanal de propostas do Compras.gov: o governo não publica o significado nem distingue desclassificação de inabilitação. Grave o pregão pela extensão para ter o motivo literal.' }));
+  // Contrato: vigente (fim no futuro), encerrado (fim no passado) ou sem data de fim publicada.
+  const situacaoContrato = (c, hoje) => (!c.vigencia_fim ? 'Sem data de fim' : c.vigencia_fim >= hoje ? 'Vigente' : 'Encerrado');
+  function blocoContratos(doc, c, hoje) {
+    const caixa = secao(doc, 'acn-contratos', 'Contratos com o governo');
+    if (!c.total) { caixa.append(dica(doc, 'Nenhum contrato desta empresa encontrado ainda no Portal Nacional de Contratações Públicas (PNCP).')); return caixa; }
+    caixa.append(el(doc, 'div', { class: 'cartoes' }, cartao(doc, 'Contratos vigentes', String(c.vigentes)), cartao(doc, 'Contratos encerrados', String(c.encerrados)),
+      cartao(doc, 'Valor total dos contratos', moeda(c.valorContratado)), c.federaisComValores ? cartao(doc, 'Já pago (contratos federais)', moeda(c.pago)) : null));
+    caixa.append(rolavel(doc, el(doc, 'table', {},
+      el(doc, 'tr', {}, ['Situação', 'Órgão', 'O que foi contratado', 'Valor', 'Vigência', 'Ver'].map((t) => el(doc, 'th', { texto: t }))),
+      c.lista.slice(0, MAX_LINHAS).map((x) => {
+        const gov = Number(x.contratos_gov_id);
+        return el(doc, 'tr', {}, el(doc, 'td', { texto: situacaoContrato(x, hoje) }),
+          el(doc, 'td', { texto: [x.unidade_nome || x.orgao_nome, x.uf].filter(Boolean).join(' / ') || '—' }),
+          el(doc, 'td', { texto: x.objeto || 'Não informado' }), el(doc, 'td', { texto: moeda(num(x.valor_global)) }),
+          el(doc, 'td', { texto: `${dataBr(x.vigencia_inicio || x.data_assinatura)} a ${dataBr(x.vigencia_fim)}` }),
+          el(doc, 'td', {}, link(doc, x.link_pncp, 'PNCP'), gov > 0 ? ' · ' : null, gov > 0 ? link(doc, `https://contratos.comprasnet.gov.br/api/contrato/id/${gov}`, 'Contratos.gov.br') : null));
+      }))));
+    if (c.total > MAX_LINHAS) caixa.append(dica(doc, `Mostrando os ${MAX_LINHAS} mais recentes de ${c.total}; os totais contam todos.`));
+    caixa.append(dica(doc, 'Fonte: PNCP. "Já pago" só existe para contrato federal registrado no Contratos.gov.br.'));
     return caixa;
   }
 
-  // Camadas do que o painel já tem das disputas deste CNPJ (puro): tudo o que vem do PNCP e dos dados abertos já
-  // está aqui (automático); o motivo de recusa só vem do pregão gravado (extensão); o resto exige captcha.
-  function camadasCnpj(r, mensagens, propostas) {
-    const gravadas = new Map(); // id_compra -> true se verificado (2+ organizações concordando)
-    for (const x of [...(Array.isArray(mensagens) ? mensagens : []), ...(Array.isArray(propostas) ? propostas : [])]) {
-      gravadas.set(x.id_compra, (gravadas.get(x.id_compra) || false) || leituras(x) >= 2);
-    }
-    const compras = new Map();
-    for (const p of [...r.itensVencidos, ...r.itensNaoVencidos]) {
-      const c = compras.get(p.id_compra) || { id_compra: p.id_compra, orgao: p.orgao_nome || p.unidade_nome || (p.uasg && `UASG ${p.uasg}`) || '', link: p.link_origem || null, recusas: 0 };
-      if (p._recusada || p._fracassado1) c.recusas++;
-      compras.set(p.id_compra, c);
-    }
-    const lista = [...compras.values()];
-    const faltam = lista.filter((c) => c.recusas && !gravadas.has(c.id_compra)).sort((a, b) => b.recusas - a.recusas);
-    const nGravadas = lista.filter((c) => gravadas.has(c.id_compra)).length;
-    return { compras: lista.length, gravadas: nGravadas, verificadas: lista.filter((c) => gravadas.get(c.id_compra)).length, faltam, comRecusa: lista.filter((c) => c.recusas).length };
+  // Pagamentos do governo federal (/api/despesas-fornecedor, o mesmo do Raio-X Financeiro), dentro da própria análise.
+  function conteudoPagamentos(doc, d) {
+    if (!d || (d.erro && !d.totalDocumentos)) return el(doc, 'p', { class: 'aviso', texto: 'Não foi possível consultar o Portal da Transparência agora. Tente de novo mais tarde.' });
+    if (!d.totalDocumentos) return el(doc, 'p', { texto: 'Nenhum pagamento do governo federal a esta empresa nos últimos 4 anos. Ela pode vender só para estados e municípios, que não aparecem nesta fonte.' });
+    const anos = Object.keys(d.porAno || {}).sort().reverse();
+    const docs = Array.isArray(d.documentos) ? d.documentos : [];
+    return el(doc, 'div', {},
+      el(doc, 'div', { class: 'cartoes' }, cartao(doc, d.parcial ? 'Total recebido (pelo menos)' : 'Total recebido', moeda(Number(d.totalPago))), anos.map((a) => cartao(doc, `Em ${a}`, moeda(Number(d.porAno[a]))))),
+      d.erro || d.parcial ? dica(doc, 'Parte da consulta não respondeu ou passou do limite: o total pode ser maior.') : null,
+      rolavel(doc, el(doc, 'table', {}, el(doc, 'tr', {}, ['Data', 'Órgão que pagou', 'Unidade', 'Valor'].map((t) => el(doc, 'th', { texto: t }))),
+        docs.map((x) => el(doc, 'tr', {}, el(doc, 'td', { texto: dataBr(x.data) }), el(doc, 'td', { texto: x.orgao || '—' }), el(doc, 'td', { texto: x.unidadeGestora || '—' }), el(doc, 'td', { texto: moeda(Number(x.valor)) }))))),
+      d.totalDocumentos > docs.length ? dica(doc, `Mostrando os ${docs.length} pagamentos mais recentes de ${d.totalDocumentos}.`) : null);
   }
-  // Mudou o que foi gravado? (para atualizar sozinho quando o usuário volta da página do governo)
-  const assinaturaGravado = (mensagens, propostas) => [...(mensagens || []), ...(propostas || [])].reduce((n, x) => n + leituras(x), 0) + '|' + (mensagens || []).length + '|' + (propostas || []).length;
+  function blocoPagamentos(doc, promessa) {
+    const corpo = el(doc, 'div', { class: 'carregando', texto: 'Consultando o Portal da Transparência…' });
+    const caixa = secao(doc, 'acn-pagamentos', 'Quanto essa empresa já recebeu do governo federal',
+      dica(doc, 'Dinheiro que o governo federal já pagou de fato a esta empresa nos últimos 4 anos (não é o valor do contrato assinado). Fonte: Portal da Transparência.'), corpo);
+    if (!promessa) corpo.replaceWith(conteudoPagamentos(doc, null));
+    else promessa.then((d) => corpo.replaceWith(conteudoPagamentos(doc, d)), () => corpo.replaceWith(conteudoPagamentos(doc, null)));
+    return caixa;
+  }
 
-  function blocoCamadas(doc, c) {
-    const caixa = el(doc, 'div', { class: 'acn-camadas la-camadas' }, el(doc, 'h3', { texto: 'O que já está aqui, e de onde veio' }));
-    const selo = (classe, texto) => caixa.append(el(doc, 'span', { class: 'la-camada ' + classe, texto }));
-    selo('la-cam-auto', `Automático: ${c.compras} contratação(ões) (PNCP e dados abertos)`);
-    selo(c.gravadas ? (c.verificadas ? 'la-cam-verificado' : 'la-cam-gravado') : 'la-cam-falta', c.gravadas ? `Gravado por clientes: ${c.gravadas} pregão(ões)${c.verificadas ? ` · ${c.verificadas} verificado(s)` : ' · não verificado'}` : 'Gravado por clientes: nenhum ainda');
-    selo(c.faltam.length ? 'la-cam-falta' : 'la-cam-ok', c.faltam.length ? `Falta ver (precisa do captcha): ${c.faltam.length} pregão(ões)` : 'Tudo visto');
-    const feitos = c.comRecusa - c.faltam.length;
-    caixa.append(el(doc, 'p', { class: 'la-completude', texto: `Vencedores e preços ✔ · Motivos de recusa ${c.comRecusa ? (c.faltam.length ? (feitos ? '◐' : '✖') : '✔') : '✔'}${c.comRecusa ? ` (${feitos} de ${c.comRecusa} pregões com recusa)` : ''}${c.faltam.length ? ' — abra o pregão' : ''}` }));
-    if (c.faltam.length) {
-      caixa.append(el(doc, 'details', {}, el(doc, 'summary', { texto: 'Pregões para abrir e gravar (você resolve o captcha, a extensão grava)' }),
-        el(doc, 'ul', { class: 'ficha-lista' }, c.faltam.slice(0, 10).map((f) => el(doc, 'li', {}, `${f.orgao || 'Contratação ' + f.id_compra} · ${f.recusas} recusa(s) `, link(doc, f.link, 'Abrir o pregão') || '')))));
-    }
+  function blocoOndeAtua(doc, r, ct) {
+    const caixa = secao(doc, 'acn-onde-atua', 'Onde atua e o que vende');
+    caixa.append(tabelaGrupo(doc, 'Estados onde disputa', r.porUf) || '', tabelaGrupo(doc, 'Órgãos onde disputa', r.porOrgao) || '');
+    if (ct.porUf.length) caixa.append(el(doc, 'details', { class: 'acn-grupo' }, el(doc, 'summary', { texto: `Estados onde tem contrato (${ct.porUf.length})` }), rolavel(doc, el(doc, 'table', {},
+      el(doc, 'tr', {}, ['Estado', 'Contratos', 'Vigentes', 'Valor'].map((t) => el(doc, 'th', { texto: t }))),
+      ct.porUf.map((g) => el(doc, 'tr', {}, el(doc, 'td', { texto: g.chave }), el(doc, 'td', { texto: String(g.contratos) }), el(doc, 'td', { texto: String(g.vigentes) }), el(doc, 'td', { texto: moeda(g.valor) })))))));
+    const vit = r.vitoriasPorProduto;
+    caixa.append(el(doc, 'h4', { texto: 'Produtos que ela mais ganha' }), vit.length ? rolavel(doc, el(doc, 'table', {}, el(doc, 'tr', {}, ['Produto', 'Vitórias', 'Disputas', 'Valor ganho'].map((t) => el(doc, 'th', { texto: t }))),
+      vit.slice(0, 20).map((g) => el(doc, 'tr', {}, el(doc, 'td', { texto: g.chave }), el(doc, 'td', { texto: String(g.vencidas) }),
+        el(doc, 'td', { texto: String((r.porProduto.find((x) => x.chave === g.chave) || g).disputas) }), el(doc, 'td', { texto: moeda(g.valor) })))))
+      : dica(doc, 'Nenhuma vitória no histórico ainda.'));
+    caixa.append(el(doc, 'h4', { texto: `Marcas que ela oferece (${r.marcas.length})` }), r.marcas.length ? rolavel(doc, el(doc, 'table', {}, el(doc, 'tr', {}, ['Marca', 'Itens ganhos', 'Valor ganho', 'Exemplo de item'].map((t) => el(doc, 'th', { texto: t }))),
+      r.marcas.slice(0, 30).map((m) => el(doc, 'tr', {}, el(doc, 'td', { texto: m.chave }), el(doc, 'td', { texto: String(m.itens) }), el(doc, 'td', { texto: moeda(m.valor) }), el(doc, 'td', { texto: m.exemplo })))))
+      : dica(doc, 'O governo só publica a marca de quem ganhou o item; nenhuma marca publicada ainda para esta empresa.'));
     return caixa;
   }
 
   function tabelaGrupo(doc, titulo, grupos) {
     if (!grupos.length) return null;
     return el(doc, 'details', { class: 'acn-grupo' }, el(doc, 'summary', { texto: `${titulo} (${grupos.length})` }), rolavel(doc, el(doc, 'table', {},
-      el(doc, 'tr', {}, ['', 'Disputas', 'Vencidas', '% vitória', 'Valor disputado', 'Valor vencido'].map((t) => el(doc, 'th', { texto: t || titulo }))),
+      el(doc, 'tr', {}, ['', 'Disputas', 'Vitórias', '% vitória', 'Valor ganho'].map((t) => el(doc, 'th', { texto: t || titulo }))),
       grupos.slice(0, 30).map((g) => el(doc, 'tr', {}, el(doc, 'td', { texto: g.chave }), el(doc, 'td', { texto: String(g.disputas) }),
-        el(doc, 'td', { texto: String(g.vencidas) }), el(doc, 'td', { texto: pct((g.vencidas / g.disputas) * 100) }), el(doc, 'td', { texto: moeda(g.valorDisputado) }), el(doc, 'td', { texto: moeda(g.valor) }))))));
+        el(doc, 'td', { texto: String(g.vencidas) }), el(doc, 'td', { texto: pct((g.vencidas / g.disputas) * 100) }), el(doc, 'td', { texto: moeda(g.valor) }))))));
+  }
+
+  // Coleta ainda em andamento: aviso curto, sem detalhe técnico do robô.
+  function blocoColeta(doc, coleta, aoAtualizar) {
+    if (!coleta || coleta.situacao === 'completo') return null;
+    // Erro (ex.: cota diária de consultas, 429): diz que pode faltar coisa, sem o detalhe técnico.
+    if (coleta.erro) return el(doc, 'div', { class: 'aviso acn-coleta', role: 'status', texto: 'Não conseguimos buscar licitações novas desta empresa agora; mostrando o que já temos. Tente de novo mais tarde.' });
+    const b = el(doc, 'button', { type: 'button', class: 'btn-imprimir', texto: 'Atualizar' });
+    b.addEventListener('click', aoAtualizar);
+    return el(doc, 'div', { class: 'aviso acn-coleta', role: 'status' }, 'Ainda estamos juntando o histórico completo desta empresa; volte mais tarde para ver mais disputas. ', b);
   }
 
   const MAX_LINHAS = 100;
@@ -411,21 +446,6 @@
     return caixa;
   }
 
-  function blocoParticipacoes(doc, r, selos) {
-    const caixa = el(doc, 'div', { class: 'acn-participacoes' }, el(doc, 'h3', { texto: 'Participações' }));
-    caixa.append(el(doc, 'div', { class: 'cartoes' },
-      cartao(doc, 'Disputas (itens)', `${r.disputas} em ${r.compras} contratação(ões)`), cartao(doc, 'Vencidas', String(r.vencidas)),
-      cartao(doc, 'Não vencidas', String(r.naoVencidas)), cartao(doc, '% de vitória', pct(r.vitoria)), cartao(doc, 'Valor disputado', moeda(r.valorDisputado)), cartao(doc, 'Valor vencido', moeda(r.valorGanho))));
-    caixa.append(el(doc, 'div', { class: 'cartoes' },
-      cartao(doc, 'Preço médio com que ganha', `${moeda(r.precoMedioGanha)}${Number.isFinite(r.descontoMedioGanha) ? ` (${pct(r.descontoMedioGanha)} vs estimado)` : ''}`),
-      cartao(doc, 'Preço médio com que perde', r.paresComparados ? `${moeda(r.precoMedioPerde)} vs ${moeda(r.precoMedioVencedor)} do vencedor (${pct(Math.abs(r.diferencaMediaPerde))} ${r.diferencaMediaPerde >= 0 ? 'acima' : 'abaixo'}, ${r.paresComparados} itens)` : '—')));
-    caixa.append(el(doc, 'p', { class: 'dica-clique', texto: 'Valor disputado = preço final da empresa (homologado, negociado, lance ou proposta) × quantidade, em todos os itens em que entrou; valor vencido = o mesmo só nos itens que ganhou.' }));
-    caixa.append(tabelaGrupo(doc, 'Por modalidade', r.porModalidade) || '', tabelaGrupo(doc, 'Por estado (UF do órgão)', r.porUf) || '',
-      tabelaGrupo(doc, 'Por órgão', r.porOrgao) || '', tabelaGrupo(doc, 'Por produto / CATMAT', r.porProduto) || '');
-    caixa.append(tabelaItens(doc, 'Itens vencidos', r.itensVencidos, false), tabelaItens(doc, 'Itens não vencidos', r.itensNaoVencidos, true, selos));
-    return caixa;
-  }
-
   const ROTULO = { recusa: 'Recusa', desclassificacao: 'Desclassificação', inabilitacao: 'Inabilitação' };
   function blocoMotivos(doc, motivos) {
     const caixa = el(doc, 'div', { class: 'acn-motivos' }, el(doc, 'h3', { texto: `Motivos de desclassificação / inabilitação (${motivos.length})` }));
@@ -435,20 +455,6 @@
       el(doc, 'td', {}, link(doc, m.url, m.fonte) || m.fonte, m.selo ? el(doc, 'small', { class: 'selo-nao-verificado', texto: ` ${m.selo}` }) : null)));
     caixa.append(rolavel(doc, el(doc, 'table', {}, el(doc, 'tr', {}, ['Item', 'Tipo', 'Motivo (texto literal da fonte)', 'Órgão', 'Data', 'Fonte'].map((t) => el(doc, 'th', { texto: t }))), linhas)));
     if (motivos.length > MAX_LINHAS) caixa.append(el(doc, 'p', { class: 'dica-clique', texto: `Mostrando ${MAX_LINHAS} de ${motivos.length}; a planilha traz todos.` }));
-    return caixa;
-  }
-
-  function blocoColeta(doc, coleta, aoAtualizar) {
-    const caixa = el(doc, 'div', { class: 'aviso acn-coleta', role: 'status' });
-    if (!coleta) return null;
-    if (coleta.erro) { caixa.textContent = `Coleta nova não foi possível agora (${coleta.erro}). Mostrando o que já está guardado.`; return caixa; }
-    const lidos = (coleta.meses_lidos || []).length;
-    const base = `PNCP: ${coleta.total_pncp ?? 0} contratação(ões) com resultado deste CNPJ. Arquivo de propostas do Compras.gov: ${lidos} mês(es) lido(s).`;
-    if (coleta.situacao === 'completo') { caixa.textContent = `${base} Coleta completa em ${dataBr(coleta.atualizado_em)}.`; return caixa; }
-    caixa.append(`Completando… ${base} Faltam ${coleta.compras_pendentes} contratação(ões) e ${coleta.meses_pendentes} mês(es) do arquivo semanal (é ele que traz as disputas perdidas); o robô completa a cada 2 horas. `,
-      el(doc, 'button', { type: 'button', class: 'btn-imprimir', texto: 'Atualizar' }));
-    caixa.querySelector('button').addEventListener('click', aoAtualizar);
-    for (const a of coleta.avisos || []) caixa.append(el(doc, 'br'), a);
     return caixa;
   }
 
@@ -464,21 +470,6 @@
         el(doc, 'div', { class: 'mini-grafico-barra', style: `height:${Math.max(m.disputas ? 4 : 0, Math.round((m.disputas / maior) * 100))}%` }),
         el(doc, 'div', { class: 'mini-grafico-rotulo', texto: m.rotulo }))))));
     caixa.append(el(doc, 'p', { class: 'dica-clique', texto: 'Barra = disputas no mês (todos os anos guardados somados); número = vitórias/disputas. Data do resultado ou, sem ela, da publicação.' }));
-    return caixa;
-  }
-
-  function blocoMateriais(doc, r) {
-    const caixa = el(doc, 'div', { class: 'acn-materiais' }, el(doc, 'h3', { texto: 'Onde ela ganha: materiais e marcas' }));
-    const vit = r.vitoriasPorProduto;
-    caixa.append(vit.length ? rolavel(doc, el(doc, 'table', {}, el(doc, 'tr', {}, ['Material / CATMAT', 'Vitórias', 'Disputas', 'Valor vencido'].map((t) => el(doc, 'th', { texto: t }))),
-      vit.slice(0, 20).map((g) => el(doc, 'tr', {}, el(doc, 'td', { texto: g.chave }), el(doc, 'td', { texto: String(g.vencidas) }),
-        el(doc, 'td', { texto: String((r.porProduto.find((x) => x.chave === g.chave) || g).disputas) }), el(doc, 'td', { texto: moeda(g.valor) })))))
-      : el(doc, 'p', { class: 'dica-clique', texto: 'Nenhuma vitória no histórico guardado.' }));
-    caixa.append(el(doc, 'h3', { texto: `Marcas que ela usa (${r.marcas.length})` }));
-    caixa.append(r.marcas.length ? rolavel(doc, el(doc, 'table', {}, el(doc, 'tr', {}, ['Marca', 'Itens vencidos', 'Valor vencido', 'Exemplo de item'].map((t) => el(doc, 'th', { texto: t }))),
-      r.marcas.slice(0, 30).map((m) => el(doc, 'tr', {}, el(doc, 'td', { texto: m.chave }), el(doc, 'td', { texto: String(m.itens) }), el(doc, 'td', { texto: moeda(m.valor) }), el(doc, 'td', { texto: m.exemplo })))))
-      : el(doc, 'p', { class: 'dica-clique', texto: 'Nenhuma marca publicada ainda para os itens que ela venceu. O robô procura na Pesquisa de Preços do Compras.gov e no ComprasNet antigo.' }));
-    caixa.append(el(doc, 'p', { class: 'dica-clique', texto: 'Marca: Pesquisa de Preços do Compras.gov e páginas públicas do ComprasNet antigo; o governo só publica a marca de quem venceu o item.' }));
     return caixa;
   }
 
@@ -542,6 +533,9 @@
     return el(doc, 'div', { class: 'dg-topo-botoes acn-exportar' }, planilha, pdf);
   }
 
+  // Mudou o que foi gravado? (para atualizar sozinho quando o usuário volta da página do governo)
+  const assinaturaGravado = (mensagens, propostas) => [...(mensagens || []), ...(propostas || [])].reduce((n, x) => n + leituras(x), 0) + '|' + (mensagens || []).length + '|' + (propostas || []).length;
+
   async function lerTudo(sb, cnpj) {
     const linhas = [];
     for (let de = 0; de < 10000; de += 1000) {
@@ -571,15 +565,18 @@
 
   // alvo: container; requisitar(corpo) -> /api/analise-cnpj; sancoes() -> /api/sancoes-cnpj (ou {erro}).
   // sancoesLote(cnpjs) -> { resultados, hoje } (POST /api/sancoes-cnpj): selo de sanção nos vencedores das disputas perdidas.
-  async function montar({ alvo, cnpj, ficha, sb, requisitar, sancoes, sancoesLote, hoje, LicitaSancoes }) {
+  // pagamentos() -> /api/despesas-fornecedor (Portal da Transparência): mostrado aqui mesmo, sem levar a outra tela.
+  async function montar(opcoes) {
+    const { alvo, cnpj, ficha, sb, requisitar, sancoes, sancoesLote, pagamentos, hoje, LicitaSancoes } = opcoes;
     const doc = alvo.ownerDocument;
-    const status = el(doc, 'div', { class: 'carregando', texto: 'Buscando as disputas deste CNPJ no PNCP e no Compras.gov…' });
+    const status = el(doc, 'div', { class: 'carregando', texto: 'Buscando as licitações e os contratos desta empresa…' });
     alvo.replaceChildren(cabecalho(doc, cnpj, null, ficha), status);
+    const pag = pagamentos ? pagamentos().catch(() => null) : null; // começa já: o Portal demora e não bloqueia o resto
     const [coleta, sanc, cad] = await Promise.all([requisitar({ acao: 'coletar', cnpj }).catch((e) => ({ erro: String(e.message || e) })), sancoes().catch(() => ({ erro: 'indisponível agora' })),
       requisitar({ acao: 'cadastro', cnpj }).then((x) => (x && x.cadastro) || null).catch(() => null)]);
     let dados;
-    try { dados = await lerTudo(sb, cnpj); } catch (e) {
-      status.replaceWith(el(doc, 'div', { class: 'aviso', texto: `Não foi possível ler o histórico agora (${e.message || e.code || 'erro'}).` }));
+    try { dados = await lerTudo(sb, cnpj); } catch {
+      status.replaceWith(el(doc, 'div', { class: 'aviso', texto: 'Não foi possível ler o histórico desta empresa agora. Tente de novo em alguns instantes.' }));
       return null;
     }
     const r = resumir(dados.linhas), mot = motivosGravados(dados.mensagens, dados.propostas), ct = resumirContratos(dados.contratos, hoje);
@@ -589,13 +586,15 @@
     if (vencedores.length) {
       try { const lote = await sancoesLote(vencedores); if (lote && lote.resultados) selos = { resultados: lote.resultados, hoje: lote.hoje || hoje, LicitaSancoes }; } catch { selos = null; }
     }
-    const desenhar = (mot, atualizado) => alvo.replaceChildren(cabecalho(doc, cnpj, cad, ficha),
-      barraExportar(doc, alvo, { cnpj, cad, r, ct, hoje, motivos: motivosComFonte({ r, mot, detalhes: dados.detalhes, pecas: dados.pecas }) }), blocoVulnerabilidade(doc, vulneraveis), blocoColeta(doc, coleta, () => montar({ alvo, cnpj, ficha, sb, requisitar, sancoes, sancoesLote, hoje, LicitaSancoes })) || '',
-      atualizado ? el(doc, 'p', { class: 'la-atualizado', role: 'status', texto: 'Atualizado com o que você gravou' }) : '',
-      blocoCamadas(doc, camadasCnpj(r, mot.mensagens, mot.propostas)),
-      blocoAlertas(doc, r, mot, sanc, hoje, LicitaSancoes), blocoParticipacoes(doc, r, selos), blocoSazonalidade(doc, r), blocoMateriais(doc, r), blocoContratos(doc, ct),
-      blocoMotivos(doc, motivosComFonte({ r, mot, detalhes: dados.detalhes, pecas: dados.pecas })),
-      el(doc, 'p', { class: 'dica-clique', texto: 'Fontes: PNCP (resultados e contratos por fornecedor), Contratos.gov.br (empenhos e faturas de contrato federal), base aberta de CNPJ da Receita, dados abertos do Compras.gov, arquivo semanal de propostas (repositorio.dados.gov.br, só itens homologados), CEIS/CNEP da CGU, Pesquisa de Preços (marcas), ComprasNet antigo (termos de adjudicação e recursos, páginas sem captcha) e pregões gravados pela extensão. Outras plataformas (Licitanet, BLL, BNC…) entram só pelo resultado publicado no PNCP: as disputas perdidas nelas não são públicas.' }));
+    const desenhar = (mot, atualizado) => {
+      const motivos = motivosComFonte({ r, mot, detalhes: dados.detalhes, pecas: dados.pecas });
+      alvo.replaceChildren(barraExportar(doc, alvo, { cnpj, cad, r, ct, hoje, motivos }),
+        blocoColeta(doc, coleta, () => montar(opcoes)) || '',
+        atualizado ? el(doc, 'p', { class: 'la-atualizado', role: 'status', texto: 'Atualizado com o que você gravou' }) : '',
+        cabecalho(doc, cnpj, cad, ficha), blocoAlertas(doc, vulneraveis, sanc, hoje, LicitaSancoes), blocoDesempenho(doc, r, motivos, selos),
+        blocoContratos(doc, ct, hoje), blocoPagamentos(doc, pag), blocoOndeAtua(doc, r, ct),
+        dica(doc, 'Fontes: PNCP, Compras.gov, Contratos.gov.br, Receita Federal, Portal da Transparência (pagamentos e CEIS/CNEP) e pregões gravados pela extensão. Disputas perdidas em outras plataformas (Licitanet, BLL, BNC…) não são públicas.'));
+    };
     desenhar(Object.assign(mot, { mensagens: dados.mensagens, propostas: dados.propostas }), false);
     // Voltou da página do governo (foco da janela) e há gravação nova: atualiza sozinho, sem clicar.
     if (alvo.__acnVoltar && global.removeEventListener) global.removeEventListener('focus', alvo.__acnVoltar);
@@ -625,7 +624,7 @@
     })));
   }
 
-  const api = { motivosComFonte, planilhaRelatorio, resumir, motivosGravados, venceu, posicao, precoFinal, montar, montarEscolha, cnpjsDosVencedores, camadasCnpj, resumirContratos, alertasVulnerabilidade };
+  const api = { motivosComFonte, planilhaRelatorio, resumir, motivosGravados, venceu, posicao, precoFinal, montar, montarEscolha, cnpjsDosVencedores, resumirContratos, alertasVulnerabilidade, explicarDesempenho, ondePerde };
   global.LicitaAnaliseCnpj = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(globalThis);

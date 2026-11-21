@@ -12,9 +12,12 @@ const FASE_PAGAMENTO = 3;
 const ANOS_A_CONSULTAR = 4; // ano atual + 3 anteriores
 const { cabecalhosPadrao, exigirUsuarioAprovado, verificarLimiteDiario } = require("./_auth");
 
-async function consultarAno(cnpj, ano, token) {
+// O Portal pagina a lista (só a 1ª página fazia o "total pago" sair bem menor que o real). Até MAX_PAGINAS por ano:
+// 4 anos x 8 = 32 subrequisições, dentro do limite de 50 do Cloudflare gratuito. Passou disso, o total sai marcado como parcial.
+const MAX_PAGINAS = 8;
+async function consultarPagina(cnpj, ano, pagina, token) {
   try {
-    const url = `${BASE_URL}/despesas/documentos-por-favorecido?codigoPessoa=${cnpj}&fase=${FASE_PAGAMENTO}&ano=${ano}&pagina=1`;
+    const url = `${BASE_URL}/despesas/documentos-por-favorecido?codigoPessoa=${cnpj}&fase=${FASE_PAGAMENTO}&ano=${ano}&pagina=${pagina}`;
     const resp = await fetch(url, {
       headers: { Accept: "application/json", "chave-api-dados": token },
     });
@@ -26,6 +29,19 @@ async function consultarAno(cnpj, ano, token) {
   } catch (e) {
     return { ok: false, dados: [] };
   }
+}
+
+async function consultarAno(cnpj, ano, token) {
+  const todos = [];
+  let tamanhoPagina = 0;
+  for (let pagina = 1; pagina <= MAX_PAGINAS; pagina++) {
+    const r = await consultarPagina(cnpj, ano, pagina, token);
+    if (!r.ok) return { ok: pagina > 1, dados: todos, parcial: pagina > 1 };
+    todos.push(...r.dados);
+    tamanhoPagina = tamanhoPagina || r.dados.length;
+    if (!r.dados.length || r.dados.length < tamanhoPagina) return { ok: true, dados: todos, parcial: false };
+  }
+  return { ok: true, dados: todos, parcial: true };
 }
 
 exports.handler = async (event) => {
@@ -65,11 +81,13 @@ exports.handler = async (event) => {
   const documentos = [];
   let falhouAlguma = false;
   let algumaOk = false;
+  let parcial = false;
 
   resultados.forEach((r, i) => {
     const ano = anos[i];
     if (!r.ok) { falhouAlguma = true; return; }
     algumaOk = true;
+    if (r.parcial) parcial = true;
     let somaAno = 0;
     for (const doc of r.dados) {
       const valor = Number(doc.valor || 0);
@@ -97,8 +115,10 @@ exports.handler = async (event) => {
       totalPago,
       porAno,
       totalDocumentos: documentos.length,
+      parcial,
       documentos: documentos.slice(0, 50),
       erro: !algumaOk && falhouAlguma ? "Não foi possível consultar o Portal da Transparência agora." : null,
     }),
   };
 };
+exports.consultarAno = consultarAno;

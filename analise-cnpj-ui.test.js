@@ -67,16 +67,18 @@ test("motivos gravados: selo 'não verificado' até 2 leituras de organizações
   assert.equal(m.naoVerificados, 2);
 });
 
-test("camadas do CNPJ: automático, gravado (verificado) e pregões com recusa que ainda faltam abrir", () => {
-  const r = U.resumir([...linhas, { ...base, id_compra: "ZZ1", numero_item: 1, classificacao: 2, situacao_proposta: "2", valor_lance: 9, link_origem: "https://x.gov.br/p" }]);
-  const sem = U.camadasCnpj(r, [], []);
-  assert.equal(sem.compras, 3);
-  assert.equal(sem.gravadas, 0);
-  assert.deepEqual(sem.faltam.map((c) => c.id_compra).sort(), ["78882005900332025", "ZZ1"], "recusa e fracassado como 1º, sem gravação");
-  const com = U.camadasCnpj(r, [{ id_compra: "ZZ1", leituras_concordantes: 2 }], [{ id_compra: "78882005900332025", leituras_concordantes: 1 }]);
-  assert.equal(com.gravadas, 2);
-  assert.equal(com.verificadas, 1);
-  assert.equal(com.faltam.length, 0);
+test("desempenho em frases: disputas, vitória, valor ganho, desconto e quanto perde", () => {
+  const f = U.explicarDesempenho(U.resumir(linhas));
+  assert.equal(f[0], "Ela disputou 5 item(ns) em 2 licitação(ões) e ganhou 2: 40% de vitória.");
+  assert.match(f[1], /^Somando os itens que ganhou, levou R\$\s1\.720,00\.$/);
+  assert.match(f[2], /15% abaixo do valor estimado/);
+  assert.match(f[3], /8,8% acima do preço de quem ganhou \(comparados 1 item/);
+  assert.deepEqual(U.explicarDesempenho(U.resumir([])), ["Ainda não encontramos disputas desta empresa no histórico."]);
+});
+
+test("onde perde: órgãos com derrota, mais derrotas primeiro; órgão só com vitória fica fora", () => {
+  const r = U.resumir([...linhas, { ...base, id_compra: "Z", orgao_nome: "UFAM", numero_item: 1, ordem_classificacao: 1, valor_homologado: 1, quantidade: 1 }]);
+  assert.deepEqual(U.ondePerde(r).map((g) => [g.chave, g.disputas, g.perdidas]), [["COMANDO DA MARINHA", 5, 3]]);
 });
 
 // ---------- parte 2: contratos por estado e alerta de vulnerabilidade ----------
@@ -90,6 +92,7 @@ test("contratos: total, vigentes, por UF da unidade e valores federais só de qu
   const c = U.resumirContratos(contratos, "2026-11-19");
   assert.equal(c.total, 3);
   assert.equal(c.vigentes, 1);
+  assert.equal(c.encerrados, 1, "sem data de fim não conta como encerrado");
   assert.equal(c.valorContratado, 10379826.5 + 5959800);
   assert.equal(c.maiorContrato, 10379826.5);
   assert.deepEqual(c.porUf.map((g) => [g.chave, g.contratos, g.vigentes]), [["AM", 2, 1], ["Não informado", 1, 0]]);
