@@ -266,7 +266,7 @@ async function main() {
     fs.writeFileSync(SEED, JSON.stringify(seed, null, 2));
     const pS = await novaPagina(navegador);
     await entrar(pS, S);
-    await passo('essencial: Mercado, Pesquisa de Preços, Convênios e Concorrente travados; Prospecção travada também no banco', null, async () => {
+    await passo('essencial: Mercado, Preços, Convênios, Concorrente e Proposta travados, sem botão do Chat; Prospecção travada também no banco', null, async () => {
       for (const [secao, rotulo] of [['diagnostico', 'Mercado'], ['precos', 'Pesquisa de Preços'], ['transparencia', 'Convênios'], ['empresa', 'Análise por CNPJ']]) {
         await pS.goto(SITE + '/painel.html#' + secao);
         await pS.waitForSelector(`#${secao} .trava-plano`, { timeout: 30000 });
@@ -280,6 +280,32 @@ async function main() {
       await pS.goto(SITE + '/prospeccao.html');
       await pS.waitForSelector('main .trava-plano', { timeout: 30000 });
       for (const largura of [1280, 375]) { await pS.setViewportSize({ width: largura, height: largura === 375 ? 812 : 900 }); await pS.waitForTimeout(300); await print(pS, `essencial-prospeccao-${largura}.png`); exigir(await semRolagem(pS), 'rolagem ' + largura); }
+      // Chat com IA fora do plano: o botão some (antes levava a "não está no plano").
+      await pS.goto(SITE + '/painel.html#boletim');
+      await pS.waitForTimeout(4000);
+      exigir(!(await visivel(pS, '#chat-ia-btn')), 'botão do Chat IA visível no Essencial');
+      // Proposta e declarações no dossiê do processo: travada com o mesmo aviso, sem botão que leva a erro.
+      // As telas já criaram a organização da conta (bootstrap_operacao); só cria se ainda não houver.
+      const [org] = (await servico('GET', `/rest/v1/operacao_organizacoes?owner_id=eq.${S.id}&select=id`)).length
+        ? await servico('GET', `/rest/v1/operacao_organizacoes?owner_id=eq.${S.id}&select=id`)
+        : await servico('POST', '/rest/v1/operacao_organizacoes', { nome: 'Org Essencial (fictícia)', owner_id: S.id });
+      if (!(await servico('GET', `/rest/v1/operacao_membros?organizacao_id=eq.${org.id}&usuario_id=eq.${S.id}&select=usuario_id`)).length)
+        await servico('POST', '/rest/v1/operacao_membros', { organizacao_id: org.id, usuario_id: S.id, papel: 'gestor' });
+      // A empresa do cadastro pode já existir (1 CNPJ no Essencial): reaproveita.
+      const [emp] = (await servico('GET', `/rest/v1/operacao_empresas?organizacao_id=eq.${org.id}&ativo=eq.true&select=id`)).length
+        ? await servico('GET', `/rest/v1/operacao_empresas?organizacao_id=eq.${org.id}&ativo=eq.true&select=id`)
+        : await servico('POST', '/rest/v1/operacao_empresas', { organizacao_id: org.id, razao_social: 'Essencial Plano Teste LTDA (fictícia)' });
+      const [proc] = await servico('POST', '/rest/v1/operacao_processos', { organizacao_id: org.id, empresa_id: emp.id, objeto: 'Papel A4 (teste do Essencial)' });
+      for (const largura of [1280, 375]) {
+        await pS.setViewportSize({ width: largura, height: largura === 375 ? 812 : 900 });
+        await pS.goto(SITE + `/processos.html?empresa=${emp.id}&processo=${proc.id}`);
+        await pS.waitForSelector('#d-kit-documentos .trava-plano', { timeout: 30000 });
+        exigir(/Proposta e declarações/.test(await pS.innerText('#d-kit-documentos')), 'aviso da proposta');
+        exigir(!(await pS.evaluate(() => [...document.querySelectorAll('#d-kit-documentos button')].some((b) => b.offsetParent))), 'botão da proposta visível');
+        exigir(!(await visivel(pS, '#chat-ia-btn')), 'botão do Chat IA visível em processos');
+        exigir(await semRolagem(pS), 'rolagem processos ' + largura);
+        await print(pS, `essencial-proposta-${largura}.png`);
+      }
       const tS = await token(S);
       const r = await comoUsuario(tS.access_token, 'GET', '/rest/v1/prospeccao_itens?select=id&limit=1');
       exigir(r.status === 200 && r.corpo === '[]', 'RLS de Prospecção: ' + r.status + ' ' + r.corpo.slice(0, 100));
@@ -294,6 +320,7 @@ async function main() {
         await pT.waitForSelector('main .trava-plano', { timeout: 30000 });
         exigir(/Seu teste grátis terminou/.test(await pT.innerText('main .trava-plano')), tela + ': sem aviso');
         exigir((await pT.$$('.trava-plano')).length === 1, tela + ': mais de um aviso');
+        exigir(!(await visivel(pT, '#chat-ia-btn')), tela + ': botão do Chat IA visível no teste vencido');
       }
       for (const largura of [1280, 375]) { await pT.setViewportSize({ width: largura, height: largura === 375 ? 812 : 900 }); await pT.waitForTimeout(300); await print(pT, `teste-vencido-${largura}.png`); exigir(await semRolagem(pT), 'rolagem ' + largura); }
       await Promise.all([pT.waitForURL(/index\.html#planos/, { timeout: 20000 }), pT.click('main .trava-plano a')]);

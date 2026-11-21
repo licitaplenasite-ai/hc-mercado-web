@@ -141,6 +141,8 @@
     if (!document.querySelector('link[href^="chat-ia-ui.css"]')) document.head.append(criar("link", { rel: "stylesheet", href: "chat-ia-ui.css" }));
     const botao = criar("button", { type: "button", id: "chat-ia-btn", className: "lp-chat-flutuante", title: "Chat com IA (beta)" }, ["IA", criar("span", { className: "lp-chat-beta", textContent: "BETA" })]);
     botao.setAttribute("aria-label", "Abrir chat com IA (beta)");
+    // Fora do plano (Essencial) ou teste encerrado: plano-trava.js esconde o botão, para não levar a uma recusa.
+    botao.setAttribute("data-recurso-esconder", "chat_ia");
     botao.addEventListener("click", abrir);
     document.body.classList.add("lp-com-chat-ia");
     document.body.append(botao);

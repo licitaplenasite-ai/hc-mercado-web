@@ -1,7 +1,9 @@
 // Trava de tela pelo plano da conta (meu_plano, supabase/planos_e_recursos.sql). A garantia é do servidor (rotas /api,
-// triggers e RLS); aqui só fica o aviso fixo no lugar da tela, sem pop-up. Dois casos:
+// triggers e RLS); aqui só fica o aviso fixo no lugar da tela, sem pop-up. Três casos:
 //   - teste encerrado (plano.bloqueado): trava o <main> inteiro; só o boletim por e-mail continua;
-//   - parte fora do plano (ex.: Essencial sem Mercado): trava cada elemento com data-recurso="<codigo do recurso>".
+//   - parte fora do plano (ex.: Essencial sem Mercado): trava cada elemento com data-recurso="<codigo do recurso>";
+//   - botão que só levaria a uma recusa (ex.: Chat com IA): data-recurso-esconder="<codigo>" some da tela.
+// Elementos montados depois (dossiê do processo, botão do chat) entram pelo MutationObserver.
 // Nada é apagado: os dados voltam quando a conta assina. Sem SQL aplicado (meu_plano ausente) não trava nada.
 (function () {
   "use strict";
@@ -46,7 +48,8 @@
   }
 
   function travar(el, titulo, texto, botao) {
-    if (!el || el.hasAttribute("data-travado")) return;
+    // A tela pode trocar o conteúdo depois (replaceChildren): sem o aviso, ele volta.
+    if (!el || [...el.children].some((f) => f.classList.contains("trava-plano"))) return;
     estilo();
     const caixa = document.createElement("div");
     caixa.className = "trava-plano";
@@ -61,12 +64,16 @@
 
   function aplicar(plano) {
     if (!plano || typeof plano !== "object") return;
+    const recursos = plano.recursos || {};
+    document.querySelectorAll("[data-recurso-esconder]").forEach((el) => {
+      const r = recursos[el.getAttribute("data-recurso-esconder")];
+      if (plano.bloqueado === true || (r && r.permitido === false)) el.style.setProperty("display", "none", "important");
+    });
     if (plano.bloqueado === true) {
       travar(document.querySelector("main"), "Seu teste grátis terminou",
         "Você continua recebendo o boletim por e-mail. Para voltar a usar as outras telas, assine um plano. O que você salvou continua guardado.", "Assinar");
       return;
     }
-    const recursos = plano.recursos || {};
     document.querySelectorAll("[data-recurso]").forEach((el) => {
       const r = recursos[el.getAttribute("data-recurso")];
       if (r && r.permitido === false) {
@@ -81,6 +88,13 @@
     // Sessão vencida no armazenamento: a página renova o token logo depois; tenta de novo uma vez.
     if (!plano) { await new Promise((ok) => setTimeout(ok, 3000)); plano = await lerPlano(); }
     aplicar(plano);
+    if (!plano) return;
+    let agendado = false;
+    new MutationObserver(() => {
+      if (agendado) return;
+      agendado = true;
+      requestAnimationFrame(() => { agendado = false; aplicar(plano); });
+    }).observe(document.body, { childList: true, subtree: true });
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", iniciar);
