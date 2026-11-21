@@ -65,6 +65,18 @@ begin
  -- O limite do plano soma as rotas do recurso: fornecedor-ia não ganha cota própria.
  v := public.consumir_uso_plano('e2000000-0000-4000-8000-000000000003','fornecedor-ia',20);
  if (v->>'permitido')::boolean or (v->>'contagem')::int<>5 then raise exception 'fornecedor-ia furou a cota de IA do plano: %',v; end if;
+ -- Teste grátis: 3 análises por CNPJ/dia; busca por nome e cadastro da mesma análise não gastam essa cota.
+ for n in 1..3 loop
+  v := public.consumir_uso_plano('e2000000-0000-4000-8000-000000000001','analise-cnpj-buscar',100);
+  v := public.consumir_uso_plano('e2000000-0000-4000-8000-000000000001','analise-cnpj-cadastro',100);
+  if not (v->>'permitido')::boolean or (v->>'limite')::int<>100 then raise exception 'cadastro da análise: %',v; end if;
+  v := public.consumir_uso_plano('e2000000-0000-4000-8000-000000000001','analise-cnpj',20);
+  if not (v->>'permitido')::boolean or (v->>'contagem')::int<>n then raise exception 'análise % do Teste grátis: %',n,v; end if;
+ end loop;
+ v := public.consumir_uso_plano('e2000000-0000-4000-8000-000000000001','analise-cnpj',20);
+ if (v->>'permitido')::boolean then raise exception 'Teste grátis passou de 3 análises por CNPJ/dia'; end if;
+ v := public.consumir_uso_plano('e2000000-0000-4000-8000-000000000003','analise-cnpj-cadastro',100);
+ if (v->>'permitido')::boolean or v->>'motivo'<>'plano' then raise exception 'Grátis usou cadastro da análise: %',v; end if;
  -- Rota sem recurso: só o limite da rota. Membro conta no plano do titular.
  v := public.consumir_uso_plano('e2000000-0000-4000-8000-000000000004','sancoes',100);
  if not (v->>'permitido')::boolean or (v->>'limite')::int<>100 then raise exception 'rota sem recurso: %',v; end if;

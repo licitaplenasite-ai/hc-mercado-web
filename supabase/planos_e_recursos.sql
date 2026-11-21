@@ -264,7 +264,8 @@ begin
       'usuarios', (select count(distinct usuario_id) from public.operacao_membros where organizacao_id = v_org),
       'processos', (select count(*) from public.operacao_processos where organizacao_id = v_org and status <> 'arquivado'),
       'hoje', (select coalesce(jsonb_object_agg(r.codigo, (select coalesce(sum(u.contagem), 0) from public.uso_diario u
-          where u.usuario_id = v_usuario and u.dia = current_date and u.funcao = any (r.funcoes))), '{}'::jsonb) from public.recursos_plano r)),
+          where u.usuario_id = v_usuario and u.dia = current_date and u.funcao = any (r.funcoes)
+            and u.funcao not in ('analise-cnpj-buscar', 'analise-cnpj-cadastro'))), '{}'::jsonb) from public.recursos_plano r)),
     'planos_disponiveis', (select coalesce(jsonb_agg(jsonb_build_object('codigo', codigo, 'nome', nome, 'max_cnpjs', max_cnpjs,
         'preco_mensal_centavos', preco_mensal_centavos, 'preco_anual_centavos', preco_anual_centavos) order by ordem), '[]'::jsonb)
       from public.planos where ativo and escolhivel_no_cadastro));
@@ -293,6 +294,9 @@ grant execute on function public.solicitar_plano(text) to authenticated;
 create or replace function public.consumir_uso_plano(p_usuario_id uuid, p_funcao text, p_limite_padrao integer) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare v jsonb; v_rec text; v_r jsonb; v_lim integer := p_limite_padrao; n integer;
+  -- Busca por nome e cadastro da Receita fazem parte da mesma análise por CNPJ: conferem o plano, mas não gastam a
+  -- cota do recurso (ficam no limite da própria rota). Senão o Teste grátis (3/dia) só dava 1 CNPJ novo por dia.
+  v_aux boolean := p_funcao in ('analise-cnpj-buscar', 'analise-cnpj-cadastro');
 begin
   if p_usuario_id is null or p_funcao is null then raise exception 'Parâmetros inválidos'; end if;
   v := public.plano_efetivo_titular(public.titular_do_usuario(p_usuario_id));
@@ -302,14 +306,15 @@ begin
     if not coalesce((v_r ->> 'permitido')::boolean, false) then
       return jsonb_build_object('permitido', false, 'motivo', 'plano', 'recurso', v_rec, 'nome_recurso', v_r ->> 'nome', 'plano', v ->> 'nome');
     end if;
-    v_lim := coalesce((v_r ->> 'limite_diario')::integer, p_limite_padrao);
+    if not v_aux then v_lim := coalesce((v_r ->> 'limite_diario')::integer, p_limite_padrao); end if;
   end if;
   n := public.incrementar_uso(p_usuario_id, p_funcao);
   -- Limite do plano vale para o recurso inteiro (ex.: Grátis = 3 de IA/dia somando resumo, pergunta, fornecedor e chat),
   -- igual ao "hoje" de meu_plano. Sem limite no plano, cada rota segue com o próprio padrão.
-  if v_rec is not null and (v_r ->> 'limite_diario') is not null then
+  if v_rec is not null and not v_aux and (v_r ->> 'limite_diario') is not null then
     select coalesce(sum(u.contagem), 0)::integer into n from public.uso_diario u
-      where u.usuario_id = p_usuario_id and u.dia = current_date and u.funcao = any (select unnest(r.funcoes) from public.recursos_plano r where r.codigo = v_rec);
+      where u.usuario_id = p_usuario_id and u.dia = current_date and u.funcao = any (select unnest(r.funcoes) from public.recursos_plano r where r.codigo = v_rec)
+        and u.funcao not in ('analise-cnpj-buscar', 'analise-cnpj-cadastro');
   end if;
   return jsonb_build_object('permitido', v_lim is null or n <= v_lim, 'contagem', n, 'limite', v_lim, 'recurso', v_rec, 'plano', v ->> 'nome');
 end $$;
