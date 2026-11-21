@@ -10,5 +10,5 @@ const TURNSTILE_SITEKEY = "";
 var LICITAPLENA_WHATSAPP_SUPORTE = "";
 // HC Licitações (parceira, página hc.html e chamadas "Fale com a HC"): TROCAR pelo número e site da HC. Vazio = botões somem.
 // WhatsApp: só dígitos com DDI 55. Site: endereço completo começando com https://.
-var LICITAPLENA_HC_WHATSAPP = "";
-var LICITAPLENA_HC_SITE = "";
+var LICITAPLENA_HC_WHATSAPP = "5592981937781";
+var LICITAPLENA_HC_SITE = "https://www.hclicitacoes.com";
