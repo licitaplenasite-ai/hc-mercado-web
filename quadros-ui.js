@@ -108,7 +108,7 @@ ${prazo || proc ? `<div class="q-tags">${prazo}${proc}</div>` : ''}</article>`;
     async function carregarEmpresas() {
       const { data, error } = await sb.from('operacao_empresas').select('id,razao_social,cnpj').eq('organizacao_id', estado.orgId).eq('ativo', true).order('razao_social');
       if (error) { aviso('Não foi possível carregar as empresas: ' + error.message, 'erro'); return; }
-      $('empresa-atual').innerHTML = (data || []).map((e) => `<option value="${esc(e.id)}">${esc(e.razao_social)}${e.cnpj ? ` · ${esc(e.cnpj)}` : ''}</option>`).join('');
+      $('empresa-atual').innerHTML = (data || []).map((e) => `<option value="${esc(e.id)}">${esc(e.razao_social)}${e.cnpj ? ` · ${esc(String(e.cnpj).replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5'))}` : ''}</option>`).join('');
       let preferida = ''; try { preferida = localStorage.getItem(CHAVE_EMPRESA) || ''; } catch { /* sem armazenamento: usa a primeira */ }
       estado.empresaId = (data || []).some((e) => e.id === preferida) ? preferida : data?.[0]?.id || null;
       $('empresa-atual').value = estado.empresaId || '';

@@ -85,7 +85,7 @@
       <div class="kit-alerta" data-descarte hidden><p>Há alterações não salvas nesta peça. Salve antes de sair para preservá-las.</p><button type="button" class="btn" data-cancelar-troca>Continuar editando</button><button type="button" class="btn" data-descartar>Descartar alterações e continuar</button></div>
       <form novalidate><h4 tabindex="-1" data-peca>Nova declaração</h4><p class="kit-estado" data-estado></p><p data-historico></p>
       <label>Tipo de documento<select name="tipo"><option value="declaracao">Declaração com texto informado</option><option value="proposta">Proposta de materiais</option></select></label>
-      <div data-declaracao>${campo('titulo', 'Título da declaração', 'maxlength="180"')}<label>Texto do modelo (até 20.000 caracteres)<textarea name="texto" maxlength="20000" rows="6"></textarea></label>${campo('fonte', 'Referência informada pelo usuário (opcional; não verificada)', 'maxlength="1000"')}<p>Variáveis permitidas: {{razao_social}}, {{cnpj}}, {{endereco}}, {{representante}}, {{cargo}}, {{numero_edital}}, {{orgao}}. Para o CPF do representante, escreva [CPF do representante]: o número só entra no arquivo exportado.</p></div>
+      <div data-declaracao>${campo('titulo', 'Título da declaração', 'maxlength="180"')}<label>Texto do modelo (até 20.000 caracteres)<textarea name="texto" maxlength="20000" rows="6"></textarea></label>${campo('fonte', 'De onde veio este modelo (opcional)', 'maxlength="1000"')}<p>Campos que o sistema preenche sozinho (escreva igual, com as chaves): {{razao_social}}, {{cnpj}}, {{endereco}}, {{representante}}, {{cargo}}, {{numero_edital}}, {{orgao}}. Para o CPF do representante, escreva [CPF do representante]: o número só entra no arquivo exportado.</p></div>
       <div data-proposta hidden><p>Selecione os itens (limite técnico e tamanho total serão conferidos). Quantidade, preço ofertado, marca e modelo vêm do cadastro. A unidade vem do edital quando disponível; confira e ajuste.</p><p data-contagem-itens></p><button type="button" class="btn" data-ver-selecionados>Ver selecionados</button><div data-itens></div><button type="button" class="btn" data-itens-anterior>Itens anteriores</button><button type="button" class="btn" data-itens-proxima>Próximos itens</button><div data-itens-ausentes></div>${campo('validade', 'Validade da proposta', 'maxlength="500"')}${campo('prazoEntrega', 'Prazo de entrega', 'maxlength="500"')}${campo('pagamento', 'Condições de pagamento', 'maxlength="500"')}</div>
       <div class="kit-acoes"><button type="button" class="btn primario" data-salvar disabled>Salvar rascunho</button><button type="submit" class="btn" data-preparar disabled>Preparar prévia</button><button type="button" class="btn" data-recarregar hidden>Carregar versão do servidor</button></div></form>
       <section class="kit-previa" aria-label="Revisão da peça"><h4 tabindex="-1" data-titulo-previa>Prévia integral</h4><pre data-previa>Salve o rascunho e prepare a prévia para conferir todo o conteúdo.</pre><div data-fontes></div>
@@ -303,7 +303,7 @@
     async function prepararCadastro() {
       if (ocupado || !dados || peca.tipo !== 'proposta' || !controle.podeExportar() || alterado) return;
       const g = controle.geracao, resultado = el('[data-operacao]');
-      const cabecalho = `${dados.empresa.razaoSocial} · CNPJ ${cnpjTexto(dados.empresa.cnpj)} · Processo ${dados.processo.numero} · versão ${peca.versao}`;
+      const cabecalho = `${dados.empresa.razaoSocial} · CNPJ ${cnpjTexto(dados.empresa.cnpj)} · ${dados.processo.numero ? `Processo ${dados.processo.numero}` : 'Processo sem número'} · versão ${peca.versao}`;
       ocupado = true; resultado.hidden = false; resultado.textContent = cabecalho + '\nConferindo vínculo e itens do portal…'; atualizar();
       try {
         const r = await enviar({ ...escopo, acao: 'prepararOperacao', documentoId: peca.id, versaoEsperada: peca.versao }, g);
@@ -430,7 +430,7 @@
       try {
         const r = await enviar({ ...escopo, acao: 'consultar', itensPaginados: true }, g); if (!r || !vivo(g)) return;
         dados = r;
-        el('[data-contexto]').textContent = `${r.empresa.razaoSocial} · CNPJ ${cnpjTexto(r.empresa.cnpj)} · Processo ${r.processo.numero} · ${r.processo.orgao}`;
+        el('[data-contexto]').textContent = [r.empresa.razaoSocial, `CNPJ ${cnpjTexto(r.empresa.cnpj)}`, r.processo.numero ? `Processo ${r.processo.numero}` : 'Processo sem número', r.processo.orgao].filter(Boolean).join(' · ');
         el('[data-requisitos]').innerHTML = `<strong>Requisitos registrados — confira com o edital</strong><ul>${(r.requisitos || []).map(v => `<li>${esc(v)}</li>`).join('') || '<li>Nenhum requisito registrado; confira o edital.</li>'}</ul>`;
         pendencias(r.pendencias || []);
         cursores = [undefined, r.paginacaoItens?.nextCursor]; pagina = 0; maisItens = r.paginacaoItens?.hasMore === true; for (const item of r.itens || []) conhecidos.set(item.id, item); renderItens();
