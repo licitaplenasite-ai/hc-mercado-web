@@ -5,7 +5,7 @@
 (function () {
   "use strict";
   if (window.abrirFornecedorIA) return;
-  let fundo, corpo, campo, botaoBuscar, botaoMais, usoTexto, usoBarra;
+  let fundo, corpo, campo, botaoBuscar, botaoMais, usoTexto;
   let mostrados = [];
   let descricaoAtual = "";
   let carregando = false;
@@ -21,8 +21,8 @@
     if (!document.querySelector('link[href^="gaveta-lateral.css"]')) document.head.append(criar("link", { rel: "stylesheet", href: "gaveta-lateral.css" }));
     const fechar = criar("button", { type: "button", className: "lp-gaveta-fechar", title: "Fechar", textContent: "✕" });
     fechar.setAttribute("aria-label", "Fechar Encontrar fornecedor com IA");
-    usoTexto = criar("p", { className: "lp-dica", textContent: "Limite: 20 perguntas por dia." });
-    usoBarra = criar("span", { style: "width:0%" });
+    // Sem contador: a IA tem uso justo e o cliente não vê número de cota (21/11).
+    usoTexto = criar("p", { className: "lp-dica", textContent: "IA à vontade, com uso justo." });
     corpo = criar("div", { className: "lp-gaveta-corpo" }, [
       criar("p", { className: "lp-aviso", textContent: "A IA pode errar. Os fornecedores vêm de contratos públicos já assinados; o contato vem do cadastro público da Receita. Confira antes de negociar." }),
       criar("p", { className: "lp-dica", textContent: "Descreva o produto (ex.: papel sulfite A4 branco 75g). Não escreva nome, telefone ou e-mail." }),
@@ -34,7 +34,7 @@
     botaoMais = criar("button", { type: "button", textContent: "Trazer mais três", hidden: true });
     const gaveta = criar("aside", { className: "lp-gaveta" }, [
       criar("div", { className: "lp-gaveta-topo" }, [criar("h2", { id: "fornecedor-ia-titulo", textContent: "Encontrar fornecedor com IA" }), fechar]),
-      criar("div", { className: "lp-uso" }, [usoTexto, criar("div", { className: "lp-uso-barra" }, usoBarra)]),
+      criar("div", { className: "lp-uso" }, [usoTexto]),
       corpo,
       criar("div", { className: "lp-gaveta-rodape" }, [campo, criar("div", { style: "display:flex;gap:8px;flex-wrap:wrap" }, [botaoBuscar, botaoMais])]),
     ]);
@@ -52,13 +52,6 @@
   }
 
   function fecharGaveta() { fundo.hidden = true; }
-
-  function mostrarUso(uso) {
-    if (!uso) return;
-    const restantes = Math.max(0, uso.limite - uso.usadas);
-    usoTexto.textContent = `Você usou ${uso.usadas} de ${uso.limite} perguntas diárias. ${restantes} restantes.`;
-    usoBarra.style.width = `${Math.min(100, (100 * uso.usadas) / uso.limite)}%`;
-  }
 
   function linha(rotulo, valor) { return [criar("dt", { textContent: rotulo }), criar("dd", {}, valor)]; }
 
@@ -117,7 +110,6 @@
       const r = await fetch("/api/fornecedor-ia", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` },
         body: JSON.stringify({ descricao, pular: mostrados }) });
       const d = await r.json().catch(() => ({}));
-      mostrarUso(d.uso);
       if (!r.ok) throw new Error(d.erro || "Não deu para buscar agora.");
       espera.remove();
       if (!d.fornecedores.length) corpo.append(criar("p", { className: "lp-aviso lp-resultado", textContent: mais ? "Não há mais fornecedores para essa descrição na nossa base." : "Não achei empresas com contrato público parecido. Tente outras palavras (ex.: o nome comum do produto)." }));

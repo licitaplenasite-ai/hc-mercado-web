@@ -57,7 +57,7 @@ function limpar() {
       return `${h.t} · ${h.d}`;
     });
 
-    await passo('Fornecedor com IA: aderência, contato público, site provável e contador do plano', p, async () => {
+    await passo('Fornecedor com IA: aderência, contato público, site provável e uso justo sem número', p, async () => {
       await p.route('**/api/fornecedor-ia', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ analise: 'dados', maisDisponiveis: false, uso: { usadas: 2, limite: 3 },
         fornecedores: [{ cnpj: '11222333000181', nome: 'PAPELARIA FICTICIA LTDA', contratos: 4, valorTotal: 12000, ufsAtuacao: ['AM'], exemplos: [], aderencia: 92, porque: 'Já forneceu papel A4.', analisePor: 'dados',
           contato: { telefone: '(92) 3333-4444', email: 'vendas@papelariaficticia.com.br', site: 'https://papelariaficticia.com.br', mei: false }, municipio: 'MANAUS', uf: 'AM', situacao: 'ATIVA' },
@@ -68,10 +68,10 @@ function limpar() {
       await p.waitForSelector('.lp-cartao', { timeout: 10000 });
       const t = await p.innerText('.lp-gaveta-fundo:not([hidden]) .lp-gaveta');
       exigir(/Aderência 92%/.test(t) && /Telefone \(92\) 3333-4444/.test(t) && /papelariaficticia\.com\.br \(provável: domínio do e-mail na Receita\)/.test(t), `cartão: ${t.slice(0, 400)}`);
-      exigir(/Não localizado · Procurar no Google/.test(t) && /Você usou 2 de 3 perguntas diárias/.test(t), 'sem busca no Google ou sem contador');
+      exigir(/Não localizado · Procurar no Google/.test(t) && /IA à vontade, com uso justo/.test(t) && !/2 de 3|perguntas diárias/.test(t), 'sem busca no Google ou com contador de cota');
       await p.locator('.lp-gaveta-fundo:not([hidden]) .lp-gaveta').screenshot({ path: path.join(PRINTS, 'v3-02-fornecedor-site-1280.png') });
       await p.keyboard.press('Escape');
-      return 'site provável, contato, aderência e "2 de 3" na tela';
+      return 'site provável, contato, aderência e "uso justo" sem número';
     });
 
     await passo('Ajuda: sem botão morto de WhatsApp nem "em breve" quando não há número configurado', p, async () => {

@@ -28,7 +28,7 @@
 <link rel="stylesheet" href="licitacao-anterior.css">
 <link rel="stylesheet" href="mercado-comprasgov.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" crossorigin="anonymous"></script>
-<script src="supabase-config.js"></script>
+<script src="supabase-config.js"></script><script src="plano-trava.js" defer></script>
 <script src="fetch-sessao.js"></script>
 <script src="resumo-modelo.js?v=d3ae47f64437"></script>
 <script src="resumo-email.js?v=bac81f5d9b2d"></script>
@@ -2044,7 +2044,7 @@
     </div>
   </section>
 
-  <section id="diagnostico">
+  <section id="diagnostico" data-recurso="mercado">
     <div class="boletim-cabecalho">
       <div>
         <h2 style="margin:0;"><svg class='icone-ph'><use href='#ph-chart-line-up'></use></svg> Inteligência de Mercado</h2>
@@ -2203,7 +2203,7 @@
 
 </script>
 
-  <section id="empresa">
+  <section id="empresa" data-recurso="analise_cnpj">
     <div class="secao-conteudo-principal">
     <div class="boletim-cabecalho">
       <div>
@@ -2227,7 +2227,7 @@
     </div>
   </section>
 
-  <section id="transparencia">
+  <section id="transparencia" data-recurso="convenios">
     <h2 style="margin-top:0;">Convênios e Emendas Federais</h2>
     <p class="dica-clique" style="margin:0 0 14px;">Veja o dinheiro federal que chega a municípios e órgãos antes de virar licitação: a obra ou o serviço financiado tende a virar edital semanas ou meses depois. Em "Encontrar Licitações" você vê o edital já publicado; aqui, o repasse que ainda vai gerá-lo. Dados do Portal da Transparência.</p>
     <div class="secao-conteudo-principal">
@@ -2280,7 +2280,7 @@
     <div class="dg-topo-acoes"><span></span><button class="btn-imprimir btn-imprimir-generico" title="Gerar PDF/impressão desta tela"><svg class='icone-ph'><use href='#ph-printer'></use></svg> Imprimir / Gerar PDF</button></div>
   </section>
 
-  <section id="precos">
+  <section id="precos" data-recurso="pesquisa_precos">
     <h2 style="margin-top:0;">Pesquisa de Preços de Mercado</h2>
     <p class="dica-clique" style="margin:0 0 14px;">Digite o produto e veja na hora as marcas e os modelos que ganharam, quem venceu, o órgão, a data, a quantidade e o preço pago nas compras registradas no Compras.gov (a base que substituiu o antigo "Painel de Preços"). O sistema já escolhe o produto do catálogo mais provável; troque nos botões se quiser outro (ex.: "Notebook" ou "Bateria notebook").</p>
 
@@ -3568,7 +3568,7 @@
         if (dados.dossieEmPreparacao) aguardarDossiePronto(edital, geracao);
       } else {
         const uso = document.getElementById("modal-ia-uso");
-        if (uso && dados.uso) { uso.textContent = `A resposta vem só do edital, com trecho e página. Você usou ${dados.uso.usadas} de ${dados.uso.limite} consultas de IA do edital hoje.`; uso.hidden = false; }
+        if (uso) { uso.textContent = "A resposta vem só do edital, com trecho e página."; uso.hidden = false; } // sem contagem: IA com uso justo
         mostrarPertoDaPergunta(escreverMensagemIA((dados.resposta || "").replace(/\*\*(.+?)\*\*/g, "$1"), ""));
       }
       if (modo === "resumo") bloquearAcoesResumo(false);
@@ -9312,7 +9312,7 @@ window.__atualizarDashboard = function () {
 // em vez de só ler o teto fixo.
 const LIMITE_VISUALIZACOES_POR_PLANO = { "Padrão": 20 };
 // clientes.plano guarda o código (supabase/planos_e_recursos.sql); na tela vai o nome do plano.
-const NOMES_PLANO = { gratis: "Grátis", teste: "Teste grátis", empresa: "Empresa", assessoria: "Assessoria", dono: "Dono (ilimitado)" };
+const NOMES_PLANO = { gratis: "Teste encerrado", teste: "Teste grátis", essencial: "Essencial", empresa: "Empresa", assessoria: "Assessoria", dono: "Dono (ilimitado)" };
 function nomePlano(codigo) { const t = String(codigo || "").trim(); return NOMES_PLANO[t.toLowerCase()] || t || "Padrão"; }
 
 window.__preencherIdentidadeUsuario = function () {
@@ -9568,7 +9568,8 @@ window.__preencherIdentidadeUsuario();
         const html = `
           <div style="font-size:13.5px;line-height:1.6;">
             <p style="margin:0 0 10px;">Seu plano atual: <strong>${escapeHtml(String(plano))}</strong></p>
-            <p style="margin:0 0 12px;color:var(--text-secondary);">Para conhecer outros planos ou mudar o seu, mande uma mensagem para a equipe.</p>
+            <p style="margin:0 0 12px;color:var(--text-secondary);">Essencial, Empresa e Assessoria, com preço no mês ou no ano (2 meses grátis). Para mudar o seu, fale com a equipe.</p>
+            <p style="margin:0 0 12px;"><a href="index.html#planos" target="_blank" rel="noopener">Ver planos e preços</a></p>
             <button type="button" class="btn-buscar" id="planos-falar-equipe">Falar com a equipe</button>
           </div>`;
         abrirModalConta("Planos e preços", html);

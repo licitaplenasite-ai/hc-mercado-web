@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="favicon.png?v=3">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" crossorigin="anonymous"></script><script src="supabase-config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" crossorigin="anonymous"></script><script src="supabase-config.js"></script><script src="plano-trava.js" defer></script>
 <link rel="stylesheet" href="ds-tokens.css"><link rel="stylesheet" href="menu-lateral.css">
 <!-- Tema: mesma chave do painel; claro é o padrão, só quem escolheu "escuro" fica no escuro. -->
 <script>(function(){var t=null;try{t=localStorage.getItem("licitaplena_tema");}catch(e){}if(t!=="escuro")document.documentElement.classList.add("tema-claro");document.documentElement.dataset.theme=t==="escuro"?"dark":"light";})();</script>
@@ -109,7 +109,7 @@ input::placeholder{color:var(--text-secondary);opacity:1}
   <a href="painel.html#status" title="Status das Ferramentas"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-circle"></use></svg></span><span class="nav-label">Status das Ferramentas</span></a>
 </nav>
 <div class="nav-gaveta-fundo" id="nav-gaveta-fundo" hidden></div>
-<main>
+<main data-recurso="prospeccao">
   <div class="topo"><h1>Prospecção</h1><p>Saiba o que o órgão vai comprar antes do edital: planos de contratação do ano, intenções de registro de preço abertas, atas com saldo para adesão e contratos que vão vencer. Dados públicos do PNCP e do Compras.gov, atualizados uma vez por dia.</p></div>
   <form class="card" id="form-filtros">
     <div class="filtros">

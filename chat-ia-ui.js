@@ -12,7 +12,7 @@
   const SUGESTOES = ["Qual o prazo para apresentar recurso?", "Quais são meus prazos desta semana?", "Onde fica a Pesquisa de Preços?"];
   const conversaId = crypto.randomUUID ? crypto.randomUUID() : null;
   const historico = [];
-  let fundo, lista, campo, enviar, uso, salvar;
+  let fundo, lista, campo, enviar, salvar;
 
   const criar = (tag, props = {}, filhos = []) => {
     const no = Object.assign(document.createElement(tag), props);
@@ -54,12 +54,6 @@
     return caixa;
   }
 
-  function mostrarUso(u) {
-    if (!u?.limite) { uso.hidden = true; return; }
-    uso.hidden = false;
-    uso.textContent = `${u.usadas} de ${u.limite} perguntas hoje (limite do seu plano)`;
-  }
-
   async function perguntar(texto) {
     const pergunta = String(texto || "").trim();
     if (!pergunta || enviar.disabled) return;
@@ -72,7 +66,6 @@
       pensando.remove();
       mensagem("ia", d.resposta, d);
       historico.push({ papel: "usuario", texto: pergunta }, { papel: "ia", texto: d.resposta });
-      mostrarUso(d.uso);
     } catch (e) {
       pensando.remove();
       mensagem("erro", e.message);
@@ -103,7 +96,6 @@
     lista = criar("div", { className: "lp-chat-lista" });
     lista.setAttribute("role", "log");
     lista.setAttribute("aria-live", "polite");
-    uso = criar("p", { className: "lp-dica lp-chat-uso", hidden: true });
     campo = criar("textarea", { id: "lp-chat-campo", maxLength: 1000, rows: 2, placeholder: "Pergunte sobre licitação, seus processos e prazos, ou onde fica algo no LicitaPlena" });
     campo.setAttribute("aria-label", "Sua pergunta");
     enviar = criar("button", { type: "submit", className: "lp-primario", textContent: "Enviar" });
@@ -125,7 +117,7 @@
       criar("div", { className: "lp-gaveta-topo" }, [criar("h2", { id: "lp-chat-titulo" }, ["Assistente IA ", criar("span", { className: "lp-chat-beta", textContent: "BETA" })]), fechar]),
       criar("p", { className: "lp-aviso lp-chat-aviso", textContent: "É uma IA e pode errar. Responde com os guias e os dados do LicitaPlena e cita a fonte; confira sempre o edital e a lei. Não informe CPF." }),
       criar("div", { className: "lp-gaveta-corpo" }, [lista, sugestoes]),
-      criar("div", { className: "lp-gaveta-rodape" }, [uso, form,
+      criar("div", { className: "lp-gaveta-rodape" }, [form,
         criar("div", { className: "lp-chat-opcoes" }, [criar("label", { className: "lp-opcao", htmlFor: "lp-chat-salvar" }, [salvar, "Salvar histórico"]), botaoHist, botaoApagar])]),
     ]);
     gaveta.setAttribute("role", "dialog");
