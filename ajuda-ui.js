@@ -47,7 +47,7 @@
     { id: "resumo", titulo: "Resumo do Edital e Pergunte ao Edital", telas: ["#oportunidades", "#boletim", "#kanban"], print: "r02-gaveta-resumo",
       passos: ["No cartão, clique em Resumir edital: abre a gaveta do lado direito.", "Clique em Pergunte ao Edital e escreva sua dúvida. A resposta vem só do edital, com o trecho e a página.", "Se a resposta não estiver no edital, aparece \"Não encontrei no edital\". Confira sempre os documentos oficiais."] },
     { id: "boletim", titulo: "Boletim", telas: ["#boletim"], print: "p02-boletim",
-      passos: ["Menu → Boletim: as licitações novas do seu filtro, todo dia.", "Em Configurar, escolha estados e palavras.", "O mesmo boletim chega por e-mail."] },
+      passos: ["Menu → Boletim: as licitações novas do seu filtro, todo dia.", "Em Configurar, escolha estados e palavras.", "Quando chegam licitações novas, você recebe um aviso por e-mail com o botão Acessar o boletim, que abre esta mesma lista."] },
     { id: "calendario", titulo: "Calendário", telas: ["#calendario"], print: "p03-calendario",
       passos: ["Menu → Calendário.", "Clique num dia para ver as licitações daquele dia."] },
     { id: "funil", titulo: "Funil", telas: ["#kanban"], print: "p05-funil",
@@ -73,7 +73,7 @@
     { id: "certidoes", titulo: "Certidões e documentos vencendo", telas: ["#certidoes"], print: "c15-perfil-empresa", hc: true,
       passos: ["Em Minhas empresas, cada documento mostra a validade: verde vale, amarelo vence logo, vermelho venceu.", "Certidão vencida? Peça a nova no site do órgão emissor e anexe aqui com a nova validade.", "Sem certidão válida a empresa pode ser inabilitada na hora de habilitar."] },
     { id: "lance", titulo: "Lance e acompanhamento do pregão", telas: ["#lance"], print: "e01-pagina-extensao",
-      passos: ["Com a extensão instalada, abra o pregão no Compras.gov.", "A extensão vigia o chat e avisa quando o pregoeiro escrever.", "Confira o valor mínimo antes de qualquer lance: a decisão final é sempre sua."] },
+      passos: ["Com a extensão instalada, abra o pregão no Compras.gov.", "A extensão vigia o chat e avisa quando o pregoeiro escrever.", "Em Lance com 1 clique, a extensão sugere o próximo lance a partir do valor mínimo que você cadastrou e só envia quando você clica.", "Confira o valor mínimo antes de qualquer lance: a decisão final é sempre sua."] },
     { id: "extensao", titulo: "Extensão do navegador", telas: ["extensao.html"], print: "e01-pagina-extensao",
       passos: ["Instale a extensão no Chrome ou Edge pela página Extensão.", "Ela lê pregões, ajuda a preencher a proposta no Compras.gov e vigia o chat."] },
     { id: "bdi", titulo: "Calculadora de BDI", telas: ["bdi.html"], print: "p14-bdi",
@@ -143,9 +143,9 @@
     });
     const corpo = criar("div", { className: "lp-gaveta-corpo" }, [
       criar("div", { className: "lp-acoes-ajuda" }, [botaoZap, duvida].filter(Boolean)),
-      criar("p", { style: "margin:0 0 16px" }, [criar("a", { href: "ajuda.html", target: "_blank", rel: "noopener", textContent: "Abrir o Guia de uso completo" }), " · ", criar("a", { href: "hc.html", textContent: "Assessoria e cursos (HC Licitações)" })]),
+      criar("p", { style: "margin:0 0 16px" }, [criar("a", { href: "ajuda.html", target: "_blank", rel: "noopener", textContent: "Abrir a Central de Ajuda completa" }), " · ", criar("a", { href: "hc.html", textContent: "Assessoria e cursos (HC Licitações)" })]),
       criar("h3", { textContent: "Tutoriais por tela", style: "margin:0 0 8px;font:600 16px/24px var(--font-sans)" }),
-      criar("p", { className: "lp-dica", textContent: "Os da tela onde você está aparecem primeiro. Alguns têm vídeo curto.", style: "margin-bottom:12px" }),
+      criar("p", { className: "lp-dica", textContent: "Os da tela onde você está aparecem primeiro.", style: "margin-bottom:12px" }),
     ]);
     corpo.dataset.ajudaCorpo = "";
     const gaveta = criar("aside", { className: "lp-gaveta" }, [
