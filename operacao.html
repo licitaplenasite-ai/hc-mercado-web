@@ -110,7 +110,7 @@ input::placeholder,textarea::placeholder{color:var(--text-secondary);opacity:1}
 /* 5 colunas cabem no celular; sem isto o min-width da .tabela alarga a coluna da grade. */#resumo-custos-vendas .tabela{min-width:0}#aba-relatorio .grade>.card{min-width:0}#card-custos-vendas{grid-column:1/-1}.rolar-dica{display:none}@media(max-width:820px){.rolar-dica{display:block}#resumo-custos-vendas .tabela-wrap{background:linear-gradient(to left,rgba(0,0,0,.12),transparent 14px) right/14px 100% no-repeat}}
 @media(max-width:820px){header{padding:8px 12px}#aba-documentos .card-topo,#aba-catalogo .card-topo{flex-direction:column;align-items:flex-start}#aba-catalogo .pdf-acoes{justify-content:flex-start}#catalogo-produtos .form-grade{grid-template-columns:1fr}#resumo-custos-vendas .form-grade{grid-template-columns:1fr 1fr}}
 @media(max-width:480px){.topo h1{font-size:24px;line-height:32px}.acoes .btn.tema-icone{display:inline-flex}}
-.somente-leitura :is(#btn-nova-empresa,#btn-novo-documento,#btn-novo-documento-2,.btn-editar,.btn-excluir,[data-sicaf-auto],[data-carregar],#btn-novo-evento){display:none!important}
+.somente-leitura :is(#btn-nova-empresa,#btn-novo-documento,#btn-novo-documento-2,.btn-editar,.btn-excluir,[data-sicaf-auto],[data-carregar],#btn-novo-evento,#aba-catalogo [data-escrita]){display:none!important}
 </style>
 </head>
 <body>

@@ -147,6 +147,8 @@ async function main() {
       await abrirOperacao(pl, ids.empA1);
       exigir(await pl.locator('#aviso-leitura').isVisible(), 'sem aviso de só consulta');
       for (const sel of ['#btn-novo-documento-2', '.btn-editar', '.btn-excluir', '#btn-nova-empresa', '[data-carregar]']) exigir(await pl.locator(sel).first().isVisible().catch(() => false) === false, 'botão visível para leitura: ' + sel);
+      await pl.click('.aba[data-aba="catalogo"]'); await pl.waitForTimeout(1500);
+      exigir(!await pl.locator('#aba-catalogo button:has-text("+ Produto")').isVisible(), 'leitura vê + Produto');
       const r = await comoUsuario(U.leitura, '/rest/v1/operacao_documentos', { method: 'POST', body: JSON.stringify({ organizacao_id: ids.orgA, empresa_id: ids.empA1, tipo: 'SICAF', titulo: 'PF-E2E leitura' }) });
       exigir(r.status >= 400, 'leitura gravou documento: ' + r.status);
       await pl.screenshot({ path: path.join(PRINTS, 'permissao-leitura.png'), fullPage: true });
