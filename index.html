@@ -233,6 +233,13 @@
   .cv-preview-item-meta { color: var(--text-secondary); font: var(--text-label); margin-top: 2px; font-variant-numeric: tabular-nums; }
   .cv-preview-item-valor { font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
+  .agentes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 24px; }
+  .agente { background: var(--surface-default); border: 1px solid var(--border-default); border-radius: var(--radius-card); padding: 24px; display: flex; flex-direction: column; }
+  .agente h3 { font-size: 18px; line-height: 26px; font-weight: 600; margin: 0 0 8px; }
+  .agente p { color: var(--text-secondary); margin: 0 0 16px; font-size: 15px; line-height: 24px; overflow-wrap: anywhere; }
+  .agente .agente-plano { margin: auto 0 0; font: var(--text-label); color: var(--text-primary); }
+  .agentes-nota { margin: 24px 0 0; font-weight: 600; }
+
   /* 7. Planos */
   .planos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
   .extras { margin: 24px 0 0; padding: 20px 24px; border: 1px solid var(--border-default); border-radius: var(--radius-card); background: var(--surface-default); }
@@ -654,6 +661,55 @@
         <noscript><p class="cv-preview-status">Ative o JavaScript para ver a lista ao vivo.</p></noscript>
       </div>
     </div>
+  </div>
+</section>
+
+<!-- 6b. Time de agentes -->
+<section class="bloco" id="agentes" aria-labelledby="agentes-titulo">
+  <div class="container">
+    <div class="cabeca-secao">
+      <p class="sobretitulo">Time de agentes</p>
+      <h2 class="titulo" id="agentes-titulo">Seu time de agentes</h2>
+      <p class="intro">Cada agente cuida de uma parte da licitação. Você vê o nome dele no título de cada tela do sistema.</p>
+    </div>
+    <div class="agentes">
+      <div class="agente">
+        <h3>Caçador</h3>
+        <p>Acha as licitações do seu ramo e manda o boletim no seu e-mail todo dia útil. Você marca "sem interesse" e ele para de mostrar o que não serve. Prospecção mostra o que o órgão vai comprar antes do edital.</p>
+        <p class="agente-plano">Plano: Essencial (Prospecção no Empresa)</p>
+      </div>
+      <div class="agente">
+        <h3>Leitor</h3>
+        <p>Resume o edital e responde suas perguntas com o trecho e a página. Depois de salvo, o edital abre uma trilha de passos: dados, custos e impostos, declarações e proposta.</p>
+        <p class="agente-plano">Plano: Essencial (trilha sem limite no Empresa)</p>
+      </div>
+      <div class="agente">
+        <h3>Habilitação</h3>
+        <p>Guarda os dados e os documentos das suas empresas e avisa quando uma certidão está para vencer. Tem agenda de prazos e confere sanções no CEIS e no CNEP.</p>
+        <p class="agente-plano">Plano: Essencial</p>
+      </div>
+      <div class="agente">
+        <h3>Vigia do pregão</h3>
+        <p>A extensão acompanha o chat do pregoeiro e avisa no computador e no celular quando ele escreve. Hoje funciona com a aba do pregão aberta.</p>
+        <p class="agente-plano">Plano: Empresa (monitor do chat no Pacote Operação)</p>
+      </div>
+      <div class="agente">
+        <h3>Cotação</h3>
+        <p>Mostra a licitação anterior do órgão, o que foi pago por item no mercado e quem vende. A IA ajuda a encontrar fornecedor; confira antes de negociar.</p>
+        <p class="agente-plano">Plano: Empresa</p>
+      </div>
+      <div class="agente">
+        <h3>Precificador</h3>
+        <p>Monta os itens com custo, calcula o preço-alvo e simula o lance, já com os impostos novos (CBS/IBS). O Lance assistido sugere o lance dentro do seu valor mínimo.</p>
+        <p class="agente-plano">Plano: Empresa (Lance assistido é extra)</p>
+      </div>
+      <div class="agente">
+        <h3>Chefe</h3>
+        <p>Na tela Hoje junta o que vence esta semana e o que precisa da sua atenção, para você começar o dia sabendo o que fazer.</p>
+        <p class="agente-plano">Todos os planos</p>
+      </div>
+    </div>
+    <p class="agentes-nota">Nenhum agente envia proposta, dá lance ou protocola nada sem o seu OK.</p>
   </div>
 </section>
 

@@ -24,7 +24,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="ds-tokens.css">
+<link rel="stylesheet" href="ds-tokens.css"><link rel="stylesheet" href="agentes-rotulo.css">
 <link rel="stylesheet" href="licitacao-anterior.css">
 <link rel="stylesheet" href="mercado-comprasgov.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" crossorigin="anonymous"></script>
@@ -1710,7 +1710,7 @@
       <span class="dash-faixa-novidade" id="dash-faixa-novidade"></span>
     </div>
     <div class="dash-painel dash-vence-semana">
-      <h3 class="dash-painel-titulo" style="margin:0 0 4px;">O que vence esta semana?</h3>
+      <h3 class="dash-painel-titulo" style="margin:0 0 4px;"><span class="rotulo-agente">Chefe</span> O que vence esta semana?</h3>
       <p style="margin:0 0 12px;font-size:13px;color:var(--texto-fraco);">Prazos de proposta dos pr&oacute;ximos 7 dias no seu Boletim e no seu Funil, do mais urgente para o menos urgente.</p>
       <div id="dash-vence-semana" role="status" aria-live="polite"><p class="dica-clique" style="margin:0;">Carregando&hellip;</p></div>
     </div>
@@ -1796,7 +1796,7 @@
   <section id="boletim">
     <div class="boletim-cabecalho">
       <div>
-        <h2 style="margin-top:0;">Boletim de oportunidades</h2>
+        <h2 style="margin-top:0;"><span class="rotulo-agente">Caçador</span> Boletim de oportunidades</h2>
         <p class="dica-clique" id="bol-meta" style="margin:0;">Configure seu filtro para gerar o boletim automaticamente a cada visita.</p>
       </div>
     </div>
@@ -1841,7 +1841,7 @@
     <div class="empresa-acompanhamento"><label for="op-empresa">Acompanhar oportunidades para<select id="op-empresa" class="seletor-empresa-acompanhamento" disabled><option>Carregando empresas...</option></select></label><a href="operacao.html">Gerenciar empresas</a><p class="empresa-ajuda">A escolha define a empresa ao marcar o status de uma licitação encontrada.</p><p class="empresa-convite" hidden>Para acompanhar editais no Funil, cadastre sua empresa em <a href="operacao.html">Minhas empresas e documentos</a>. A busca funciona sem isso.</p></div>
     <div class="boletim-cabecalho">
       <div>
-        <h2 style="margin:0;"><svg class='icone-ph'><use href='#ph-magnifying-glass'></use></svg> Encontrar Licitações</h2>
+        <h2 style="margin:0;"><svg class='icone-ph'><use href='#ph-magnifying-glass'></use></svg> <span class="rotulo-agente">Caçador</span> Encontrar Licitações</h2>
         <p class="dica-clique" style="margin:4px 0 0;">Pesquise oportunidades publicadas e aplique apenas os filtros que importam. Depois, abra o processo para ver os detalhes e a fonte oficial.</p>
       </div>
     </div>
@@ -2047,7 +2047,7 @@
   <section id="diagnostico" data-recurso="mercado">
     <div class="boletim-cabecalho">
       <div>
-        <h2 style="margin:0;"><svg class='icone-ph'><use href='#ph-chart-line-up'></use></svg> Inteligência de Mercado</h2>
+        <h2 style="margin:0;"><svg class='icone-ph'><use href='#ph-chart-line-up'></use></svg> <span class="rotulo-agente">Cotação</span> Inteligência de Mercado</h2>
         <p class="dica-clique" style="margin:4px 0 0;">Digite o que você vende e veja as compras, códigos do catálogo, estados, órgãos, empresas, marcas e o que os órgãos planejam comprar.</p>
       </div>
     </div>
@@ -2281,7 +2281,7 @@
   </section>
 
   <section id="precos" data-recurso="pesquisa_precos">
-    <h2 style="margin-top:0;">Pesquisa de Preços de Mercado</h2>
+    <h2 style="margin-top:0;"><span class="rotulo-agente">Cotação</span> Pesquisa de Preços de Mercado</h2>
     <p class="dica-clique" style="margin:0 0 14px;">Digite o produto e veja na hora as marcas e os modelos que ganharam, quem venceu, o órgão, a data, a quantidade e o preço pago nas compras registradas no Compras.gov (a base que substituiu o antigo "Painel de Preços"). O sistema já escolhe o produto do catálogo mais provável; troque nos botões se quiser outro (ex.: "Notebook" ou "Bateria notebook").</p>
 
     <div class="secao-conteudo-principal">
@@ -2397,7 +2397,7 @@
   <div class="modal-ia" role="dialog" aria-modal="true" aria-labelledby="modal-ia-titulo">
     <div class="modal-ia-topo">
       <div class="resumo-cabecalho-texto">
-        <h3 id="modal-ia-titulo">Resumo do Edital</h3>
+        <h3 id="modal-ia-titulo"><span class="rotulo-agente">Leitor</span> Resumo do Edital</h3>
         <p id="modal-ia-subtitulo" hidden></p>
       </div>
       <button type="button" class="resumo-botao" id="modal-ia-alternar-pergunta" aria-expanded="false" aria-controls="modal-ia-form"><svg class='icone-ph' aria-hidden="true"><use href='#ph-sparkle'></use></svg><span class="resumo-rotulo-longo">Pergunte ao Edital</span></button>

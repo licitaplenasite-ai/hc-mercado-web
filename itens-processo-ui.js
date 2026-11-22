@@ -304,7 +304,7 @@
     const ANOS_REFORMA = modulo('LicitaReformaTributaria', './reforma-tributaria.js')?.ANOS || [];
     const reforma = { ligado: false, ano: Math.min(Math.max(new Date().getFullYear(), ANOS_REFORMA[0] || 0), ANOS_REFORMA[ANOS_REFORMA.length - 1] || 0), regime: 'real', reducao: 0 };
     const CU = global.CatalogoUsar, MC = global.MercadoComprasGov;
-    alvo.innerHTML = `<h2 id="itens-titulo" tabindex="-1">Itens do processo</h2>
+    alvo.innerHTML = `<h2 id="itens-titulo" tabindex="-1"><span class="rotulo-agente">Precificador</span> Itens do processo</h2>
       <p data-item-estado role="status" aria-live="polite"></p>
       <section data-premissas class="itens-premissas" aria-labelledby="itens-premissas-titulo" hidden>
         <h3 id="itens-premissas-titulo">Premissas do processo</h3>

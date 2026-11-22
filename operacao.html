@@ -21,7 +21,7 @@
 <script src="catalogo-produtos.js"></script>
 <script src="mercado-comprasgov.js"></script>
 <link rel="stylesheet" href="operacao-identificacao.css">
-<link rel="stylesheet" href="ds-tokens.css">
+<link rel="stylesheet" href="ds-tokens.css"><link rel="stylesheet" href="agentes-rotulo.css">
 <link rel="stylesheet" href="menu-lateral.css">
 <link rel="stylesheet" href="mercado-comprasgov.css">
 <link rel="stylesheet" href="agenda-ics.css">
@@ -145,7 +145,7 @@ input::placeholder,textarea::placeholder{color:var(--text-secondary);opacity:1}
 </nav>
 <div class="nav-gaveta-fundo" id="nav-gaveta-fundo" hidden></div>
 <main>
-  <div class="topo"><div><h1>Minhas empresas e documentos</h1><p>Documentos, prazos e prontidão: controle privado por empresa, com certidões, responsáveis e alertas de vencimento.</p><p class="nota" id="cota-empresas">Verificando empresas disponíveis...</p><p class="nota" id="plano-conta" hidden></p><p class="nota" id="aviso-leitura" hidden>Seu acesso é só para consulta: você vê os documentos, mas não altera nada.</p></div><div class="empresa-select"><label for="empresa-atual">Empresa ativa</label><select id="empresa-atual"></select></div></div>
+  <div class="topo"><div><h1><span class="rotulo-agente">Habilitação</span> Minhas empresas e documentos</h1><p>Documentos, prazos e prontidão: controle privado por empresa, com certidões, responsáveis e alertas de vencimento.</p><p class="nota" id="cota-empresas">Verificando empresas disponíveis...</p><p class="nota" id="plano-conta" hidden></p><p class="nota" id="aviso-leitura" hidden>Seu acesso é só para consulta: você vê os documentos, mas não altera nada.</p></div><div class="empresa-select"><label for="empresa-atual">Empresa ativa</label><select id="empresa-atual"></select></div></div>
   <div id="aviso" class="aviso"></div>
   <section class="metricas"><div class="metrica ok"><span>Documentos válidos</span><b id="m-validos">—</b><span>com validade regular</span></div><div class="metrica alerta"><span>Vencem em até 30 dias</span><b id="m-proximos">—</b><span>com aviso antes de vencer</span></div><div class="metrica vencido"><span>Documentos vencidos</span><b id="m-vencidos">—</b><span>pedem renovação</span></div><div class="metrica"><span>Prontidão da empresa</span><b id="m-prontidao">—</b><span>documentos essenciais válidos</span></div></section>
   <div class="abas"><button class="aba" data-aba="identificacao">Dados da empresa</button><button class="aba ativa" data-aba="documentos">Documentos e certidões</button><button class="aba" data-aba="catalogo">Catálogo de produtos</button><button class="aba" data-aba="agenda">Agenda operacional</button><button class="aba" data-aba="relatorio">Prontidão e relatório</button></div>
