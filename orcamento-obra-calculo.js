@@ -152,7 +152,9 @@
     const out = etapas.map((e) => {
       const fr = distribuicao[e.item] || Array.from({ length: meses }, () => 1 / meses);
       const valores = fr.map((f) => arredondar((e.total || 0) * f));
-      valores[valores.length - 1] = arredondar((e.total || 0) - soma(valores.slice(0, -1)));
+      // A sobra do centavo vai para o último mês que tem execução (mês com 0% fica 0, nunca −0,01).
+      const ultimo = Math.max(0, fr.map((f) => Number(f) > 0).lastIndexOf(true));
+      valores[ultimo] = arredondar((e.total || 0) - soma(valores.filter((_, i) => i !== ultimo)));
       return { item: e.item, descricao: e.descricao, total: e.total || 0, fracoes: fr, valores };
     });
     const porMes = Array.from({ length: meses }, (_, i) => arredondar(soma(out.map((e) => e.valores[i] || 0))));

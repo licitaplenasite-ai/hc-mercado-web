@@ -140,4 +140,7 @@ test('cronograma: distribui por mês e o último mês fecha a etapa no centavo',
   assert.deepEqual(c.porMes, [53.33, 53.33, 3.34]);
   assert.deepEqual(c.acumulado, [53.33, 106.66, 110]);
   assert.equal(c.total, 110);
+  // Regressão (piloto TRE-AM): 50% + 50% de R$ 19.590,33 nos meses 3 e 4; o centavo fica no mês 4, não −0,01 no mês 6.
+  const r = C.cronograma([{ item: '11', tipo: 'etapa', total: 19590.33 }], 6, { 11: [0, 0, 0.5, 0.5, 0, 0] });
+  assert.deepEqual(r.etapas[0].valores, [0, 0, 9795.17, 9795.16, 0, 0]);
 });
