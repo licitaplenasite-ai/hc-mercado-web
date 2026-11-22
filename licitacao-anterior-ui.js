@@ -656,6 +656,7 @@
       const extras = await carregarExtras(visao, { cliente, sancoes: sancoes || sancoesEmLote(cliente) });
       if (!vivo) return;
       estado.visao = visao; estado.assinatura = assinaturaGravado(extras.gravado);
+      publicarVencedores(contexto.processoId, visao);
       const rodape = d.gerado_em ? `Montado em ${data(d.gerado_em)}.` : '';
       estado.redesenhar = async (ex, atualizado) => { if (vivo) desenhar(corpo, visao, { comEdital: true, extras: ex, atualizar: carregar, rodape, atualizado }); };
       await estado.redesenhar(extras, false);
@@ -723,7 +724,23 @@
     return { fechar() { parar(); alvo.replaceChildren(); } };
   }
 
-  const api = { resultadoDe, itemPassa, linkGoogle, linkWhatsApp, textoCompartilhar, montarVisao, vencedorDe, variacao, chaveMarca, montar, montarPesquisa, desenhar, linkOficial, urlsVerTudo, PASSOS_VER_TUDO, indexarGravado, participantesDoItem, cnpjsDaVisao,
+  // Preço homologado do último vencedor por item do edital atual (o mais recente), para o "Vale a pena?" do Contador.
+  function vencedoresDoProcesso(visao) {
+    const porNumero = new Map();
+    for (const c of visao?.compras || []) for (const v of c.itens) {
+      if (!v.alvo || v.ruim || v.homologado == null || !Number.isFinite(Number(v.homologado)) || porNumero.has(v.alvo.numero)) continue;
+      porNumero.set(v.alvo.numero, { numero: v.alvo.numero, descricao: v.alvo.descricao || null, homologado: Number(v.homologado), data: c.compra.data_publicacao || null });
+    }
+    return [...porNumero.values()];
+  }
+  // Avisa a tela de itens (contador-ui.js) sem acoplar os módulos: evento no documento + último valor guardado.
+  function publicarVencedores(processoId, visao) {
+    const detalhe = { processoId, itens: vencedoresDoProcesso(visao) };
+    global.LicitaUltimosVencedores = detalhe;
+    try { global.document?.dispatchEvent(new global.CustomEvent('licitaplena:vencedores', { detail: detalhe })); } catch { /* sem DOM (testes) */ }
+  }
+
+  const api = { vencedoresDoProcesso, resultadoDe, itemPassa, linkGoogle, linkWhatsApp, textoCompartilhar, montarVisao, vencedorDe, variacao, chaveMarca, montar, montarPesquisa, desenhar, linkOficial, urlsVerTudo, PASSOS_VER_TUDO, indexarGravado, participantesDoItem, cnpjsDaVisao,
     textoSelo, seloGravado, sancoesEmLote, lerGravados, carregarExtras, camadasDoPregao, completudeDoPregao, assinaturaGravado, recarregarSeMudou };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else global.LicitaLicitacaoAnterior = api;

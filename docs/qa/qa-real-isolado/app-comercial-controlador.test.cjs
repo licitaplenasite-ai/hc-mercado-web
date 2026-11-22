@@ -1077,7 +1077,9 @@ test('itens do processo montam com o mesmo contexto do kit (empresa + processo) 
   assert.equal(itensMontados(t).length, 0, 'sem itens na preparação de empresa sem processo');
   assert.equal(t.el('itens-processo').hidden, true);
   await t.ctrl.abrirProcesso('a1', 'pa');
-  assert.equal(JSON.stringify(itensMontados(t).map((e) => e.contexto)), JSON.stringify([{ empresaId: 'a1', processoId: 'pa' }]));
+  assert.equal(JSON.stringify(itensMontados(t).map((e) => ({ empresaId: e.contexto.empresaId, processoId: e.contexto.processoId }))), JSON.stringify([{ empresaId: 'a1', processoId: 'pa' }]));
+  // Contador: CNPJ e endereço do edital entram como texto (vazio quando a consulta não traz).
+  assert.equal(typeof itensMontados(t)[0].contexto.cnpj, 'string'); assert.equal(typeof itensMontados(t)[0].contexto.urlOrigem, 'string');
   assert.equal(t.el('itens-processo').hidden, false);
   assert.equal(t.ctrl.estado().itensMontado, true);
 });
@@ -1090,7 +1092,8 @@ test('itens somem ao voltar ao Hoje e são desmontados ao trocar de processo', a
   assert.equal(t.el('itens-processo').hidden, true, 'oculto no Hoje');
   await t.ctrl.abrirProcesso('a1', 'pa2');
   assert.equal(t.mod.log.filter((e) => e.tipo === 'itens.fechar').length >= 1, true, 'módulo anterior encerrado');
-  assert.equal(JSON.stringify(itensMontados(t).at(-1).contexto), JSON.stringify({ empresaId: 'a1', processoId: 'pa2' }));
+  const ultimo = itensMontados(t).at(-1).contexto;
+  assert.equal(JSON.stringify({ empresaId: ultimo.empresaId, processoId: ultimo.processoId }), JSON.stringify({ empresaId: 'a1', processoId: 'pa2' }));
 });
 
 test('alterações não salvas em itens pedem confirmação antes de trocar de processo', async () => {

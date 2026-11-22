@@ -76,6 +76,10 @@ exports.handler = async (event) => {
       processo: dados.processo || null,
       codigoUnidade: dados.unidadeOrgao && dados.unidadeOrgao.codigoUnidade || null,
       esferaId: dados.orgaoEntidade && dados.orgaoEntidade.esferaId || null,
+      // UF e município do órgão: DIFAL do Contador e prazo do Pagômetro (pagometro-ui.js enteDoEdital).
+      uf: dados.unidadeOrgao && dados.unidadeOrgao.ufSigla || null,
+      municipio: dados.unidadeOrgao && dados.unidadeOrgao.municipioNome || null,
+      codigoMunicipioIbge: dados.unidadeOrgao && dados.unidadeOrgao.codigoIbge ? String(dados.unidadeOrgao.codigoIbge) : null,
       encerramento: dados.dataEncerramentoProposta || null,
       inicioRecebimento: dados.dataAberturaProposta || dados.dataInicioRecebimentoProposta || null,
       publicacao: dados.dataPublicacaoPncp || null,
