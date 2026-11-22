@@ -1,0 +1,29 @@
+name: Copiar tabela oficial da Reforma (cClassTrib)
+
+on:
+  schedule:
+    # 08:20 UTC = 05:20 no horario de Brasilia. 3 GETs com pausa; so regrava quando a versao oficial muda.
+    - cron: "20 8 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  copiar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout do repositorio
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "20"
+
+      - name: Copiar tabela de classificacao tributaria
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          RTC_PAUSA_MS: "3000"
+        run: node scripts/copiar_tabelas_rtc.js
