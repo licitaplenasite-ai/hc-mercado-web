@@ -25,6 +25,7 @@
 
   // ctx.bdi = { tipo, ac, s, r, g, df, l, issAliquota, pis, cofins, cprb } em centésimos de ponto (como bdi-calculadora.js).
   function regraBdi(ctx) {
+    if (ctx.bdiFinal === 0 && servicos(ctx.linhas).length) return [alerta('bdi_zerado', 'erro', 'O BDI está em 0%: informe a composição do BDI (administração central, seguro, risco, despesas financeiras, lucro e tributos).')];
     if (!ctx.bdi?.tipo) return [];
     const r = BDI.avaliar(ctx.bdi);
     if (r.erro) return [alerta('bdi_faixa', 'erro', `Não deu para calcular o BDI: ${r.erro}`)];
@@ -118,6 +119,7 @@
     for (const l of servicos(ctx.linhas)) {
       // Célula de fórmula salva sem valor: o item tem preço, mas fica fora da soma (caso real: R$ 687 mil fora do total).
       if (l.unitario > 0 && (l.total === null || l.total === '')) { out.push(alerta('total_nao_fecha', 'erro', `Item ${l.item}: tem preço (${exato(l.unitario)}) mas o total está vazio, e fica fora da soma. Recalcule a planilha no Excel antes de enviar.`, l.item)); continue; }
+      if (!(Number(l.quantidade) > 0)) { out.push(alerta('total_nao_fecha', 'erro', `Item ${l.item}: sem quantidade.`, l.item)); continue; }
       if (l.unitario === undefined || l.total === undefined) continue;
       const certo = C.ajustar((Number(l.quantidade) || 0) * l.unitario, ctx.modoTotal || ctx.modo);
       if (Math.abs(certo - l.total) > 0.005) out.push(alerta('total_nao_fecha', 'erro', `Item ${l.item}: ${l.quantidade} × ${exato(l.unitario)} = ${reais(certo)}, mas está ${exato(l.total)}.`, l.item));
@@ -204,6 +206,33 @@
     const lista = (xs) => `${xs.slice(0, 12).map((l) => l.item).join(', ')}${xs.length > 12 ? ` e mais ${xs.length - 12}` : ''}`;
     if (semCpu.length) out.push(alerta('cpu_incompleta', 'erro', `${semCpu.length} item(ns) sem a composição (CPU): ${lista(semCpu)}. Anexe a composição da tabela de cada um (ou a sua) antes de enviar.`));
     if (furada.length) out.push(alerta('cpu_incompleta', 'erro', `${furada.length} composição(ões) com insumo sem preço: ${lista(furada)}.`));
+    const zerado = s.filter((l) => l.cpu?.linhas?.some((c) => !(Number(c.coeficiente) > 0)));
+    if (zerado.length) out.push(alerta('cpu_incompleta', 'atencao', `${zerado.length} composição(ões) com coeficiente zerado: ${lista(zerado)}. Confira se o insumo deveria estar lá.`));
+    return out;
+  }
+
+  // Cada etapa do cronograma soma 100% e o cronograma fecha com o total da planilha.
+  function regraCronograma(ctx) {
+    const c = ctx.cronogramaCompleto, out = [];
+    if (!c) return out;
+    for (const e of c.etapas) {
+      const soma = e.fracoes.reduce((a, f) => a + Number(f || 0), 0);
+      if (Math.abs(soma - 1) > 0.0001 || e.valores.some((v) => v < 0)) out.push(alerta('cronograma', 'erro', `Etapa ${e.item} (${e.descricao}): os meses somam ${pct(soma)}, e não 100%.`, e.item));
+    }
+    const soma = C.arredondar(c.etapas.reduce((a, e) => a + e.total, 0));
+    if (ctx.totalPlanilha !== undefined && Math.abs(soma - ctx.totalPlanilha) > 0.005) out.push(alerta('cronograma', 'erro', `O cronograma soma ${reais(soma)} e a planilha ${reais(ctx.totalPlanilha)}: falta etapa no cronograma.`));
+    return out;
+  }
+
+  // Composição própria (ou preço digitado) comparada com o serviço parecido que existe no SINAPI (ctx.similares).
+  function regraPropriaVsReferencia(ctx) {
+    const out = [];
+    for (const l of servicos(ctx.linhas)) {
+      const sim = ctx.similares?.[l.item];
+      if (!sim?.preco || !(l.referencia > 0) || !['cotacao', 'manual'].includes(l.origem)) continue;
+      const r = l.referencia / sim.preco;
+      if (r < 0.5 || r > 2) out.push(alerta('propria_vs_referencia', 'atencao', `Item ${l.item}: preço de ${reais(l.referencia)} é ${r < 1 ? `${(1 / r).toFixed(1).replace('.', ',')} vezes menor` : `${r.toFixed(1).replace('.', ',')} vezes maior`} que o SINAPI ${sim.codigo} parecido (${reais(sim.preco)}). Confira antes de usar.`, l.item));
+    }
     return out;
   }
 
@@ -249,7 +278,7 @@
     return out;
   }
 
-  const REGRAS_ATIVAS = [regraBdi, regraUnitario, regraGlobalEtapas, regraDesoneracao, regraTotais, regraArredondamento, regraItens, regraReferencias, regraJogoDePlanilha, regraEncargos, regraCodigoRepetido, regraBdiDiferenciado, regraCpuIncompleta, regraChecklistEnvio];
+  const REGRAS_ATIVAS = [regraBdi, regraUnitario, regraGlobalEtapas, regraDesoneracao, regraTotais, regraArredondamento, regraItens, regraReferencias, regraJogoDePlanilha, regraEncargos, regraCodigoRepetido, regraBdiDiferenciado, regraCpuIncompleta, regraChecklistEnvio, regraCronograma, regraPropriaVsReferencia];
   const ORDEM = { erro: 0, atencao: 1, info: 2 };
   function auditar(ctx) {
     return REGRAS_ATIVAS.flatMap((f) => f(ctx)).sort((a, b) => ORDEM[a.nivel] - ORDEM[b.nivel]);
@@ -261,7 +290,7 @@
     return { ...n, pronto: n.erro === 0 };
   }
 
-  const api = { auditar, resumo, regraBdi, regraUnitario, regraGlobalEtapas, regraDesoneracao, regraTotais, regraArredondamento, regraItens, regraReferencias, regraJogoDePlanilha, regraEncargos, regraCodigoRepetido, regraBdiDiferenciado, regraCpuIncompleta, regraChecklistEnvio };
+  const api = { auditar, resumo, regraBdi, regraUnitario, regraGlobalEtapas, regraDesoneracao, regraTotais, regraArredondamento, regraItens, regraReferencias, regraJogoDePlanilha, regraEncargos, regraCodigoRepetido, regraBdiDiferenciado, regraCpuIncompleta, regraChecklistEnvio, regraCronograma, regraPropriaVsReferencia };
   if (noNode) module.exports = api;
   else globalThis.OrcObra = Object.assign(globalThis.OrcObra || {}, { auditor: api });
 })();

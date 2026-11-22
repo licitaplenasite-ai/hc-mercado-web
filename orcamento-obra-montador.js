@@ -61,7 +61,7 @@
     // Cronograma de referência: as etapas do edital com a mesma distribuição (para comparar mês a mês).
     const cronoRef = editalComPreco ? C.cronograma(p.linhas.map((l) => (l.tipo === 'etapa' ? { ...l, total: etapasReferencia[l.item] ?? 0 } : l)), meses, distribuicao).porMes : null;
     orc.alertas = A.auditar({
-      cronograma: orc.crono.porMes, cronogramaReferencia: cronoRef ?? undefined,
+      cronograma: orc.crono.porMes, cronogramaReferencia: cronoRef ?? undefined, cronogramaCompleto: orc.crono, totalPlanilha: p.total, bdiFinal: bdi, similares: op.similares,
       linhas: p.linhas, total: bdiNoUnitario ? p.total : globalProposta, globalProposta: op.globalDeclarado ?? undefined,
       globalReferencia, etapasReferencia, bdi: op.bdi, bdiAplicado: calcBdi && !calcBdi.erro && op.bdiFracao !== undefined ? op.bdiFracao : undefined,
       bdiEdital: bdiNoUnitario ? bdiEdital : 0, modo, modoTotal, itensEdital: op.itensEdital, encargos: op.encargos,

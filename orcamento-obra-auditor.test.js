@@ -160,6 +160,28 @@ test('cpu_incompleta: item sem composição ou com insumo sem preço; insumo pur
   assert.equal(A.regraCpuIncompleta({ linhas: [s('1.1', { referencia: 10, origem: 'manual', manual: { cpuAnexada: true } })] }).length, 0, 'quem marcou que anexa a CPU da tabela');
 });
 
+test('bdi_zerado, item sem quantidade e coeficiente zerado (falhas silenciosas de ferramenta de mercado)', () => {
+  assert.deepEqual(regras(A.regraBdi({ bdiFinal: 0, linhas: [s('1.1')] })), ['bdi_zerado:erro']);
+  assert.deepEqual(A.regraBdi({ bdiFinal: 0.25, linhas: [s('1.1')] }), []);
+  assert.match(A.regraTotais({ linhas: [s('1.1', { quantidade: 0, unitario: 10, total: 0 })] })[0].texto, /sem quantidade/);
+  const z = A.regraCpuIncompleta({ linhas: [s('1.1', { referencia: 5, origem: 'base', cpu: { semPreco: [], linhas: [{ coeficiente: 0 }, { coeficiente: 1 }] } })] });
+  assert.deepEqual(regras(z), ['cpu_incompleta:atencao']);
+});
+
+test('cronograma: etapa com 120% e cronograma que não fecha com a planilha', () => {
+  const c = { etapas: [{ item: '1', descricao: 'Demolições', total: 100, fracoes: [0.6, 0.6], valores: [60, 40] }, { item: '2', descricao: 'Canteiro', total: 50, fracoes: [0.5, 0.5], valores: [25, 25] }] };
+  assert.deepEqual(A.regraCronograma({ cronogramaCompleto: c, totalPlanilha: 150 }).map((x) => x.item), ['1']);
+  assert.match(A.regraCronograma({ cronogramaCompleto: c, totalPlanilha: 200 })[1].texto, /falta etapa/);
+  assert.deepEqual(A.regraCronograma({ cronogramaCompleto: { etapas: [c.etapas[1]] }, totalPlanilha: 50 }), []);
+});
+
+test('propria_vs_referencia: composição própria 10 vezes abaixo do SINAPI parecido', () => {
+  const linhas = [s('1.1', { origem: 'cotacao', referencia: 1.09 }), s('1.2', { origem: 'manual', referencia: 11 }), s('1.3', { origem: 'base', referencia: 1 })];
+  const a = A.regraPropriaVsReferencia({ linhas, similares: { 1.1: { codigo: '102504', preco: 11.55 }, 1.2: { codigo: '102504', preco: 11.55 }, 1.3: { codigo: 'x', preco: 100 } } });
+  assert.deepEqual(a.map((x) => x.item), ['1.1']);
+  assert.match(a[0].texto, /10,6 vezes menor que o SINAPI 102504/);
+});
+
 test('checklist_envio: lembrete das declarações assinadas pelo RT e do prazo de 2 h', () => {
   assert.match(A.regraChecklistEnvio({ linhas: [s('1.1')] })[0].texto, /assinados pelo responsável técnico.*opção desonerado ou não desonerado.*2 horas/);
   assert.deepEqual(A.regraChecklistEnvio({ linhas: [] }), []);
