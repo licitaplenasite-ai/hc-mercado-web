@@ -85,6 +85,16 @@
     return out;
   }
 
+  // Objeto da obra: "OBRA: | texto" (célula seguinte) ou "Objeto: texto" (mesma célula), acima dos títulos.
+  function objetoDe(linhas) {
+    for (const l of linhas) {
+      const cel = (l || []).filter((c) => String(c ?? '').trim() !== '').map((c) => String(c).trim());
+      const m = /^(OBRA|OBJETO)\s*:?\s*(.*)$/i.exec(cel[0] || '');
+      if (m) return (m[2] || cel[1] || '').slice(0, 500) || null;
+    }
+    return null;
+  }
+
   // Rodapé: custo direto, BDI, preço global, desconto (o número vem na mesma linha do rótulo).
   function rodape(linhas) {
     const out = {};
@@ -140,7 +150,7 @@
     const comPreco = servicos.filter((x) => x.precoUnitario > 0).length;
     const fontes = {};
     for (const s of servicos) fontes[s.fonte || 'sem fonte'] = (fontes[s.fonte || 'sem fonte'] || 0) + 1;
-    const cabecalho = metadados(textos);
+    const cabecalho = { ...metadados(textos), objeto: objetoDe(matriz.slice(0, cab.linha)) };
     if (!cabecalho.dataBase) avisos.push('Não achei a data-base do orçamento: informe o mês de referência.');
     if (!cabecalho.uf) avisos.push('Não achei a UF da obra: informe para buscar os preços certos.');
     if (cabecalho.desonerado === null) avisos.push('A planilha não diz se é desonerado ou não desonerado: confira no edital.');

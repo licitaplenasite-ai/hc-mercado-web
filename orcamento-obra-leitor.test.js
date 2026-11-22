@@ -14,7 +14,7 @@ const pasta = (n) => lerXlsx(fs.readFileSync(path.join(FIX, n)));
 test('lê o orçamento sintético do edital: cabeçalho, itens, fontes e rodapé', () => {
   const r = L.lerPasta(pasta('edital-reduzido.xlsx'));
   assert.equal(r.aba, 'Orçamento Sintético');
-  assert.deepEqual(r.cabecalho, { dataBase: '2023-09', uf: 'AM', desonerado: true, encargosHorista: 0.8373, encargosMensalista: 0.4663, lei: null });
+  assert.deepEqual(r.cabecalho, { dataBase: '2023-09', uf: 'AM', desonerado: true, encargosHorista: 0.8373, encargosMensalista: 0.4663, lei: null, objeto: 'REFORMA DE PRÉDIO PÚBLICO EM MUNICÍPIO/AM' });
   const s = r.itens.filter((i) => i.tipo === 'servico');
   assert.equal(s.length, 12);
   assert.equal(r.itens.filter((i) => i.tipo === 'etapa').length, 2);
@@ -40,6 +40,7 @@ test('planilha em branco com várias bases: reconhece cada fonte e marca emBranc
   assert.equal(r.emBranco, true);
   assert.equal(r.cabecalho.uf, 'PB');
   assert.equal(r.cabecalho.dataBase, null);
+  assert.equal(r.cabecalho.objeto, 'Contratação fictícia de sistema fotovoltaico');
   assert.ok(r.avisos.some((a) => /data-base/.test(a)));
   const fonte = Object.fromEntries(r.itens.filter((i) => i.tipo === 'servico').map((i) => [i.item, i.fonte]));
   assert.deepEqual(fonte, { 1.1: 'ORSE', 1.2: 'SETOP', 1.3: 'SINAPI', 2.1: 'PROPRIA', 2.2: 'CREA', 2.3: 'SIURB' });

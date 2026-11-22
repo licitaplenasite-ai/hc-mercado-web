@@ -158,8 +158,83 @@
       ...orc.alertas.map((a) => [{ erro: 'Pode desclassificar', atencao: 'Atenção', info: 'Para saber' }[a.nivel], a.item || '', a.titulo, a.texto, a.fonte, a.link || ''])] };
   }
 
+  // Valor por extenso em reais (carta-proposta): 705488.9 -> "setecentos e cinco mil quatrocentos e oitenta e oito reais e noventa centavos".
+  const UNID = ['', 'um', 'dois', 'três', 'quatro', 'cinco', 'seis', 'sete', 'oito', 'nove', 'dez', 'onze', 'doze', 'treze', 'quatorze', 'quinze', 'dezesseis', 'dezessete', 'dezoito', 'dezenove'];
+  const DEZ = ['', '', 'vinte', 'trinta', 'quarenta', 'cinquenta', 'sessenta', 'setenta', 'oitenta', 'noventa'];
+  const CEM = ['', 'cento', 'duzentos', 'trezentos', 'quatrocentos', 'quinhentos', 'seiscentos', 'setecentos', 'oitocentos', 'novecentos'];
+  function ate999(n) {
+    if (n === 100) return 'cem';
+    const c = Math.floor(n / 100), r = n % 100, d = Math.floor(r / 10), u = r % 10;
+    const resto = r < 20 ? UNID[r] : [DEZ[d], UNID[u]].filter(Boolean).join(' e ');
+    return [CEM[c], resto].filter(Boolean).join(' e ');
+  }
+  function inteiroPorExtenso(n) {
+    if (n === 0) return 'zero';
+    const escalas = [['', ''], ['mil', 'mil'], ['milhão', 'milhões'], ['bilhão', 'bilhões']];
+    const grupos = [];
+    for (let i = 0; n > 0; i++, n = Math.floor(n / 1000)) grupos.push({ v: n % 1000, i });
+    const partes = grupos.filter((g) => g.v).reverse().map((g) => (g.i === 1 && g.v === 1 ? 'mil' : `${ate999(g.v)}${g.i ? ` ${escalas[g.i][g.v === 1 ? 0 : 1]}` : ''}`));
+    const ultimo = grupos.find((g) => g.v);
+    // "e" antes do último grupo quando ele é menor que 100 ou centena redonda: "mil e quinhentos", "dois mil e dez".
+    if (partes.length > 1 && (ultimo.v < 100 || ultimo.v % 100 === 0)) return `${partes.slice(0, -1).join(' ')} e ${partes[partes.length - 1]}`;
+    return partes.join(' ');
+  }
+  function valorPorExtenso(valor) {
+    const centavosTotal = Math.round(Number(valor) * 100), reais = Math.floor(centavosTotal / 100), cent = centavosTotal % 100;
+    const milhaoRedondo = reais >= 1e6 && reais % 1e6 === 0;
+    const r = reais ? `${inteiroPorExtenso(reais)}${milhaoRedondo ? ' de' : ''} ${reais === 1 ? 'real' : 'reais'}` : '';
+    const c = cent ? `${inteiroPorExtenso(cent)} ${cent === 1 ? 'centavo' : 'centavos'}` : '';
+    return [r, c].filter(Boolean).join(' e ') || 'zero real';
+  }
+
+  // Composições próprias: cada item sem tabela, com as cotações, a mediana e o lugar da CPU (MO, material, equipamento).
+  function abaComposicoesProprias(orc) {
+    const out = [...cab(orc, 'COMPOSIÇÕES PRÓPRIAS (itens sem tabela de referência)')];
+    const proprias = orc.linhas.filter((l) => l.tipo === 'servico' && (l.origem === 'cotacao' || l.fonte === 'PROPRIA'));
+    if (!proprias.length) out.push(['Nenhum item com composição própria.']);
+    for (const l of proprias) {
+      out.push([`Item ${l.item}`, l.codigo || '', l.descricao, l.unidade || '', 'Quantidade:', l.quantidade ?? '']);
+      if (l.propria?.cotacoes?.length) {
+        out.push(['Fornecedor', 'Data', 'Valor (R$)']);
+        for (const c of l.propria.cotacoes) out.push([c.fornecedor || '', c.data || '(anotar a data)', c.valor]);
+        out.push(['Mediana (preço adotado, sem BDI)', '', l.propria.preco], ['Memória:', l.propria.memoria]);
+      } else out.push(['Cotações:', 'faltam (são 3, com data e CNPJ do fornecedor)']);
+      if (l.cpu) {
+        out.push(['Tipo', 'Código', 'Descrição', 'Unid.', 'Coeficiente', 'Preço unit.', 'Parcial']);
+        for (const c of l.cpu.linhas) out.push([c.tipo === 'composicao' ? 'Composição auxiliar' : 'Insumo', c.codigo, c.descricao || '', c.unidade || '', c.coeficiente, c.preco ?? 'sem preço', c.parcial ?? '']);
+      } else out.push(['CPU:', 'detalhar mão de obra, material e equipamento com coeficientes (o edital pede a composição de todos os itens)']);
+      out.push([]);
+    }
+    return { nome: 'Composições próprias', linhas: out };
+  }
+
+  // Carta-proposta: modelo com os números do orçamento e os campos da empresa em branco (a ferramenta não assina).
+  function abaCartaProposta(orc) {
+    const c = orc.leitura.cabecalho || {}, g = orc.globalProposta, d = orc.desconto?.linear;
+    const meses = orc.crono?.porMes?.length || 0;
+    return { nome: 'Carta-proposta', linhas: [
+      ['CARTA-PROPOSTA (modelo: confira com o modelo do edital)'], [AVISO], [],
+      ['À', '[órgão licitante]'], ['Referência:', '[modalidade e número do edital]'], ['Objeto:', c.objeto || '[objeto do edital]'], [],
+      ['Empresa:', '[razão social]'], ['CNPJ:', '[CNPJ]'], ['Endereço:', '[endereço]'], ['Representante legal:', '[nome e cargo]'], [],
+      ['Valor global da proposta (R$):', g], ['Por extenso:', valorPorExtenso(g)],
+      ...(d ? [['Desconto linear sobre a referência:', d]] : []),
+      ...(orc.globalReferencia ? [['Valor de referência do edital (R$):', orc.globalReferencia]] : []),
+      ['BDI adotado:', orc.bdi], ['Regime da empresa:', orc.regime?.desonerado === true ? 'desonerada (CPRB)' : orc.regime?.desonerado === false ? 'não desonerada' : '[marcar: desonerada ou não desonerada]'],
+      ['Data-base dos preços:', c.dataBase || '[mês/ano]'], ['Prazo de execução:', meses ? `${meses * 30} dias (${meses} meses, conforme cronograma)` : '[conforme edital]'],
+      ['Validade da proposta:', '[conforme edital; em geral, 60 dias]'], [],
+      ['Declaramos que:'],
+      ['1.', 'nos preços estão incluídos todos os custos diretos e indiretos, tributos, encargos sociais e trabalhistas, BDI, materiais, mão de obra, equipamentos, transporte e demais despesas para executar o objeto;'],
+      ['2.', 'a planilha orçamentária, as composições de custo unitário, o BDI, os encargos sociais e o cronograma físico-financeiro anexos fazem parte desta proposta;'],
+      ['3.', 'conhecemos as condições do local da obra (vistoria realizada ou dispensada por declaração do responsável técnico, conforme o edital);'],
+      ['4.', 'aceitamos todas as condições do edital e de seus anexos.'], [],
+      ['[local], [data]'], [],
+      ['_______________________________', '', '_______________________________'],
+      ['Representante legal', '', 'Responsável técnico (CREA/CAU nº ______)'],
+    ] };
+  }
+
   function montarAbas(orc) {
-    return [abaSintetico(orc), abaCpu(orc), abaBdi(orc), abaEncargos(orc), abaAbc(orc), abaCronograma(orc), abaAlertas(orc)];
+    return [abaSintetico(orc), abaCpu(orc), abaComposicoesProprias(orc), abaBdi(orc), abaEncargos(orc), abaAbc(orc), abaCronograma(orc), abaCartaProposta(orc), abaAlertas(orc)];
   }
 
   // Planilha do edital preenchida: copia a matriz original e troca só preço unitário e total de cada linha lida,
@@ -188,7 +263,7 @@
     return m;
   }
 
-  const api = { AVISO, montarOrcamento, montarAbas, formatoEdital };
+  const api = { AVISO, montarOrcamento, montarAbas, formatoEdital, valorPorExtenso };
   if (noNode) module.exports = api;
   else globalThis.OrcObra = Object.assign(globalThis.OrcObra || {}, { montador: api });
 })();

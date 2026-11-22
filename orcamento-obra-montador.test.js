@@ -40,10 +40,10 @@ test('desconto linear de 17% vai em cada preço unitário e o Auditor avisa a ga
   assert.deepEqual(orc.alertas.map((a) => a.regra).sort(), ['bdi_faixa', 'checklist_envio', 'cpu_incompleta', 'garantia_adicional']);
 });
 
-test('as 7 abas saem com o aviso do engenheiro e números como número; o .xlsx volta igual', () => {
+test('as 9 abas saem com o aviso do engenheiro e números como número; o .xlsx volta igual', () => {
   const { orc } = orcamentoDoEdital({ desconto: { linear: 0.17 } });
   const abas = M.montarAbas(orc);
-  assert.deepEqual(abas.map((a) => a.nome), ['Orçamento sintético', 'CPU', 'BDI', 'Encargos sociais', 'Curva ABC', 'Cronograma', 'Alertas do Auditor']);
+  assert.deepEqual(abas.map((a) => a.nome), ['Orçamento sintético', 'CPU', 'Composições próprias', 'BDI', 'Encargos sociais', 'Curva ABC', 'Cronograma', 'Carta-proposta', 'Alertas do Auditor']);
   for (const a of abas) assert.ok(a.linhas.flat().includes(M.AVISO), `aviso em ${a.nome}`);
   const lida = lerXlsx(gravarXlsx(abas));
   assert.deepEqual(lida.map((a) => a.nome), abas.map((a) => a.nome));
@@ -52,9 +52,14 @@ test('as 7 abas saem com o aviso do engenheiro e números como número; o .xlsx 
   assert.ok(sint.some((l) => l[3] === 'PREÇO GLOBAL DA PROPOSTA' && l[10] === orc.globalProposta));
   const cpu = lida[1].linhas;
   assert.ok(cpu.some((l) => l[2] === 'Custo pela CPU' && l[6] === 344.16));
-  assert.ok(lida[2].linhas.some((l) => l[0] === 'BDI FINAL' && l[1] === '28,35%'));
-  assert.ok(lida[3].linhas.some((l) => /optante pela desoneração/.test(l[0]) && l[1] === '( X ) Sim    (   ) Não'), 'campo de opção pela desoneração');
-  assert.deepEqual(lida[4].linhas.find((l) => l[0] === '2.2').slice(-1), ['A']);
+  assert.ok(lida[3].linhas.some((l) => l[0] === 'BDI FINAL' && l[1] === '28,35%'));
+  assert.ok(lida[4].linhas.some((l) => /optante pela desoneração/.test(l[0]) && l[1] === '( X ) Sim    (   ) Não'), 'campo de opção pela desoneração');
+  assert.deepEqual(lida[5].linhas.find((l) => l[0] === '2.2').slice(-1), ['A']);
+  const carta = lida[7].linhas;
+  assert.ok(carta.some((l) => l[0] === 'Valor global da proposta (R$):' && l[1] === orc.globalProposta));
+  assert.ok(carta.some((l) => l[0] === 'Objeto:' && l[1] === 'REFORMA DE PRÉDIO PÚBLICO EM MUNICÍPIO/AM'));
+  assert.ok(carta.some((l) => l[2] === 'Responsável técnico (CREA/CAU nº ______)'));
+  assert.ok(lida[2].linhas.some((l) => l[0] === 'Item 2.2') && lida[2].linhas.some((l) => /detalhar mão de obra/.test(l[1] || '')), 'composição própria sem cotação pede CPU');
 });
 
 test('planilha do edital preenchida: troca só preço, total e rodapé da proposta', () => {
@@ -91,6 +96,20 @@ test('planilha em branco com várias bases: cada item diz qual base valeu e o qu
   const m = M.formatoEdital(pasta('edital-em-branco.xlsx')[0].linhas, orc), k = orc.leitura.colunas;
   const l11 = m[orc.linhas.find((l) => l.item === '1.1').linhaPlanilha];
   assert.deepEqual([l11[k.precoUnitario], l11[k.unitarioComBdi], l11[k.total]], [600, 743.1, 743.1]);
+});
+
+test('valor por extenso da carta-proposta', () => {
+  const x = M.valorPorExtenso;
+  assert.equal(x(705488.9), 'setecentos e cinco mil quatrocentos e oitenta e oito reais e noventa centavos');
+  assert.equal(x(849986.63), 'oitocentos e quarenta e nove mil novecentos e oitenta e seis reais e sessenta e três centavos');
+  assert.equal(x(1), 'um real');
+  assert.equal(x(0.01), 'um centavo');
+  assert.equal(x(100), 'cem reais');
+  assert.equal(x(1500), 'mil e quinhentos reais');
+  assert.equal(x(2010.5), 'dois mil e dez reais e cinquenta centavos');
+  assert.equal(x(1000000), 'um milhão de reais');
+  assert.equal(x(1200000), 'um milhão e duzentos mil reais');
+  assert.equal(x(9212765.02), 'nove milhões duzentos e doze mil setecentos e sessenta e cinco reais e dois centavos');
 });
 
 test('colunas do .xlsx: letra e índice', () => {
