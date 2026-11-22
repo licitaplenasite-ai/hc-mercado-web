@@ -7,7 +7,7 @@
 // Nada é apagado: os dados voltam quando a conta assina. Sem SQL aplicado (meu_plano ausente) não trava nada.
 (function () {
   "use strict";
-  const PLANOS = "index.html#planos";
+  const PLANOS = "assinar.html"; // tela de planos de quem já tem conta: escolhe, pede e paga por Pix
 
   function tokenDaSessao() {
     try {
@@ -70,8 +70,11 @@
       if (plano.bloqueado === true || (r && r.permitido === false)) el.style.setProperty("display", "none", "important");
     });
     if (plano.bloqueado === true) {
-      travar(document.querySelector("main"), "Seu teste grátis terminou",
+      // Assinatura vencida e não renovada fica igual ao teste vencido (só o boletim), com "Renovar" no lugar de "Assinar".
+      if (plano.situacao === "teste" || plano.situacao === "sem_assinatura") travar(document.querySelector("main"), "Seu teste grátis terminou",
         "Você continua recebendo o boletim por e-mail. Para voltar a usar as outras telas, assine um plano. O que você salvou continua guardado.", "Assinar");
+      else travar(document.querySelector("main"), "Sua assinatura venceu",
+        "Você continua recebendo o boletim por e-mail. Para voltar a usar as outras telas, renove a assinatura. O que você salvou continua guardado.", "Renovar");
       return;
     }
     document.querySelectorAll("[data-recurso]").forEach((el) => {

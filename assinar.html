@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Planos e assinatura — LicitaPlena</title>
+<link rel="icon" type="image/png" href="favicon.png?v=3">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" crossorigin="anonymous"></script><script src="supabase-config.js"></script><script src="pix-copia-cola.js"></script>
+<link rel="stylesheet" href="ds-tokens.css">
+<!-- Tela de planos de quem já tem conta (sem plano-trava.js: quem está com o teste ou a assinatura vencida precisa
+     chegar aqui). O valor do pedido é calculado no banco (pedir_assinatura); a tela só mostra. Pagamento manual por Pix:
+     o dono confere na conta e libera no admin (supabase/planos_e_recursos.sql, seção 9). -->
+<script>(function(){var t=null;try{t=localStorage.getItem("licitaplena_tema");}catch(e){}if(t!=="escuro")document.documentElement.classList.add("tema-claro");document.documentElement.dataset.theme=t==="escuro"?"dark":"light";})();</script>
+<style>
+*{box-sizing:border-box}
+[data-theme="dark"]{color-scheme:dark}[data-theme="light"]{color-scheme:light}
+body{margin:0;background:var(--surface-page);color:var(--text-primary);font:var(--text-body);font-family:var(--font-sans)}
+button,input,select,textarea{font-family:var(--font-sans)}
+:is(button,a,input,select,textarea,[tabindex]):focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
+header{position:sticky;top:0;z-index:5;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:8px 24px;background:var(--surface-default);border-bottom:1px solid var(--border-default)}
+header .marca{display:flex;align-items:center;gap:8px;color:var(--text-primary);text-decoration:none;font:600 16px/24px var(--font-sans)}
+.marca-placa{display:inline-grid;place-content:center;width:32px;height:32px;border-radius:var(--radius-control);background:#f6f8fc;border:1px solid #e3e8f0;flex:none}
+.marca-placa img{width:24px;height:24px;display:block}
+.acoes{display:flex;gap:8px;align-items:center}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:0 16px;border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--surface-default);color:var(--text-primary);font:500 14px/16px var(--font-sans);cursor:pointer;text-decoration:none;text-align:center}
+.btn:hover{background:var(--surface-sunken)}
+.btn.primario{background:var(--action-strong);border-color:transparent;color:var(--action-on)}
+.btn.primario:hover{background:var(--action-strong-hover)}
+.btn:disabled{opacity:.6;cursor:not-allowed}
+.btn.grande{min-height:48px;padding:0 24px;font-size:16px}
+.tema-icone{width:40px;padding:0;font-size:16px}
+main{max-width:1080px;margin:0 auto;padding:24px 24px 56px}
+h1{font:var(--text-title);margin:0 0 4px}
+.nota{color:var(--text-secondary);line-height:1.5;margin:0}
+.card{background:var(--surface-default);border:1px solid var(--border-default);border-radius:var(--radius-card);padding:20px;margin:16px 0}
+.card h2{font:var(--text-section);margin:0 0 12px}
+fieldset{border:0;margin:0;padding:0;min-width:0}
+legend{font:var(--text-section);margin:0 0 12px;padding:0}
+.ciclos{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.opcao{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border:1px solid var(--border-strong);border-radius:var(--radius-control);cursor:pointer;background:var(--surface-default);min-width:0}
+.opcao:has(input:checked){border-color:var(--action-strong);box-shadow:inset 0 0 0 1px var(--action-strong);background:var(--action-tint)}
+.opcao input{margin:3px 0 0;flex:none}
+.opcao strong{display:block}
+.opcao .sub{display:block;color:var(--text-secondary);font-size:13px;line-height:18px}
+.planos{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.planos .opcao{flex-direction:column}
+.planos .topo-opcao{display:flex;gap:10px;align-items:center}
+.preco{font:700 28px/36px var(--font-sans);font-variant-numeric:tabular-nums}
+.preco small{font:400 14px/20px var(--font-sans);color:var(--text-secondary)}
+.extras{display:grid;gap:8px}
+.cnpjs-extras{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.cnpjs-extras input{width:88px;min-height:40px;padding:8px 12px;border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--surface-default);color:var(--text-primary)}
+.resumo{display:flex;justify-content:space-between;gap:16px;align-items:center;flex-wrap:wrap}
+.total{font:700 32px/40px var(--font-sans);font-variant-numeric:tabular-nums}
+.politica{margin:12px 0 0;padding:12px 14px;border:1px solid var(--info-border);background:var(--info-bg);color:var(--info-text);border-radius:var(--radius-control);line-height:1.5}
+.aviso{margin:12px 0;border:1px solid;border-radius:var(--radius-card);padding:12px 16px;line-height:1.5}
+.aviso[hidden]{display:none}
+.aviso.erro{color:var(--error-text);border-color:var(--error-border);background:var(--error-bg)}
+.aviso.info{color:var(--info-text);border-color:var(--info-border);background:var(--info-bg)}
+.aviso.atencao{color:var(--attention-text);border-color:var(--attention-border);background:var(--attention-bg)}
+.pagar dl{display:grid;grid-template-columns:max-content 1fr;gap:8px 16px;margin:0 0 16px}
+.pagar dt{color:var(--text-secondary)}
+.pagar dd{margin:0;font-weight:600;overflow-wrap:anywhere}
+.pagar textarea{width:100%;min-height:96px;padding:10px 12px;border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--surface-sunken);color:var(--text-primary);font:13px/18px ui-monospace,monospace;resize:vertical;overflow-wrap:anywhere}
+.botoes{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.pedidos{list-style:none;margin:0;padding:0}
+.pedidos li{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 0;border-bottom:1px solid var(--border-default)}
+.pedidos li:last-child{border-bottom:0}
+.chip{display:inline-block;padding:2px 10px;border:1px solid;border-radius:var(--radius-control);font:var(--text-label);white-space:nowrap}
+.chip.aguardando,.chip.correcao{color:var(--attention-text);background:var(--attention-bg);border-color:var(--attention-border)}
+.chip.liberado{color:var(--success-text);background:var(--success-bg);border-color:var(--success-border)}
+.chip.recusado{color:var(--error-text);background:var(--error-bg);border-color:var(--error-border)}
+.chip.cancelado{color:var(--text-secondary);border-color:var(--border-default)}
+[hidden]{display:none !important}
+@media(max-width:760px){.planos,.ciclos{grid-template-columns:1fr}}
+@media(max-width:640px){header{padding:8px 12px}main{padding:16px}.card{padding:16px}.resumo .btn{width:100%}.pagar dl{grid-template-columns:1fr;gap:2px 0}.pagar dd{margin-bottom:8px}.botoes .btn{width:100%}}
+</style>
+</head>
+<body>
+<header><a class="marca" href="painel.html" title="Voltar ao painel principal"><span class="marca-placa"><img src="logo-icone.svg" alt=""></span>LicitaPlena</a>
+  <div class="acoes"><a class="btn" href="painel.html">Voltar ao painel</a><button class="btn tema-icone" id="btn-tema" type="button" title="Alternar tema claro/escuro" aria-label="Alternar tema claro/escuro">☾</button></div></header>
+<main>
+  <h1>Planos e assinatura</h1>
+  <p class="nota" id="situacao">Carregando sua conta...</p>
+  <div id="aviso" class="aviso erro" role="alert" hidden></div>
+
+  <section class="card pagar" id="como-pagar" aria-labelledby="t-pagar" hidden>
+    <h2 id="t-pagar">Como pagar</h2>
+    <div id="pagar-conteudo"></div>
+  </section>
+
+  <form id="form-assinar" novalidate>
+    <section class="card">
+      <fieldset><legend>1. Como você quer pagar</legend>
+        <div class="ciclos">
+          <label class="opcao"><input type="radio" name="ciclo" value="mensal" checked><span><strong>Mensal</strong><span class="sub">Preço cheio, sem fidelidade</span></span></label>
+          <label class="opcao"><input type="radio" name="ciclo" value="semestral"><span><strong>Semestral</strong><span class="sub">10% de desconto, 6 meses pagos de uma vez</span></span></label>
+          <label class="opcao"><input type="radio" name="ciclo" value="anual"><span><strong>Anual</strong><span class="sub">2 meses grátis, 12 meses pagos de uma vez</span></span></label>
+        </div>
+      </fieldset>
+    </section>
+    <section class="card">
+      <fieldset><legend>2. Escolha o plano</legend>
+        <div class="planos" id="lista-planos"><p class="nota">Carregando planos...</p></div>
+      </fieldset>
+    </section>
+    <section class="card">
+      <fieldset><legend>3. Extras (se quiser)</legend>
+        <div class="extras" id="lista-extras"></div>
+        <div class="cnpjs-extras" id="bloco-cnpjs" hidden><label for="cnpjs-extras">CNPJs a mais na Assessoria</label><input id="cnpjs-extras" type="number" min="0" max="20" step="1" value="0" inputmode="numeric"><span class="nota" id="preco-cnpj"></span></div>
+      </fieldset>
+    </section>
+    <section class="card" aria-labelledby="t-resumo">
+      <h2 id="t-resumo">Resumo</h2>
+      <div class="resumo">
+        <div><div class="total" id="total">—</div><div class="nota" id="total-detalhe"></div></div>
+        <button type="submit" class="btn primario grande" id="btn-assinar">Quero assinar</button>
+      </div>
+      <p class="politica"><strong>Cancelamento justo, sem multa escondida.</strong> Mensal: cancela quando quiser. Semestral e anual: devolvemos os meses não usados, descontado o desconto recebido.</p>
+    </section>
+  </form>
+
+  <section class="card" aria-labelledby="t-pedidos" id="bloco-pedidos" hidden>
+    <h2 id="t-pedidos">Seus pedidos</h2>
+    <ul class="pedidos" id="lista-pedidos"></ul>
+  </section>
+</main>
+<script>
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const MESES = { mensal: 1, semestral: 6, anual: 12 };
+  const NOME_CICLO = { mensal: "Mensal", semestral: "Semestral", anual: "Anual" };
+  const SITUACAO = { aguardando: "Aguardando o Pix", liberado: "Pago e liberado", recusado: "Recusado", correcao: "Precisa de correção", cancelado: "Substituído por outro pedido" };
+  const COLUNA = { mensal: "preco_mensal_centavos", semestral: "preco_semestral_centavos", anual: "preco_anual_centavos" };
+  const reais = (c) => (c / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const dataBr = (v) => v ? new Date(v.length === 10 ? v + "T12:00:00" : v).toLocaleDateString("pt-BR") : "";
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const config = (nome) => (typeof window[nome] === "string" ? window[nome].trim() : "");
+  const estado = { planos: [], extras: [], email: "", nomes: {} };
+
+  function mostrarErro(texto) { const a = $("aviso"); a.textContent = texto; a.hidden = !texto; }
+  const ciclo = () => document.querySelector('input[name="ciclo"]:checked')?.value || "mensal";
+  const planoEscolhido = () => document.querySelector('input[name="plano"]:checked')?.value || "";
+  const extrasEscolhidos = () => [...document.querySelectorAll('input[name="extra"]:checked')].map((i) => i.value);
+  const cnpjsExtras = () => planoEscolhido() === "assessoria" ? Math.max(0, Math.min(20, Number.parseInt($("cnpjs-extras").value, 10) || 0)) : 0;
+
+  function desenharPlanos() {
+    const c = ciclo(), m = MESES[c], escolhido = planoEscolhido() || estado.planoInicial || "empresa";
+    $("lista-planos").innerHTML = estado.planos.map((p) => {
+      const total = p[COLUNA[c]];
+      return `<label class="opcao"><span class="topo-opcao"><input type="radio" name="plano" value="${esc(p.codigo)}"${p.codigo === escolhido ? " checked" : ""}><strong>${esc(p.nome)}</strong></span>
+        <span class="preco">${reais(Math.round(total / m))}<small>/mês</small></span>
+        <span class="sub">${m === 1 ? "Cobrado todo mês" : `${reais(total)} a cada ${m} meses`}</span>
+        <span class="sub">${esc(p.descricao)}</span></label>`;
+    }).join("");
+    desenharExtras();
+  }
+  function desenharExtras() {
+    const c = ciclo(), m = MESES[c], marcados = new Set(extrasEscolhidos());
+    $("lista-extras").innerHTML = estado.extras.filter((e) => e.codigo !== "cnpj_extra").map((e) =>
+      `<label class="opcao"><input type="checkbox" name="extra" value="${esc(e.codigo)}"${marcados.has(e.codigo) ? " checked" : ""}><span><strong>${esc(e.nome)}</strong>
+        <span class="sub">${reais(e[COLUNA[c]])}${m === 1 ? " por mês" : ` a cada ${m} meses`}${e.por_cnpj ? ", por CNPJ" : ""}</span></span></label>`).join("");
+    const cnpj = estado.extras.find((e) => e.codigo === "cnpj_extra");
+    $("bloco-cnpjs").hidden = planoEscolhido() !== "assessoria" || !cnpj;
+    if (cnpj) $("preco-cnpj").textContent = `${reais(cnpj[COLUNA[c]])}${m === 1 ? " por mês" : ` a cada ${m} meses`}, cada um`;
+    atualizarTotal();
+  }
+
+  let pedidoTotal = 0;
+  async function atualizarTotal() {
+    const n = ++pedidoTotal, c = ciclo(), plano = planoEscolhido();
+    if (!plano) return;
+    // O total vem do banco (mesma conta do pedido), para a tela nunca mostrar um valor diferente do cobrado.
+    const { data, error } = await sb.rpc("valor_do_pedido", { p_plano: plano, p_ciclo: c, p_extras: extrasEscolhidos(), p_cnpjs_extras: cnpjsExtras() });
+    if (n !== pedidoTotal) return;
+    if (error || !data) { $("total").textContent = "—"; $("total-detalhe").textContent = "Não foi possível calcular agora."; return; }
+    $("total").textContent = reais(data);
+    $("total-detalhe").textContent = MESES[c] === 1 ? "por mês, sem fidelidade" : `pago de uma vez, equivale a ${reais(Math.round(data / MESES[c]))} por mês`;
+  }
+
+  function telaComoPagar(g) {
+    const caixa = $("como-pagar"), alvo = $("pagar-conteudo");
+    if (!g) { caixa.hidden = true; return; }
+    const chave = config("LICITAPLENA_PIX_CHAVE"), nome = config("LICITAPLENA_PIX_NOME"), cidade = config("LICITAPLENA_PIX_CIDADE"), zap = config("LICITAPLENA_WHATSAPP_PAGAMENTO").replace(/\D/g, "");
+    const codigo = window.PixCopiaCola ? window.PixCopiaCola.montarPixCopiaCola({ chave, nome, cidade, valorCentavos: g.valor_centavos }) : "";
+    const resumo = `${estado.nomes[g.plano] || g.plano}, ${NOME_CICLO[g.ciclo].toLowerCase()}`;
+    const mensagem = ["Olá! Fiz o Pix para o LicitaPlena e mando o comprovante.", `Plano: ${estado.nomes[g.plano] || g.plano}`, `Ciclo: ${NOME_CICLO[g.ciclo]}`,
+      `Valor: ${reais(g.valor_centavos)}`, `E-mail da conta: ${estado.email}`, `Pedido: ${g.id.slice(0, 8)}`].join("\n");
+    let html = `<dl><dt>Valor a pagar</dt><dd id="pagar-valor">${reais(g.valor_centavos)}</dd><dt>Pedido</dt><dd>${esc(resumo)} · nº ${esc(g.id.slice(0, 8))}</dd>`;
+    if (codigo) {
+      html += `<dt>Chave Pix</dt><dd id="pagar-chave">${esc(chave)}</dd><dt>Recebedor</dt><dd>${esc(nome)}</dd></dl>
+        <label for="pix-codigo"><strong>Pix copia e cola</strong> <span class="nota">(cole no aplicativo do seu banco, em Pix &gt; Copia e cola; o valor já vem preenchido)</span></label>
+        <textarea id="pix-codigo" readonly>${esc(codigo)}</textarea>`;
+    } else {
+      html += `</dl><p class="aviso info" id="fale-equipe">Fale com a equipe para receber os dados do Pix: escreva para <a href="mailto:licitaplena.site@gmail.com">licitaplena.site@gmail.com</a> com o número do pedido.</p>`;
+    }
+    html += `<div class="botoes">${codigo ? '<button type="button" class="btn primario" id="btn-copiar">Copiar código Pix</button>' : ""}${zap ? `<a class="btn" id="btn-whatsapp" target="_blank" rel="noopener" href="https://wa.me/${zap}?text=${encodeURIComponent(mensagem)}">Mandar comprovante no WhatsApp</a>` : ""}</div>
+      <p class="nota" style="margin-top:12px">Depois que o Pix cair na conta e a equipe conferir, as telas do seu plano são liberadas. Não precisa fazer mais nada.</p>`;
+    alvo.innerHTML = html;
+    caixa.hidden = false;
+    if (codigo) $("btn-copiar").onclick = async () => {
+      try { await navigator.clipboard.writeText(codigo); $("btn-copiar").textContent = "Código copiado"; }
+      catch (_) { $("pix-codigo").select(); $("btn-copiar").textContent = "Selecionado: copie com Ctrl+C"; }
+    };
+  }
+
+  async function carregarPedidos() {
+    const { data, error } = await sb.from("pedidos").select("id, plano, ciclo, extras, cnpjs_extras, valor_centavos, situacao, motivo, criado_em, decidido_em").order("criado_em", { ascending: false }).limit(10);
+    if (error) return;
+    const lista = data || [];
+    $("bloco-pedidos").hidden = !lista.length;
+    $("lista-pedidos").innerHTML = lista.map((g) => `<li><span><strong>${esc(estado.nomes[g.plano] || g.plano)}</strong> · ${NOME_CICLO[g.ciclo]} · ${reais(g.valor_centavos)}
+      <span class="nota" style="display:block">Pedido nº ${esc(g.id.slice(0, 8))} em ${dataBr(g.criado_em)}${g.extras.length ? " · extras: " + esc(g.extras.map((x) => (estado.extras.find((e) => e.codigo === x) || {}).nome || x).join(", ")) : ""}${g.cnpjs_extras ? ` · ${g.cnpjs_extras} CNPJ(s) a mais` : ""}</span>
+      ${g.motivo && (g.situacao === "recusado" || g.situacao === "correcao") ? `<span class="nota" style="display:block"><strong>Recado da equipe:</strong> ${esc(g.motivo)}${g.situacao === "correcao" ? " Faça um novo pedido acima com a correção." : ""}</span>` : ""}</span>
+      <span class="chip ${esc(g.situacao)}">${SITUACAO[g.situacao] || esc(g.situacao)}</span></li>`).join("");
+    telaComoPagar(lista.find((g) => g.situacao === "aguardando"));
+  }
+
+  function textoSituacao(p) {
+    if (!p) return "Escolha o plano, o ciclo e os extras. O valor é confirmado antes de pagar.";
+    if (p.plano === "dono") return "Conta do proprietário: não precisa assinar.";
+    if (p.bloqueado && p.situacao === "teste") return "Seu teste grátis terminou. Só o boletim por e-mail continua; o que você salvou está guardado. Escolha um plano para voltar a usar tudo.";
+    if (p.bloqueado) return "Sua assinatura venceu. Só o boletim por e-mail continua; o que você salvou está guardado. Renove para voltar a usar tudo.";
+    if (p.em_teste) return `Você está no teste grátis até ${dataBr(p.teste_ate)}. Assine quando quiser: nada é cobrado sem o seu Pix.`;
+    if (p.vence_em) return `Plano ${p.nome} ativo até ${dataBr(p.vence_em)}. Para renovar ou mudar, escolha abaixo.`;
+    return `Plano ${p.nome}.`;
+  }
+
+  async function iniciar() {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) { location.replace("login.html?voltar=/assinar.html"); return; }
+    estado.email = session.user.email || "";
+    const [planos, extras, plano, assinatura] = await Promise.all([
+      sb.from("planos").select("codigo, nome, descricao, preco_mensal_centavos, preco_semestral_centavos, preco_anual_centavos, ordem").eq("escolhivel_no_cadastro", true).order("ordem"),
+      sb.from("precos_extras").select("*").order("codigo"),
+      sb.rpc("meu_plano"),
+      sb.from("assinaturas").select("ciclo").maybeSingle()]);
+    if (planos.error || extras.error) { $("situacao").textContent = ""; mostrarErro("Não foi possível carregar os planos agora. Tente de novo em alguns minutos ou fale com a equipe."); $("form-assinar").hidden = true; return; }
+    estado.planos = (planos.data || []).filter((p) => p.preco_mensal_centavos > 0 && p.preco_semestral_centavos > 0 && p.preco_anual_centavos > 0);
+    estado.extras = extras.data || [];
+    estado.nomes = Object.fromEntries(estado.planos.map((p) => [p.codigo, p.nome]));
+    const p = plano.error ? null : plano.data;
+    $("situacao").textContent = textoSituacao(p);
+    if (p && estado.nomes[p.plano_contratado]) estado.planoInicial = p.plano_contratado;
+    const cicloAtual = assinatura.data && assinatura.data.ciclo;
+    if (cicloAtual && MESES[cicloAtual]) document.querySelector(`input[name="ciclo"][value="${cicloAtual}"]`).checked = true;
+    if (p && (p.plano === "dono" || p.eh_titular === false)) {
+      $("form-assinar").hidden = true;
+      if (p.eh_titular === false) mostrarErro("Só o titular da conta pode assinar. Peça para quem convidou você.");
+    }
+    desenharPlanos();
+    await carregarPedidos();
+  }
+
+  document.querySelectorAll('input[name="ciclo"]').forEach((i) => i.addEventListener("change", desenharPlanos));
+  $("lista-planos").addEventListener("change", desenharExtras);
+  $("lista-extras").addEventListener("change", atualizarTotal);
+  $("cnpjs-extras").addEventListener("input", atualizarTotal);
+  $("form-assinar").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    mostrarErro("");
+    if (!planoEscolhido()) { mostrarErro("Escolha um plano."); return; }
+    const btn = $("btn-assinar");
+    btn.disabled = true; btn.textContent = "Enviando...";
+    const { error } = await sb.rpc("pedir_assinatura", { p_plano: planoEscolhido(), p_ciclo: ciclo(), p_extras: extrasEscolhidos(), p_cnpjs_extras: cnpjsExtras() });
+    btn.disabled = false; btn.textContent = "Quero assinar";
+    if (error) { mostrarErro("Não foi possível fazer o pedido: " + (error.message || "tente de novo.")); return; }
+    await carregarPedidos();
+    $("como-pagar").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  $("btn-tema").addEventListener("click", () => {
+    const escuro = document.documentElement.dataset.theme !== "dark";
+    document.documentElement.dataset.theme = escuro ? "dark" : "light";
+    document.documentElement.classList.toggle("tema-claro", !escuro);
+    try { localStorage.setItem("licitaplena_tema", escuro ? "escuro" : "claro"); } catch (_) { /* preferência opcional */ }
+  });
+  iniciar();
+})();
+</script>
+</body>
+</html>

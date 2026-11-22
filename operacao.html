@@ -241,16 +241,11 @@ input::placeholder,textarea::placeholder{color:var(--text-secondary);opacity:1}
     const partes = [];
     if (p.em_teste && p.teste_ate) partes.push(`Teste grátis até ${new Date(p.teste_ate).toLocaleDateString("pt-BR")}.`);
     if (p.plano === "gratis" && p.plano_contratado !== "gratis") partes.push("Seu teste ou assinatura terminou: só o boletim por e-mail continua. Seus dados continuam guardados. Para voltar a usar, escolha um plano.");
-    if (p.plano_solicitado) partes.push(`Pedido de plano ${esc((p.planos_disponiveis || []).find(x => x.codigo === p.plano_solicitado)?.nome || p.plano_solicitado)} enviado: a equipe vai confirmar com você.`);
-    const podePedir = p.eh_titular && p.plano !== "dono" && (p.em_teste || p.plano === "gratis") && !p.plano_solicitado;
-    el.innerHTML = esc(partes.join(" ")) + (podePedir ? ` <label for="plano-pedido" style="display:inline">Quero o plano</label> <select id="plano-pedido">${(p.planos_disponiveis || []).map(x => `<option value="${esc(x.codigo)}"${x.codigo === p.plano_contratado ? " selected" : ""}>${esc(x.nome)}${x.preco_mensal_centavos ? ` · R$ ${(x.preco_mensal_centavos / 100).toLocaleString("pt-BR")}/mês` : ""}</option>`).join("")}</select> <button type="button" class="btn" id="btn-pedir-plano">Pedir plano</button>` : "");
+    if (p.plano_solicitado) partes.push(`No cadastro você escolheu o plano ${esc((p.planos_disponiveis || []).find(x => x.codigo === p.plano_solicitado)?.nome || p.plano_solicitado)}.`);
+    const podePedir = p.eh_titular && p.plano !== "dono" && (p.em_teste || p.plano === "gratis");
+    // Escolher plano, ciclo e extras e pagar por Pix fica em assinar.html (pedido com valor calculado no banco).
+    el.innerHTML = esc(partes.join(" ")) + (podePedir ? ' <a class="btn" href="assinar.html">Escolher plano e assinar</a>' : "");
     el.hidden = !el.innerHTML.trim();
-    if (podePedir) $("btn-pedir-plano").onclick = async () => {
-      const { error } = await sb.rpc("solicitar_plano", { p_plano: $("plano-pedido").value });
-      if (error) { aviso("Não foi possível enviar o pedido: " + motivo(error), "erro"); return; }
-      aviso("Pedido enviado. A equipe do LicitaPlena vai confirmar com você.", "info");
-      await carregarLimiteCnpjs();
-    };
   }
   function statusDoc(d) { if (!d.vencimento) return ["pendente", "Sem vencimento"]; const dias = Math.ceil((new Date(`${d.vencimento}T12:00:00`) - hoje()) / 86400000); if (dias < 0) return ["vencido", "Vencido"]; if (dias <= 30) return ["proximo", `Vence em ${dias} dia${dias === 1 ? "" : "s"}`]; return ["valido", "Válido"]; }
   async function autenticar() {
