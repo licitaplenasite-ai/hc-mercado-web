@@ -16,16 +16,31 @@
 // O xlsx é lido direto do XML (adm-zip, já dependência): sem biblioteca nova.
 //
 // Rodar de novo é seguro: upsert pelas chaves; depois apaga o que ficou com referência anterior (só a vigente fica
-// no banco). Preço em branco (sem coleta no mês para a UF) fica null; sem preço nos dois regimes, não é gravado.
+// nas tabelas sinapi_*, que a busca da tela usa). Preço em branco (sem coleta no mês para a UF) fica null; sem preço
+// nos dois regimes, não é gravado.
+// Histórico por data-base (supabase/bases_preco.sql): cada mês coletado também vira uma versão "SINAPI BR AAAA-MM"
+// em bases_preco_versoes/_partes (preços das UFs, descrições e analítico), guardada por BASES_RETENCAO_MESES (24).
+// Assim o orçamento usa a data-base do edital, não só o mês atual.
+// Referência zerada: a CAIXA já publicou mês sem preço (out/2025, retificado em 22/12/2025). Se mais da metade das
+// linhas vier sem preço em todas as UFs, nada é gravado nas tabelas vigentes, a versão fica "zerada" no catálogo e o
+// robô sai com erro (alarme). Retificação: a cada execução confere os SINAPI_MESES_REVISAR meses anteriores; se a CAIXA
+// publicou "_RetificacaoNN" mais nova que a gravada (ou o mês estava zerado ou faltando), regrava o histórico do mês.
+// Alarme no padrão dos robôs: estado em dados_robo "bases_preco_saude" (saudeFonte, ultimoErro, ultimoSucessoEm) e saída
+// com erro, que o GitHub Actions avisa por e-mail.
 //
 // Variáveis:
 //   SUPABASE_SERVICE_ROLE_KEY  obrigatória para gravar (scripts/supabase_dados.js)
 //   SINAPI_UFS                 todas as 27 (lista separada por vírgula, ex.: "AC,PB")
 //   SINAPI_MESES_ATRAS         6 — quantos meses voltar procurando a última referência publicada
 //   SINAPI_REFERENCIA          opcional "AAAA-MM" — força um mês (sem sondar)
+//   SINAPI_SO_HISTORICO        "1" — grava só o histórico daquele mês (carregar meses antigos sem trocar a vigente)
+//   SINAPI_MESES_REVISAR       3 — meses anteriores conferidos à procura de retificação
+//   SINAPI_LIMIAR_ZERADA       0.5 — fração de linhas sem preço que marca a referência como zerada
+//   BASES_RETENCAO_MESES       24 — ver scripts/bases_preco.js
 //   TAMANHO_LOTE_BANCO         1000
 const AdmZip = require("adm-zip");
 const { restFetch, upsertEmLotes } = require("./supabase_dados");
+const bp = require("./bases_preco");
 
 const BASE = "https://www.caixa.gov.br/Downloads/sinapi-relatorios-mensais/";
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36";
@@ -82,9 +97,11 @@ function textosCompartilhados(xml) {
   return [...String(xml || "").matchAll(/<si>([\s\S]*?)<\/si>/g)].map((m) => xmlTexto([...m[1].matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map((t) => t[1]).join("")));
 }
 // Nome da aba -> caminho do XML dentro do xlsx (workbook.xml + rels).
+// Atributos em qualquer ordem: o Excel grava Id antes de Target, o openpyxl (e outros) grava depois.
+const atributo = (tag, nome) => new RegExp(`\\s${nome}="([^"]*)"`).exec(tag)?.[1];
 function mapaAbas(workbookXml, relsXml) {
-  const alvo = Object.fromEntries([...relsXml.matchAll(/<Relationship [^>]*Id="([^"]+)"[^>]*Target="([^"]+)"/g)].map((m) => [m[1], m[2].replace(/^\/?(xl\/)?/, "xl/")]));
-  return Object.fromEntries([...workbookXml.matchAll(/<sheet [^>]*name="([^"]+)"[^>]*r:id="([^"]+)"/g)].map((m) => [xmlTexto(m[1]), alvo[m[2]]]));
+  const alvo = Object.fromEntries([...relsXml.matchAll(/<Relationship\s[^>]*>/g)].map((m) => [atributo(m[0], "Id"), String(atributo(m[0], "Target") || "").replace(/^\/?(xl\/)?/, "xl/")]));
+  return Object.fromEntries([...workbookXml.matchAll(/<sheet\s[^>]*>/g)].map((m) => [xmlTexto(atributo(m[0], "name") || ""), alvo[atributo(m[0], "r:id")]]));
 }
 const coluna = (ref) => ref.replace(/[0-9]+$/, "");
 // Linhas da aba: [{ n, celulas: { A: "...", B: "..." } }]. Código de composição vem numa fórmula HYPERLINK(...,104658)
@@ -177,25 +194,54 @@ function abrirReferencia(zipBuffer) {
   return { compartilhados: textosCompartilhados(ler("xl/sharedStrings.xml")), lerAba: (a) => ler(abas[a]) };
 }
 
-async function main() {
-  const ufs = String(process.env.SINAPI_UFS || TODAS_UFS.join(",")).split(",").map((u) => u.trim().toUpperCase()).filter(Boolean);
-  for (const uf of ufs) if (!UFS.has(uf)) throw new Error(`UF inválida em SINAPI_UFS: ${uf}`);
-  const lote = num(process.env.TAMANHO_LOTE_BANCO, 1000);
-  const ref = await acharReferencia();
-  console.log(`SINAPI ${ref.mes}: ${ref.url}`);
+// Linhas lidas do mês -> partes do histórico (bases_preco_partes): preços por UF, descrições e analítico.
+// Preço em texto "12.34" vira número; vazio vira null. Chave "tipo|codigo"; analítico pela composição.
+function partesSinapi(itens, custos, analitico) {
+  const n = (v) => (v === null || v === undefined ? null : Number(v));
+  const precosPorUf = {};
+  for (const c of custos) (precosPorUf[c.uf] ||= {})[`${c.tipo}|${c.codigo}`] = [n(c.preco_sd), n(c.preco_cd)];
+  const descricoes = Object.fromEntries(itens.map((i) => [`${i.tipo}|${i.codigo}`, [i.descricao, i.unidade]]));
+  const composicoes = {};
+  for (const a of analitico) (composicoes[a.composicao] ||= []).push([a.item_tipo, a.item_codigo, Number(a.coeficiente)]);
+  return [
+    ...Object.entries(precosPorUf).flatMap(([uf, m]) => bp.fatiar(`precos:${uf}`, m)),
+    ...bp.fatiar("itens", descricoes),
+    ...bp.fatiar("analitico", composicoes),
+  ];
+}
+function versaoSinapi(mes, url, situacao, itens, zerados) {
+  const retificacao = /_Retificacao(\d{2})\.zip$/.exec(url)?.[1];
+  return {
+    base: "SINAPI", abrangencia: "BR", data_base: `${mes}-01`, versao: retificacao ? `${mes} Retificação ${retificacao}` : mes,
+    desonerado: "ambos", arredondamento: "edital", casas_decimais: 2,
+    fonte: "CAIXA/IBGE — SINAPI, preço mediano da capital por UF", fonte_url: url, arquivo: url.split("/").pop(),
+    situacao, itens, zerados,
+    observacao: "Custo sem BDI. A CAIXA não manda truncar nem arredondar: siga o edital (órgãos com SINAPI costumam truncar em 2 casas).",
+  };
+}
+
+// Baixa e lê um mês. zerada: arquivo publicado sem preço (ver cabeçalho).
+async function lerMes(ref, ufs) {
   const r = await pedir(ref.url, "GET", 300000);
   if (!r.ok) throw new Error(`Download do SINAPI falhou: HTTP ${r.status}`);
   const pacote = abrirReferencia(Buffer.from(await r.arrayBuffer()));
   const tabela = (aba) => lerTabela(pacote.lerAba(aba), pacote.compartilhados, aba, ufs);
-  let itens = [], custos = [];
+  let itens = [], custos = [], lidas = [];
   for (const [sd, cd] of [["ISD", "ICD"], ["CSD", "CCD"]]) {
-    const m = montarLinhas(tabela(sd), tabela(cd), ufs, ref.mes);
-    if (!m.itens.length) throw new Error(`Aba ${sd} sem linhas: nada gravado.`);
+    const semDeson = tabela(sd), comDeson = tabela(cd);
+    lidas = lidas.concat(semDeson, comDeson);
+    const m = montarLinhas(semDeson, comDeson, ufs, ref.mes);
+    if (!m.itens.length) throw Object.assign(new Error(`Aba ${sd} sem linhas: nada gravado.`), { formato: true });
     // concat, não push(...): ~330 mil preços estouram a pilha como argumentos.
     itens = itens.concat(m.itens); custos = custos.concat(m.custos);
   }
   const analitico = lerAnalitico(pacote.lerAba(ABA_ANALITICO), pacote.compartilhados, ref.mes);
-  if (!analitico.length) throw new Error("Aba Analítico sem linhas: nada gravado.");
+  if (!analitico.length) throw Object.assign(new Error("Aba Analítico sem linhas: nada gravado."), { formato: true });
+  const zerados = lidas.filter((l) => !Object.values(l.precos).some(Boolean)).length;
+  return { itens, custos, analitico, zerados, zerada: bp.referenciaZerada(lidas, num(process.env.SINAPI_LIMIAR_ZERADA, 0.5)) };
+}
+
+async function gravarVigente(ref, ufs, { itens, custos, analitico }, lote) {
   // Itens antes dos custos (chave estrangeira). Limpeza só depois de gravar tudo: falha no meio não apaga a referência anterior.
   await upsertEmLotes("sinapi_itens", itens, "tipo,codigo", lote);
   await upsertEmLotes("sinapi_custos", custos, "uf,tipo,codigo", lote);
@@ -205,9 +251,65 @@ async function main() {
   await restFetch(`sinapi_composicao_itens?${antes}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
   // Código que saiu do SINAPI: apaga o item e (cascade) os preços dele em todas as UFs.
   await restFetch(`sinapi_itens?${antes}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
-  console.log(`Referência ${ref.mes}: ${itens.length} insumos/composições, ${custos.length} preços em ${ufs.length} UF(s) (${ufs.join(",")}), ${analitico.length} itens de composição analítica.`);
 }
 
-if (require.main === module) main().catch((e) => { console.error(e); process.exit(1); });
+// Lê, confere se veio zerado e grava o histórico (e a vigente, se pedido).
+async function coletarMes(ref, ufs, { vigente, lote }) {
+  const lido = await lerMes(ref, ufs);
+  const todas = ufs.length === TODAS_UFS.length;
+  if (lido.zerada) {
+    if (todas) await bp.gravarVersao(versaoSinapi(ref.mes, ref.url, "zerada", lido.itens.length, lido.zerados), []);
+    throw Object.assign(new Error(`SINAPI ${ref.mes} (${ref.url.split("/").pop()}) veio sem preço em ${lido.zerados} linhas: referência zerada, nada trocado. Aguardando a retificação da CAIXA.`), { zerada: true });
+  }
+  if (vigente) await gravarVigente(ref, ufs, lido, lote);
+  // Histórico só com as 27 UFs: uma versão "BR" com parte das UFs enganaria quem orça em outra UF.
+  if (todas) await bp.gravarVersao(versaoSinapi(ref.mes, ref.url, "precos", lido.itens.length, lido.zerados), partesSinapi(lido.itens, lido.custos, lido.analitico));
+  return lido;
+}
 
-module.exports = { mesesParaTras, nomesDoMes, textosCompartilhados, mapaAbas, linhasDaAba, lerTabela, lerAnalitico, montarLinhas, semAcento, xmlTexto };
+// Meses anteriores com retificação nova, gravados zerados ou faltando: referências a regravar no histórico.
+async function retificacoesPendentes(mesVigente, gravadas, agora = Date.now(), existeFn = existe) {
+  const meses = mesesParaTras(agora, num(process.env.SINAPI_MESES_REVISAR, 3) + 1).filter((m) => m < mesVigente);
+  const out = [];
+  for (const mes of meses) {
+    const g = gravadas.find((v) => String(v.data_base).slice(0, 7) === mes);
+    for (const nome of nomesDoMes(mes)) {
+      if (!(await existeFn(BASE + nome))) continue;
+      if (!g || g.situacao === "zerada" || g.arquivo !== nome) out.push({ mes, url: BASE + nome });
+      break;
+    }
+  }
+  return out;
+}
+
+async function main() {
+  const ufs = String(process.env.SINAPI_UFS || TODAS_UFS.join(",")).split(",").map((u) => u.trim().toUpperCase()).filter(Boolean);
+  for (const uf of ufs) if (!UFS.has(uf)) throw new Error(`UF inválida em SINAPI_UFS: ${uf}`);
+  const lote = num(process.env.TAMANHO_LOTE_BANCO, 1000);
+  const soHistorico = process.env.SINAPI_SO_HISTORICO === "1";
+  if (soHistorico && ufs.length !== TODAS_UFS.length) throw new Error("SINAPI_SO_HISTORICO precisa das 27 UFs (deixe SINAPI_UFS vazio).");
+  const ref = await acharReferencia();
+  console.log(`SINAPI ${ref.mes}: ${ref.url}${soHistorico ? " (só histórico)" : ""}`);
+  const lido = await coletarMes(ref, ufs, { vigente: !soHistorico, lote });
+  console.log(`Referência ${ref.mes}: ${lido.itens.length} insumos/composições, ${lido.custos.length} preços em ${ufs.length} UF(s) (${ufs.join(",")}), ${lido.analitico.length} itens de composição analítica.`);
+  if (ufs.length === TODAS_UFS.length && !process.env.SINAPI_REFERENCIA) {
+    for (const r of await retificacoesPendentes(ref.mes, await bp.versoesGravadas("SINAPI"))) {
+      console.log(`Histórico: regravando ${r.url} (retificação, mês zerado ou faltando).`);
+      await coletarMes(r, ufs, { vigente: false, lote });
+    }
+    console.log(`Histórico: data-base desde ${await bp.aplicarRetencao()} (BASES_RETENCAO_MESES).`);
+  }
+  if (!soHistorico) await bp.registrarSaude("SINAPI", { saudeFonte: "ok", ultimoSucessoEm: new Date().toISOString(), ultimaDataBase: ref.mes, ultimoErro: null });
+}
+
+// Alarme: guarda o motivo em dados_robo e sai com erro (o GitHub Actions avisa por e-mail).
+async function falhar(e) {
+  const saudeFonte = e.zerada ? "zerada" : e.formato || /formato da CAIXA mudou|layout da CAIXA mudou|O site mudou/.test(e.message) ? "formato_mudou" : "indisponivel";
+  await bp.registrarSaude("SINAPI", { saudeFonte, ultimoErro: String(e.message).slice(0, 500) }).catch(() => {});
+  console.error(e);
+  process.exit(1);
+}
+
+if (require.main === module) main().catch(falhar);
+
+module.exports = { pedir, partesSinapi, versaoSinapi, retificacoesPendentes, mesesParaTras, nomesDoMes, textosCompartilhados, mapaAbas, linhasDaAba, lerTabela, lerAnalitico, montarLinhas, semAcento, xmlTexto, abrirReferencia };

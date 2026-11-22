@@ -1,0 +1,37 @@
+name: Vigia de normas do Orçamentista (TCU, SINAPI, Lei 14.133)
+
+# Robô semanal (scripts/vigia_normas_obra.js): procura em fonte oficial acórdãos do TCU sobre BDI, sobrepreço e
+# inexequibilidade, PDFs novos ou republicados do SINAPI na CAIXA e INs/decretos novos no gov.br/compras.
+# Grava "novidades para revisar" (orcamento_normas_novidades). NÃO muda regra do Auditor: o dono decide em
+# normas-obra.html. Terça às 12:00 UTC (9h de Brasília), longe dos outros robôs de obra.
+# Falha de fonte ou de formato: o job falha (e-mail do GitHub) e o motivo fica em dados_robo "vigia_normas_estado".
+# Precisa de supabase/orcamento_normas.sql aplicado antes.
+concurrency:
+  group: vigia-normas-obra
+  cancel-in-progress: false
+
+on:
+  schedule:
+    - cron: "0 12 * * 2"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  vigiar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "20"
+      - run: npm ci
+      - name: Vigiar normas
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          VIGIA_DIAS_INICIAIS: "90"
+          VIGIA_TCU_PAGINAS: "20"
+          VIGIA_PAUSA_MS: "2000"
+        run: node scripts/vigia_normas_obra.js

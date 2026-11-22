@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Normas para revisar — LicitaPlena</title>
+<link rel="icon" type="image/png" href="favicon.png?v=3">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" crossorigin="anonymous"></script><script src="supabase-config.js"></script>
+<link rel="stylesheet" href="ds-tokens.css">
+<script>(function(){var t=null;try{t=localStorage.getItem("licitaplena_tema");}catch(e){}if(t!=="escuro")document.documentElement.classList.add("tema-claro");document.documentElement.dataset.theme=t==="escuro"?"dark":"light";})();</script>
+<style>
+/* Mesmas regras de componentes de orcamento-obra.html (Design System em ds-tokens.css). Página só do dono. */
+*{box-sizing:border-box}[hidden]{display:none!important}
+body{margin:0;background:var(--surface-page);color:var(--text-primary);font:var(--text-body);font-family:var(--font-sans)}
+button,input,select{font-family:var(--font-sans)}
+:is(button,a,input,select):focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
+header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 24px;background:var(--surface-default);border-bottom:1px solid var(--border-default)}
+header a{color:var(--text-primary);text-decoration:none;font:600 16px/24px var(--font-sans)}
+main{max-width:1080px;margin:0 auto;padding:24px 24px 56px}
+h1{font:var(--text-title);margin:0 0 4px}h2{font:var(--text-title);font-size:18px;margin:0 0 8px}
+.nota{color:var(--text-secondary);line-height:1.5;margin:0}
+.card{background:var(--surface-default);border:1px solid var(--border-default);border-radius:var(--radius-card);padding:16px;margin:16px 0}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:0 16px;border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--surface-default);color:var(--text-primary);font:500 14px/16px var(--font-sans);cursor:pointer}
+.btn.primario{background:var(--action-strong);border-color:transparent;color:var(--action-on)}
+.btn[disabled]{opacity:.6;cursor:wait}
+input{width:100%;min-height:40px;padding:8px 12px;border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--surface-default);color:var(--text-primary);font:var(--text-body)}
+label{display:block;font:var(--text-label);margin:8px 0 4px}
+.novidade{border:1px solid var(--border-default);border-radius:var(--radius-card);padding:12px;margin:0 0 12px;overflow-wrap:anywhere}
+.novidade a{color:var(--action-text);font-weight:600}
+.chip{display:inline-block;padding:2px 10px;border:1px solid var(--border-default);border-radius:999px;background:var(--surface-sunken);font:600 12px/18px var(--font-sans);margin:0 4px 4px 0}
+.grade{display:grid;grid-template-columns:1fr 2fr auto auto;gap:8px;align-items:end}
+.aviso{margin:12px 0;border:1px solid var(--info-border);border-radius:var(--radius-card);padding:12px 16px;color:var(--info-text);background:var(--info-bg)}
+.aviso.erro{color:var(--error-text);border-color:var(--error-border);background:var(--error-bg)}
+@media(max-width:640px){main{padding:16px}.grade{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><a href="admin.html">LicitaPlena · Admin</a><a href="orcamento-obra.html">Orçamento de obra</a></header>
+<main>
+  <h1>Normas para revisar</h1>
+  <p class="nota">O vigia de normas (robô semanal) separa acórdãos do TCU, notas do SINAPI e normas da Lei 14.133 que podem mudar o orçamento de obra. <b>Nada muda no Auditor sozinho.</b> Aprove dizendo qual regra muda (ou "nova"); depois, um agente com a sua ordem altera a regra com nova versão e data de "vale desde".</p>
+  <div id="aviso" class="aviso" role="status" aria-live="polite" hidden></div>
+
+  <section class="card" id="coleta" hidden>
+    <h2>Motivos de recusa do chat ("Ajudar a melhorar o Auditor")</h2>
+    <p class="nota" id="coleta-estado"></p>
+    <p class="nota">Antes de ligar: publique o texto de <code>docs/orcamento-obra/privacidade-motivos-recusa.md</code> na política de privacidade. Ligado, só entra o texto público do agente de contratação, sem nome, CNPJ, CPF, e-mail ou telefone, e só de quem marcar a opção.</p>
+    <p><button class="btn" type="button" id="btn-coleta"></button></p>
+  </section>
+
+  <section class="card" id="lista-card" hidden>
+    <h2>Para revisar (<span id="n-pendentes">0</span>)</h2>
+    <div id="lista"></div>
+    <h2>Já decididas</h2>
+    <div id="decididas"></div>
+  </section>
+</main>
+<script>
+(function () {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const link = (u) => (/^https:\/\//.test(String(u || '')) ? esc(u) : '#');
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); // eslint-disable-line no-undef -- globais de supabase-config.js
+  function aviso(texto, erro) { $('aviso').hidden = !texto; $('aviso').textContent = texto || ''; $('aviso').className = erro ? 'aviso erro' : 'aviso'; }
+
+  function cartao(n, aberta) {
+    const termos = (n.termos || []).map((t) => `<span class="chip">${esc(t)}</span>`).join('');
+    const decisao = aberta ? `<div class="grade"><div><label for="r-${n.id}">Regra que muda</label><input id="r-${n.id}" maxlength="60" placeholder="ex.: bdi_faixa ou nova"></div>`
+      + `<div><label for="t-${n.id}">Nota</label><input id="t-${n.id}" maxlength="2000" placeholder="O que muda e por quê"></div>`
+      + `<button class="btn primario" type="button" data-decidir="aprovada" data-id="${n.id}">Aprovar</button><button class="btn" type="button" data-decidir="descartada" data-id="${n.id}">Descartar</button></div>`
+      : `<p class="nota"><b>${n.situacao === 'aprovada' ? 'Aprovada' : 'Descartada'}</b>${n.regra ? ` · regra ${esc(n.regra)}` : ''}${n.nota ? ` · ${esc(n.nota)}` : ''} · ${esc(new Date(n.revisado_em).toLocaleString('pt-BR'))}</p>`;
+    return `<div class="novidade"><span class="chip">${esc(n.fonte)}</span>${termos}<br><a href="${link(n.link)}" target="_blank" rel="noopener noreferrer">${esc(n.titulo)}</a>`
+      + `${n.publicado_em ? ` · ${esc(n.publicado_em.split('-').reverse().join('/'))}` : ''}${n.resumo ? `<p class="nota">${esc(n.resumo.slice(0, 600))}</p>` : ''}${decisao}</div>`;
+  }
+
+  async function carregar() {
+    const { data, error } = await sb.from('orcamento_normas_novidades').select('id,fonte,titulo,link,publicado_em,termos,resumo,situacao,regra,nota,revisado_em').order('criado_em', { ascending: false }).limit(300);
+    if (error) { aviso('Não foi possível carregar as novidades agora. Recarregue a página.', true); return; }
+    const abertas = data.filter((n) => n.situacao === 'para_revisar');
+    $('lista-card').hidden = false;
+    $('n-pendentes').textContent = String(abertas.length);
+    $('lista').innerHTML = abertas.map((n) => cartao(n, true)).join('') || '<p class="nota">Nada para revisar.</p>';
+    $('decididas').innerHTML = data.filter((n) => n.situacao !== 'para_revisar').slice(0, 50).map((n) => cartao(n, false)).join('') || '<p class="nota">Nenhuma ainda.</p>';
+  }
+
+  async function carregarColeta() {
+    const { data } = await sb.from('orcamento_motivos_config').select('ligado').maybeSingle();
+    if (!data) return;
+    $('coleta').hidden = false;
+    $('coleta-estado').innerHTML = data.ligado ? '<b>Ligada.</b> Quem marcar a opção no Orçamento de obra ajuda a base de motivos.' : '<b>Desligada.</b> A opção nem aparece para os clientes.';
+    $('btn-coleta').textContent = data.ligado ? 'Desligar a coleta' : 'Ligar a coleta';
+    $('btn-coleta').onclick = async () => {
+      if (!data.ligado && !window.confirm('Ligar a coleta de motivos de recusa? Confirme que o texto da política de privacidade já foi publicado.')) return;
+      const { error } = await sb.rpc('admin_ligar_motivos_recusa', { p_ligado: !data.ligado });
+      if (error) aviso('Não foi possível mudar agora. Entre com a verificação em 2 etapas e tente de novo.', true); else void carregarColeta();
+    };
+  }
+
+  $('lista').addEventListener('click', async (ev) => {
+    const b = ev.target.closest('[data-decidir]');
+    if (!b) return;
+    const id = Number(b.dataset.id), decisao = b.dataset.decidir, regra = $(`r-${id}`).value.trim(), nota = $(`t-${id}`).value.trim();
+    if (decisao === 'aprovada' && !/^[a-z0-9_]{2,60}$/.test(regra)) { aviso('Para aprovar, escreva a chave da regra que muda (ex.: bdi_faixa) ou "nova".', true); return; }
+    b.disabled = true;
+    const { error } = await sb.rpc('revisar_novidade_norma', { p_id: id, p_decisao: decisao, p_regra: regra || null, p_nota: nota || null });
+    if (error) { b.disabled = false; aviso('Não foi possível gravar a decisão. Confira a verificação em 2 etapas e tente de novo.', true); return; }
+    aviso(decisao === 'aprovada' ? 'Aprovada. Peça ao agente para alterar a regra com nova versão e "vale desde".' : 'Descartada.');
+    void carregar();
+  });
+
+  (async () => {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) { location.replace('login.html?voltar=/normas-obra'); return; }
+    const { data: nivel } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (nivel?.currentLevel !== 'aal2') { aviso('Página só do dono, com a verificação em 2 etapas. Entre pelo Admin com o código e volte aqui.', true); return; }
+    await Promise.all([carregar(), carregarColeta()]);
+  })().catch(() => aviso('Não foi possível validar a sessão. Recarregue a página.', true));
+})();
+</script>
+</body>
+</html>

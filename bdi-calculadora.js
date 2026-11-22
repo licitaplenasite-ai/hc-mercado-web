@@ -125,6 +125,9 @@
 
   const api = { FONTE, TIPOS, lerPct, fmtPct, calcularBdi, classificar, avaliar, matrizDetalhe, textoProposta, TOLERANCIA_AMARELO };
   if (typeof module !== 'undefined' && module.exports) { module.exports = api; return; }
+  // O Orçamento de obra (orcamento-obra.html) usa a mesma conta e as mesmas faixas, sem a tela da calculadora.
+  window.BdiCalculadora = api;
+  if (!document.getElementById('bdi-final')) return;
 
   // ---------------- Navegador ----------------
   const $ = (id) => document.getElementById(id);
