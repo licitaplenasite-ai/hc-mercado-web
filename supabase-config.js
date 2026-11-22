@@ -15,7 +15,7 @@ var LICITAPLENA_HC_SITE = "https://www.hclicitacoes.com";
 // Pagamento manual por Pix (assinar.html, tela "Como pagar"): TROCAR pela chave Pix, nome e cidade do recebedor (como
 // aparecem no banco) e pelo WhatsApp que recebe o comprovante (só dígitos com DDI 55). Vazio = a tela diz "Fale com a
 // equipe" e não mostra chave nem código. Nada daqui sai do navegador: o código Pix é montado na própria tela.
-var LICITAPLENA_PIX_CHAVE = "";
-var LICITAPLENA_PIX_NOME = "";
-var LICITAPLENA_PIX_CIDADE = "";
+var LICITAPLENA_PIX_CHAVE = "28786260000153";
+var LICITAPLENA_PIX_NOME = "HCM LTDA";
+var LICITAPLENA_PIX_CIDADE = "MANAUS";
 var LICITAPLENA_WHATSAPP_PAGAMENTO = "";
