@@ -202,6 +202,14 @@
   .extras-assinatura legend { font-size: 13px; padding: 0 4px; }
   .extras-assinatura .sub { flex-basis: 100%; margin: 0; }
   .btn-secundario { background: var(--cartao); color: var(--action-text); border: 1px solid var(--border-strong); padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .pedido-cartao { border: 1px solid var(--borda); border-radius: var(--raio); padding: 16px; margin: 0 0 12px; background: var(--cartao); }
+  .pedido-cartao h4 { margin: 0 0 4px; font-size: 16px; }
+  .pedido-cartao dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 8px 0 12px; font-size: 14px; }
+  .pedido-cartao dt { color: var(--texto-fraco); }
+  .pedido-cartao dd { margin: 0; overflow-wrap: anywhere; }
+  .pedido-cartao textarea { width: 100%; min-height: 56px; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--cartao); color: inherit; font: inherit; resize: vertical; }
+  .pedido-cartao .acoes { margin-top: 8px; flex-wrap: wrap; }
+  @media (max-width: 640px) { .pedido-cartao dl { grid-template-columns: 1fr; } .pedido-cartao .acoes button { flex: 1 1 100%; } }
   .aviso-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--borda); font-size: 14px; }
   .aviso-item:last-child { border-bottom: none; }
   @media (max-width: 600px) { .grade-plano { grid-template-columns: 1fr 1fr; } .filtros input[type="search"] { margin-left: 0; width: 100%; min-width: 0; } }
@@ -300,6 +308,7 @@
       <button data-status="clientes">Clientes</button>
       <button data-status="planos" id="tab-planos" style="display:none;">Planos</button>
       <button data-status="uso">Uso</button>
+      <button data-status="pedidos" id="tab-pedidos" style="display:none;">Pedidos</button>
       <button data-status="financeiro" id="tab-financeiro" style="display:none;">Financeiro</button>
       <button data-status="boletim">Boletim</button>
       <button data-status="equipe" id="tab-equipe" style="display:none;">Equipe</button>
@@ -349,14 +358,31 @@
         <div class="tabela-rolavel" id="conteudo-uso"><div class="carregando">Carregando uso...</div></div>
       </div>
     </div>
+    <div id="secao-pedidos" style="display:none;">
+      <div class="cartao-lista" style="padding:20px 24px;margin-bottom:20px;">
+        <h3 style="margin-top:0;">Pedidos para aprovar</h3>
+        <p class="nota-equipe">O cliente escolheu o plano na tela "Planos e assinatura" e recebeu os dados do Pix. Confira no aplicativo do banco se o valor caiu na sua conta. Caiu certo: clique em "Recebi o Pix: liberar" e as telas dele destravam na hora, com o vencimento calculado (1, 6 ou 12 meses). Valor diferente ou Pix não encontrado: escreva o motivo e use "Pedir correção" ou "Recusar". O cliente vê o motivo.</p>
+        <div id="conteudo-pedidos-abertos"><div class="carregando">Carregando pedidos...</div></div>
+        <div id="resultado-pedido" role="status" style="margin-top:12px;"></div>
+      </div>
+      <div class="cartao-lista" style="padding:20px 24px;margin-bottom:20px;">
+        <h3 style="margin-top:0;">Vencendo nos próximos 7 dias</h3>
+        <p class="nota-equipe">Assinaturas ativas que vencem até daqui a 7 dias. Mande uma mensagem lembrando de renovar: o cliente renova pela mesma tela, em "Planos e assinatura".</p>
+        <div class="tabela-rolavel" id="conteudo-vencendo"><div class="carregando">Carregando...</div></div>
+      </div>
+      <div class="cartao-lista" style="padding:20px 24px;">
+        <h3 style="margin-top:0;">Histórico dos pedidos</h3>
+        <div class="tabela-rolavel" id="conteudo-pedidos-historico"><div class="carregando">Carregando...</div></div>
+      </div>
+    </div>
     <div id="secao-financeiro" style="display:none;">
       <div class="cartao-lista" style="padding:20px 24px;margin-bottom:20px;">
         <h3 style="margin-top:0;">Registrar cobrança</h3>
-        <p class="nota-equipe">Nenhuma cobrança é enviada daqui e não há integração de pagamento ligada. Registre o Pix que caiu na sua conta: com "Já recebido" marcado, a assinatura fica ativa e o próximo vencimento é calculado (1 mês ou 1 ano).</p>
+        <p class="nota-equipe">Nenhuma cobrança é enviada daqui e não há integração de pagamento ligada. Registre o Pix que caiu na sua conta: com "Já recebido" marcado, a assinatura fica ativa e o próximo vencimento é calculado (1, 6 ou 12 meses). Pedidos feitos pelo cliente ficam na aba Pedidos.</p>
         <form id="form-pagamento" class="form-equipe grade-form">
           <div><label for="pag-conta">Conta</label><select id="pag-conta" required></select></div>
           <div><label for="pag-plano">Plano</label><select id="pag-plano"></select></div>
-          <div><label for="pag-ciclo">Ciclo</label><select id="pag-ciclo"><option value="mensal">Mensal</option><option value="anual">Anual</option></select></div>
+          <div><label for="pag-ciclo">Ciclo</label><select id="pag-ciclo"><option value="mensal">Mensal</option><option value="semestral">Semestral</option><option value="anual">Anual</option></select></div>
           <div><label for="pag-valor">Valor (R$)</label><input id="pag-valor" type="text" inputmode="decimal" placeholder="Preço do plano"></div>
           <div><label for="pag-vencimento">Vencimento</label><input id="pag-vencimento" type="date"></div>
           <div><label for="pag-referencia">Referência (ex.: id do Pix)</label><input id="pag-referencia" type="text" maxlength="200"></div>
@@ -649,7 +675,8 @@
 
   const NOMES_ACAO = { assinatura_alterada: "Plano ou limites alterados", pagamento_confirmado: "Pagamento confirmado", plano_solicitado: "Cliente pediu plano",
     status_aprovado: "Aprovado", status_rejeitado: "Rejeitado", status_pendente: "Voltou para pendente", status_suspenso: "Suspenso", status_reativar: "Reativado",
-    pagamento_cancelado: "Cobrança cancelada", pagamento_estornado: "Cobrança estornada", pagamento_vencido: "Cobrança vencida" };
+    pagamento_cancelado: "Cobrança cancelada", pagamento_estornado: "Cobrança estornada", pagamento_vencido: "Cobrança vencida",
+    pedido_criado: "Cliente fez pedido", pedido_liberado: "Pedido liberado (Pix recebido)", pedido_recusado: "Pedido recusado", pedido_correcao: "Pedido com correção" };
   async function montarBlocoHistorico(c) {
     const alvo = document.getElementById("bloco-historico");
     const { data, error } = await sb.rpc("admin_historico_assinatura", { p_usuario: c.id });
@@ -726,6 +753,7 @@
     // Planos e Financeiro: só o proprietário (o banco confere de novo, com 2 fatores).
     document.getElementById("tab-planos").style.display = adminAtual && adminAtual.role === "owner" ? "" : "none";
     document.getElementById("tab-financeiro").style.display = adminAtual && adminAtual.role === "owner" ? "" : "none";
+    document.getElementById("tab-pedidos").style.display = adminAtual && adminAtual.role === "owner" ? "" : "none";
   }
 
   // Chave "config_admin" em public.dados_robo (mesma tabela chave->jsonb usada pelo
@@ -1066,7 +1094,7 @@
   }
 
   const NOMES_AVISO = { teste_vencendo: "Teste termina em até 3 dias", teste_vencido: "Teste terminou (conta no Grátis)", vencida: "Assinatura vencida",
-    plano_solicitado: "Pediu mudança de plano", pendente: "Cadastro pendente há mais de 24 h", pagamento_pendente: "Cobrança pendente" };
+    plano_solicitado: "Pediu mudança de plano", pendente: "Cadastro pendente há mais de 24 h", pagamento_pendente: "Cobrança pendente", pedido_aguardando: "Pedido aguardando o Pix" };
   async function carregarVisaoGeral() {
     const { data, error } = await sb.rpc("admin_resumo");
     const cards = document.getElementById("cards-resumo"), avisos = document.getElementById("lista-avisos");
@@ -1092,13 +1120,14 @@
     if (recursos.error || matriz.error) { alvo.innerHTML = '<div class="vazio">Planos indisponíveis: ' + escapeHtml((recursos.error || matriz.error).message) + '</div>'; return; }
     const celula = (p, r) => matriz.data.find((x) => x.plano === p && x.recurso === r) || { permitido: false, limite_diario: null };
     const campo = (id, valor, rotulo) => `<input type="text" inputmode="numeric" id="${id}" value="${valor ?? ""}" placeholder="∞" aria-label="${escapeHtml(rotulo)}">`;
-    alvo.innerHTML = `<table><thead><tr><th>Plano</th><th>CNPJs</th><th>Usuários</th><th>Processos</th><th>IA/mês por CNPJ</th><th>Mensal (R$)</th><th>Anual (R$)</th>${recursos.data.map((r) => `<th title="${escapeHtml(r.nome)}">${escapeHtml(r.nome.split(" (")[0])}<br><span class="sub">teto por pessoa/dia</span></th>`).join("")}<th></th></tr></thead><tbody>${planos.map((p) => `<tr>
+    alvo.innerHTML = `<table><thead><tr><th>Plano</th><th>CNPJs</th><th>Usuários</th><th>Processos</th><th>IA/mês por CNPJ</th><th>Mensal (R$)</th><th>Semestral (R$)</th><th>Anual (R$)</th>${recursos.data.map((r) => `<th title="${escapeHtml(r.nome)}">${escapeHtml(r.nome.split(" (")[0])}<br><span class="sub">teto por pessoa/dia</span></th>`).join("")}<th></th></tr></thead><tbody>${planos.map((p) => `<tr>
       <td><strong>${escapeHtml(p.nome)}</strong><br><span class="sub">${escapeHtml(p.codigo)}</span></td>
       <td>${campo(`pl-${p.codigo}-max_cnpjs`, p.max_cnpjs, p.nome + " CNPJs")}</td>
       <td>${campo(`pl-${p.codigo}-max_usuarios`, p.max_usuarios, p.nome + " usuários")}</td>
       <td>${campo(`pl-${p.codigo}-max_processos`, p.max_processos, p.nome + " processos")}</td>
       <td>${campo(`pl-${p.codigo}-ia_mes_por_cnpj`, p.ia_mes_por_cnpj, p.nome + " IA por mês por CNPJ")}</td>
       <td>${campo(`pl-${p.codigo}-preco_mensal_centavos`, p.preco_mensal_centavos != null ? p.preco_mensal_centavos / 100 : null, p.nome + " mensal")}</td>
+      <td>${campo(`pl-${p.codigo}-preco_semestral_centavos`, p.preco_semestral_centavos != null ? p.preco_semestral_centavos / 100 : null, p.nome + " semestral")}</td>
       <td>${campo(`pl-${p.codigo}-preco_anual_centavos`, p.preco_anual_centavos != null ? p.preco_anual_centavos / 100 : null, p.nome + " anual")}</td>
       ${recursos.data.map((r) => { const c = celula(p.codigo, r.codigo); return `<td><label class="inline"><input type="checkbox" id="pr-${p.codigo}-${r.codigo}"${c.permitido ? " checked" : ""} aria-label="${escapeHtml(p.nome + ": " + r.nome)}"> sim</label><br>${campo(`prl-${p.codigo}-${r.codigo}`, c.limite_diario, p.nome + " limite " + r.nome)}</td>`; }).join("")}
       <td><button type="button" class="btn-aprovar" data-salvar-plano="${escapeHtml(p.codigo)}">Salvar</button></td></tr>`).join("")}</tbody></table>`;
@@ -1106,7 +1135,7 @@
       const codigo = b.dataset.salvarPlano, resultado = document.getElementById("resultado-planos");
       const ler = (id) => numeroOuVazio(document.getElementById(id).value.replace(",", "."));
       const dados = { max_cnpjs: ler(`pl-${codigo}-max_cnpjs`), max_usuarios: ler(`pl-${codigo}-max_usuarios`), max_processos: ler(`pl-${codigo}-max_processos`), ia_mes_por_cnpj: ler(`pl-${codigo}-ia_mes_por_cnpj`) };
-      for (const k of ["preco_mensal_centavos", "preco_anual_centavos"]) {
+      for (const k of ["preco_mensal_centavos", "preco_semestral_centavos", "preco_anual_centavos"]) {
         const t = document.getElementById(`pl-${codigo}-${k}`).value.trim().replace(/\./g, "").replace(",", ".");
         dados[k] = t ? Math.round(Number(t) * 100) : null;
       }
@@ -1133,6 +1162,57 @@
       : '<div class="vazio">Nenhum uso registrado no período.</div>';
   }
 
+  const NOMES_CICLO = { mensal: "Mensal", semestral: "Semestral", anual: "Anual" };
+  const NOMES_PEDIDO = { aguardando: "Aguardando o Pix", correcao: "Pediu correção", liberado: "Liberado", recusado: "Recusado", cancelado: "Substituído pelo cliente" };
+  const NOMES_EXTRA = { lance_assistido: "Lance assistido", pacote_operacao: "Pacote Operação", ia_extra: "IA extra" };
+  const descreverExtras = (g) => [...(g.extras || []).map((x) => NOMES_EXTRA[x] || x), ...(g.cnpjs_extras ? [`${g.cnpjs_extras} CNPJ(s) a mais`] : [])].join(", ") || "nenhum";
+  async function carregarPedidos() {
+    const abertos = document.getElementById("conteudo-pedidos-abertos"), vencendo = document.getElementById("conteudo-vencendo"), historico = document.getElementById("conteudo-pedidos-historico");
+    const { data, error } = await sb.rpc("admin_listar_pedidos");
+    if (error) { for (const el of [abertos, vencendo, historico]) el.innerHTML = '<div class="vazio">Indisponível: ' + escapeHtml(error.message) + '</div>'; return; }
+    const pedidos = data.pedidos || [], emAberto = pedidos.filter((g) => g.situacao === "aguardando" || g.situacao === "correcao");
+    abertos.innerHTML = emAberto.length ? emAberto.map((g) => `<div class="pedido-cartao" data-pedido-cartao="${escapeHtml(g.id)}">
+        <h4>${escapeHtml(g.nome || g.email || "-")} · ${reais(g.valor_centavos)}</h4>
+        <span class="badge ${g.situacao === "correcao" ? "suspenso" : "pendente"}">${NOMES_PEDIDO[g.situacao]}</span>
+        <dl><dt>Empresa</dt><dd>${escapeHtml(g.empresa || "-")}</dd><dt>CNPJ</dt><dd>${escapeHtml(g.cnpj || "-")}</dd>
+          <dt>E-mail</dt><dd>${escapeHtml(g.email || "-")}${g.telefone ? " · " + escapeHtml(g.telefone) : ""}</dd>
+          <dt>Plano</dt><dd>${escapeHtml(g.plano_nome || g.plano)} · ${NOMES_CICLO[g.ciclo] || escapeHtml(g.ciclo)}</dd><dt>Extras</dt><dd>${escapeHtml(descreverExtras(g))}</dd>
+          <dt>Valor esperado</dt><dd><strong>${reais(g.valor_centavos)}</strong></dd><dt>Pedido</dt><dd>nº ${escapeHtml(g.id.slice(0, 8))} em ${new Date(g.criado_em).toLocaleString("pt-BR")}</dd>
+          ${g.motivo ? `<dt>Recado enviado</dt><dd>${escapeHtml(g.motivo)}</dd>` : ""}</dl>
+        <label for="motivo-${escapeHtml(g.id)}">Motivo para o cliente (só para recusar ou pedir correção)</label>
+        <textarea id="motivo-${escapeHtml(g.id)}" maxlength="500" placeholder="Ex.: o Pix veio com valor diferente do pedido"></textarea>
+        <div class="acoes"><button type="button" class="btn-aprovar" data-decidir="liberar" data-pedido="${escapeHtml(g.id)}">Recebi o Pix: liberar</button>
+          <button type="button" class="btn-secundario" data-decidir="correcao" data-pedido="${escapeHtml(g.id)}">Pedir correção</button>
+          <button type="button" class="btn-rejeitar" data-decidir="recusar" data-pedido="${escapeHtml(g.id)}">Recusar</button></div></div>`).join("")
+      : '<div class="vazio">Nenhum pedido esperando. Quando um cliente pedir um plano, ele aparece aqui.</div>';
+    const venc = data.vencendo || [];
+    vencendo.innerHTML = venc.length ? `<table><thead><tr><th>Cliente</th><th>Plano</th><th>Valor</th><th>Vence em</th></tr></thead><tbody>${venc.map((a) => `<tr>
+        <td>${escapeHtml(a.nome || a.email || "-")}<br><span class="sub">${escapeHtml(a.email || "")}${a.telefone ? " · " + escapeHtml(a.telefone) : ""}</span></td>
+        <td>${escapeHtml(a.plano_nome || a.plano)} · ${NOMES_CICLO[a.ciclo] || "-"}</td><td>${reais(a.valor_centavos)}</td><td>${dataBr(a.vence_em)}</td></tr>`).join("")}</tbody></table>`
+      : '<div class="vazio">Nenhuma assinatura vence nos próximos 7 dias.</div>';
+    const fechados = pedidos.filter((g) => !emAberto.includes(g));
+    historico.innerHTML = fechados.length ? `<table><thead><tr><th>Cliente</th><th>Plano</th><th>Valor</th><th>Pedido em</th><th>Situação</th><th>Decidido</th></tr></thead><tbody>${fechados.map((g) => `<tr>
+        <td>${escapeHtml(g.nome || g.email || "-")}<br><span class="sub">${escapeHtml(g.empresa || "")}</span></td>
+        <td>${escapeHtml(g.plano_nome || g.plano)} · ${NOMES_CICLO[g.ciclo] || "-"}<br><span class="sub">extras: ${escapeHtml(descreverExtras(g))}</span></td>
+        <td>${reais(g.valor_centavos)}</td><td>${dataBr(g.criado_em)}</td>
+        <td><span class="badge ${g.situacao === "liberado" ? "ativo" : g.situacao === "recusado" ? "suspenso" : "gratis"}">${NOMES_PEDIDO[g.situacao] || escapeHtml(g.situacao)}</span>${g.motivo ? `<br><span class="sub">${escapeHtml(g.motivo)}</span>` : ""}</td>
+        <td>${g.decidido_em ? dataBr(g.decidido_em) : "-"}<br><span class="sub">${escapeHtml(g.decidido_por || "")}</span></td></tr>`).join("")}</tbody></table>`
+      : '<div class="vazio">Nenhum pedido encerrado ainda.</div>';
+    abertos.querySelectorAll("[data-decidir]").forEach((b) => b.addEventListener("click", async () => {
+      const g = emAberto.find((x) => x.id === b.dataset.pedido), acao = b.dataset.decidir, resultado = document.getElementById("resultado-pedido");
+      const motivo = document.getElementById("motivo-" + g.id).value.trim();
+      if (acao !== "liberar" && motivo.length < 3) { resultado.textContent = "Escreva o motivo para o cliente antes de recusar ou pedir correção."; document.getElementById("motivo-" + g.id).focus(); return; }
+      if (acao === "liberar" && !confirm(`Confirmar que ${reais(g.valor_centavos)} de ${g.nome || g.email} caiu na sua conta? O plano ${g.plano_nome || g.plano} (${(NOMES_CICLO[g.ciclo] || "").toLowerCase()}) é liberado na hora.`)) return;
+      b.disabled = true;
+      resultado.textContent = "Salvando...";
+      const { data: feito, error: erro } = await sb.rpc("admin_decidir_pedido", { p_pedido: g.id, p_acao: acao, p_motivo: acao === "liberar" ? null : motivo });
+      if (erro) { resultado.textContent = "Não foi possível: " + erro.message; b.disabled = false; return; }
+      resultado.textContent = acao === "liberar" ? `Liberado. ${g.nome || g.email} já pode usar o plano ${g.plano_nome || g.plano} até ${dataBr(feito.vence_em)}.`
+        : acao === "recusar" ? "Pedido recusado. O cliente vê o motivo na tela de planos." : "Correção pedida. O cliente vê o recado na tela de planos.";
+      await Promise.all([carregarPedidos(), carregarClientes()]);
+    }));
+  }
+
   const NOMES_PAGAMENTO = { pendente: "Pendente", pago: "Pago", cancelado: "Cancelado", estornado: "Estornado", vencido: "Vencido" };
   async function carregarFinanceiro() {
     if (!todosClientes.length) await carregarClientes();
@@ -1140,7 +1220,7 @@
     document.getElementById("pag-conta").innerHTML = '<option value="">Selecione</option>' + todosClientes.filter((c) => !c.titular_id || c.titular_id === c.id)
       .map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.nome || c.email)}${c.empresa ? " · " + escapeHtml(c.empresa) : ""}</option>`).join("");
     document.getElementById("pag-plano").innerHTML = planos.filter((p) => p.preco_mensal_centavos > 0)
-      .map((p) => `<option value="${escapeHtml(p.codigo)}">${escapeHtml(p.nome)} · ${reais(p.preco_mensal_centavos)}/mês · ${reais(p.preco_anual_centavos)}/ano</option>`).join("");
+      .map((p) => `<option value="${escapeHtml(p.codigo)}">${escapeHtml(p.nome)} · ${reais(p.preco_mensal_centavos)}/mês · ${reais(p.preco_semestral_centavos)}/6 meses · ${reais(p.preco_anual_centavos)}/ano</option>`).join("");
     const alvo = document.getElementById("conteudo-pagamentos");
     const { data, error } = await sb.rpc("admin_listar_pagamentos", { p_usuario: null });
     if (error) { alvo.innerHTML = '<div class="vazio">Cobranças indisponíveis: ' + escapeHtml(error.message) + '</div>'; return; }
@@ -1368,7 +1448,7 @@
     await carregarAcessosEmpresa();
   });
 
-  const SECOES = { visao: carregarVisaoGeral, clientes: renderizarLista, planos: carregarPlanos, uso: carregarUso, financeiro: carregarFinanceiro,
+  const SECOES = { visao: carregarVisaoGeral, clientes: renderizarLista, planos: carregarPlanos, uso: carregarUso, pedidos: carregarPedidos, financeiro: carregarFinanceiro,
     boletim: carregarLogsBoletim, equipe: carregarEquipe, acessos: carregarAcessosEmpresa };
   document.querySelectorAll(".tabs button").forEach((btn) => {
     btn.addEventListener("click", () => {
