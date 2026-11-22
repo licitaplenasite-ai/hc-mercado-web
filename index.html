@@ -242,6 +242,13 @@
 
   /* 7. Planos */
   .planos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+  .ciclos { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 24px; padding: 0; border: 0; }
+  .ciclos legend { font: var(--text-label); color: var(--text-secondary); margin: 0 0 8px; padding: 0; width: 100%; }
+  .ciclos label { display: inline-flex; gap: 8px; align-items: center; min-height: 44px; padding: 8px 16px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface-default); cursor: pointer; }
+  .ciclos label:has(input:checked) { border-color: var(--action-strong); box-shadow: inset 0 0 0 1px var(--action-strong); background: var(--action-tint); }
+  .ciclos small { color: var(--text-secondary); }
+  .plano .total-ciclo { font: var(--text-label); color: var(--text-secondary); margin: 0 0 4px; min-height: 20px; }
+  .cancelamento { margin: 16px 0 0; max-width: 920px; }
   .extras { margin: 24px 0 0; padding: 20px 24px; border: 1px solid var(--border-default); border-radius: var(--radius-card); background: var(--surface-default); }
   .extras h3 { font-size: 16px; line-height: 24px; margin: 0 0 8px; }
   .extras ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; color: var(--text-secondary); }
@@ -721,11 +728,18 @@
       <h2 class="titulo" id="planos-titulo">Preço público, sem precisar falar com vendedor</h2>
       <p class="intro">Todo plano começa com 14 dias de teste grátis, sem cartão, com tudo do plano Empresa liberado. Se você não assinar, só o boletim por e-mail continua, e o que você salvou fica guardado.</p>
     </div>
+    <fieldset class="ciclos" id="ciclos">
+      <legend>Como você quer pagar</legend>
+      <label><input type="radio" name="ciclo" value="mensal" checked> Mensal <small>sem fidelidade</small></label>
+      <label><input type="radio" name="ciclo" value="semestral"> Semestral <small>10% de desconto</small></label>
+      <label><input type="radio" name="ciclo" value="anual"> Anual <small>2 meses grátis</small></label>
+    </fieldset>
     <div class="planos">
       <div class="plano">
         <div class="plano-topo"><h3>Essencial</h3></div>
         <p class="para">Para começar a licitar com organização.</p>
-        <p class="preco"><b>R$ 127</b><span>/mês</span></p>
+        <p class="preco"><b data-mensal="R$ 127" data-semestral="686" data-anual="1.270">R$ 127</b><span>/mês</span></p>
+        <p class="total-ciclo">Cobrado todo mês</p>
         <p class="obs">1 CNPJ · 1 pessoa · até 15 processos</p>
         <ul class="inclui">
           <li>Boletim por e-mail em todo dia útil</li>
@@ -741,7 +755,8 @@
       <div class="plano destaque">
         <div class="plano-topo"><h3>Empresa</h3><span class="chip in"><span class="g" aria-hidden="true">i</span>Recomendado</span></div>
         <p class="para">Para quem participa de licitações com o próprio CNPJ.</p>
-        <p class="preco"><b>R$ 249</b><span>/mês</span></p>
+        <p class="preco"><b data-mensal="R$ 249" data-semestral="1.345" data-anual="2.490">R$ 249</b><span>/mês</span></p>
+        <p class="total-ciclo">Cobrado todo mês</p>
         <p class="obs">1 CNPJ · 3 pessoas · processos sem limite</p>
         <ul class="inclui">
           <li class="titulo-lista">Tudo do Essencial, mais:</li>
@@ -761,7 +776,8 @@
       <div class="plano">
         <div class="plano-topo"><h3>Assessoria</h3></div>
         <p class="para">Para quem cuida das licitações de várias empresas.</p>
-        <p class="preco"><b>R$ 697</b><span>/mês</span></p>
+        <p class="preco"><b data-mensal="R$ 697" data-semestral="3.764" data-anual="6.970">R$ 697</b><span>/mês</span></p>
+        <p class="total-ciclo">Cobrado todo mês</p>
         <p class="obs">3 CNPJs · 6 pessoas · CNPJ extra por R$ 199/mês</p>
         <ul class="inclui">
           <li class="titulo-lista">Tudo do Empresa para cada CNPJ, mais:</li>
@@ -776,12 +792,13 @@
     <div class="extras">
       <h3>Extras, contratados à parte por CNPJ</h3>
       <ul>
-        <li><strong>Lance assistido · R$ 97/mês.</strong> A extensão preenche a proposta no Compras.gov e sugere o lance respeitando o seu valor mínimo. Quem dá o clique final é você.</li>
-        <li><strong>Pacote Operação · R$ 49/mês.</strong> Monitor do chat do pregoeiro. Em breve: certidões tiradas automaticamente e avisos no WhatsApp.</li>
-        <li><strong>IA extra · R$ 49.</strong> Para a equipe que usa muito a IA no mês.</li>
+        <li><strong>Lance assistido · R$ 97/mês (semestral R$ 524, anual R$ 970).</strong> A extensão preenche a proposta no Compras.gov e sugere o lance respeitando o seu valor mínimo. Quem dá o clique final é você.</li>
+        <li><strong>Pacote Operação · R$ 49/mês (semestral R$ 265, anual R$ 490).</strong> Monitor do chat do pregoeiro. Em breve: certidões tiradas automaticamente e avisos no WhatsApp.</li>
+        <li><strong>IA extra · R$ 49/mês (semestral R$ 265, anual R$ 490).</strong> Para a equipe que usa muito a IA no mês.</li>
       </ul>
     </div>
-    <p class="planos-nota">No plano anual você paga 10 meses e leva 12 (2 meses grátis). Empresas grandes: fale com a gente em <a href="mailto:licitaplena.site@gmail.com">licitaplena.site@gmail.com</a>.</p>
+    <p class="cancelamento"><strong>Cancelamento justo, sem multa escondida.</strong> Mensal: cancela quando quiser. Semestral e anual: devolvemos os meses não usados, descontado o desconto recebido.</p>
+    <p class="planos-nota">Semestral: 6 meses pagos de uma vez, com 10% de desconto. Anual: você paga 10 meses e leva 12 (2 meses grátis). CNPJ extra da Assessoria: R$ 199/mês (semestral R$ 1.075, anual R$ 1.990). O pagamento é por Pix, direto pela tela de planos depois do teste. Empresas grandes: fale com a gente em <a href="mailto:licitaplena.site@gmail.com">licitaplena.site@gmail.com</a>.</p>
   </div>
 </section>
 
@@ -813,7 +830,7 @@
       <details>
         <summary>Como cancelo?</summary>
         <!-- Dono confirmar: hoje não há botão de cancelamento no sistema nem cobrança automática integrada. Texto neutro até existir o fluxo. -->
-        <div class="resp"><p>Escreva para <a href="mailto:licitaplena.site@gmail.com">licitaplena.site@gmail.com</a> a partir do e-mail cadastrado pedindo o cancelamento. Nossa equipe orienta os próximos passos.</p></div>
+        <div class="resp"><p>Escreva para <a href="mailto:licitaplena.site@gmail.com">licitaplena.site@gmail.com</a> a partir do e-mail cadastrado pedindo o cancelamento. Sem multa escondida: no mensal você cancela quando quiser; no semestral e no anual devolvemos os meses não usados, descontado o desconto recebido.</p></div>
       </details>
       <details>
         <summary>Para quem é?</summary>
@@ -853,6 +870,25 @@
   </div>
 </footer>
 
+<script>
+  // Seletor Mensal / Semestral / Anual dos planos: troca o preço por mês e mostra o total do ciclo. Valores fixos na
+  // página (sem consulta ao banco), os mesmos de supabase/planos_e_recursos.sql.
+  (function () {
+    const MESES = { mensal: 1, semestral: 6, anual: 12 };
+    const real = (t) => Number(String(t).replace(/\D/g, ""));
+    const brl = (n) => "R$ " + Math.round(n).toLocaleString("pt-BR");
+    function aplicar() {
+      const c = document.querySelector('#ciclos input:checked')?.value || "mensal";
+      document.querySelectorAll(".preco b[data-mensal]").forEach((b) => {
+        const total = c === "mensal" ? real(b.dataset.mensal) : real(b.dataset[c]);
+        const mes = total / MESES[c];
+        b.textContent = Number.isInteger(mes) ? brl(mes) : "R$ " + mes.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        b.parentElement.nextElementSibling.textContent = c === "mensal" ? "Cobrado todo mês" : `${brl(total)} a cada ${MESES[c]} meses, pago de uma vez`;
+      });
+    }
+    document.querySelectorAll("#ciclos input").forEach((i) => i.addEventListener("change", aplicar));
+  })();
+</script>
 <script>
   // Alternar tema: grava na mesma chave que o sistema lê.
   (function () {

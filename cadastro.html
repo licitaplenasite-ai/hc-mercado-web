@@ -297,6 +297,12 @@
         <label><input type="radio" name="plano_desejado" value="empresa" checked><span><strong>Empresa</strong><span>R$ 249/mês. Minha empresa licita (1 CNPJ, 3 pessoas).</span></span></label>
         <label><input type="radio" name="plano_desejado" value="assessoria"><span><strong>Assessoria</strong><span>R$ 697/mês. Atendo várias empresas (3 CNPJs, 6 pessoas).</span></span></label>
       </fieldset>
+      <fieldset class="planos-opcoes" aria-label="Como você quer pagar depois do teste" id="ciclos">
+        <label><input type="radio" name="ciclo" value="mensal" checked><span><strong>Mensal</strong><span>Preço cheio, sem fidelidade.</span></span></label>
+        <label><input type="radio" name="ciclo" value="semestral"><span><strong>Semestral</strong><span>10% de desconto, 6 meses de uma vez.</span></span></label>
+        <label><input type="radio" name="ciclo" value="anual"><span><strong>Anual</strong><span>2 meses grátis, 12 meses de uma vez.</span></span></label>
+      </fieldset>
+      <p class="planos-nota" id="preco-ciclo" aria-live="polite">Empresa mensal: R$ 249 por mês.</p>
       <p class="planos-nota">14 dias grátis, sem cartão, com tudo do plano Empresa. No fim do teste nada é cobrado: se você não assinar, só o boletim por e-mail continua, e o que você salvou fica guardado.</p>
 
       <h2 class="secao">Acesso</h2>
@@ -625,6 +631,22 @@
     document.getElementById("form-cadastro").reset();
     btn.textContent = "Cadastro enviado";
   });
+</script>
+<script>
+  // Preço por mês e total do ciclo escolhido (só mostra; a escolha final é feita na tela de planos, depois do teste).
+  // Mesmos valores de supabase/planos_e_recursos.sql: semestral = 6 x mensal x 0,9 e anual = 10 x mensal, em real inteiro.
+  (function () {
+    const PRECOS = { essencial: ["Essencial", 127, 686, 1270], empresa: ["Empresa", 249, 1345, 2490], assessoria: ["Assessoria", 697, 3764, 6970] };
+    const MESES = { mensal: 1, semestral: 6, anual: 12 }, POS = { mensal: 1, semestral: 2, anual: 3 };
+    const brl = (n) => "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2 });
+    function aplicar() {
+      const plano = PRECOS[document.querySelector('input[name="plano_desejado"]:checked')?.value] || PRECOS.empresa;
+      const c = document.querySelector('input[name="ciclo"]:checked')?.value || "mensal", total = plano[POS[c]];
+      document.getElementById("preco-ciclo").textContent = c === "mensal" ? `${plano[0]} mensal: ${brl(total)} por mês.`
+        : `${plano[0]} ${c}: ${brl(Math.round(total / MESES[c] * 100) / 100)} por mês, ${brl(total)} pagos de uma vez a cada ${MESES[c]} meses.`;
+    }
+    document.querySelectorAll('input[name="plano_desejado"], input[name="ciclo"]').forEach((i) => i.addEventListener("change", aplicar));
+  })();
 </script>
 </body>
 </html>
