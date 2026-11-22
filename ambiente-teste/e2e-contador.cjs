@@ -91,7 +91,7 @@ const CNPJ_BRASILAPI = { cnpj: '11222333000181', uf: 'AM', codigo_municipio_ibge
     await passo('Salvar no item grava o resumo para a proposta', p, async () => {
       await quadro().getByRole('button', { name: 'Salvar no item para a proposta' }).click();
       await p.waitForFunction(() => /Salvo no item/.test(document.querySelector('.contador-corpo .itens-acoes .itens-campo-estado')?.textContent || ''), null, { timeout: 15000 });
-      const salvo = psql(`select contador_resumo->>'precoMinimo'||'|'||contador_resumo->>'ano'||'|'||contador_resumo->>'cClassTrib'||'|'||(contador_resumo->>'aviso') from operacao_itens_resultado where identificador='${ID_TESTE}';`);
+      const salvo = psql(`select concat_ws('|', contador_resumo->>'precoMinimo', contador_resumo->>'ano', contador_resumo->>'cClassTrib', contador_resumo->>'aviso') from operacao_itens_resultado where identificador='${ID_TESTE}';`);
       exigir(salvo.startsWith('63.24|2027|200032|Estimativa para formar preço'), `resumo: ${salvo}`);
       return salvo;
     });
@@ -104,15 +104,18 @@ const CNPJ_BRASILAPI = { cnpj: '11222333000181', uf: 'AM', codigo_municipio_ibge
       await p.setViewportSize({ width: 1280, height: 900 });
       return `scrollWidth ${largura} / innerWidth ${janela}`;
     });
-    await passo('Essencial: aviso fixo no lugar do Contador e a rota recusa', p, async () => {
+    // No Essencial a formação de preço (lista de itens do kit) já é barrada pelo plano; o Contador nem chega a aparecer.
+    await passo('Essencial: sem Contador na tela e a rota recusa', p, async () => {
       psql(`update assinaturas set plano='essencial', situacao='ativa' where usuario_id='${titular}';`);
       await p.reload();
-      await li().waitFor({ timeout: 30000 });
-      await li().locator('.contador-caixa .trava-plano').waitFor({ timeout: 15000 });
-      const trava = await li().locator('.contador-caixa .trava-plano').innerText();
+      await p.waitForTimeout(4000);
+      const botoes = await p.locator('[data-contador-abrir]').count();
+      const travas = await p.locator('.contador-caixa .trava-plano').count();
+      exigir(botoes === 0 || travas === botoes, `Contador aberto no Essencial: ${botoes} botão(ões), ${travas} trava(s)`);
+      const trava = botoes ? `${travas} quadro(s) travado(s)` : 'sem itens nem Contador na tela';
       const r = await p.evaluate(async () => { const x = await window.fetchComSessao('/api/contador', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ acao: 'tabela' }) }); return { s: x.status, j: await x.json() }; });
       exigir(r.s === 403 && /não inclui/.test(r.j.erro), `rota: ${r.s} ${JSON.stringify(r.j)}`);
-      await li().screenshot({ path: path.join(PRINTS, 'contador-essencial.png') });
+      await p.screenshot({ path: path.join(PRINTS, 'contador-essencial.png') });
       return `${trava.split('\n')[0]} | rota ${r.s}: ${r.j.erro}`;
     });
     await passo('sem erro de página nem de script no console', null, async () => {
