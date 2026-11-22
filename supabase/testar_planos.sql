@@ -220,4 +220,144 @@ begin
  update public.assinaturas set vence_em=current_date-6 where usuario_id=a;
  if public.plano_efetivo_titular(a)->>'plano'<>'gratis' then raise exception 'vencida não caiu para Grátis'; end if;
 end $$;
+-- 22/11: ciclo semestral, pedido de compra com Pix manual, liberação só pelo dono com 2 fatores, vencimento e
+-- isolamento (o cliente só vê os pedidos dele). P = titular novo (Empresa), Q = outro titular, D = dono.
+insert into auth.users(id,email) values
+ ('e2000000-0000-4000-8000-000000000011','pl-p@qa.invalid'),('e2000000-0000-4000-8000-000000000012','pl-q@qa.invalid');
+insert into public.clientes(id,nome,email,empresa,status,plano) values
+ ('e2000000-0000-4000-8000-000000000011','QA P','pl-p@qa.invalid','QA P LTDA','aprovado','empresa'),
+ ('e2000000-0000-4000-8000-000000000012','QA Q','pl-q@qa.invalid','QA Q LTDA','aprovado','assessoria');
+do $$
+begin
+ -- Preços semestrais (6 x mensal x 0,9, real inteiro) e extras com a mesma regra.
+ if (select string_agg(codigo||'='||preco_semestral_centavos||'/'||preco_anual_centavos, ',' order by ordem) from public.planos where codigo in ('essencial','empresa','assessoria'))
+   <>'essencial=68600/127000,empresa=134500/249000,assessoria=376400/697000' then raise exception 'preços semestrais: %',
+   (select string_agg(codigo||'='||preco_semestral_centavos, ',') from public.planos); end if;
+ if (select string_agg(codigo||'='||preco_semestral_centavos||'/'||preco_anual_centavos, ',' order by codigo) from public.precos_extras)
+   <>'cnpj_extra=107500/199000,ia_extra=26500/49000,lance_assistido=52400/97000,pacote_operacao=26500/49000' then raise exception 'preços dos extras'; end if;
+ if public.valor_do_pedido('empresa','semestral','{}',0)<>134500 then raise exception 'Empresa semestral'; end if;
+ if public.valor_do_pedido('empresa','mensal','{lance_assistido,ia_extra}',0)<>24900+9700+4900 then raise exception 'Empresa com extras'; end if;
+ -- Assessoria: Lance por CNPJ (3 + 1 extra = 4) e CNPJ extra anual.
+ if public.valor_do_pedido('assessoria','anual','{lance_assistido}',1)<>697000+199000+4*97000 then raise exception 'Assessoria com CNPJ extra e Lance: %',public.valor_do_pedido('assessoria','anual','{lance_assistido}',1); end if;
+end $$;
+set local role authenticated;
+do $$
+declare p uuid:='e2000000-0000-4000-8000-000000000011'; q uuid:='e2000000-0000-4000-8000-000000000012'; v jsonb; n int;
+begin
+ perform set_config('request.jwt.claim.sub',p::text,true);
+ perform set_config('request.jwt.claims',json_build_object('sub',p,'aal','aal1')::text,true);
+ begin perform public.pedir_assinatura('empresa','trimestral'); raise exception 'ciclo inválido aceito';
+ exception when raise_exception then if sqlerrm not like 'Escolha mensal%' then raise; end if; end;
+ begin perform public.pedir_assinatura('dono','mensal'); raise exception 'pediu plano Dono';
+ exception when raise_exception then if sqlerrm not like 'Plano indisponível%' then raise; end if; end;
+ begin perform public.pedir_assinatura('empresa','mensal','{}',2); raise exception 'CNPJ extra fora da Assessoria';
+ exception when raise_exception then if sqlerrm not like 'CNPJ extra%' then raise; end if; end;
+ begin perform public.pedir_assinatura('empresa','mensal','{robo_magico}'); raise exception 'extra inválido no pedido';
+ exception when raise_exception then if sqlerrm not like 'Extra inválido%' then raise; end if; end;
+ -- Pedido novo substitui o anterior em aberto; o valor vem do banco.
+ perform public.pedir_assinatura('essencial','mensal');
+ v := public.pedir_assinatura('empresa','semestral');
+ if (v->>'valor_centavos')::int<>134500 or v->>'situacao'<>'aguardando' then raise exception 'pedido Empresa semestral: %',v; end if;
+ if (select count(*) from public.pedidos where situacao='aguardando')<>1 or (select count(*) from public.pedidos)<>2 then raise exception 'pedido anterior não foi substituído'; end if;
+ -- Cliente não grava nem muda pedido direto, não libera e não chama a lista do admin.
+ begin insert into public.pedidos(usuario_id,plano,ciclo,valor_centavos) values (p,'empresa','anual',1); raise exception 'cliente gravou pedido';
+ exception when insufficient_privilege then null; end;
+ begin update public.pedidos set valor_centavos=1 where usuario_id=p; raise exception 'cliente mudou o valor';
+ exception when insufficient_privilege then null; end;
+ begin perform public.admin_decidir_pedido((v->>'id')::uuid,'liberar'); raise exception 'cliente liberou o próprio pedido';
+ exception when insufficient_privilege then null; end;
+ perform set_config('request.jwt.claims',json_build_object('sub',p,'aal','aal2')::text,true);
+ begin perform public.admin_decidir_pedido((v->>'id')::uuid,'liberar'); raise exception 'cliente com 2 fatores liberou';
+ exception when insufficient_privilege then null; end;
+ begin perform public.admin_listar_pedidos(); raise exception 'cliente listou pedidos de todos';
+ exception when insufficient_privilege then null; end;
+ -- Q faz o pedido dele; cada um só vê o seu.
+ perform set_config('request.jwt.claim.sub',q::text,true);
+ perform set_config('request.jwt.claims',json_build_object('sub',q,'aal','aal1')::text,true);
+ perform public.pedir_assinatura('assessoria','anual','{lance_assistido}',1);
+ select count(*) into n from public.pedidos;
+ if n<>1 or exists (select 1 from public.pedidos where usuario_id<>q) then raise exception 'Q vê pedido de outra conta'; end if;
+ perform set_config('request.jwt.claim.sub',p::text,true);
+ if exists (select 1 from public.pedidos where usuario_id<>p) then raise exception 'P vê pedido de outra conta'; end if;
+ -- Membro de outra organização não pede pelo titular.
+ perform set_config('request.jwt.claim.sub','e2000000-0000-4000-8000-000000000004',true);
+ begin perform public.pedir_assinatura('empresa','mensal'); raise exception 'membro pediu assinatura';
+ exception when insufficient_privilege then null; end;
+end $$;
+reset role;
+-- Dono (fora do papel authenticated, para achar os pedidos de todos): sem 2 fatores não libera; com 2 fatores libera, recusa e pede correção (com motivo).
+do $$
+declare d uuid:='e2000000-0000-4000-8000-000000000005'; p uuid:='e2000000-0000-4000-8000-000000000011'; q uuid:='e2000000-0000-4000-8000-000000000012';
+ gp uuid; gq uuid; v jsonb; l jsonb;
+begin
+ perform set_config('request.jwt.claim.sub',d::text,true);
+ perform set_config('request.jwt.claims',json_build_object('sub',d,'aal','aal1')::text,true);
+ select id into gp from public.pedidos where usuario_id=p and situacao='aguardando';
+ begin perform public.admin_decidir_pedido(gp,'liberar'); raise exception 'dono sem 2 fatores liberou';
+ exception when insufficient_privilege then null; end;
+ perform set_config('request.jwt.claims',json_build_object('sub',d,'aal','aal2')::text,true);
+ l := public.admin_listar_pedidos();
+ if jsonb_array_length(l->'pedidos')<3 or (l->'pedidos'->0->>'situacao')<>'aguardando' or (l->'pedidos'->0->>'empresa') is null then raise exception 'lista do admin: %',l; end if;
+ if exists (select 1 from jsonb_array_elements(public.admin_resumo()->'avisos') x where x->>'tipo'='pedido_aguardando' and x->>'usuario_id'=p::text) is not true then raise exception 'aviso de pedido'; end if;
+ begin perform public.admin_decidir_pedido(gp,'recusar',''); raise exception 'recusou sem motivo';
+ exception when raise_exception then if sqlerrm not like 'Escreva o motivo%' then raise; end if; end;
+ v := public.admin_decidir_pedido(gp,'correcao','Valor do Pix diferente do pedido');
+ if v->>'situacao'<>'correcao' then raise exception 'pedir correção'; end if;
+ v := public.admin_decidir_pedido(gp,'liberar');
+ if v->>'situacao'<>'liberado' or (v->>'vence_em')::date<>(current_date+interval '6 months')::date then raise exception 'liberação semestral: %',v; end if;
+ begin perform public.admin_decidir_pedido(gp,'liberar'); raise exception 'liberou duas vezes';
+ exception when raise_exception then if sqlerrm not like 'Este pedido já foi%' then raise; end if; end;
+ if (select plano||'/'||situacao||'/'||ciclo||'/'||valor_centavos||'/'||vence_em from public.assinaturas where usuario_id=p)
+   <>'empresa/ativa/semestral/134500/'||(current_date+interval '6 months')::date then raise exception 'assinatura de P: %',(select to_jsonb(a) from public.assinaturas a where usuario_id=p); end if;
+ if (select metodo||'/'||gateway||'/'||situacao||'/'||ciclo||'/'||valor_centavos from public.pagamentos where usuario_id=p)<>'pix/pix_manual/pago/semestral/134500' then raise exception 'pagamento de P'; end if;
+ -- Assessoria anual com 1 CNPJ extra e Lance: 12 meses, 4 CNPJs, extra ligado.
+ select id into gq from public.pedidos where usuario_id=q and situacao='aguardando';
+ v := public.admin_decidir_pedido(gq,'liberar');
+ if (select max_cnpjs||'/'||array_to_string(extras,',')||'/'||vence_em from public.assinaturas where usuario_id=q)<>'4/lance_assistido/'||(current_date+interval '1 year')::date then raise exception 'assinatura de Q: %',(select to_jsonb(a) from public.assinaturas a where usuario_id=q); end if;
+ -- Renovação antes de vencer soma ao vencimento atual.
+ update public.assinaturas set vence_em=current_date+3 where usuario_id=p;
+ if not exists (select 1 from jsonb_array_elements(public.admin_listar_pedidos()->'vencendo') x where x->>'usuario_id'=p::text) then raise exception 'P não está em vencendo'; end if;
+ perform set_config('request.jwt.claim.sub',p::text,true);
+ perform set_config('request.jwt.claims',json_build_object('sub',p,'aal','aal1')::text,true);
+ perform public.pedir_assinatura('empresa','mensal','{ia_extra}');
+ perform set_config('request.jwt.claim.sub',d::text,true);
+ perform set_config('request.jwt.claims',json_build_object('sub',d,'aal','aal2')::text,true);
+ select id into gp from public.pedidos where usuario_id=p and situacao='aguardando';
+ v := public.admin_decidir_pedido(gp,'liberar');
+ if (v->>'vence_em')::date<>(current_date+3+interval '1 month')::date then raise exception 'renovação não somou: %',v; end if;
+ -- Recusar com motivo: o cliente vê o motivo.
+ perform set_config('request.jwt.claim.sub',q::text,true);
+ perform set_config('request.jwt.claims',json_build_object('sub',q,'aal','aal1')::text,true);
+ perform public.pedir_assinatura('assessoria','mensal');
+ perform set_config('request.jwt.claim.sub',d::text,true);
+ perform set_config('request.jwt.claims',json_build_object('sub',d,'aal','aal2')::text,true);
+ select id into gq from public.pedidos where usuario_id=q and situacao='aguardando';
+ perform public.admin_decidir_pedido(gq,'recusar','Pix não encontrado');
+end $$;
+-- O cliente vê o motivo da recusa no pedido dele.
+set local role authenticated;
+do $$
+begin
+ perform set_config('request.jwt.claim.sub','e2000000-0000-4000-8000-000000000012',true);
+ if (select motivo from public.pedidos where situacao='recusado')<>'Pix não encontrado' then raise exception 'cliente não vê o motivo'; end if;
+end $$;
+reset role;
+do $$
+declare p uuid:='e2000000-0000-4000-8000-000000000011';
+begin
+ -- IA extra comprada no ciclo vale todo mês até o vencimento (Empresa 1.000 + 500).
+ if (public.plano_efetivo_titular(p)->>'ia_mes')::int<>1500 then raise exception 'IA extra do ciclo: %',public.plano_efetivo_titular(p)->>'ia_mes'; end if;
+ update public.assinaturas set ia_extra_mes=(current_date-interval '2 months')::date where usuario_id=p;
+ if (public.plano_efetivo_titular(p)->>'ia_mes')::int<>1500 then raise exception 'IA extra sumiu antes do vencimento'; end if;
+ update public.assinaturas set ia_extra_ate=current_date-1 where usuario_id=p;
+ if (public.plano_efetivo_titular(p)->>'ia_mes')::int<>1000 then raise exception 'IA extra depois do vencimento'; end if;
+ -- Vencida e não renovada: igual ao teste vencido, só boletim.
+ update public.assinaturas set vence_em=current_date-6 where usuario_id=p;
+ if public.plano_efetivo_titular(p)->>'plano'<>'gratis' or not (public.plano_efetivo_titular(p)->>'bloqueado')::boolean then raise exception 'semestral vencido não travou'; end if;
+ -- admin_registrar_pagamento entende o semestral.
+ perform set_config('request.jwt.claim.sub','e2000000-0000-4000-8000-000000000005',true);
+ perform set_config('request.jwt.claims',json_build_object('sub','e2000000-0000-4000-8000-000000000005','aal','aal2')::text,true);
+ perform public.admin_registrar_pagamento(p,'{"plano":"essencial","ciclo":"semestral"}');
+ if not exists (select 1 from public.pagamentos where usuario_id=p and situacao='pendente' and valor_centavos=68600 and ciclo='semestral') then raise exception 'cobrança semestral manual'; end if;
+end $$;
 rollback;

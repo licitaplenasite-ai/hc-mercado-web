@@ -56,6 +56,8 @@ create policy plano_recursos_select_publico on public.plano_recursos for select 
 -- Banco que já tinha os planos de 19/11 (sem a linha Essencial): aplica uma vez os valores aprovados em 21/11. Depois
 -- disso o que o dono editar no admin não volta ao padrão quando este arquivo roda de novo.
 alter table public.planos add column if not exists ia_mes_por_cnpj integer check (ia_mes_por_cnpj is null or ia_mes_por_cnpj >= 0);
+-- 22/11: ciclo semestral (6 meses com 10% de desconto, pago de uma vez). Preenchido logo depois dos valores iniciais.
+alter table public.planos add column if not exists preco_semestral_centavos integer check (preco_semestral_centavos is null or preco_semestral_centavos >= 0);
 do $$
 begin
   if exists (select 1 from public.planos) and not exists (select 1 from public.planos where codigo = 'essencial') then
@@ -83,6 +85,10 @@ insert into public.planos (codigo, nome, descricao, max_cnpjs, max_usuarios, max
   ('assessoria', 'Assessoria', 'Para assessorias: 3 CNPJs e 6 pessoas, com tudo do Empresa para cada CNPJ. CNPJ extra: R$ 199 por mês.', 3, 6, null, 69700, 697000, null, true, 5, 800),
   ('dono', 'Dono (ilimitado)', 'Conta do proprietário do LicitaPlena.', null, null, null, null, null, null, false, 9, null)
 on conflict (codigo) do nothing;
+-- Semestral = 6 x mensal x 0,9, arredondado para real inteiro (Essencial 686, Empresa 1.345, Assessoria 3.764). Só onde
+-- ainda está vazio: o que o dono editar no admin não volta ao padrão.
+update public.planos set preco_semestral_centavos = round(preco_mensal_centavos * 5.4 / 100.0)::integer * 100
+  where preco_semestral_centavos is null and preco_mensal_centavos > 0;
 -- Recursos sem rota /api (funcoes vazio) valem pela tela e, onde dá, pela RLS (Prospecção, seção 4).
 insert into public.recursos_plano (codigo, nome, funcoes) values
   ('ia', 'Inteligência artificial (resumo, busca e fornecedor com IA)', array['ia-edital', 'monte-busca-ia', 'fornecedor-ia']),
@@ -128,7 +134,7 @@ create table if not exists public.assinaturas (
   plano text not null references public.planos(codigo) on update cascade,
   situacao text not null default 'teste' check (situacao in ('teste', 'ativa', 'vencida', 'suspensa', 'cancelada')),
   teste_ate timestamptz,
-  ciclo text check (ciclo in ('mensal', 'anual')),
+  ciclo text check (ciclo in ('mensal', 'semestral', 'anual')),
   valor_centavos integer check (valor_centavos is null or valor_centavos >= 0),
   vence_em date,
   max_cnpjs integer check (max_cnpjs is null or max_cnpjs >= 1),        -- ajuste do dono; vazio = o do plano
@@ -152,12 +158,16 @@ alter table public.assinaturas add column if not exists ia_extra_usos integer ch
 alter table public.assinaturas add column if not exists ia_extra_mes date;
 alter table public.assinaturas drop constraint if exists assinaturas_extras_validos;
 alter table public.assinaturas add constraint assinaturas_extras_validos check (extras <@ array['lance_assistido', 'pacote_operacao']::text[]);
+-- IA extra comprada junto com o ciclo (pedido semestral ou anual): os usos a mais valem todo mês até esta data.
+alter table public.assinaturas add column if not exists ia_extra_ate date;
+alter table public.assinaturas drop constraint if exists assinaturas_ciclo_check;
+alter table public.assinaturas add constraint assinaturas_ciclo_check check (ciclo in ('mensal', 'semestral', 'anual'));
 create table if not exists public.pagamentos (
   id uuid primary key default gen_random_uuid(),
   usuario_id uuid references public.clientes(id) on delete set null,   -- registro fiscal fica mesmo se a conta sair
   cliente_email text,
   plano text references public.planos(codigo) on update cascade,
-  ciclo text check (ciclo in ('mensal', 'anual')),
+  ciclo text check (ciclo in ('mensal', 'semestral', 'anual')),
   valor_centavos integer not null check (valor_centavos > 0),
   situacao text not null default 'pendente' check (situacao in ('pendente', 'pago', 'cancelado', 'estornado', 'vencido')),
   metodo text not null default 'pix' check (metodo in ('pix', 'boleto', 'cartao', 'manual')),
@@ -172,7 +182,56 @@ create table if not exists public.pagamentos (
   criado_em timestamptz not null default now(),
   criado_por text
 );
+alter table public.pagamentos drop constraint if exists pagamentos_ciclo_check;
+alter table public.pagamentos add constraint pagamentos_ciclo_check check (ciclo in ('mensal', 'semestral', 'anual'));
 create index if not exists pagamentos_usuario_idx on public.pagamentos (usuario_id, criado_em desc);
+-- 22/11: preços dos extras por ciclo (CNPJ extra, Lance assistido, Pacote Operação, IA extra). Mesma regra dos planos:
+-- semestral = 6 x mensal x 0,9 e anual = 10 x mensal, em real inteiro. Leitura pública (tela de planos).
+create table if not exists public.precos_extras (
+  codigo text primary key check (codigo in ('cnpj_extra', 'lance_assistido', 'pacote_operacao', 'ia_extra')),
+  nome text not null,
+  por_cnpj boolean not null default false,  -- Lance assistido e Pacote Operação: cobrados por CNPJ do plano
+  preco_mensal_centavos integer not null check (preco_mensal_centavos > 0),
+  preco_semestral_centavos integer not null check (preco_semestral_centavos > 0),
+  preco_anual_centavos integer not null check (preco_anual_centavos > 0)
+);
+insert into public.precos_extras (codigo, nome, por_cnpj, preco_mensal_centavos, preco_semestral_centavos, preco_anual_centavos) values
+  ('cnpj_extra', 'CNPJ extra (Assessoria)', false, 19900, 107500, 199000),
+  ('lance_assistido', 'Lance assistido', true, 9700, 52400, 97000),
+  ('pacote_operacao', 'Pacote Operação', true, 4900, 26500, 49000),
+  ('ia_extra', 'IA extra (mais 500 leituras por mês)', false, 4900, 26500, 49000)
+on conflict (codigo) do nothing;
+alter table public.precos_extras enable row level security;
+revoke all on public.precos_extras from anon, authenticated;
+grant select on public.precos_extras to anon, authenticated;
+drop policy if exists precos_extras_select_publico on public.precos_extras;
+create policy precos_extras_select_publico on public.precos_extras for select to anon, authenticated using (true);
+
+-- Pedido de compra (tela assinar.html): o cliente escolhe plano, ciclo e extras; o valor é calculado AQUI, nunca no
+-- navegador. O dono confere o Pix na conta e libera no admin (admin_decidir_pedido, 2 fatores). Pagamento manual,
+-- sem gateway. O cliente só lê os pedidos dele; ninguém grava pelo navegador.
+create table if not exists public.pedidos (
+  id uuid primary key default gen_random_uuid(),
+  usuario_id uuid not null references public.clientes(id) on delete cascade,
+  plano text not null references public.planos(codigo) on update cascade,
+  ciclo text not null check (ciclo in ('mensal', 'semestral', 'anual')),
+  extras text[] not null default '{}' check (extras <@ array['lance_assistido', 'pacote_operacao', 'ia_extra']::text[]),
+  cnpjs_extras integer not null default 0 check (cnpjs_extras between 0 and 20),
+  valor_centavos integer not null check (valor_centavos > 0),
+  situacao text not null default 'aguardando' check (situacao in ('aguardando', 'liberado', 'recusado', 'correcao', 'cancelado')),
+  motivo text check (length(motivo) <= 500),
+  pagamento_id uuid references public.pagamentos(id) on delete set null,
+  criado_em timestamptz not null default now(),
+  decidido_em timestamptz,
+  decidido_por text
+);
+create index if not exists pedidos_usuario_idx on public.pedidos (usuario_id, criado_em desc);
+create index if not exists pedidos_situacao_idx on public.pedidos (situacao, criado_em desc);
+alter table public.pedidos enable row level security;
+revoke all on public.pedidos from anon, authenticated;
+grant select on public.pedidos to authenticated;
+drop policy if exists pedidos_select_proprio on public.pedidos;
+create policy pedidos_select_proprio on public.pedidos for select to authenticated using (usuario_id = (select auth.uid()));
 create table if not exists public.assinaturas_historico (
   id bigint generated always as identity primary key,
   usuario_id uuid not null,
@@ -254,7 +313,8 @@ begin
   -- Uso justo de IA do mês: por CNPJ e somado (Assessoria 800 x 3; o CNPJ extra é o ajuste max_cnpjs e soma mais 800),
   -- mais a IA extra do mês corrente. Vazio = sem cota (Dono).
   v_ia_mes := v_ia_cnpj * greatest(coalesce(v_max_c, 1), 1);
-  if v_ia_mes is not null and v_tem and v_efetivo = a.plano and a.ia_extra_mes = date_trunc('month', current_date)::date then
+  if v_ia_mes is not null and v_tem and v_efetivo = a.plano
+     and (a.ia_extra_mes = date_trunc('month', current_date)::date or a.ia_extra_ate >= current_date) then
     v_ia_mes := v_ia_mes + coalesce(a.ia_extra_usos, 0);
   end if;
   select coalesce(jsonb_object_agg(r.codigo, jsonb_build_object(
@@ -346,7 +406,8 @@ begin
           where u.usuario_id = v_usuario and u.dia = current_date and u.funcao = any (r.funcoes)
             and u.funcao not in ('analise-cnpj-buscar', 'analise-cnpj-cadastro'))), '{}'::jsonb) from public.recursos_plano r)),
     'planos_disponiveis', (select coalesce(jsonb_agg(jsonb_build_object('codigo', codigo, 'nome', nome, 'descricao', descricao, 'max_cnpjs', max_cnpjs,
-        'preco_mensal_centavos', preco_mensal_centavos, 'preco_anual_centavos', preco_anual_centavos) order by ordem), '[]'::jsonb)
+        'preco_mensal_centavos', preco_mensal_centavos, 'preco_semestral_centavos', preco_semestral_centavos,
+        'preco_anual_centavos', preco_anual_centavos) order by ordem), '[]'::jsonb)
       from public.planos where ativo and escolhivel_no_cadastro));
 end $$;
 revoke all on function public.meu_plano() from public, anon;
@@ -594,7 +655,7 @@ begin
   select * into a from public.assinaturas where usuario_id = g.usuario_id for update;
   if not found then raise exception 'Assinatura não encontrada'; end if;
   v_inicio := greatest(current_date, coalesce(case when a.situacao = 'ativa' then a.vence_em end, current_date));
-  v_fim := (v_inicio + case g.ciclo when 'anual' then interval '1 year' else interval '1 month' end)::date;
+  v_fim := (v_inicio + case g.ciclo when 'anual' then interval '1 year' when 'semestral' then interval '6 months' else interval '1 month' end)::date;
   update public.pagamentos set situacao = 'pago', pago_em = coalesce(pago_em, now()), periodo_inicio = v_inicio, periodo_fim = v_fim where id = g.id;
   update public.assinaturas set plano = g.plano, situacao = 'ativa', ciclo = g.ciclo, valor_centavos = g.valor_centavos,
     vence_em = v_fim, plano_solicitado = null, atualizado_em = now(), atualizado_por = p_feito_por where usuario_id = g.usuario_id;
@@ -732,7 +793,7 @@ language plpgsql security definer set search_path = public as $$
 begin
   if not public.admin_planos_autorizado() then raise exception 'Exige o proprietário com 2 fatores' using errcode = '42501'; end if;
   if jsonb_typeof(p_dados) is distinct from 'object' or (select count(*) from jsonb_object_keys(p_dados) k where k not in
-    ('nome', 'descricao', 'max_cnpjs', 'max_usuarios', 'max_processos', 'preco_mensal_centavos', 'preco_anual_centavos', 'dias_teste', 'escolhivel_no_cadastro', 'ativo', 'ia_mes_por_cnpj')) > 0
+    ('nome', 'descricao', 'max_cnpjs', 'max_usuarios', 'max_processos', 'preco_mensal_centavos', 'preco_semestral_centavos', 'preco_anual_centavos', 'dias_teste', 'escolhivel_no_cadastro', 'ativo', 'ia_mes_por_cnpj')) > 0
     then raise exception 'Campo não permitido'; end if;
   update public.planos set
     nome = case when p_dados ? 'nome' then p_dados ->> 'nome' else nome end,
@@ -741,6 +802,7 @@ begin
     max_usuarios = case when p_dados ? 'max_usuarios' then (p_dados ->> 'max_usuarios')::integer else max_usuarios end,
     max_processos = case when p_dados ? 'max_processos' then (p_dados ->> 'max_processos')::integer else max_processos end,
     preco_mensal_centavos = case when p_dados ? 'preco_mensal_centavos' then (p_dados ->> 'preco_mensal_centavos')::integer else preco_mensal_centavos end,
+    preco_semestral_centavos = case when p_dados ? 'preco_semestral_centavos' then (p_dados ->> 'preco_semestral_centavos')::integer else preco_semestral_centavos end,
     preco_anual_centavos = case when p_dados ? 'preco_anual_centavos' then (p_dados ->> 'preco_anual_centavos')::integer else preco_anual_centavos end,
     dias_teste = case when p_dados ? 'dias_teste' then (p_dados ->> 'dias_teste')::integer else dias_teste end,
     ia_mes_por_cnpj = case when p_dados ? 'ia_mes_por_cnpj' then (p_dados ->> 'ia_mes_por_cnpj')::integer else ia_mes_por_cnpj end,
@@ -803,6 +865,9 @@ begin
       select jsonb_build_object('tipo', 'pendente', 'usuario_id', c.id, 'nome', coalesce(c.nome, c.email), 'quando', c.criado_em)
         from public.clientes c where c.status = 'pendente' and c.criado_em < now() - interval '24 hours'
       union all
+      select jsonb_build_object('tipo', 'pedido_aguardando', 'usuario_id', p.usuario_id, 'nome', coalesce(c.nome, c.email), 'quando', p.criado_em, 'plano', p.plano)
+        from public.pedidos p join public.clientes c on c.id = p.usuario_id where p.situacao = 'aguardando'
+      union all
       select jsonb_build_object('tipo', 'pagamento_pendente', 'usuario_id', g.usuario_id, 'nome', coalesce(g.cliente_email, ''), 'quando', g.vencimento)
         from public.pagamentos g where g.situacao = 'pendente') s));
 end $$;
@@ -816,7 +881,7 @@ begin
   v_plano := coalesce(p_dados ->> 'plano', (select plano from public.assinaturas where usuario_id = p_usuario));
   v_ciclo := coalesce(p_dados ->> 'ciclo', 'mensal');
   v_valor := coalesce((p_dados ->> 'valor_centavos')::integer,
-    (select case v_ciclo when 'anual' then preco_anual_centavos else preco_mensal_centavos end from public.planos where codigo = v_plano));
+    (select case v_ciclo when 'anual' then preco_anual_centavos when 'semestral' then preco_semestral_centavos else preco_mensal_centavos end from public.planos where codigo = v_plano));
   if v_valor is null or v_valor <= 0 then raise exception 'Informe o valor'; end if;
   insert into public.pagamentos (usuario_id, cliente_email, plano, ciclo, valor_centavos, metodo, vencimento, referencia, gateway, observacoes, criado_por)
     values (p_usuario, (select email from public.clientes where id = p_usuario), v_plano, v_ciclo, v_valor,
@@ -857,6 +922,122 @@ begin
   return (select coalesce(jsonb_agg(jsonb_build_object('acao', acao, 'depois', depois, 'feito_por', feito_por, 'feito_em', feito_em) order by feito_em desc), '[]'::jsonb)
     from (select * from public.assinaturas_historico where usuario_id = p_usuario order by feito_em desc limit 100) h);
 end $$;
+
+-- ---------------------------------------------------------------------------------------------------------------
+-- 9) Pedido de compra e pagamento manual por Pix (22/11). Cliente pede (pedir_assinatura); o dono libera, recusa ou
+--    pede correção (admin_decidir_pedido, 2 fatores). Liberar = pagamento manual/pix confirmado pelo ponto único
+--    aplicar_pagamento_confirmado (vence_em em 1, 6 ou 12 meses; renovação soma ao vencimento atual).
+-- ---------------------------------------------------------------------------------------------------------------
+create or replace function public.preco_extra_no_ciclo(p_codigo text, p_ciclo text) returns integer
+language sql stable security definer set search_path = public as $$
+  select case p_ciclo when 'mensal' then preco_mensal_centavos when 'semestral' then preco_semestral_centavos
+    when 'anual' then preco_anual_centavos end from public.precos_extras where codigo = p_codigo;
+$$;
+-- Valor do pedido em centavos. Lance assistido e Pacote Operação: por CNPJ (do plano + extras). Vazio = combinação inválida.
+create or replace function public.valor_do_pedido(p_plano text, p_ciclo text, p_extras text[], p_cnpjs_extras integer) returns integer
+language sql stable security definer set search_path = public as $$
+  select p.preco + coalesce(p_cnpjs_extras, 0) * public.preco_extra_no_ciclo('cnpj_extra', p_ciclo)
+    + coalesce((select sum(public.preco_extra_no_ciclo(e.codigo, p_ciclo) * case when e.por_cnpj then p.cnpjs + coalesce(p_cnpjs_extras, 0) else 1 end)
+        from public.precos_extras e where e.codigo = any (coalesce(p_extras, '{}'))), 0)::integer
+  from (select case p_ciclo when 'mensal' then preco_mensal_centavos when 'semestral' then preco_semestral_centavos
+      when 'anual' then preco_anual_centavos end as preco, coalesce(max_cnpjs, 1) as cnpjs
+    from public.planos where codigo = p_plano) p;
+$$;
+
+create or replace function public.pedir_assinatura(p_plano text, p_ciclo text, p_extras text[] default '{}', p_cnpjs_extras integer default 0) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare v_usuario uuid := auth.uid(); v_extras text[]; v_valor integer; g public.pedidos%rowtype;
+begin
+  if v_usuario is null then raise exception 'Sessão inválida' using errcode = '42501'; end if;
+  if public.titular_do_usuario(v_usuario) <> v_usuario then raise exception 'Só o titular da conta pode assinar' using errcode = '42501'; end if;
+  if not exists (select 1 from public.assinaturas where usuario_id = v_usuario) then raise exception 'Assinatura não encontrada'; end if;
+  if not exists (select 1 from public.planos where codigo = p_plano and ativo and escolhivel_no_cadastro) then raise exception 'Plano indisponível'; end if;
+  if p_ciclo is null or p_ciclo not in ('mensal', 'semestral', 'anual') then raise exception 'Escolha mensal, semestral ou anual'; end if;
+  v_extras := array(select distinct x from unnest(coalesce(p_extras, '{}')) x order by x);
+  if not v_extras <@ array['lance_assistido', 'pacote_operacao', 'ia_extra']::text[] then raise exception 'Extra inválido'; end if;
+  if coalesce(p_cnpjs_extras, 0) not between 0 and 20 then raise exception 'Número de CNPJs extras inválido'; end if;
+  if coalesce(p_cnpjs_extras, 0) > 0 and p_plano <> 'assessoria' then raise exception 'CNPJ extra é só na Assessoria'; end if;
+  -- Contra clique repetido ou abuso: até 10 pedidos por dia por conta.
+  if (select count(*) from public.pedidos where usuario_id = v_usuario and criado_em > now() - interval '1 day') >= 10 then
+    raise exception 'Muitos pedidos hoje. Fale com a equipe.';
+  end if;
+  v_valor := public.valor_do_pedido(p_plano, p_ciclo, v_extras, coalesce(p_cnpjs_extras, 0));
+  if v_valor is null or v_valor <= 0 then raise exception 'Preço do plano não cadastrado. Fale com a equipe.'; end if;
+  -- Um pedido em aberto por conta: o novo substitui o anterior ainda não pago.
+  update public.pedidos set situacao = 'cancelado', decidido_em = now(), decidido_por = 'cliente'
+    where usuario_id = v_usuario and situacao in ('aguardando', 'correcao');
+  insert into public.pedidos (usuario_id, plano, ciclo, extras, cnpjs_extras, valor_centavos)
+    values (v_usuario, p_plano, p_ciclo, v_extras, coalesce(p_cnpjs_extras, 0), v_valor) returning * into g;
+  insert into public.assinaturas_historico (usuario_id, acao, depois, feito_por) values (v_usuario, 'pedido_criado', to_jsonb(g), 'cliente');
+  return to_jsonb(g);
+end $$;
+revoke all on function public.valor_do_pedido(text, text, text[], integer), public.preco_extra_no_ciclo(text, text) from public, anon;
+grant execute on function public.valor_do_pedido(text, text, text[], integer), public.preco_extra_no_ciclo(text, text) to authenticated;
+revoke all on function public.pedir_assinatura(text, text, text[], integer) from public, anon;
+grant execute on function public.pedir_assinatura(text, text, text[], integer) to authenticated;
+
+-- Dono decide: 'liberar' (Recebi o Pix), 'recusar' ou 'correcao' (os dois com motivo, que o cliente vê).
+create or replace function public.admin_decidir_pedido(p_pedido uuid, p_acao text, p_motivo text default null) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare g public.pedidos%rowtype; p public.planos%rowtype; v_plano_antes text; v_pag uuid; v jsonb; v_venc date;
+begin
+  if not public.admin_planos_autorizado() then raise exception 'Liberar pedido exige o proprietário com 2 fatores' using errcode = '42501'; end if;
+  if p_acao is null or p_acao not in ('liberar', 'recusar', 'correcao') then raise exception 'Ação inválida'; end if;
+  select * into g from public.pedidos where id = p_pedido for update;
+  if not found then raise exception 'Pedido não encontrado'; end if;
+  if g.situacao not in ('aguardando', 'correcao') then raise exception 'Este pedido já foi %', g.situacao; end if;
+  if p_acao <> 'liberar' then
+    if length(trim(coalesce(p_motivo, ''))) < 3 then raise exception 'Escreva o motivo para o cliente'; end if;
+    update public.pedidos set situacao = case p_acao when 'recusar' then 'recusado' else 'correcao' end, motivo = left(trim(p_motivo), 500),
+      decidido_em = now(), decidido_por = public.admin_email_atual() where id = g.id returning * into g;
+    insert into public.assinaturas_historico (usuario_id, acao, depois, feito_por) values (g.usuario_id, 'pedido_' || g.situacao, to_jsonb(g), public.admin_email_atual());
+    return to_jsonb(g);
+  end if;
+  select * into p from public.planos where codigo = g.plano;
+  select plano into v_plano_antes from public.assinaturas where usuario_id = g.usuario_id;
+  insert into public.pagamentos (usuario_id, cliente_email, plano, ciclo, valor_centavos, metodo, vencimento, referencia, gateway, observacoes, criado_por)
+    values (g.usuario_id, (select email from public.clientes where id = g.usuario_id), g.plano, g.ciclo, g.valor_centavos, 'pix', current_date,
+      'Pedido ' || left(g.id::text, 8), 'pix_manual', 'Pix manual conferido pelo dono', public.admin_email_atual())
+    returning id into v_pag;
+  v := public.aplicar_pagamento_confirmado(v_pag, public.admin_email_atual());
+  v_venc := (v ->> 'vence_em')::date;
+  -- O pedido define a assinatura inteira: extras, CNPJs a mais e IA extra até o fim do período pago. Sem CNPJ extra,
+  -- um ajuste manual do dono continua, a não ser que o plano mude (aí volta ao do plano).
+  update public.assinaturas set extras = array_remove(g.extras, 'ia_extra'),
+    max_cnpjs = case when g.cnpjs_extras > 0 then coalesce(p.max_cnpjs, 1) + g.cnpjs_extras
+      when v_plano_antes is distinct from g.plano then null else max_cnpjs end,
+    ia_extra_usos = case when 'ia_extra' = any (g.extras) then 500 else ia_extra_usos end,
+    ia_extra_mes = case when 'ia_extra' = any (g.extras) then date_trunc('month', current_date)::date else ia_extra_mes end,
+    ia_extra_ate = case when 'ia_extra' = any (g.extras) then v_venc end,
+    gateway = 'pix_manual'
+    where usuario_id = g.usuario_id;
+  update public.pedidos set situacao = 'liberado', pagamento_id = v_pag, decidido_em = now(), decidido_por = public.admin_email_atual()
+    where id = g.id returning * into g;
+  insert into public.assinaturas_historico (usuario_id, acao, depois, feito_por) values (g.usuario_id, 'pedido_liberado', to_jsonb(g), public.admin_email_atual());
+  return to_jsonb(g) || jsonb_build_object('vence_em', v_venc);
+end $$;
+
+-- Pedidos (os em aberto primeiro) e assinaturas que vencem nos próximos 7 dias, para o dono cobrar a renovação.
+create or replace function public.admin_listar_pedidos() returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.admin_planos_autorizado() then raise exception 'Financeiro exige o proprietário com 2 fatores' using errcode = '42501'; end if;
+  return jsonb_build_object(
+    'pedidos', (select coalesce(jsonb_agg(x order by (x ->> 'situacao') not in ('aguardando', 'correcao'), x ->> 'criado_em' desc), '[]'::jsonb) from (
+      select to_jsonb(g) || jsonb_build_object('nome', c.nome, 'email', c.email, 'telefone', c.telefone,
+        'empresa', coalesce((select e.razao_social from public.operacao_organizacoes o join public.operacao_empresas e on e.organizacao_id = o.id and e.ativo
+          where o.owner_id = g.usuario_id order by e.criado_em limit 1), c.empresa),
+        'cnpj', coalesce((select e.cnpj from public.operacao_organizacoes o join public.operacao_empresas e on e.organizacao_id = o.id and e.ativo
+          where o.owner_id = g.usuario_id and e.cnpj is not null order by e.criado_em limit 1), c.cnpj),
+        'plano_nome', (select nome from public.planos where codigo = g.plano)) as x
+      from (select * from public.pedidos order by criado_em desc limit 300) g left join public.clientes c on c.id = g.usuario_id) s),
+    'vencendo', (select coalesce(jsonb_agg(jsonb_build_object('usuario_id', a.usuario_id, 'nome', c.nome, 'email', c.email, 'telefone', c.telefone,
+        'empresa', c.empresa, 'plano', a.plano, 'plano_nome', p.nome, 'ciclo', a.ciclo, 'valor_centavos', a.valor_centavos, 'vence_em', a.vence_em) order by a.vence_em), '[]'::jsonb)
+      from public.assinaturas a join public.clientes c on c.id = a.usuario_id left join public.planos p on p.codigo = a.plano
+      where a.situacao = 'ativa' and a.vence_em between current_date and current_date + 7));
+end $$;
+revoke all on function public.admin_decidir_pedido(uuid, text, text), public.admin_listar_pedidos() from public, anon;
+grant execute on function public.admin_decidir_pedido(uuid, text, text), public.admin_listar_pedidos() to authenticated;
 
 revoke all on function public.admin_email_atual(), public.admin_listar_contas(), public.admin_empresas_da_conta(uuid),
   public.admin_definir_status_cliente(uuid, text), public.admin_definir_assinatura(uuid, jsonb), public.admin_salvar_plano(text, jsonb),
