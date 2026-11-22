@@ -40,10 +40,10 @@ test('desconto linear de 17% vai em cada preço unitário e o Auditor avisa a ga
   assert.deepEqual(orc.alertas.map((a) => a.regra).sort(), ['bdi_faixa', 'checklist_envio', 'cpu_incompleta', 'garantia_adicional']);
 });
 
-test('as 9 abas saem com o aviso do engenheiro e números como número; o .xlsx volta igual', () => {
+test('as 10 abas saem com o aviso do engenheiro e números como número; o .xlsx volta igual', () => {
   const { orc } = orcamentoDoEdital({ desconto: { linear: 0.17 } });
   const abas = M.montarAbas(orc);
-  assert.deepEqual(abas.map((a) => a.nome), ['Orçamento sintético', 'CPU', 'Composições próprias', 'BDI', 'Encargos sociais', 'Curva ABC', 'Cronograma', 'Carta-proposta', 'Alertas do Auditor']);
+  assert.deepEqual(abas.map((a) => a.nome), ['Orçamento sintético', 'CPU', 'Composições próprias', 'BDI', 'Encargos sociais', 'Curva ABC', 'Cronograma', 'Carta-proposta', 'Alertas do Auditor', 'Conferência antes de enviar']);
   for (const a of abas) assert.ok(a.linhas.flat().includes(M.AVISO), `aviso em ${a.nome}`);
   const lida = lerXlsx(gravarXlsx(abas));
   assert.deepEqual(lida.map((a) => a.nome), abas.map((a) => a.nome));
@@ -128,4 +128,18 @@ test('valor por extenso da carta-proposta', () => {
 test('colunas do .xlsx: letra e índice', () => {
   assert.deepEqual([0, 25, 26, 701].map(letraColuna), ['A', 'Z', 'AA', 'ZZ']);
   assert.deepEqual(['A', 'Z', 'AA', 'ZZ'].map(indiceColuna), [0, 25, 26, 701]);
+});
+
+test('conferência antes de enviar: regras que o Auditor não confere sozinho; memorial só acima de 25%', () => {
+  const { orc } = orcamentoDoEdital({ desconto: { linear: 0.17 } });
+  const conf = M.montarAbas(orc).find((a) => a.nome === 'Conferência antes de enviar').linhas;
+  const ids = conf.filter((l) => /^[A-M]\d{2}$/.test(l[0])).map((l) => l[0]);
+  assert.ok(ids.includes('I03') && ids.includes('J01'), 'envio e declarações entram');
+  assert.ok(!ids.includes('A01'), 'regra que o Auditor já confere não repete');
+  assert.ok(!ids.includes('A03') && !conf.flat().some((c) => /MEMORIAL DE EXEQUIBILIDADE/.test(c)), 'com 17% não pede memorial');
+  assert.ok(conf.every((l) => !/^[A-M]\d{2}$/.test(l[0]) || /^v1 de 2026-11-22$/.test(l[5])), 'cada regra com versão e vale desde');
+  const { orc: alto } = orcamentoDoEdital({ desconto: { linear: 0.27 } });
+  const c2 = M.montarAbas(alto).find((a) => a.nome === 'Conferência antes de enviar').linhas;
+  assert.ok(c2.some((l) => l[0] === 'A03'));
+  assert.ok(c2.some((l) => /MEMORIAL DE EXEQUIBILIDADE \(desconto de 27/.test(l[0])));
 });

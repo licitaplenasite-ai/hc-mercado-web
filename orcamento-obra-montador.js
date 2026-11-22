@@ -9,6 +9,8 @@
   const C = noNode ? require('./orcamento-obra-calculo.js') : globalThis.OrcObra.calculo;
   const A = noNode ? require('./orcamento-obra-auditor.js') : globalThis.OrcObra.auditor;
   const BDI = noNode ? require('./bdi-calculadora.js') : globalThis.BdiCalculadora;
+  const R = noNode ? require('./orcamento-obra-regras.js') : globalThis.OrcObra.regras;
+  const CAT = noNode ? require('./orcamento-obra-regras-catalogo.js') : globalThis.OrcObra.catalogo;
 
   const AVISO = 'Revisão e assinatura de engenheiro ou arquiteto responsável são obrigatórias.';
   const ORIGEM = { edital: 'Preço do edital', base: 'Tabela de referência', cpu: 'Soma da CPU', manual: 'Preço digitado de tabela', cotacao: 'Composição própria (cotações)', sem_referencia: 'SEM PREÇO' };
@@ -67,6 +69,7 @@
       bdiEdital: bdiNoUnitario ? bdiEdital : 0, modo, modoTotal, itensEdital: op.itensEdital, encargos: op.encargos,
       regime: { ...(op.regime || {}), editalDesonerado: leitura.cabecalho?.desonerado },
       dataBaseEdital: leitura.cabecalho?.dataBase, dataBaseBanco: op.dataBaseBanco, lei: op.lei ?? leitura.cabecalho?.lei,
+      uf: leitura.cabecalho?.uf, encargosEdital: { horista: leitura.cabecalho?.encargosHorista, mensalista: leitura.cabecalho?.encargosMensalista },
     });
     orc.resumoAlertas = A.resumo(orc.alertas);
     return orc;
@@ -143,7 +146,10 @@
     // Campo de opção pela desoneração: a falta dele derrubou proposta no TRE-AM 2/2023.
     const opcao = ['Empresa optante pela desoneração da folha (CPRB, Lei 12.546/2011):', d === true ? '( X ) Sim    (   ) Não' : d === false ? '(   ) Sim    ( X ) Não' : '(   ) Sim    (   ) Não  ← MARQUE'];
     if (!e?.grupos) {
+      // Tabela do SINAPI da UF, do regime e do ano da data-base (vem da base, nunca de número fixo).
+      const h = d === true || d === false ? R.encargosDeReferencia(c.uf, c.dataBase, d, 'horista') : null, m = h ? R.encargosDeReferencia(c.uf, c.dataBase, d, 'mensalista') : null;
       return { nome: 'Encargos sociais', linhas: [[AVISO], [], opcao, [], ['Encargos do edital', c.encargosHorista ?? '', 'horista', c.encargosMensalista ?? '', 'mensalista'],
+        ...(h ? [[`Tabela SINAPI ${c.uf} ${d ? 'desonerado' : 'não desonerado'}`, h.percentual, 'horista', m.percentual, 'mensalista', h.fonte]] : []),
         ['Tabela por grupos não informada: use a tabela de encargos do SINAPI da UF e do regime (CAIXA).']] };
     }
     const r = C.encargosSociais(e.grupos), out = [[AVISO], [], opcao, [], ['Código', 'Descrição', 'Percentual']];
@@ -254,8 +260,28 @@
     ] };
   }
 
+  // "Pacote pronto para enviar": as regras que o Auditor não confere sozinho (lista única de 106, REGRAS-AUDITOR.md) e que
+  // bloqueiam ou derrubam, para o engenheiro marcar ANTES da disputa (a causa nº 1 de queda é não enviar no prazo de 2 h).
+  // Desconto acima de 25%: entra o memorial de exequibilidade (A03; caso DNIT BR-364).
+  function abaConferencia(orc) {
+    const ref = orc.globalReferencia, desconto = ref > 0 ? 1 - orc.globalProposta / ref : 0;
+    const manuais = CAT.CATALOGO.filter((r) => !r.chave && (['BLOQUEIA', 'ERRO'].includes(r.nivel) || /^[IJ]/.test(r.id)) && !/^M/.test(r.id) && (r.id !== 'A03' || desconto > 0.25));
+    const linhas = [[AVISO], [], ['CONFERÊNCIA ANTES DE ENVIAR (o Auditor não confere estes pontos sozinho)'], [],
+      ['Regra', 'Nível', 'Grupo', 'O que conferir', 'Fonte', 'Versão', 'Feito']];
+    for (const r of manuais) linhas.push([r.id, r.nivel, r.grupo, r.checar, r.fonte, `v${r.versao} de ${r.valeDesde}`, '(   )']);
+    if (desconto > 0.25) {
+      linhas.push([], ['MEMORIAL DE EXEQUIBILIDADE (desconto de ' + (Math.round(desconto * 10000) / 100).toString().replace('.', ',') + '%, acima de 25%)'],
+        ['1', 'Cotações válidas e assinadas dos insumos da curva A, com local de entrega e frete.'],
+        ['2', 'Declaração de compromisso de fornecimento dos fornecedores cotados.'],
+        ['3', 'Mão de obra, coeficientes, equipamentos e tributos IGUAIS aos da referência (só o preço do insumo cotado muda).'],
+        ['4', 'Salários no mínimo iguais aos da convenção coletiva da UF.'],
+        ['Fonte', 'Lei 14.133/2021 art. 59 §2º e §4º; DNIT CE 268/2025 (BR-364); REGRAS-AUDITOR A03']);
+    }
+    return { nome: 'Conferência antes de enviar', linhas };
+  }
+
   function montarAbas(orc) {
-    return [abaSintetico(orc), abaCpu(orc), abaComposicoesProprias(orc), abaBdi(orc), abaEncargos(orc), abaAbc(orc), abaCronograma(orc), abaCartaProposta(orc), abaAlertas(orc)];
+    return [abaSintetico(orc), abaCpu(orc), abaComposicoesProprias(orc), abaBdi(orc), abaEncargos(orc), abaAbc(orc), abaCronograma(orc), abaCartaProposta(orc), abaAlertas(orc), abaConferencia(orc)];
   }
 
   // Planilha do edital preenchida: copia a matriz original e troca só preço unitário e total de cada linha lida,

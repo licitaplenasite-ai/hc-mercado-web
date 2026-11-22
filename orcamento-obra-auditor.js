@@ -5,7 +5,7 @@
 (function () {
   'use strict';
   const noNode = typeof module !== 'undefined' && module.exports;
-  const { REGRAS } = noNode ? require('./orcamento-obra-regras.js') : globalThis.OrcObra.regras;
+  const { REGRAS, encargosDeReferencia } = noNode ? require('./orcamento-obra-regras.js') : globalThis.OrcObra.regras;
   const C = noNode ? require('./orcamento-obra-calculo.js') : globalThis.OrcObra.calculo;
   const BDI = noNode ? require('./bdi-calculadora.js') : globalThis.BdiCalculadora;
 
@@ -18,7 +18,7 @@
 
   function alerta(regra, nivel, texto, item) {
     const r = REGRAS[regra];
-    return { regra, nivel, titulo: r.titulo, texto, fonte: r.fonte, link: r.link, ...(item ? { item } : {}) };
+    return { regra, nivel, titulo: r.titulo, texto, fonte: r.fonte, link: r.link, versao: r.versao, valeDesde: r.valeDesde, ...(item ? { item } : {}) };
   }
 
   // ---- Uma função por regra: (ctx) -> [alertas] ----
@@ -278,7 +278,29 @@
     return out;
   }
 
-  const REGRAS_ATIVAS = [regraBdi, regraUnitario, regraGlobalEtapas, regraDesoneracao, regraTotais, regraArredondamento, regraItens, regraReferencias, regraJogoDePlanilha, regraEncargos, regraCodigoRepetido, regraBdiDiferenciado, regraCpuIncompleta, regraChecklistEnvio, regraCronograma, regraPropriaVsReferencia];
+  // Encargos do edital contra a tabela do SINAPI da UF, do regime e do ano da data-base (E01); data-base em 2027 ou
+  // depois com a tabela de 2026 guardada (E06: a CAIXA muda os encargos em jan/2027). Sem tabela do ano: não opina.
+  function regraEncargosDaBase(ctx) {
+    const d = ctx.regime?.desonerado, db = ctx.dataBaseEdital, out = [];
+    if (!ctx.uf || !db || (d !== true && d !== false)) return out;
+    for (const tipo of ['horista', 'mensalista']) {
+      const edital = ctx.encargosEdital?.[tipo], ref = encargosDeReferencia(ctx.uf, db, d, tipo);
+      if (!(edital > 0) || !ref) continue;
+      if (Math.abs(edital - ref.percentual) > 0.005) out.push(alerta('encargos_da_base', 'atencao', `Encargos do ${tipo} no edital: ${pct(edital)}. Tabela do SINAPI ${ctx.uf} ${d ? 'desonerado' : 'não desonerado'} vigente em ${db}: ${pct(ref.percentual)} (${ref.fonte}). Confira de que ano é a tabela usada: ela muda todo ano.`));
+    }
+    const ref = encargosDeReferencia(ctx.uf, db, d, 'horista');
+    if (ref && db >= '2027-01' && ref.vigencia < '2027-01') out.push(alerta('encargos_da_base', 'info', `Data-base ${db}: a CAIXA muda os encargos em jan/2027 (jornada menor). O sistema ainda tem a tabela de ${ref.vigencia}: confira a nova na CAIXA.`));
+    return out;
+  }
+
+  // SICRO arredonda (NBR 5891); com itens do SICRO e a planilha truncando, avisa para conferir o critério do edital.
+  function regraArredondamentoDaBase(ctx) {
+    const sicro = servicos(ctx.linhas).filter((l) => l.fonte === 'SICRO').length;
+    if (!sicro || ctx.modo !== 'truncar') return [];
+    return [alerta('arredondamento_da_base', 'info', `${sicro} item(ns) do SICRO com a planilha truncando os centavos. O SICRO arredonda (NBR 5891): siga o que o edital mandar e confira 3 composições e 3 totais da referência.`)];
+  }
+
+  const REGRAS_ATIVAS = [regraBdi, regraUnitario, regraGlobalEtapas, regraDesoneracao, regraTotais, regraArredondamento, regraItens, regraReferencias, regraJogoDePlanilha, regraEncargos, regraCodigoRepetido, regraBdiDiferenciado, regraCpuIncompleta, regraChecklistEnvio, regraCronograma, regraPropriaVsReferencia, regraEncargosDaBase, regraArredondamentoDaBase];
   const ORDEM = { erro: 0, atencao: 1, info: 2 };
   function auditar(ctx) {
     return REGRAS_ATIVAS.flatMap((f) => f(ctx)).sort((a, b) => ORDEM[a.nivel] - ORDEM[b.nivel]);
@@ -290,7 +312,7 @@
     return { ...n, pronto: n.erro === 0 };
   }
 
-  const api = { auditar, resumo, regraBdi, regraUnitario, regraGlobalEtapas, regraDesoneracao, regraTotais, regraArredondamento, regraItens, regraReferencias, regraJogoDePlanilha, regraEncargos, regraCodigoRepetido, regraBdiDiferenciado, regraCpuIncompleta, regraChecklistEnvio, regraCronograma, regraPropriaVsReferencia };
+  const api = { auditar, resumo, regraBdi, regraUnitario, regraGlobalEtapas, regraDesoneracao, regraTotais, regraArredondamento, regraItens, regraReferencias, regraJogoDePlanilha, regraEncargos, regraCodigoRepetido, regraBdiDiferenciado, regraCpuIncompleta, regraChecklistEnvio, regraCronograma, regraPropriaVsReferencia, regraEncargosDaBase, regraArredondamentoDaBase };
   if (noNode) module.exports = api;
   else globalThis.OrcObra = Object.assign(globalThis.OrcObra || {}, { auditor: api });
 })();

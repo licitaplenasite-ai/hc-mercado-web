@@ -205,3 +205,40 @@ test('auditar ordena por gravidade e resumo diz se está pronto para o engenheir
   assert.deepEqual(A.resumo(a), { erro: 1, atencao: 1, info: 1, pronto: false });
   assert.equal(A.resumo([]).pronto, true);
 });
+
+test('encargos da base: compara com a tabela do SINAPI da UF, do regime e do ano; sem tabela do ano não opina', () => {
+  const a = (ctx) => A.regraEncargosDaBase(ctx);
+  // TRE-AM usou 83,73% (tabela de 2023) numa data-base de 2026: a tabela de 2026 do AM é 98,35%.
+  const r = a({ uf: 'AM', dataBaseEdital: '2026-03', regime: { desonerado: true }, encargosEdital: { horista: 0.8373 } });
+  assert.equal(r.length, 1);
+  assert.equal(r[0].regra, 'encargos_da_base');
+  assert.match(r[0].texto, /83,73%.*98,35%/);
+  assert.equal(r[0].versao, 1);
+  assert.equal(a({ uf: 'AM', dataBaseEdital: '2026-03', regime: { desonerado: true }, encargosEdital: { horista: 0.9835 } }).length, 0);
+  assert.equal(a({ uf: 'AM', dataBaseEdital: '2026-03', regime: { desonerado: false }, encargosEdital: { horista: 1.1416, mensalista: 0.708 } }).length, 0);
+  assert.equal(a({ uf: 'AM', dataBaseEdital: '2023-09', regime: { desonerado: true }, encargosEdital: { horista: 0.8373 } }).length, 0, 'sem a tabela de 2023 guardada');
+  assert.equal(a({ uf: 'AM', dataBaseEdital: '2026-03', regime: {}, encargosEdital: { horista: 0.8 } }).length, 0, 'sem regime marcado: a regra encargos já avisa');
+  const r27 = a({ uf: 'PA', dataBaseEdital: '2027-02', regime: { desonerado: true }, encargosEdital: {} });
+  assert.equal(r27[0].nivel, 'info');
+  assert.match(r27[0].texto, /jan\/2027/);
+});
+
+test('arredondamento da base: itens do SICRO com a planilha truncando pedem conferência', () => {
+  const linhas = [{ tipo: 'servico', item: '1.1', fonte: 'SICRO' }, { tipo: 'servico', item: '1.2', fonte: 'SINAPI' }];
+  assert.equal(A.regraArredondamentoDaBase({ linhas, modo: 'truncar' })[0].regra, 'arredondamento_da_base');
+  assert.deepEqual(A.regraArredondamentoDaBase({ linhas, modo: 'arredondar' }), []);
+  assert.deepEqual(A.regraArredondamentoDaBase({ linhas: [linhas[1]], modo: 'truncar' }), []);
+});
+
+test('toda regra do Auditor tem versão e vale desde; o catálogo tem as 106 com chave existente', () => {
+  const { REGRAS } = require('./orcamento-obra-regras.js');
+  const { CATALOGO } = require('./orcamento-obra-regras-catalogo.js');
+  for (const [k, r] of Object.entries(REGRAS)) assert.ok(Number.isInteger(r.versao) && /^\d{4}-\d{2}-\d{2}$/.test(r.valeDesde), k);
+  assert.equal(CATALOGO.length, 106);
+  assert.equal(new Set(CATALOGO.map((r) => r.id)).size, 106);
+  for (const r of CATALOGO) {
+    assert.ok(['BLOQUEIA', 'ERRO', 'AVISO', 'INFO'].includes(r.nivel), r.id);
+    assert.ok(r.checar.length > 10, `${r.id} sem o que checar`);
+    if (r.chave) assert.ok(REGRAS[r.chave], `${r.id}: chave ${r.chave} não existe`);
+  }
+});
