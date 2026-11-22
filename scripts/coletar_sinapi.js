@@ -82,9 +82,11 @@ function textosCompartilhados(xml) {
   return [...String(xml || "").matchAll(/<si>([\s\S]*?)<\/si>/g)].map((m) => xmlTexto([...m[1].matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map((t) => t[1]).join("")));
 }
 // Nome da aba -> caminho do XML dentro do xlsx (workbook.xml + rels).
+// Atributos em qualquer ordem: o Excel grava Id antes de Target, o openpyxl (e outros) grava depois.
+const atributo = (tag, nome) => new RegExp(`\\s${nome}="([^"]*)"`).exec(tag)?.[1];
 function mapaAbas(workbookXml, relsXml) {
-  const alvo = Object.fromEntries([...relsXml.matchAll(/<Relationship [^>]*Id="([^"]+)"[^>]*Target="([^"]+)"/g)].map((m) => [m[1], m[2].replace(/^\/?(xl\/)?/, "xl/")]));
-  return Object.fromEntries([...workbookXml.matchAll(/<sheet [^>]*name="([^"]+)"[^>]*r:id="([^"]+)"/g)].map((m) => [xmlTexto(m[1]), alvo[m[2]]]));
+  const alvo = Object.fromEntries([...relsXml.matchAll(/<Relationship\s[^>]*>/g)].map((m) => [atributo(m[0], "Id"), String(atributo(m[0], "Target") || "").replace(/^\/?(xl\/)?/, "xl/")]));
+  return Object.fromEntries([...workbookXml.matchAll(/<sheet\s[^>]*>/g)].map((m) => [xmlTexto(atributo(m[0], "name") || ""), alvo[atributo(m[0], "r:id")]]));
 }
 const coluna = (ref) => ref.replace(/[0-9]+$/, "");
 // Linhas da aba: [{ n, celulas: { A: "...", B: "..." } }]. Código de composição vem numa fórmula HYPERLINK(...,104658)
@@ -210,4 +212,4 @@ async function main() {
 
 if (require.main === module) main().catch((e) => { console.error(e); process.exit(1); });
 
-module.exports = { mesesParaTras, nomesDoMes, textosCompartilhados, mapaAbas, linhasDaAba, lerTabela, lerAnalitico, montarLinhas, semAcento, xmlTexto };
+module.exports = { mesesParaTras, nomesDoMes, textosCompartilhados, mapaAbas, linhasDaAba, lerTabela, lerAnalitico, montarLinhas, semAcento, xmlTexto, abrirReferencia };
