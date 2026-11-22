@@ -49,7 +49,7 @@
     const meses = op.meses || ce?.meses || 1;
     const orc = {
       leitura, linhas: p.linhas, total: p.total, totalReferencia: p.totalReferencia, globalProposta, globalReferencia,
-      bdi, calcBdi, bdiNoUnitario, modo, modoTotal, desconto: op.desconto || {}, encargos: op.encargos || null,
+      bdi, calcBdi, bdiNoUnitario, modo, modoTotal, desconto: op.desconto || {}, encargos: op.encargos || null, regime: op.regime || {},
       abc: C.curvaAbc(p.linhas), crono: C.cronograma(p.linhas, meses, distribuicao),
     };
     // Cronograma de referência: as etapas do edital com a mesma distribuição (para comparar mês a mês).
@@ -112,12 +112,14 @@
   }
 
   function abaEncargos(orc) {
-    const e = orc.encargos, c = orc.leitura.cabecalho || {};
+    const e = orc.encargos, c = orc.leitura.cabecalho || {}, d = orc.regime?.desonerado;
+    // Campo de opção pela desoneração: a falta dele derrubou proposta no TRE-AM 2/2023.
+    const opcao = ['Empresa optante pela desoneração da folha (CPRB, Lei 12.546/2011):', d === true ? '( X ) Sim    (   ) Não' : d === false ? '(   ) Sim    ( X ) Não' : '(   ) Sim    (   ) Não  ← MARQUE'];
     if (!e?.grupos) {
-      return { nome: 'Encargos sociais', linhas: [[AVISO], [], ['Encargos do edital', c.encargosHorista ?? '', 'horista', c.encargosMensalista ?? '', 'mensalista'],
+      return { nome: 'Encargos sociais', linhas: [[AVISO], [], opcao, [], ['Encargos do edital', c.encargosHorista ?? '', 'horista', c.encargosMensalista ?? '', 'mensalista'],
         ['Tabela por grupos não informada: use a tabela de encargos do SINAPI da UF e do regime (CAIXA).']] };
     }
-    const r = C.encargosSociais(e.grupos), out = [[AVISO], [], ['Código', 'Descrição', 'Percentual']];
+    const r = C.encargosSociais(e.grupos), out = [[AVISO], [], opcao, [], ['Código', 'Descrição', 'Percentual']];
     for (const g of ['A', 'B', 'C']) {
       for (const x of e.grupos[g] || []) out.push([x.codigo || '', x.descricao || '', x.valor]);
       out.push([g, `Total do grupo ${g}`, r[g]], []);

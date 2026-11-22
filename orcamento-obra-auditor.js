@@ -100,8 +100,9 @@
     if (r.desonerado === true && ctx.bdi && cprb === 0) out.push(alerta('desoneracao', 'erro', 'Orçamento desonerado sem CPRB no BDI.'));
     if (r.desonerado === false && cprb > 0) out.push(alerta('desoneracao', 'erro', 'Orçamento não desonerado com CPRB no BDI.'));
     if (r.editalDesonerado !== undefined && r.editalDesonerado !== null && r.desonerado !== undefined && r.editalDesonerado !== r.desonerado) {
-      out.push(alerta('desoneracao', 'info', `O edital orçou ${r.editalDesonerado ? 'desonerado' : 'não desonerado'} e a proposta está ${r.desonerado ? 'desonerada' : 'não desonerada'}. Pode, se o edital deixa escolher, mas BDI e encargos têm que seguir o regime da empresa.`));
+      out.push(alerta('desoneracao', 'atencao', `O edital orçou ${r.editalDesonerado ? 'desonerado' : 'não desonerado'} e a proposta está ${r.desonerado ? 'desonerada' : 'não desonerada'}. Se o edital deixa escolher, BDI e encargos têm de seguir o regime da empresa, e mesmo assim nenhum preço unitário pode passar da referência (caso real: recusa no TRE-AM 2/2023).`));
     }
+    if (ctx.bdi && r.desonerado !== true && r.desonerado !== false) out.push(alerta('encargos', 'atencao', 'Marque se a empresa é desonerada ou não: a tabela de encargos precisa trazer essa opção.'));
     if (r.ano >= 2025 && r.ano <= 2027 && cprb > 0) {
       const certa = C.cprbConstrucao(r.ano);
       if (Math.abs(cprb - certa) > 0.0001) out.push(alerta('reoneracao', 'erro', `Em ${r.ano} a CPRB da construção é ${pct(certa)} (não ${pct(cprb)}), e a folha paga ${pct(C.inssGrupoA(true, r.ano))} de INSS.`));
@@ -193,6 +194,24 @@
     return spread > 0.3 ? [alerta('jogo_de_planilha', 'atencao', `Nos itens que mais pesam, o desconto vai de ${pct(Math.min(...d))} a ${pct(Math.max(...d))}. Descontos tão desiguais parecem jogo de planilha.`)] : [];
   }
 
+  // CPU de todos os itens (recusa confirmada no TRE-AM 2/2023): item sem composição ou composição com insumo sem preço.
+  // Agrupa num alerta só para não afogar a lista. Composição própria tem a memória das cotações; insumo puro não tem CPU.
+  function regraCpuIncompleta(ctx) {
+    const s = servicos(ctx.linhas).filter((l) => l.referencia !== null && l.referencia !== undefined), out = [];
+    const semCpu = s.filter((l) => !l.cpu && !l.insumo && l.origem !== 'cotacao' && !l.manual?.cpuAnexada);
+    const furada = s.filter((l) => l.cpu?.semPreco?.length);
+    const lista = (xs) => `${xs.slice(0, 12).map((l) => l.item).join(', ')}${xs.length > 12 ? ` e mais ${xs.length - 12}` : ''}`;
+    if (semCpu.length) out.push(alerta('cpu_incompleta', 'erro', `${semCpu.length} item(ns) sem a composição (CPU): ${lista(semCpu)}. Anexe a composição da tabela de cada um (ou a sua) antes de enviar.`));
+    if (furada.length) out.push(alerta('cpu_incompleta', 'erro', `${furada.length} composição(ões) com insumo sem preço: ${lista(furada)}.`));
+    return out;
+  }
+
+  // Lembrete fixo do que derrubou propostas fora da planilha (prazo de 2 h, declarações assinadas pelo RT).
+  function regraChecklistEnvio(ctx) {
+    if (!servicos(ctx.linhas).length) return [];
+    return [alerta('checklist_envio', 'info', 'Antes da disputa, deixe prontos e assinados pelo responsável técnico: planilha, CPU, BDI, encargos (com a opção desonerado ou não desonerado marcada), cronograma e as declarações (vistoria ou dispensa e as demais). O prazo de envio costuma ser de 2 horas.')];
+  }
+
   // Mesmo código da mesma tabela em itens de descrição diferente (ex.: módulo e otimizador com o mesmo código SIURB).
   function regraCodigoRepetido(ctx) {
     const vistos = new Map(), out = [];
@@ -229,7 +248,7 @@
     return out;
   }
 
-  const REGRAS_ATIVAS = [regraBdi, regraUnitario, regraGlobalEtapas, regraDesoneracao, regraTotais, regraArredondamento, regraItens, regraReferencias, regraJogoDePlanilha, regraEncargos, regraCodigoRepetido, regraBdiDiferenciado];
+  const REGRAS_ATIVAS = [regraBdi, regraUnitario, regraGlobalEtapas, regraDesoneracao, regraTotais, regraArredondamento, regraItens, regraReferencias, regraJogoDePlanilha, regraEncargos, regraCodigoRepetido, regraBdiDiferenciado, regraCpuIncompleta, regraChecklistEnvio];
   const ORDEM = { erro: 0, atencao: 1, info: 2 };
   function auditar(ctx) {
     return REGRAS_ATIVAS.flatMap((f) => f(ctx)).sort((a, b) => ORDEM[a.nivel] - ORDEM[b.nivel]);
@@ -241,7 +260,7 @@
     return { ...n, pronto: n.erro === 0 };
   }
 
-  const api = { auditar, resumo, regraBdi, regraUnitario, regraGlobalEtapas, regraDesoneracao, regraTotais, regraArredondamento, regraItens, regraReferencias, regraJogoDePlanilha, regraEncargos, regraCodigoRepetido, regraBdiDiferenciado };
+  const api = { auditar, resumo, regraBdi, regraUnitario, regraGlobalEtapas, regraDesoneracao, regraTotais, regraArredondamento, regraItens, regraReferencias, regraJogoDePlanilha, regraEncargos, regraCodigoRepetido, regraBdiDiferenciado, regraCpuIncompleta, regraChecklistEnvio };
   if (noNode) module.exports = api;
   else globalThis.OrcObra = Object.assign(globalThis.OrcObra || {}, { auditor: api });
 })();

@@ -70,7 +70,9 @@
       const publicado = num(base.precos?.[`composicao|${it.codigo}`] ?? base.precos?.[`insumo|${it.codigo}`]);
       const manual = manuais[it.item];
       const propria = cotacoes[it.item] ? composicaoPropria(cotacoes[it.item]) : null;
-      const com = (referencia, origem, baseUsada, extra = {}) => ({ ...it, referencia, origem, baseUsada, cpu, publicado, ...extra });
+      // Insumo puro (tem preço próprio na tabela, não é composição): não precisa de CPU.
+      const insumo = base.precos?.[`composicao|${it.codigo}`] === undefined && base.precos?.[`insumo|${it.codigo}`] !== undefined;
+      const com = (referencia, origem, baseUsada, extra = {}) => ({ ...it, referencia, origem, baseUsada, cpu, publicado, insumo, ...extra });
       if (num(it.precoUnitario) > 0) return com(Number(it.precoUnitario), 'edital', `Preço do edital (${fonte || 'fonte não informada'} ${it.codigo || ''})`.trim());
       if (publicado !== null) return com(publicado, 'base', `${fonte} ${it.codigo}${base.referencia ? ` · ${base.referencia}` : ''}${base.uf ? ` · ${base.uf}` : ''}${base.desonerado === undefined ? '' : base.desonerado ? ' · desonerado' : ' · não desonerado'}`);
       if (cpu && !cpu.semPreco.length) return com(cpu.custo, 'cpu', `${fonte} ${it.codigo} (soma da CPU)`);

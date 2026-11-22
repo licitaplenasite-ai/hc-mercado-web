@@ -27,7 +27,8 @@ test('fluxo sem desconto refaz o orçamento do edital centavo por centavo', () =
   assert.equal(orc.globalProposta, 3943.05);
   assert.equal(orc.globalReferencia, 3943.05);
   assert.deepEqual(orc.crono.porMes, [2064.54, 1007.57]);
-  assert.deepEqual(orc.alertas.map((a) => a.regra), ['bdi_faixa'], 'só o aviso de que o BDI passa da faixa por causa da CPRB');
+  assert.deepEqual(orc.alertas.map((a) => a.regra), ['cpu_incompleta', 'bdi_faixa', 'checklist_envio']);
+  assert.match(orc.alertas[0].texto, /^9 item\(ns\) sem a composição \(CPU\): 2\.2, 2\.3, 2\.4/, 'as composições do órgão (ORG) não vieram na CPU');
 });
 
 test('desconto linear de 17% vai em cada preço unitário e o Auditor avisa a garantia adicional', () => {
@@ -36,7 +37,7 @@ test('desconto linear de 17% vai em cada preço unitário e o Auditor avisa a ga
   assert.equal(it.unitario, 44.15); // 53,20 × 0,83 = 44,156 (truncado)
   assert.equal(it.total, 797.79); // 18,07 × 44,15 = 797,7905
   assert.ok(orc.globalProposta < orc.globalReferencia * 0.85);
-  assert.deepEqual(orc.alertas.map((a) => a.regra).sort(), ['bdi_faixa', 'garantia_adicional']);
+  assert.deepEqual(orc.alertas.map((a) => a.regra).sort(), ['bdi_faixa', 'checklist_envio', 'cpu_incompleta', 'garantia_adicional']);
 });
 
 test('as 7 abas saem com o aviso do engenheiro e números como número; o .xlsx volta igual', () => {
@@ -52,6 +53,7 @@ test('as 7 abas saem com o aviso do engenheiro e números como número; o .xlsx 
   const cpu = lida[1].linhas;
   assert.ok(cpu.some((l) => l[2] === 'Custo pela CPU' && l[6] === 344.16));
   assert.ok(lida[2].linhas.some((l) => l[0] === 'BDI FINAL' && l[1] === '28,35%'));
+  assert.ok(lida[3].linhas.some((l) => /optante pela desoneração/.test(l[0]) && l[1] === '( X ) Sim    (   ) Não'), 'campo de opção pela desoneração');
   assert.deepEqual(lida[4].linhas.find((l) => l[0] === '2.2').slice(-1), ['A']);
 });
 

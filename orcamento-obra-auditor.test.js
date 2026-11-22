@@ -71,11 +71,12 @@ test('lei_13303: estatal não usa os 75% nem os 85%; global acima continua erro'
 
 test('desoneracao: CPRB e INSS juntos, nenhum dos dois, regime trocado e edital em outro regime', () => {
   const d = (bdi, regime) => regras(A.regraDesoneracao({ bdi, regime }));
-  assert.deepEqual(d(BDI_EDIF, { inssEncargos: 0.2 }), ['desoneracao:erro']);
-  assert.deepEqual(d({ ...BDI_EDIF, cprb: 0 }, { inssEncargos: 0 }), ['desoneracao:erro']);
+  assert.deepEqual(d(BDI_EDIF, { inssEncargos: 0.2, desonerado: true }), ['desoneracao:erro']);
+  assert.deepEqual(d({ ...BDI_EDIF, cprb: 0 }, { inssEncargos: 0, desonerado: false }), ['desoneracao:erro']);
+  assert.deepEqual(d(BDI_EDIF, { inssEncargos: 0 }), ['encargos:atencao'], 'sem a opção desonerado/não desonerado marcada');
   assert.deepEqual(d({ ...BDI_EDIF, cprb: 0 }, { desonerado: true }), ['desoneracao:erro']);
   assert.deepEqual(d(BDI_EDIF, { desonerado: false }), ['desoneracao:erro']);
-  assert.deepEqual(d(BDI_EDIF, { desonerado: true, editalDesonerado: false }), ['desoneracao:info']);
+  assert.deepEqual(d(BDI_EDIF, { desonerado: true, editalDesonerado: false }), ['desoneracao:atencao']);
   assert.deepEqual(d(BDI_EDIF, { desonerado: true, inssEncargos: 0, editalDesonerado: true, ano: 2023 }), []);
 });
 
@@ -86,7 +87,7 @@ test('reoneracao: em 2026 a CPRB é 2,70% e o INSS da folha 10%', () => {
 
 test('simples: empresa do Simples com PIS/COFINS/CPRB de outro regime', () => {
   assert.deepEqual(regras(A.regraDesoneracao({ bdi: BDI_EDIF, regime: { simples: true, desonerado: true } })), ['simples:atencao']);
-  assert.deepEqual(A.regraDesoneracao({ bdi: { ...BDI_EDIF, pis: 0, cofins: 0, cprb: 0 }, regime: { simples: true } }), []);
+  assert.deepEqual(A.regraDesoneracao({ bdi: { ...BDI_EDIF, pis: 0, cofins: 0, cprb: 0 }, regime: { simples: true, desonerado: false } }), []);
 });
 
 test('total_nao_fecha: quantidade × unitário e soma da etapa; desconto_so_no_global', () => {
@@ -147,6 +148,20 @@ test('sem_referencia, cotacao e data_base: item sem preço, poucas cotações e 
   assert.deepEqual(A.regraReferencias({ linhas: [], dataBaseEdital: '2026-10', dataBaseBanco: '2026-10' }), []);
 });
 
+test('cpu_incompleta: item sem composição ou com insumo sem preço; insumo puro e cotação não pedem CPU', () => {
+  const linhas = [s('1.1', { referencia: 10, origem: 'manual' }), s('1.2', { referencia: 10, origem: 'edital', cpu: { semPreco: [] } }), s('1.3', { referencia: 5, origem: 'base', insumo: true }),
+    s('1.4', { referencia: 7, origem: 'cotacao' }), s('1.5', { referencia: 9, origem: 'base', cpu: { semPreco: ['4813'] } }), s('1.6', { referencia: null, origem: 'sem_referencia' })];
+  const a = A.regraCpuIncompleta({ linhas });
+  assert.deepEqual(a.map((x) => x.texto.slice(0, 40)), ['1 item(ns) sem a composição (CPU): 1.1. ', '1 composição(ões) com insumo sem preço: ']);
+  assert.ok(a.every((x) => x.nivel === 'erro' && /chat da sessão/.test(x.fonte)));
+  assert.equal(A.regraCpuIncompleta({ linhas: [s('1.1', { referencia: 10, origem: 'manual', manual: { cpuAnexada: true } })] }).length, 0, 'quem marcou que anexa a CPU da tabela');
+});
+
+test('checklist_envio: lembrete das declarações assinadas pelo RT e do prazo de 2 h', () => {
+  assert.match(A.regraChecklistEnvio({ linhas: [s('1.1')] })[0].texto, /assinados pelo responsável técnico.*opção desonerado ou não desonerado.*2 horas/);
+  assert.deepEqual(A.regraChecklistEnvio({ linhas: [] }), []);
+});
+
 test('jogo_de_planilha: descontos muito desiguais nos itens que mais pesam', () => {
   const linhas = [s('1.1', { total: 500, desconto: 0 }), s('1.2', { total: 400, desconto: 0.4 }), s('1.3', { total: 100, desconto: 0.1 })];
   assert.deepEqual(regras(A.regraJogoDePlanilha({ linhas })), ['jogo_de_planilha:atencao']);
@@ -161,7 +176,7 @@ test('encargos: total informado diferente de A+B+C+D', () => {
 
 test('auditar ordena por gravidade e resumo diz se está pronto para o engenheiro', () => {
   const a = A.auditar({ linhas: [s('1.1', { origem: 'sem_referencia' })], globalProposta: 830, globalReferencia: 1000 });
-  assert.deepEqual(a.map((x) => x.nivel), ['erro', 'atencao']);
-  assert.deepEqual(A.resumo(a), { erro: 1, atencao: 1, info: 0, pronto: false });
+  assert.deepEqual(a.map((x) => x.regra), ['sem_referencia', 'garantia_adicional', 'checklist_envio']);
+  assert.deepEqual(A.resumo(a), { erro: 1, atencao: 1, info: 1, pronto: false });
   assert.equal(A.resumo([]).pronto, true);
 });
