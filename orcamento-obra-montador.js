@@ -72,6 +72,27 @@
     return orc;
   }
 
+  // Ajuste ao lance: o maior desconto linear (em 0,01%) cuja planilha, já truncada item a item, fica igual ou abaixo do
+  // lance. Assim a planilha reapresentada (art. 56 §5º) bate com o lance e passa de novo pelo Auditor.
+  function ajustarAoLance(leitura, op, lance) {
+    const tentar = (d) => montarOrcamento(leitura, { ...op, desconto: { linear: d / 10000 } });
+    let baixo = 0, alto = 10000, melhor = null;
+    while (baixo <= alto) {
+      const meio = Math.floor((baixo + alto) / 2), o = tentar(meio);
+      if (o.globalProposta <= lance + 0.004) { melhor = o; alto = meio - 1; } else baixo = meio + 1;
+    }
+    if (!melhor) return null;
+    return { ...melhor, lance, sobra: C.arredondar(lance - melhor.globalProposta) };
+  }
+  // Tabela de lances: global e risco de cada desconto, para a pessoa ter o preço pronto na disputa.
+  function tabelaDeLances(leitura, op, descontos = [0.05, 0.1, 0.15, 0.17, 0.2, 0.22, 0.25, 0.3]) {
+    return descontos.map((d) => {
+      const o = montarOrcamento(leitura, { ...op, desconto: { linear: d } });
+      const ruim = o.alertas.filter((a) => ['inexequivel', 'garantia_adicional', 'zona_de_risco', 'unitario_acima', 'etapa_acima', 'global_acima'].includes(a.regra)).map((a) => a.titulo);
+      return { desconto: d, global: o.globalProposta, pctReferencia: o.globalReferencia ? C.arredondar(o.globalProposta / o.globalReferencia, 4) : null, riscos: [...new Set(ruim)] };
+    });
+  }
+
   const pctTexto = (f) => `${(Number(f) * 100).toFixed(2).replace('.', ',')}%`;
   const cab = (orc, titulo) => {
     const c = orc.leitura.cabecalho || {};
@@ -263,7 +284,7 @@
     return m;
   }
 
-  const api = { AVISO, montarOrcamento, montarAbas, formatoEdital, valorPorExtenso };
+  const api = { AVISO, montarOrcamento, montarAbas, formatoEdital, valorPorExtenso, ajustarAoLance, tabelaDeLances };
   if (noNode) module.exports = api;
   else globalThis.OrcObra = Object.assign(globalThis.OrcObra || {}, { montador: api });
 })();

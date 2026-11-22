@@ -98,6 +98,19 @@ test('planilha em branco com várias bases: cada item diz qual base valeu e o qu
   assert.deepEqual([l11[k.precoUnitario], l11[k.unitarioComBdi], l11[k.total]], [600, 743.1, 743.1]);
 });
 
+test('ajuste ao lance: maior planilha que cabe no lance, e tabela de lances com os riscos', () => {
+  const abas = pasta('edital-reduzido.xlsx'), leitura = L.lerPasta(abas);
+  const op = { bases: L.lerCpu(pasta('cpu-reduzida.xlsx')[0].linhas).bases, bdi: BDI, regime: { desonerado: true, ano: 2023 } };
+  const o = M.ajustarAoLance(leitura, op, 3500);
+  assert.ok(o.globalProposta <= 3500 && o.sobra >= 0, `global ${o.globalProposta}`);
+  const umPassoAntes = M.montarOrcamento(leitura, { ...op, desconto: { linear: o.desconto.linear - 0.0001 } });
+  assert.ok(umPassoAntes.globalProposta > 3500, 'é o menor desconto que cabe no lance');
+  assert.equal(M.ajustarAoLance(leitura, op, -1), null, 'lance impossível');
+  const t = M.tabelaDeLances(leitura, op, [0.1, 0.2, 0.3]);
+  assert.deepEqual(t.map((x) => x.riscos), [[], ['Abaixo de 85%: garantia adicional', 'Desconto na faixa que mais cai'], ['Abaixo de 75% do orçamento (inexequível)', 'Desconto na faixa que mais cai']]);
+  assert.ok(t[0].global > t[1].global && t[1].global > t[2].global);
+});
+
 test('valor por extenso da carta-proposta', () => {
   const x = M.valorPorExtenso;
   assert.equal(x(705488.9), 'setecentos e cinco mil quatrocentos e oitenta e oito reais e noventa centavos');
