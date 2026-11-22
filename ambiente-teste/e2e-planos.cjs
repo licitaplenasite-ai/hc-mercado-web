@@ -272,7 +272,7 @@ async function main() {
         await pS.waitForSelector(`#${secao} .trava-plano`, { timeout: 30000 });
         const t = await pS.innerText(`#${secao} .trava-plano`);
         exigir(/não está no seu plano/.test(t) && new RegExp(rotulo).test(t), `${secao}: ${t}`);
-        exigir(await pS.getAttribute(`#${secao} .trava-plano a`, 'href') === 'index.html#planos', 'botão sem destino');
+        exigir(await pS.getAttribute(`#${secao} .trava-plano a`, 'href') === 'assinar.html', 'botão sem destino');
       }
       await pS.goto(SITE + '/painel.html#boletim');
       await pS.waitForTimeout(3000);
@@ -323,7 +323,7 @@ async function main() {
         exigir(!(await visivel(pT, '#chat-ia-btn')), tela + ': botão do Chat IA visível no teste vencido');
       }
       for (const largura of [1280, 375]) { await pT.setViewportSize({ width: largura, height: largura === 375 ? 812 : 900 }); await pT.waitForTimeout(300); await print(pT, `teste-vencido-${largura}.png`); exigir(await semRolagem(pT), 'rolagem ' + largura); }
-      await Promise.all([pT.waitForURL(/index\.html#planos/, { timeout: 20000 }), pT.click('main .trava-plano a')]);
+      await Promise.all([pT.waitForURL(/assinar\.html/, { timeout: 20000 }), pT.click('main .trava-plano a')]);
       const tT = await token(T);
       // Sanções: rota com cota que não depende de chave de IA no ambiente local; a regra é a mesma de todas (consumir_uso_plano).
       const ia = await fetch(SITE + '/api/sancoes?cnpj=11222333000181', { headers: { Authorization: 'Bearer ' + tT.access_token } });
