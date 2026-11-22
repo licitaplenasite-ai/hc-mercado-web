@@ -79,8 +79,9 @@
     if (ref > 0 && g > 0) {
       const d = 1 - g / ref;
       if (g > ref + 0.005) out.push(alerta('global_acima', 'erro', `Global ${reais(g)} acima do orçamento ${reais(ref)}.`));
-      else if (g < ref * 0.75) out.push(alerta('inexequivel', 'erro', `Global ${reais(g)} é ${pct(g / ref)} do orçado (desconto de ${pct(d)}): abaixo de 75%, a lei presume inexequível. Tenha a prova de exequibilidade pronta (CPU, cotações, contratos parecidos).`));
-      else if (g < ref * 0.85) out.push(alerta('garantia_adicional', 'atencao', `Global ${reais(g)} é ${pct(g / ref)} do orçado: abaixo de 85%, exige garantia adicional de ${reais(ref * 0.85 - g)} ou mais (custo que entra na conta do desconto).`));
+      // Compara em centavos: 25% de desconto cravado (R$ 637.489,97 de R$ 849.986,63) não é "inferior a 75%".
+      else if (g < C.arredondar(ref * 0.75) - 0.004) out.push(alerta('inexequivel', 'erro', `Global ${reais(g)} é ${pct(g / ref)} do orçado (desconto de ${pct(d)}): abaixo de 75%, a lei presume inexequível. Tenha a prova de exequibilidade pronta (CPU, cotações, contratos parecidos).`));
+      else if (g < C.arredondar(ref * 0.85) - 0.004) out.push(alerta('garantia_adicional', 'atencao', `Global ${reais(g)} é ${pct(g / ref)} do orçado: abaixo de 85%, exige garantia adicional de ${reais(ref * 0.85 - g)} ou mais (custo que entra na conta do desconto).`));
       if (d >= 0.2) {
         const taxa = d > 0.30005 ? '48,6% (66% no Norte)' : d > 0.25005 ? '40,5% (54% no Norte)' : d > 0.24995 ? '27%' : '24% (30% no Norte)';
         out.push(alerta('zona_de_risco', 'atencao', `Desconto de ${pct(d)}: nas obras estudadas, ${taxa} das propostas nesta faixa foram recusadas. ${d > 0.25005 ? 'Tenha o memorial de exequibilidade pronto (contratos parecidos, notas de insumo, produtividade). ' : ''}Revise planilha, CPU, BDI, cronograma e habilitação antes da sessão.`));

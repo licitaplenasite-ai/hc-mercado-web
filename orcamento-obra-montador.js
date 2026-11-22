@@ -22,20 +22,26 @@
     const bdi = calcBdi && !calcBdi.erro ? calcBdi.bdi / 10000 : (op.bdiFracao ?? leitura.resumo?.bdi ?? 0);
     // Edital que põe o BDI só no rodapé (custo direto + BDI = global): os preços unitários ficam sem BDI, como no edital.
     const bdiNoUnitario = !(leitura.resumo?.custoDireto > 0 && leitura.resumo?.bdi > 0);
+    // Conferindo uma proposta já pronta (op.itensEdital): a referência de cada item é o preço do edital, não o da proposta.
+    const doEdital = op.itensEdital ? new Map(op.itensEdital.filter((e) => e.tipo === 'servico').map((e) => [e.item, e.precoUnitario])) : null;
     const precificados = C.precificar(leitura.itens, op.bases || {}, { cotacoes: op.cotacoes, manuais: op.manuais, modo })
-      .map((l) => (l.tipo === 'servico' ? { ...l, referenciaEdital: l.precoUnitario > 0 ? l.precoUnitario : null } : l));
+      .map((l) => (l.tipo !== 'servico' ? l : { ...l, referenciaEdital: doEdital ? (doEdital.get(l.item) > 0 ? doEdital.get(l.item) : null) : l.precoUnitario > 0 ? l.precoUnitario : null }));
     const p = C.proposta(precificados, { bdi, bdiPorItem: op.bdiPorItem, desconto: op.desconto || {}, modo, modoTotal, bdiNoUnitario });
     const globalProposta = bdiNoUnitario ? p.total : C.arredondar(C.ajustar(p.total * bdi, modoTotal) + p.total);
     const editalComPreco = !leitura.emBranco;
     const bdiEdital = leitura.resumo?.bdi ?? 0;
     const etapasReferencia = {};
+    const etapaEdital = op.itensEdital ? new Map(op.itensEdital.filter((e) => e.tipo === 'etapa').map((e) => [e.item, e.totalEdital])) : null;
+    // Etapa sem total na planilha do edital (só as subetapas têm): soma os itens do edital, na mesma base da proposta.
+    const somaEdital = (etapa) => C.arredondar(op.itensEdital.filter((s) => s.tipo === 'servico' && s.item.startsWith(`${etapa}.`) && s.precoUnitario > 0)
+      .reduce((a, s) => a + C.ajustar((Number(s.quantidade) || 0) * (bdiNoUnitario ? C.ajustar(s.precoUnitario * (1 + bdiEdital), modo) : s.precoUnitario), modoTotal), 0));
     if (editalComPreco) {
       for (const e of p.linhas.filter((l) => l.tipo === 'etapa' && !l.item.includes('.'))) {
-        const ref = e.totalEdital ?? e.totalReferencia;
+        const ref = etapaEdital ? (etapaEdital.get(e.item) > 0 ? etapaEdital.get(e.item) : somaEdital(e.item)) : e.totalEdital ?? e.totalReferencia;
         if (ref > 0) etapasReferencia[e.item] = ref; // mesma base da proposta: com BDI no item, ou sem BDI quando o edital põe o BDI no rodapé
       }
     }
-    const globalReferencia = editalComPreco ? (leitura.resumo?.global ?? (bdiNoUnitario ? p.totalReferencia : C.arredondar(p.totalReferencia * (1 + bdiEdital)))) : null;
+    const globalReferencia = editalComPreco ? (op.globalEdital ?? leitura.resumo?.global ??(bdiNoUnitario ? p.totalReferencia : C.arredondar(p.totalReferencia * (1 + bdiEdital)))) : null;
     // Distribuição dos meses: a informada, senão a do cronograma do edital (pelo número da etapa ou pelo nome).
     const ce = op.cronogramaEdital, nome = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
     let distribuicao = op.distribuicao;

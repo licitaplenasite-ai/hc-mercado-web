@@ -60,6 +60,9 @@ test('global_acima, inexequivel, garantia_adicional e zona_de_risco pelo preço 
   assert.deepEqual(g(749.99), ['inexequivel:erro', 'zona_de_risco:atencao']);
   assert.match(A.regraGlobalEtapas({ linhas: [], globalProposta: 690, globalReferencia: 1000 })[1].texto, /48,6% \(66% no Norte\).*memorial de exequibilidade/);
   assert.match(A.regraGlobalEtapas({ linhas: [], globalProposta: 750, globalReferencia: 1000 })[1].texto, /27% das propostas/);
+  // Caso real (TRE-AM): 25% cravado sobre R$ 849.986,63 dá R$ 637.489,97, que não é inferior a 75% em centavos.
+  assert.ok(!regras(A.regraGlobalEtapas({ linhas: [], globalProposta: 637489.97, globalReferencia: 849986.6315 })).includes('inexequivel:erro'));
+  assert.ok(regras(A.regraGlobalEtapas({ linhas: [], globalProposta: 637489.96, globalReferencia: 849986.6315 })).includes('inexequivel:erro'));
   assert.match(A.regraGlobalEtapas({ linhas: [], globalProposta: 705488.9, globalReferencia: 849986.63 })[0].texto, /garantia adicional de R\$\s16\.999,74/);
 });
 
