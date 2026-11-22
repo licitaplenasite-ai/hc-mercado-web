@@ -71,12 +71,20 @@
       if (ref !== undefined && v > ref + 0.005) out.push(alerta('etapa_acima', 'erro', `Mês ${i + 1} do cronograma: ${reais(v)} acima do mês da referência ${reais(ref)}.`));
     });
     const g = ctx.globalProposta ?? ctx.total, ref = ctx.globalReferencia;
+    if (ctx.lei === '13303') {
+      out.push(alerta('lei_13303', 'info', 'Licitação de estatal (Lei 13.303/2016): a regra dos 75% não vale. Confira no edital o limite de inexequibilidade (em geral, 70% da média das propostas) e se o orçamento é sigiloso.'));
+      if (ref > 0 && g > ref + 0.005) out.push(alerta('global_acima', 'erro', `Global ${reais(g)} acima do orçamento ${reais(ref)}.`));
+      return out;
+    }
     if (ref > 0 && g > 0) {
       const d = 1 - g / ref;
       if (g > ref + 0.005) out.push(alerta('global_acima', 'erro', `Global ${reais(g)} acima do orçamento ${reais(ref)}.`));
       else if (g < ref * 0.75) out.push(alerta('inexequivel', 'erro', `Global ${reais(g)} é ${pct(g / ref)} do orçado (desconto de ${pct(d)}): abaixo de 75%, a lei presume inexequível. Tenha a prova de exequibilidade pronta (CPU, cotações, contratos parecidos).`));
       else if (g < ref * 0.85) out.push(alerta('garantia_adicional', 'atencao', `Global ${reais(g)} é ${pct(g / ref)} do orçado: abaixo de 85%, exige garantia adicional de ${reais(ref * 0.85 - g)} ou mais (custo que entra na conta do desconto).`));
-      if (d >= 0.2 && g >= ref * 0.75) out.push(alerta('zona_de_risco', 'atencao', `Desconto de ${pct(d)}: na faixa de 20% a 25% foi onde mais propostas caíram nos casos estudados. Revise planilha, CPU, BDI, cronograma e habilitação.`));
+      if (d >= 0.2) {
+        const taxa = d > 0.30005 ? '48,6% (66% no Norte)' : d > 0.25005 ? '40,5% (54% no Norte)' : d > 0.24995 ? '27%' : '24% (30% no Norte)';
+        out.push(alerta('zona_de_risco', 'atencao', `Desconto de ${pct(d)}: nas obras estudadas, ${taxa} das propostas nesta faixa foram recusadas. ${d > 0.25005 ? 'Tenha o memorial de exequibilidade pronto (contratos parecidos, notas de insumo, produtividade). ' : ''}Revise planilha, CPU, BDI, cronograma e habilitação antes da sessão.`));
+      }
     }
     return out;
   }
@@ -106,6 +114,8 @@
   function regraTotais(ctx) {
     const out = [];
     for (const l of servicos(ctx.linhas)) {
+      // Célula de fórmula salva sem valor: o item tem preço, mas fica fora da soma (caso real: R$ 687 mil fora do total).
+      if (l.unitario > 0 && (l.total === null || l.total === '')) { out.push(alerta('total_nao_fecha', 'erro', `Item ${l.item}: tem preço (${exato(l.unitario)}) mas o total está vazio, e fica fora da soma. Recalcule a planilha no Excel antes de enviar.`, l.item)); continue; }
       if (l.unitario === undefined || l.total === undefined) continue;
       const certo = C.ajustar((Number(l.quantidade) || 0) * l.unitario, ctx.modoTotal || ctx.modo);
       if (Math.abs(certo - l.total) > 0.005) out.push(alerta('total_nao_fecha', 'erro', `Item ${l.item}: ${l.quantidade} × ${exato(l.unitario)} = ${reais(certo)}, mas está ${exato(l.total)}.`, l.item));
@@ -148,6 +158,8 @@
       if (!p) { out.push(alerta('item_faltando', 'erro', `Item ${e.item} (${e.descricao.slice(0, 60)}) do edital não está na proposta.`, e.item)); continue; }
       if (Number(p.quantidade) !== Number(e.quantidade)) out.push(alerta('item_faltando', 'erro', `Item ${e.item}: quantidade ${p.quantidade}, o edital pede ${e.quantidade}.`, e.item));
       if (String(p.unidade || '').toLowerCase() !== String(e.unidade || '').toLowerCase()) out.push(alerta('item_faltando', 'atencao', `Item ${e.item}: unidade "${p.unidade}", o edital pede "${e.unidade}".`, e.item));
+      const desc = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
+      if (p.descricao !== undefined && desc(p.descricao) !== desc(e.descricao)) out.push(alerta('item_faltando', 'atencao', `Item ${e.item}: a descrição mudou em relação ao edital.`, e.item));
     }
     const doEdital = new Set(servicos(ctx.itensEdital).map((e) => e.item));
     for (const p of prop.values()) if (!doEdital.has(p.item)) out.push(alerta('item_faltando', 'atencao', `Item ${p.item} não existe no edital.`, p.item));
@@ -160,6 +172,7 @@
     for (const l of servicos(ctx.linhas)) {
       if (l.origem === 'sem_referencia') out.push(alerta('sem_referencia', 'erro', `Item ${l.item} (${l.fonte || 'sem fonte'} ${l.codigo || ''}): sem preço. Busque na tabela ${l.fonte || 'de referência'} ou faça composição própria com 3 cotações.`, l.item));
       if (l.origem === 'cotacao' && l.propria?.aviso) out.push(alerta('cotacao', 'atencao', `Item ${l.item}: ${l.propria.aviso}`, l.item));
+      if (l.origem === 'cotacao' && l.propria?.cotacoes?.some((c) => !c.data)) out.push(alerta('cotacao', 'info', `Item ${l.item}: anexe as cotações com data e CNPJ do fornecedor, e a CPU (mão de obra, material e equipamento). Na diligência o órgão pede.`, l.item));
       if (l.origem === 'manual' && !l.manual?.dataBase) out.push(alerta('data_base', 'atencao', `Item ${l.item}: preço da ${l.manual?.fonte || l.fonte} sem mês de referência. Anote a data-base (e a data de acesso) na memória.`, l.item));
     }
     if (ctx.dataBaseEdital && ctx.dataBaseBanco && ctx.dataBaseEdital !== ctx.dataBaseBanco) {
@@ -180,6 +193,33 @@
     return spread > 0.3 ? [alerta('jogo_de_planilha', 'atencao', `Nos itens que mais pesam, o desconto vai de ${pct(Math.min(...d))} a ${pct(Math.max(...d))}. Descontos tão desiguais parecem jogo de planilha.`)] : [];
   }
 
+  // Mesmo código da mesma tabela em itens de descrição diferente (ex.: módulo e otimizador com o mesmo código SIURB).
+  function regraCodigoRepetido(ctx) {
+    const vistos = new Map(), out = [];
+    const desc = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim().slice(0, 40);
+    for (const l of servicos(ctx.linhas)) {
+      if (!l.codigo || /^(N\/?A|-)$/i.test(l.codigo) || l.fonte === 'PROPRIA') continue;
+      const k = `${l.fonte}|${l.codigo}`, antes = vistos.get(k);
+      if (antes && desc(antes.descricao) !== desc(l.descricao)) out.push(alerta('codigo_repetido', 'atencao', `Itens ${antes.item} e ${l.item} usam o mesmo código ${l.fonte} ${l.codigo} com descrições diferentes.`, l.item));
+      if (!antes) vistos.set(k, l);
+    }
+    return out;
+  }
+
+  // Equipamento de valor relevante com o BDI dos serviços; item sem BDI.
+  const EQUIPAMENTO = /MODULO FOTOVOLTAICO|PAINEL SOLAR|INVERSOR|TRANSFORMADOR|GERADOR|ELEVADOR|CHILLER|SUBESTACAO|CARREGADOR/;
+  function regraBdiDiferenciado(ctx) {
+    const s = servicos(ctx.linhas).filter((l) => l.bdi !== undefined && l.total > 0), out = [];
+    const total = s.reduce((a, l) => a + l.total, 0), maior = Math.max(0, ...s.map((l) => l.bdi));
+    for (const l of s) {
+      const d = String(l.descricao || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+      if (EQUIPAMENTO.test(d) && l.bdi === maior && maior > 0 && l.total / total >= 0.05) out.push(alerta('bdi_diferenciado', 'atencao', `Item ${l.item} parece equipamento de valor relevante (${pct(l.total / total)} da obra) com o mesmo BDI dos serviços. O BDI diferenciado (reduzido) é o esperado.`, l.item));
+    }
+    const semBdi = s.filter((l) => l.bdi === 0);
+    if (semBdi.length && maior > 0) out.push(alerta('bdi_diferenciado', 'info', `${semBdi.length} item(ns) sem BDI (ex.: ${semBdi.slice(0, 3).map((l) => l.item).join(', ')}): explique na planilha (projeto, ART ou taxa entram pelo preço de tabela).`));
+    return out;
+  }
+
   // Encargos: total informado diferente de A+B+C+D; desonerado com INSS.
   function regraEncargos(ctx) {
     const e = ctx.encargos;
@@ -189,7 +229,7 @@
     return out;
   }
 
-  const REGRAS_ATIVAS = [regraBdi, regraUnitario, regraGlobalEtapas, regraDesoneracao, regraTotais, regraArredondamento, regraItens, regraReferencias, regraJogoDePlanilha, regraEncargos];
+  const REGRAS_ATIVAS = [regraBdi, regraUnitario, regraGlobalEtapas, regraDesoneracao, regraTotais, regraArredondamento, regraItens, regraReferencias, regraJogoDePlanilha, regraEncargos, regraCodigoRepetido, regraBdiDiferenciado];
   const ORDEM = { erro: 0, atencao: 1, info: 2 };
   function auditar(ctx) {
     return REGRAS_ATIVAS.flatMap((f) => f(ctx)).sort((a, b) => ORDEM[a.nivel] - ORDEM[b.nivel]);
@@ -201,7 +241,7 @@
     return { ...n, pronto: n.erro === 0 };
   }
 
-  const api = { auditar, resumo, regraBdi, regraUnitario, regraGlobalEtapas, regraDesoneracao, regraTotais, regraArredondamento, regraItens, regraReferencias, regraJogoDePlanilha, regraEncargos };
+  const api = { auditar, resumo, regraBdi, regraUnitario, regraGlobalEtapas, regraDesoneracao, regraTotais, regraArredondamento, regraItens, regraReferencias, regraJogoDePlanilha, regraEncargos, regraCodigoRepetido, regraBdiDiferenciado };
   if (noNode) module.exports = api;
   else globalThis.OrcObra = Object.assign(globalThis.OrcObra || {}, { auditor: api });
 })();

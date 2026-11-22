@@ -60,8 +60,9 @@
   // Data-base "AAAA-MM", UF, regime e encargos a partir dos textos da planilha (cabeçalho e rodapé).
   function metadados(textos) {
     const todo = textos.map(norm);
-    const out = { dataBase: null, uf: null, desonerado: null, encargosHorista: null, encargosMensalista: null };
+    const out = { dataBase: null, uf: null, desonerado: null, encargosHorista: null, encargosMensalista: null, lei: null };
     for (const t of todo) {
+      if (/13\.?303/.test(t)) out.lei = '13303'; // estatal: outra regra de inexequível
       if (!out.dataBase && /DATA[\s-]*BASE|REFERENCIA|MES[\s-]*BASE/.test(t)) {
         const m = new RegExp(`(${MESES.join('|')})\\s*(?:/|DE)?\\s*(\\d{4})`).exec(t) || /\b(0?[1-9]|1[0-2])\s*\/\s*(\d{4})\b/.exec(t);
         if (m) out.dataBase = `${m[2]}-${String(MESES.includes(m[1]) ? MESES.indexOf(m[1]) + 1 : Number(m[1])).padStart(2, '0')}`;
@@ -130,6 +131,7 @@
       vistos.add(item);
       if (servico && !(quantidade > 0)) avisos.push(`Item ${item}: sem quantidade.`);
       if (servico && !unidade) avisos.push(`Item ${item}: sem unidade.`);
+      if (servico && linha.precoUnitario > 0 && linha.totalEdital === null && k.total >= 0) avisos.push(`Item ${item}: tem preço mas o total está vazio (fórmula sem valor salvo?). Abra no Excel, recalcule e salve.`);
       itens.push(linha);
     }
     const servicos = itens.filter((x) => x.tipo === 'servico');

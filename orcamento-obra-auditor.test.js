@@ -57,8 +57,16 @@ test('global_acima, inexequivel, garantia_adicional e zona_de_risco pelo preço 
   assert.deepEqual(g(830), ['garantia_adicional:atencao']);
   assert.deepEqual(g(790), ['garantia_adicional:atencao', 'zona_de_risco:atencao']);
   assert.deepEqual(g(750), ['garantia_adicional:atencao', 'zona_de_risco:atencao'], 'exatamente 75% não é inexequível');
-  assert.deepEqual(g(749.99), ['inexequivel:erro']);
+  assert.deepEqual(g(749.99), ['inexequivel:erro', 'zona_de_risco:atencao']);
+  assert.match(A.regraGlobalEtapas({ linhas: [], globalProposta: 690, globalReferencia: 1000 })[1].texto, /48,6% \(66% no Norte\).*memorial de exequibilidade/);
+  assert.match(A.regraGlobalEtapas({ linhas: [], globalProposta: 750, globalReferencia: 1000 })[1].texto, /27% das propostas/);
   assert.match(A.regraGlobalEtapas({ linhas: [], globalProposta: 705488.9, globalReferencia: 849986.63 })[0].texto, /garantia adicional de R\$\s16\.999,74/);
+});
+
+test('lei_13303: estatal não usa os 75% nem os 85%; global acima continua erro', () => {
+  const g = (globalProposta) => regras(A.regraGlobalEtapas({ linhas: [], globalProposta, globalReferencia: 1000, lei: '13303' }));
+  assert.deepEqual(g(700), ['lei_13303:info']);
+  assert.deepEqual(g(1001), ['lei_13303:info', 'global_acima:erro']);
 });
 
 test('desoneracao: CPRB e INSS juntos, nenhum dos dois, regime trocado e edital em outro regime', () => {
@@ -89,6 +97,25 @@ test('total_nao_fecha: quantidade × unitário e soma da etapa; desconto_so_no_g
   assert.deepEqual(A.regraTotais({ linhas: [{ item: '1', tipo: 'etapa', total: 20 }, s('1.1', { unitario: 10, total: 20 })], total: 20, globalProposta: 20 }), []);
 });
 
+test('total vazio (fórmula sem valor salvo) e descrição mudada', () => {
+  assert.match(A.regraTotais({ linhas: [s('3.2.1', { unitario: 267.8, total: null })] })[0].texto, /total está vazio, e fica fora da soma/);
+  const a = A.regraItens({ itensEdital: [s('1.1', { descricao: 'Remoção de telhas' })], linhas: [s('1.1', { descricao: 'REMOÇÃO DE TELHAS' }), ] });
+  assert.deepEqual(a, [], 'maiúscula e acento não contam');
+  assert.deepEqual(regras(A.regraItens({ itensEdital: [s('1.1', { descricao: 'Remoção de telhas' })], linhas: [s('1.1', { descricao: 'Remoção de forro' })] })), ['item_faltando:atencao']);
+});
+
+test('codigo_repetido: mesmo código da mesma tabela em itens diferentes', () => {
+  const linhas = [s('3.2.19', { fonte: 'SIURB', codigo: '9082084', descricao: 'MÓDULO FOTOVOLTAICO 555 W' }), s('3.2.20', { fonte: 'SIURB', codigo: '9082084', descricao: 'OTIMIZADOR DE POTÊNCIA' }),
+    s('1.4', { fonte: 'SETOP', codigo: 'CO-3266', descricao: 'Projeto elétrico' }), s('1.8', { fonte: 'SETOP', codigo: 'CO-3266', descricao: 'Projeto elétrico' }), s('2.3', { fonte: 'CREA', codigo: 'n/a', descricao: 'ART' }), s('2.4', { fonte: 'CREA', codigo: 'n/a', descricao: 'ART execução' })];
+  assert.deepEqual(A.regraCodigoRepetido({ linhas }).map((x) => x.item), ['3.2.20']);
+});
+
+test('bdi_diferenciado: equipamento relevante com o BDI dos serviços; item sem BDI', () => {
+  const linhas = [s('3.2.19', { descricao: 'MÓDULO FOTOVOLTAICO 555 W', total: 800, bdi: 0.2385 }), s('1.1', { descricao: 'Remoção de telhas', total: 150, bdi: 0.2385 }), s('1.2', { descricao: 'Projeto', total: 50, bdi: 0 })];
+  assert.deepEqual(regras(A.regraBdiDiferenciado({ linhas })), ['bdi_diferenciado:atencao', 'bdi_diferenciado:info']);
+  assert.deepEqual(A.regraBdiDiferenciado({ linhas: [{ ...linhas[0], bdi: 0.1528 }, linhas[1]] }), []);
+});
+
 test('arredondamento: mais de 2 casas e modo diferente do edital', () => {
   const a = A.regraArredondamento({ linhas: [s('1.1', { quantidade: 1, unitario: 705.9679, total: 705.97 })] });
   assert.deepEqual(regras(a), ['arredondamento:erro']);
@@ -114,6 +141,8 @@ test('sem_referencia, cotacao e data_base: item sem preço, poucas cotações e 
     s('1.5', { origem: 'base' }),
   ];
   assert.deepEqual(A.regraReferencias({ linhas }).map((x) => [x.regra, x.item]), [['sem_referencia', '1.1'], ['cotacao', '1.2'], ['data_base', '1.3']]);
+  const semData = A.regraReferencias({ linhas: [s('1.6', { origem: 'cotacao', propria: { aviso: null, cotacoes: [{ valor: 1 }, { valor: 1, data: '01/11/2026' }] } })] });
+  assert.deepEqual(regras(semData), ['cotacao:info']);
   assert.deepEqual(regras(A.regraReferencias({ linhas: [], dataBaseEdital: '2023-09', dataBaseBanco: '2026-10' })), ['data_base:atencao']);
   assert.deepEqual(A.regraReferencias({ linhas: [], dataBaseEdital: '2026-10', dataBaseBanco: '2026-10' }), []);
 });

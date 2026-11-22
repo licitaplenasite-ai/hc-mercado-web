@@ -60,7 +60,7 @@
       globalReferencia, etapasReferencia, bdi: op.bdi, bdiAplicado: calcBdi && !calcBdi.erro && op.bdiFracao !== undefined ? op.bdiFracao : undefined,
       bdiEdital: bdiNoUnitario ? bdiEdital : 0, modo, modoTotal, itensEdital: op.itensEdital, encargos: op.encargos,
       regime: { ...(op.regime || {}), editalDesonerado: leitura.cabecalho?.desonerado },
-      dataBaseEdital: leitura.cabecalho?.dataBase, dataBaseBanco: op.dataBaseBanco,
+      dataBaseEdital: leitura.cabecalho?.dataBase, dataBaseBanco: op.dataBaseBanco, lei: op.lei ?? leitura.cabecalho?.lei,
     });
     orc.resumoAlertas = A.resumo(orc.alertas);
     return orc;

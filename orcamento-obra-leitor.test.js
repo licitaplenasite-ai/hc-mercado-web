@@ -14,7 +14,7 @@ const pasta = (n) => lerXlsx(fs.readFileSync(path.join(FIX, n)));
 test('lê o orçamento sintético do edital: cabeçalho, itens, fontes e rodapé', () => {
   const r = L.lerPasta(pasta('edital-reduzido.xlsx'));
   assert.equal(r.aba, 'Orçamento Sintético');
-  assert.deepEqual(r.cabecalho, { dataBase: '2023-09', uf: 'AM', desonerado: true, encargosHorista: 0.8373, encargosMensalista: 0.4663 });
+  assert.deepEqual(r.cabecalho, { dataBase: '2023-09', uf: 'AM', desonerado: true, encargosHorista: 0.8373, encargosMensalista: 0.4663, lei: null });
   const s = r.itens.filter((i) => i.tipo === 'servico');
   assert.equal(s.length, 12);
   assert.equal(r.itens.filter((i) => i.tipo === 'etapa').length, 2);
