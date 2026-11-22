@@ -263,7 +263,7 @@
         ['Custo por unidade (com a planilha)', reais(r.custos.custoUnidade)],
         ['Ano da entrega', String(r.ano)],
       ].filter(Boolean);
-      n.resultado.replaceChildren(
+      n.resultado.replaceChildren(...[
         h('dl', { classe: 'itens-precos' }, ...linhas.map(([dt, dd]) => h('div', {}, h('dt', { texto: dt }), h('dd', { texto: dd })))),
         h('strong', { texto: 'Tributos sobre a venda' }),
         h('ul', { classe: 'contador-lista' }, ...(r.tributos.length ? r.tributos.map((t) => h('li', { texto: `${t.rotulo}: ${pct(t.pct)} · ${t.fonte}` })) : [h('li', { texto: 'Nenhum por dentro neste regime e ano.' })])),
@@ -272,7 +272,7 @@
         h('strong', { texto: 'Dicas do Contador' }),
         h('ul', { classe: 'contador-lista', 'data-dicas': '' }, ...r.dicas.map((d) => h('li', { texto: d }))),
         h('p', { classe: 'itens-apoio', 'data-oficial': '', texto: fraseOficial }),
-        h('p', { classe: 'contador-aviso', texto: r.aviso }));
+        h('p', { classe: 'contador-aviso', texto: r.aviso })].filter(Boolean));
       n.salvar.disabled = false;
     }
     el('[data-contador-calcular]').addEventListener('click', async (ev) => {

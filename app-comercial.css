@@ -260,6 +260,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .contador-lista [data-veredito="nao"]{color:var(--error-text)}
 .contador-lista [data-veredito="vale"]{color:var(--success-text)}
 .contador-resultado{display:grid;gap:var(--space-8);min-width:0}
+.contador-corpo input:not([type="checkbox"]),.contador-corpo select{width:100%;min-width:0;box-sizing:border-box}
 /* Identificação da empresa (empresa-identificacao-ui.js). Markup real: #identificacao > details > summary, p, p[role=status], label+campo em pares, select, input file, botões .defesa-botao, div de sugestões, checkbox e label.
    Desktop (641px+): duas colunas label | campo; textos, botões, arquivo, tipo e sugestões ocupam a largura toda; checkbox e label ficam na mesma linha.
    Mobile: uma coluna, rótulo acima do campo; checkbox e label na mesma linha.
