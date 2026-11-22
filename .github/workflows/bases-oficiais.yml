@@ -1,0 +1,50 @@
+name: Bases oficiais de obra (SICRO, SEINFRA-CE, ORSE)
+
+# Robô semanal das bases de preço de obra além do SINAPI (scripts/coletar_bases_oficiais.js): descobre a versão
+# nova de cada base na página oficial, grava no catálogo bases_preco_versoes e, no SICRO, baixa o .7z da UF e grava
+# os preços por data-base. SICRO sai a cada trimestre (jan/abr/jul/out); ORSE todo mês; SEINFRA-CE sem calendário.
+# Roda toda segunda às 11:00 UTC (8h de Brasília): basta para pegar cada publicação na mesma semana.
+# Falha de acesso ou formato: o job falha (e-mail do GitHub) e o motivo fica em dados_robo "bases_preco_saude".
+# Não escreve no repositório. Precisa de supabase/bases_preco.sql aplicado antes.
+concurrency:
+  group: bases-oficiais
+  cancel-in-progress: false
+
+on:
+  schedule:
+    - cron: "0 11 * * 1"
+  workflow_dispatch:
+    inputs:
+      bases:
+        description: "Bases separadas por vírgula (vazio = SICRO,SEINFRA-CE,ORSE)"
+        required: false
+        default: ""
+      sicro_ufs:
+        description: "UFs do SICRO (vazio = todas)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  coletar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "20"
+      - run: npm ci
+      # O .7z do SICRO precisa do 7z (p7zip). O runner ubuntu já costuma ter; instala se faltar.
+      - run: command -v 7z || (sudo apt-get update && sudo apt-get install -y p7zip-full)
+      - name: Coletar bases oficiais
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BASES: ${{ github.event.inputs.bases || '' }}
+          SICRO_UFS: ${{ github.event.inputs.sicro_ufs || '' }}
+          SICRO_BAIXAR: "1"
+          LIMITE_MINUTOS: "45"
+          BASES_RETENCAO_MESES: "24"
+        run: node scripts/coletar_bases_oficiais.js
