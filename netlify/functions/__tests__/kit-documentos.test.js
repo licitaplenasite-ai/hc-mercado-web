@@ -220,6 +220,17 @@ test('custo, mínimo, referência e premissas gravam sem atualizado_em e sem inv
  assert.equal((await f.run({acao:'exportar',...target,revisado:true,revisaoHash:p.json.revisaoHash})).statusCode,200);
  const lista=await f.run({acao:'listarItens'});assert.equal(lista.json.precoDisponivel,true);assert.equal(lista.json.itens[0].precoReferencia,'1.2345');
 });
+test('resumo do Contador grava só contador_resumo, sem atualizado_em; formato e escopo validados',async t=>{
+ const f=fixture(t);f.state.itens.push({...f.state.itens[0],id:outro,processo_id:ids.empresa,identificador:'9'});
+ const resumo={versao:1,ano:2027,regime:'real',precoFinal:'305.85',custoUnidade:'224.40',tributos:[{rotulo:'DIFAL para AM',pct:'13'}],aviso:'Estimativa para formar preço. Confirme com o seu contador.'};
+ const r=await f.run({acao:'salvarContador',itemId:ids.item,resumo});
+ assert.equal(r.statusCode,200);assert.equal(r.json.itemId,ids.item);
+ assert.deepEqual(JSON.parse(patches(f)[0][1].body),{contador_resumo:resumo});
+ for(const ruim of [[1],{chaveEstranha:1},{precoFinal:'x'.repeat(601)},{tributos:[[[[1]]]]},'texto'])assert.equal((await f.run({acao:'salvarContador',itemId:ids.item,resumo:ruim})).statusCode,400);
+ assert.equal((await f.run({acao:'salvarContador',itemId:ids.item})).statusCode,400);
+ assert.equal((await f.run({acao:'salvarContador',itemId:outro,resumo})).statusCode,404);
+ assert.equal(patches(f).length,2);
+});
 test('preço, referência e premissas validam regra, formato e escopo',async t=>{
  const f=fixture(t);f.state.itens.push({...f.state.itens[0],id:outro,processo_id:ids.empresa,identificador:'9'});
  assert.equal((await f.run({acao:'salvarPrecoItem',itemId:ids.item,custoUnitario:null,valorUnitarioMinimo:'1.26'})).statusCode,422);
