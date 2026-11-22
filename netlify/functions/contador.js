@@ -69,6 +69,9 @@ function validarSugestao(j, tabela) {
 async function classificar(corpo, ctx) {
   const descricao = String(corpo.descricao || "").replace(CONTROLE, " ").trim().slice(0, 2000);
   if (descricao.length < 4) return [400, { erro: "O item precisa de descrição para o Contador classificar." }];
+  // Plano antes de tudo (o reaproveitado também é do recurso Contador); a cota de IA só conta quando a IA é chamada.
+  const plano = await ctx.limitar(ctx.userId, "contador-calculo", LIMITE_CALCULO);
+  if (!plano.ok) return [plano.status, { erro: plano.erro }];
   const tabela = await lerTabela(ctx.fetch).catch(() => null);
   if (!tabela) return [503, { erro: "A tabela oficial da Receita ainda não foi copiada. Escolha a classificação à mão ou tente mais tarde." }];
   const chave = createHash("sha256").update(normalizar(descricao)).digest("hex");

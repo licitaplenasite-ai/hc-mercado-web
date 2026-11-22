@@ -102,8 +102,11 @@ test("classificar: IA sugere, a tabela oficial valida; do edital grava no cache,
 
 test("classificar reaproveita o cache sem gastar IA; IA com código fora da lista cai para sem redução", async () => {
   const amb = ambiente({ cacheClass: [{ tipo: "bem", codigo: "10063021", cclasstrib: "200003", motivo: "Cesta." }] });
-  const r = await pedir({ acao: "classificar", descricao: "Arroz", doEdital: true }, deps(amb, { responder: async () => { throw new Error("não devia chamar"); }, limitar: async () => { throw new Error("não devia contar"); } }));
+  const r = await pedir({ acao: "classificar", descricao: "Arroz", doEdital: true }, deps(amb, { responder: async () => { throw new Error("não devia chamar"); }, limitar: async (_u, f) => { if (f === "contador-ia") throw new Error("não devia gastar IA"); return { ok: true }; } }));
   assert.equal(r.j.fonte, "reaproveitada");
+  // Fora do plano, nem o reaproveitado sai.
+  const fora = await pedir({ acao: "classificar", descricao: "Arroz", doEdital: true }, deps(amb, { limitar: async () => ({ ok: false, status: 403, erro: "Fora do plano." }) }));
+  assert.equal(fora.status, 403);
   assert.equal(_interno.validarSugestao({ tipo: "bem", codigo: "10063021", cClassTrib: "410004", motivo: "x" }, TABELA).cClassTrib, "000001");
   assert.equal(_interno.validarSugestao({ tipo: "bem", codigo: "123", cClassTrib: "000001" }, TABELA), null);
   assert.equal(_interno.validarSugestao({ tipo: "outro" }, TABELA), null);
