@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="favicon.png?v=3">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" crossorigin="anonymous"></script><script src="supabase-config.js"></script><script src="pix-copia-cola.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" crossorigin="anonymous"></script><script src="supabase-config.js"></script><script src="pix-copia-cola.js"></script><script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js" integrity="sha384-8FWZA6BGMXhsfO+BLtrJK0We6gg5o1JyO8xQm6peWDEUs17ACA5ziE/NIAkl9z2k" crossorigin="anonymous"></script>
 <link rel="stylesheet" href="ds-tokens.css">
 <!-- Tela de planos de quem já tem conta (sem plano-trava.js: quem está com o teste ou a assinatura vencida precisa
      chegar aqui). O valor do pedido é calculado no banco (pedir_assinatura); a tela só mostra. Pagamento manual por Pix:
@@ -182,6 +182,15 @@ legend{font:var(--text-section);margin:0 0 12px;padding:0}
     $("total-detalhe").textContent = MESES[c] === 1 ? "por mês, sem fidelidade" : `pago de uma vez, equivale a ${reais(Math.round(data / MESES[c]))} por mês`;
   }
 
+  // QR do mesmo código copia e cola (qrcode-generator, MIT, via jsDelivr com SRI). Sem a biblioteca, só some o QR.
+  function qrPix(codigo) {
+    if (typeof window.qrcode !== "function") return "";
+    try {
+      const qr = window.qrcode(0, "M"); qr.addData(codigo); qr.make();
+      return `<figure id="pix-qr" style="margin:12px 0;text-align:center"><div style="display:inline-block;background:#fff;padding:8px;border-radius:8px">${qr.createSvgTag({ cellSize: 5, margin: 2, scalable: true }).replace("<svg ", '<svg width="220" height="220" role="img" aria-label="QR Code do Pix" ')}</div><figcaption class="nota">Aponte a câmera do aplicativo do seu banco (Pix &gt; Ler QR Code)</figcaption></figure>`;
+    } catch (_) { return ""; }
+  }
+
   function telaComoPagar(g) {
     const caixa = $("como-pagar"), alvo = $("pagar-conteudo");
     if (!g) { caixa.hidden = true; return; }
@@ -193,13 +202,19 @@ legend{font:var(--text-section);margin:0 0 12px;padding:0}
     let html = `<dl><dt>Valor a pagar</dt><dd id="pagar-valor">${reais(g.valor_centavos)}</dd><dt>Pedido</dt><dd>${esc(resumo)} · nº ${esc(g.id.slice(0, 8))}</dd>`;
     if (codigo) {
       html += `<dt>Chave Pix</dt><dd id="pagar-chave">${esc(chave)}</dd><dt>Recebedor</dt><dd>${esc(nome)}</dd></dl>
+        ${qrPix(codigo)}
         <label for="pix-codigo"><strong>Pix copia e cola</strong> <span class="nota">(cole no aplicativo do seu banco, em Pix &gt; Copia e cola; o valor já vem preenchido)</span></label>
         <textarea id="pix-codigo" readonly>${esc(codigo)}</textarea>`;
     } else {
       html += `</dl><p class="aviso info" id="fale-equipe">Fale com a equipe para receber os dados do Pix: escreva para <a href="mailto:licitaplena.site@gmail.com">licitaplena.site@gmail.com</a> com o número do pedido.</p>`;
     }
     html += `<div class="botoes">${codigo ? '<button type="button" class="btn primario" id="btn-copiar">Copiar código Pix</button>' : ""}${zap ? `<a class="btn" id="btn-whatsapp" target="_blank" rel="noopener" href="https://wa.me/${zap}?text=${encodeURIComponent(mensagem)}">Mandar comprovante no WhatsApp</a>` : ""}</div>
-      <p class="nota" style="margin-top:12px">Depois que o Pix cair na conta e a equipe conferir, as telas do seu plano são liberadas. Não precisa fazer mais nada.</p>`;
+      <ol class="nota" id="pagar-passos" style="margin-top:12px;padding-left:20px">
+        <li>Pague pelo QR Code ou pelo Pix copia e cola, no aplicativo do seu banco.</li>
+        <li>Mande o comprovante no WhatsApp${zap ? " pelo botão acima" : " da equipe"}, com o número do pedido.</li>
+        <li>A equipe confere e libera o seu plano, em dia útil, no mesmo dia. Você não precisa fazer mais nada.</li>
+      </ol>
+      <p class="nota">Prefere boleto? Peça pelo WhatsApp. O boleto leva até 2 dias úteis para compensar, e o plano é liberado quando o pagamento cair.</p>`;
     alvo.innerHTML = html;
     caixa.hidden = false;
     if (codigo) $("btn-copiar").onclick = async () => {

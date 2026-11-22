@@ -106,6 +106,7 @@ async function main() {
       exigir(/1\.345,00/.test(await pC.innerText('#pagar-valor')), 'valor do pedido');
       const codigo = await pC.inputValue('#pix-codigo');
       exigir(codigo.startsWith('000201') && codigo.includes('54071345.00') && codigo.includes('pagamentos@teste-licitaplena.example.com'), 'código: ' + codigo);
+      exigir(await pC.$('#pix-qr svg[aria-label="QR Code do Pix"]'), 'QR Code do Pix não apareceu');
       const zap = await pC.getAttribute('#btn-whatsapp', 'href');
       const texto = decodeURIComponent(zap.split('text=')[1] || '');
       exigir(zap.startsWith('https://wa.me/5592000000000') && /Semestral/.test(texto) && /Empresa/.test(texto) && /1\.345,00/.test(texto) && texto.includes(C.email), 'WhatsApp: ' + zap);
