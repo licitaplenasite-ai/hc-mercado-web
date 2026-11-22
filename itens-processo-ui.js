@@ -300,6 +300,9 @@
     let precoDisponivel = null, premissas = null, previa = null, numeroProcesso = '', filaPremissas = Promise.resolve(), filaRef = Promise.resolve();
     const nos = new Map(), lances = new Map(), margensProprias = new Map(), refEstado = new Map(), refTentada = new Set();
     let catalogoProdutos = [];
+    // Contador por item: quadros abertos (fechados a cada nova lista) e resumos salvos, lidos uma vez por processo.
+    const contadores = new Map();
+    let resumosContador = null;
     // Opção CBS/IBS só na tela (não grava): começa desligada, ano corrente dentro da transição.
     const ANOS_REFORMA = modulo('LicitaReformaTributaria', './reforma-tributaria.js')?.ANOS || [];
     const reforma = { ligado: false, ano: Math.min(Math.max(new Date().getFullYear(), ANOS_REFORMA[0] || 0), ANOS_REFORMA[ANOS_REFORMA.length - 1] || 0), regime: 'real', reducao: 0 };
@@ -506,7 +509,25 @@
         h('strong', { texto: 'Cenários de margem' }),
         h('div', { classe: 'itens-campo' }, h('label', { for: id('margem-propria'), texto: 'Margem própria (%)' }), n.margemPropria), n.cenarios,
         h('div', { classe: 'itens-acoes' }, n.usar, n.usarEstado),
-        fontesDoItem(i, n));
+        fontesDoItem(i, n), caixaContador(i));
+    }
+    // Agente Contador (contador-ui.js): quadro por item, aberto pelo botão. data-recurso: o plano-trava.js mostra o aviso
+    // fixo no Essencial; a rota /api/contador barra de verdade. Sem o módulo carregado, nada aparece.
+    function caixaContador(i) {
+      const CUI = global.LicitaContadorUI;
+      if (!CUI) return null;
+      const corpo = h('div', { classe: 'contador-corpo', hidden: true });
+      const b = h('button', { type: 'button', 'aria-expanded': 'false', 'data-contador-abrir': i.id, texto: 'Contador: preço com impostos' });
+      b.addEventListener('click', async () => {
+        corpo.hidden = !corpo.hidden; b.setAttribute('aria-expanded', String(!corpo.hidden));
+        if (corpo.hidden || contadores.has(i.id)) return;
+        contadores.set(i.id, null);
+        if (!resumosContador) { const { r, j } = await chamar({ acao: 'lerContador' }); resumosContador = r && r.ok && j?.resumos ? j.resumos : {}; }
+        if (!vivo || !corpo.isConnected) return;
+        contadores.set(i.id, CUI.montar({ alvo: corpo, item: i, contexto, requisitar, chamarKit: chamar, resumoSalvo: resumosContador[i.id] || null, storage: global.localStorage || null, doc,
+          obterCalculo: () => calcularPrecos(itens, premissas).get(i.id) || null, obterPremissas: () => premissas }));
+      });
+      return h('section', { classe: 'contador-caixa', 'data-recurso': 'contador' }, h('div', { classe: 'itens-acoes' }, b), corpo);
     }
     // "Usar do catálogo" (custo, marca, modelo do catálogo da empresa) e "Buscar no mercado" (marcas e preços já licitados).
     function fontesDoItem(i, n) {
@@ -594,6 +615,8 @@
     }
     function renderLista() {
       nos.clear();
+      for (const c of contadores.values()) c?.fechar?.();
+      contadores.clear();
       const lista = el('[data-item-lista]');
       lista.replaceChildren(itens.length ? h('ul', {}, ...itens.map(cartaoItem)) : h('p', { texto: 'Nenhum item cadastrado neste processo.' }));
       el('[data-item-mais]').hidden = !maisItens;
@@ -949,7 +972,7 @@
     if (carregarCatalogo) Promise.resolve().then(() => carregarCatalogo(contexto.empresaId)).then((l) => { if (vivo) catalogoProdutos = Array.isArray(l) ? l : []; }, () => { catalogoProdutos = []; });
 
     return {
-      fechar() { vivo = false; geracao += 1; alvo.replaceChildren(); },
+      fechar() { vivo = false; geracao += 1; for (const c of contadores.values()) c?.fechar?.(); alvo.replaceChildren(); },
       temAlteracoesNaoSalvas: () => vivo && (Object.values(campos()).some((v) => v !== '') || edicao !== null || previa?.podeAplicar === true),
     };
   }

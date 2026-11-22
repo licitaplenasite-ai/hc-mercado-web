@@ -50,6 +50,22 @@ test("visão: só itens casados, mais nova primeiro, fracassado contado, marcas 
   assert.deepEqual(v.porProduto.map((g) => [g.numero, g.marcasAceitas.map((m) => m.marca), g.semMarca]), [[1, ["Pilão"], 1]]);
 });
 
+test("vencedores para o Contador: o homologado mais recente por item do edital; fracassado e sem item casado ficam fora", () => {
+  const { vencedoresDoProcesso } = require("./licitacao-anterior-ui.js");
+  const v = montarVisao({
+    compras: [compra("78882005900042024", "2024-04-12"), compra("78882005900332025", "2025-08-18")],
+    itens: [item("78882005900332025", 107, "Homologado", 23.33), item("78882005900332025", 108, "Fracassado", 35.62), item("78882005900042024", 27, "Homologado", 21.88)],
+    participacoes: [
+      { id_compra: "78882005900332025", numero_item: 107, fornecedor_chave: "a", ordem_classificacao: 1, valor_homologado: 17 },
+      { id_compra: "78882005900042024", numero_item: 27, fornecedor_chave: "b", ordem_classificacao: 1, valor_homologado: 8 },
+    ],
+    casamentos: [cas("78882005900332025", 107), cas("78882005900332025", 108, 2), cas("78882005900042024", 27)],
+    alvos: [{ numero: 1, descricao: "Café 500 g" }, { numero: 2, descricao: "Açúcar" }],
+  });
+  assert.deepEqual(vencedoresDoProcesso(v), [{ numero: 1, descricao: "Café 500 g", homologado: 17, data: "2025-08-18" }]);
+  assert.deepEqual(vencedoresDoProcesso(null), []);
+});
+
 test("visão vazia não quebra", () => {
   assert.deepEqual(montarVisao({}), { compras: [], marcasAceitas: [], semMarca: 0, porProduto: [], ruins: 0 });
 });

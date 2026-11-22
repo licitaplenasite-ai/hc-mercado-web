@@ -581,7 +581,9 @@
       // Itens do processo: mesmo contexto do kit (empresa + processo). Sem processo, nunca chega aqui.
       // Gancho: apos salvar item, renova o catalogo do kit SOMENTE se o contexto ainda for o mesmo (epoca) e o mesmo kit.
       const epocaKit = epoca, kitDoItem = { atual: null };
-      if (itens) itensComp = itens.montar({ alvo: el('itens-processo'), contexto: { empresaId: contexto.empresaId, processoId: contexto.processoId }, requisitar: requisitarAutenticado, buscarMercado: requisitarAutenticado,
+      // cnpj e urlOrigem: o Contador lê o regime pelo CNPJ e a UF/prazo do órgão pelo edital do PNCP.
+      if (itens) itensComp = itens.montar({ alvo: el('itens-processo'), contexto: { empresaId: contexto.empresaId, processoId: contexto.processoId,
+        cnpj: typeof consulta?.empresa?.cnpj === 'string' ? consulta.empresa.cnpj : '', urlOrigem: typeof consulta?.processo?.urlOrigem === 'string' ? consulta.processo.urlOrigem : '' }, requisitar: requisitarAutenticado, buscarMercado: requisitarAutenticado,
         // Mesmo kit e mesmo contexto, mesmo oculto (voltar ao Hoje preserva o kit). Fechado ou contexto trocado: bloqueia.
         aoSalvar: () => { if (epoca === epocaKit && componente !== null && componente === kitDoItem.atual) kitDoItem.atual?.atualizarItens?.(); } });
       if (esteira && el('checklist-esteira')) esteiraComp = esteira.montar({ alvo: el('checklist-esteira'), contexto: { empresaId: contexto.empresaId, processoId: contexto.processoId }, requisitar: requisitarAutenticado });

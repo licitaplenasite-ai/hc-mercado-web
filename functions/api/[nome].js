@@ -60,6 +60,8 @@ import * as analiseCnpj from "../../netlify/functions/analise-cnpj.js";
 import * as monteBuscaIa from "../../netlify/functions/monte-busca-ia.js";
 // Conferência CBS/IBS com a calculadora oficial da Receita (logado; 2 subrequisições, falha fechada).
 import * as conferirCbsIbs from "../../netlify/functions/conferir-cbs-ibs.js";
+// Agente Contador (Itens do processo): logado e aprovado, cota do recurso contador; até 1 chamada à Receita (em lote) + 3 Supabase ou 1 IA.
+import * as contador from "../../netlify/functions/contador.js";
 // Encontrar fornecedor com IA: logado, 20 perguntas/dia, 1 leitura no Supabase + até 3 BrasilAPI + 1 chamada à IA.
 import * as fornecedorIa from "../../netlify/functions/fornecedor-ia.js";
 // Aviso no celular (Web Push): inscrição do aparelho e preferências (logado; 1-3 subrequisições, 60/dia).
@@ -94,6 +96,7 @@ const ROTAS = {
   "chat-ia": chatIa,
   "situacao-sicaf": situacaoSicaf,
   "conferir-cbs-ibs": conferirCbsIbs,
+  contador: contador,
   "decisao-oportunidade": m17,
   "empresa-identificacao": m16,
   "admin-excluir-cliente": m0,

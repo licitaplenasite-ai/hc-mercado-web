@@ -185,6 +185,33 @@ async function salvarReferencia({token,organizacaoId,processoId,body}){
  return {status:200,body:{item:publicoPreco(l)}};
 }
 
+// Resumo do agente Contador no item (contador.sql): custos, tributos e preço final para a proposta usar depois.
+// Coluna própria e select próprio: não toca atualizado_em nem o select da proposta (o hash do kit fica igual).
+const CHAVES_CONTADOR=['versao','salvoEm','ano','regime','tipo','codigo','cClassTrib','classificacao','baseLegal','fonteOficial','custoUnidade','precoMinimo','precoAlvo','precoFinal','cbs','ibs','lucroUnidade','margem','tributos','custos','valeAPena','aviso'];
+function resumoContador(v,nivel=0){
+ if(v===null||typeof v==='boolean'||(typeof v==='number'&&Number.isFinite(v)))return true;
+ if(typeof v==='string')return v.length<=600&&!CONTROLE.test(v);
+ if(nivel>=3)return false;
+ if(Array.isArray(v))return v.length<=30&&v.every(x=>resumoContador(x,nivel+1));
+ return objeto(v)&&Object.keys(v).length<=30&&Object.entries(v).every(([k,x])=>/^[a-zA-Z]{1,30}$/.test(k)&&resumoContador(x,nivel+1));
+}
+async function salvarContador({token,organizacaoId,processoId,body}){
+ escopo(organizacaoId,processoId,body.itemId);exigirChaves(body,['resumo']);
+ const r=body.resumo;
+ if(r!==null&&(!objeto(r)||Object.keys(r).some(k=>!CHAVES_CONTADOR.includes(k))||!resumoContador(r)||JSON.stringify(r).length>8000))falhar('Resumo do Contador inválido.',400);
+ const linhas=await exigirOk(await rest(token,caminhoItem(body.itemId,organizacaoId,processoId)+'&select='+selectLista+',contador_resumo',{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({contador_resumo:r})}));
+ if(!Array.isArray(linhas)||linhas.length!==1)falhar('Item indisponível.',404);
+ conferirLinha(linhas[0],organizacaoId,processoId);
+ return {status:200,body:{itemId:linhas[0].id,resumo:linhas[0].contador_resumo}};
+}
+async function lerContador({token,organizacaoId,processoId}){
+ escopo(organizacaoId,processoId);
+ const linhas=await exigirOk(await rest(token,`/rest/v1/operacao_itens_resultado?processo_id=eq.${processoId}&organizacao_id=eq.${organizacaoId}&tipo=eq.item&contador_resumo=not.is.null&select=${selectLista},contador_resumo&limit=500`));
+ if(!Array.isArray(linhas))falhar('Serviço de itens indisponível.',503);
+ for(const l of linhas)conferirLinha(l,organizacaoId,processoId);
+ return {status:200,body:{resumos:Object.fromEntries(linhas.map(l=>[l.id,l.contador_resumo]))}};
+}
+
 // Percentual de 0 a 99,999 (numeric(7,3)); frete >= 0 (numeric(15,2)). null limpa.
 function premissa(v,chave){
  if(v===null)return null;
@@ -253,4 +280,4 @@ async function importarPlanilha({token,organizacaoId,processoId,body}){
  for(const l of salvos)conferirLinha(l,organizacaoId,processoId);
  return {status:200,body:{gravados:salvos.length,resumo:v.resumo,linhas,itens:salvos.map(publicoPreco)}};
 }
-module.exports={rest,salvarItemProcesso,validarItem,chaveDeLinha,publico,publicoPreco,salvarPrecoItem,salvarReferencia,salvarPremissas,lerPremissas,importarPlanilha};
+module.exports={rest,salvarItemProcesso,validarItem,chaveDeLinha,publico,publicoPreco,salvarPrecoItem,salvarReferencia,salvarPremissas,lerPremissas,importarPlanilha,salvarContador,lerContador};

@@ -1,11 +1,11 @@
 const {LIMITES}=require('./_kit_proposta_limites');
 const {listarPaginaItens,carregarItensSelecionados,verificarOrigemSelecionada,origemPncp}=require('./_kit_proposta_itens');
-const {rest:restItens,salvarItemProcesso,salvarPrecoItem,salvarPremissas,lerPremissas,salvarReferencia,importarPlanilha}=require('./_itens_processo');
+const {rest:restItens,salvarItemProcesso,salvarPrecoItem,salvarPremissas,lerPremissas,salvarReferencia,importarPlanilha,salvarContador,lerContador}=require('./_itens_processo');
 const {MAX_BYTES:PLANILHA_BYTES}=require('../../planilha-itens.js');
 // Ações de cadastro do item: só token do usuário (RLS), escopo já validado por carregarEscopo. Não tocam em documentos.
 // Listagem com Response crua: o fallback do banco antigo precisa ler o código do erro.
 const requestBruto=event=>(path,op)=>restItens(event.headers?.authorization||event.headers?.Authorization||'',path,op);
-const ACOES_ITENS={salvarItem:salvarItemProcesso,salvarPrecoItem,salvarPremissas,lerPremissas,salvarReferencia,importarPlanilha};
+const ACOES_ITENS={salvarItem:salvarItemProcesso,salvarPrecoItem,salvarPremissas,lerPremissas,salvarReferencia,importarPlanilha,salvarContador,lerContador};
 const {cabecalhosPadrao,exigirUsuarioLogado,verificarLimiteDiario}=require('./_auth');
 const {createHash}=require('node:crypto');
 const {falhar,validarConfirmacao}=require('./_empresa_identificacao');
