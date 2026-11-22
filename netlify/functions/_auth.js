@@ -94,7 +94,7 @@ async function consumirUsoPlano(opcoes) {
 // IA só prossegue com contagem válida. Os demais consumidores mantêm o comportamento
 // anterior de contingência para não alterar envios e consultas fora deste fluxo.
 async function verificarLimiteDiario(userId, nomeFuncao, limite) {
-  const ehIA = nomeFuncao === "ia-edital" || nomeFuncao === "monte-busca-ia" || nomeFuncao === "fornecedor-ia" || nomeFuncao === "chat-ia";
+  const ehIA = nomeFuncao === "ia-edital" || nomeFuncao === "monte-busca-ia" || nomeFuncao === "fornecedor-ia" || nomeFuncao === "chat-ia" || nomeFuncao === "contador-ia";
   const indisponivel = ehIA ? { ok: false, status: 503, erro: "Não foi possível verificar o limite de uso da IA agora. Tente novamente em instantes." } : { ok: true };
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceKey) {
@@ -228,7 +228,7 @@ const LIMITE_POR_MINUTO_CONTA = {
   "ia-edital": 3, "chat-ia": 4, "fornecedor-ia": 3, "monte-busca-ia": 3,
   "analise-cnpj": 5, "analise-cnpj-buscar": 10, "analise-cnpj-cadastro": 5,
   "licitacao-anterior": 5, "licitacao-anterior-orgaos": 10, "sancoes": 20, "despesas-fornecedor": 10,
-  "pagometro": 10, "conferir-cbs-ibs": 10,
+  "pagometro": 10, "conferir-cbs-ibs": 10, "contador-ia": 6, "contador-calculo": 20,
 };
 // Proxies do PNCP/Compras.gov: a busca do painel abre 1 página por UF e por termo ao mesmo tempo (27 UFs x 5 termos
 // = 135 pedidos num clique), por isso o teto é bem maior que o das rotas de IA.
