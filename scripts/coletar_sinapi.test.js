@@ -83,3 +83,38 @@ test("mesesParaTras e nomesDoMes: mês atual primeiro, virada de ano, retificaç
   assert.equal(n[0], "SINAPI-2026-02-formato-xlsx_Retificacao03.zip");
   assert.equal(n[n.length - 1], "SINAPI-2026-02-formato-xlsx.zip");
 });
+
+test("partesSinapi: preços por UF com número/null, descrições e analítico, fatiados pelo código", () => {
+  const itens = [{ tipo: "insumo", codigo: "370", descricao: "AREIA", unidade: "M3" }, { tipo: "composicao", codigo: "97622", descricao: "DEMOLIÇÃO", unidade: "M2" }];
+  const custos = [{ uf: "AM", tipo: "insumo", codigo: "370", preco_sd: "72.85", preco_cd: null }, { uf: "AC", tipo: "composicao", codigo: "97622", preco_sd: "1.00", preco_cd: "0.90" }];
+  const analitico = [{ composicao: "97622", item_tipo: "insumo", item_codigo: "370", coeficiente: "0.25" }];
+  const p = Object.fromEntries(S.partesSinapi(itens, custos, analitico).map((x) => [x.parte, x.conteudo]));
+  assert.deepEqual(p["precos:AM:37"], { "insumo|370": [72.85, null] });
+  assert.deepEqual(p["precos:AC:97"], { "composicao|97622": [1, 0.9] });
+  assert.deepEqual(p["itens:97"], { "composicao|97622": ["DEMOLIÇÃO", "M2"] });
+  assert.deepEqual(p["analitico:97"], { 97622: [["insumo", "370", 0.25]] });
+});
+
+test("versaoSinapi registra fonte, data-base, retificação, desonerado e arredondamento do edital", () => {
+  const v = S.versaoSinapi("2025-10", "https://www.caixa.gov.br/Downloads/sinapi-relatorios-mensais/SINAPI-2025-10-formato-xlsx_Retificacao01.zip", "precos", 10, 0);
+  assert.equal(v.versao, "2025-10 Retificação 01");
+  assert.equal(v.data_base, "2025-10-01");
+  assert.equal(v.desonerado, "ambos");
+  assert.equal(v.arredondamento, "edital");
+  assert.equal(v.arquivo, "SINAPI-2025-10-formato-xlsx_Retificacao01.zip");
+  assert.equal(S.versaoSinapi("2026-10", "https://x/SINAPI-2026-10-formato-xlsx.zip", "zerada", 0, 9).versao, "2026-10");
+});
+
+test("retificacoesPendentes: regrava mês com retificação nova, zerado ou faltando; pula o que já está igual", async () => {
+  const publicados = new Set(["SINAPI-2026-09-formato-xlsx_Retificacao01.zip", "SINAPI-2026-08-formato-xlsx.zip", "SINAPI-2026-07-formato-xlsx.zip"]);
+  const existe = async (url) => publicados.has(url.split("/").pop());
+  const gravadas = [
+    { data_base: "2026-09-01", arquivo: "SINAPI-2026-09-formato-xlsx.zip", situacao: "precos" }, // saiu retificação
+    { data_base: "2026-08-01", arquivo: "SINAPI-2026-08-formato-xlsx.zip", situacao: "precos" }, // igual
+    // 2026-07 faltando
+  ];
+  const r = await S.retificacoesPendentes("2026-10", gravadas, Date.UTC(2026, 9, 25), existe);
+  assert.deepEqual(r.map((x) => x.url.split("/").pop()), ["SINAPI-2026-09-formato-xlsx_Retificacao01.zip", "SINAPI-2026-07-formato-xlsx.zip"]);
+  const zerada = await S.retificacoesPendentes("2026-10", [{ data_base: "2026-09-01", arquivo: "SINAPI-2026-09-formato-xlsx_Retificacao01.zip", situacao: "zerada" }, ...gravadas.slice(1), { data_base: "2026-07-01", arquivo: "SINAPI-2026-07-formato-xlsx.zip", situacao: "precos" }], Date.UTC(2026, 9, 25), existe);
+  assert.deepEqual(zerada.map((x) => x.mes), ["2026-09"]);
+});

@@ -5,7 +5,10 @@ name: SINAPI (preços de insumos e composições da CAIXA)
 # não desonerado) e sinapi_composicao_itens (composições analíticas).
 # A CAIXA publica por volta do dia 10 a 15 do mês seguinte; roda dia 16 e dia 25 às 12:00 UTC (9h de Brasília)
 # para pegar atraso e retificação. Rodar de novo é seguro (upsert + limpeza da referência anterior).
-# Não escreve no repositório: só no Supabase. Precisa de supabase/sinapi_todas_ufs.sql aplicado antes.
+# Também grava o histórico por data-base (bases_preco_*, 24 meses), confere retificação dos meses anteriores e
+# recusa referência zerada (falha = e-mail do GitHub + estado em dados_robo "bases_preco_saude").
+# Não escreve no repositório: só no Supabase. Precisa de supabase/sinapi_todas_ufs.sql e bases_preco.sql aplicados.
+# Carregar meses antigos no histórico: Run workflow com referencia=AAAA-MM e so_historico=1 (um mês por vez).
 concurrency:
   group: sinapi
   cancel-in-progress: false
@@ -21,6 +24,10 @@ on:
         default: ""
       referencia:
         description: "Mês AAAA-MM (vazio = mais recente publicado)"
+        required: false
+        default: ""
+      so_historico:
+        description: "1 = só grava o histórico do mês (não troca a referência vigente)"
         required: false
         default: ""
 
@@ -42,4 +49,6 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SINAPI_UFS: ${{ github.event.inputs.ufs || '' }}
           SINAPI_REFERENCIA: ${{ github.event.inputs.referencia || '' }}
+          SINAPI_SO_HISTORICO: ${{ github.event.inputs.so_historico || '' }}
+          BASES_RETENCAO_MESES: "24"
         run: node scripts/coletar_sinapi.js
