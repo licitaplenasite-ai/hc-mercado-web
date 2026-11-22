@@ -2,8 +2,11 @@
 // E2E do Orçamento de obra (agente Orçamentista): enviar a planilha do edital em branco -> conferir o Leitor ->
 // montar com o SINAPI do banco -> preencher preço de outra tabela e 3 cotações -> alertas do Auditor -> baixar
 // as planilhas. Também: trava no plano Essencial, 1280 e 375 px sem rolagem lateral e sem erro no console.
+// Fase 2: "Bases no sistema", "o que costuma acontecer", data-base antiga pelo histórico (bases_preco_*), rascunho
+// depois de recarregar, aba "Conferência antes de enviar", opção de motivos escondida (desligada) e normas-obra.html só do dono.
 //   PORTA_TESTE=8851 node ambiente-teste/servidor.cjs   e depois   PORTA_TESTE=8851 node ambiente-teste/e2e-orcamento-obra.cjs
-// Grava dados fictícios (SINAPI 9902xx) e apaga no fim; aplica supabase/orcamento_obra_recurso.sql (idempotente).
+// Grava dados fictícios (SINAPI 9902xx, versões com fonte "E2E", recortes do estudo) e apaga no fim; aplica
+// supabase/orcamento_obra_recurso.sql, bases_preco.sql, orcamento_normas.sql e orcamento_estudo.sql (idempotentes).
 const fs = require('node:fs'), path = require('node:path'), os = require('node:os');
 const { spawnSync } = require('node:child_process');
 process.env.PRINTS = process.env.PRINTS || 'C:/Users/harre/Desktop/LICITAPLENA/_historico/orcamentista/prints-e2e';
@@ -21,7 +24,10 @@ function psql(sql) {
   return r.stdout.trim();
 }
 const R = '2026-10-01';
+const RECORTES_E2E = ['uf:AM|*|*', 'uf:AM|outra_obra|*', 'uf:AM|outra_obra|ate_1mi'];
 async function limpar() {
+  await sv('DELETE', '/rest/v1/bases_preco_versoes?fonte=like.E2E*');
+  await sv('DELETE', `/rest/v1/orcamento_estudo_estatisticas?recorte=in.(${RECORTES_E2E.map((r) => `"${r}"`).join(',')})`);
   await sv('DELETE', '/rest/v1/sinapi_composicao_itens?composicao=like.9902*');
   await sv('DELETE', '/rest/v1/sinapi_custos?codigo=like.9902*');
   await sv('DELETE', '/rest/v1/sinapi_itens?codigo=like.9902*');
@@ -42,8 +48,18 @@ fs.writeFileSync(EDITAL, gravarXlsx([{ nome: 'Planilha Orçamentária Sintética
   const nav = await chromium.launch({ channel: process.env.NAVEGADOR === 'chrome' ? 'chrome' : 'msedge', headless: true });
   let essencialOriginal = null;
   try {
-    psql(fs.readFileSync(path.join(__dirname, '..', 'supabase', 'orcamento_obra_recurso.sql'), 'utf8'));
+    for (const f of ['orcamento_obra_recurso.sql', 'bases_preco.sql', 'orcamento_normas.sql', 'orcamento_estudo.sql']) psql(fs.readFileSync(path.join(__dirname, '..', 'supabase', f), 'utf8'));
     await limpar();
+    // Histórico: SINAPI 2026-10 (vigente, nas tabelas sinapi_*) e 2026-09 guardado nas partes, com outro preço.
+    const versao = (data, versao) => ({ base: 'SINAPI', abrangencia: 'BR', data_base: data, versao, desonerado: 'ambos', arredondamento: 'edital', casas_decimais: 2, fonte: 'E2E CAIXA', situacao: 'precos', itens: 3, coletado_em: '2026-11-16T12:00:00Z' });
+    await sv('POST', '/rest/v1/bases_preco_versoes', [versao('2026-10-01', '2026-10'), versao('2026-09-01', '2026-09')]);
+    const v09 = psql("select id from public.bases_preco_versoes where fonte='E2E CAIXA' and data_base='2026-09-01'");
+    await sv('POST', '/rest/v1/bases_preco_partes', [
+      { versao_id: Number(v09), parte: 'precos:AM:99', conteudo: { 'composicao|990201': [80, 77], 'insumo|990202': [2.4, 2.4], 'insumo|990203': [20, 17] } },
+      { versao_id: Number(v09), parte: 'analitico:99', conteudo: { 990201: [['insumo', '990202', 13.5], ['insumo', '990203', 0.8]] } },
+      { versao_id: Number(v09), parte: 'itens:99', conteudo: { 'composicao|990201': ['ALVENARIA (FICTICIO)', 'M2'], 'insumo|990202': ['BLOCO (FICTICIO)', 'UN'], 'insumo|990203': ['PEDREIRO (FICTICIO)', 'H'] } }]);
+    await sv('POST', '/rest/v1/orcamento_estudo_estatisticas', RECORTES_E2E.map((recorte, i) => ({ recorte, n: i ? 3 : 24, dados: { desconto_mediana: 17.38, desconto_p25: 12.6, desconto_p75: 21.58, pct_com_recusa_mais_barata: 70.83 } })));
+    psql('update public.orcamento_motivos_config set ligado=false');
     await sv('POST', '/rest/v1/sinapi_itens', [
       { tipo: 'composicao', codigo: '990201', descricao: 'ALVENARIA (FICTICIO)', unidade: 'M2', referencia: R, busca: 'alvenaria ficticio' },
       { tipo: 'insumo', codigo: '990202', descricao: 'BLOCO (FICTICIO)', unidade: 'UN', referencia: R, busca: 'bloco ficticio' },
@@ -76,6 +92,15 @@ fs.writeFileSync(EDITAL, gravarXlsx([{ nome: 'Planilha Orçamentária Sintética
       exigir(/SINAPI: 1/.test(fontes) && /ORSE: 1/.test(fontes) && /Composição própria: 1/.test(fontes), fontes);
       exigir(await p.inputValue('#l-uf') === 'AM' && await p.inputValue('#l-data') === '2026-10' && await p.inputValue('#l-regime') === 'nao', 'cabeçalho lido errado');
       return `${resumo} | ${fontes.replace(/\s+/g, ' ')}`;
+    });
+    await passo('bases no sistema, data-base e "o que costuma acontecer" (amostra pequena sobe para a UF)', p, async () => {
+      await p.waitForFunction(() => /SINAPI 2026-10/.test(document.getElementById('m-bases').textContent) && !document.getElementById('m-estudo').hidden);
+      const bases = await p.innerText('#m-bases'), base = await p.innerText('#l-base'), estudo = (await p.innerText('#m-estudo')).replace(/\s+/g, ' ');
+      exigir(/Bases no sistema: SINAPI 2026-10 \(atualizada em 16\/11\/2026\)/.test(bases), bases);
+      exigir(/SINAPI 2026-10: o mais novo no sistema/.test(base), base);
+      exigir(/O que costuma acontecer Em obras no AM \(24 concorrências concluídas\), o vencedor deu em geral 17,4% de desconto/.test(estudo), estudo);
+      exigir(await p.locator('#m-ajudar').isHidden(), 'opção "Ajudar a melhorar o Auditor" apareceu com a coleta desligada');
+      return `${bases} | ${estudo.slice(0, 140)}`;
     });
     await passo('montar busca o SINAPI do banco e lista o que falta', p, async () => {
       await p.selectOption('#b-tipo', 'edificios');
@@ -118,18 +143,44 @@ fs.writeFileSync(EDITAL, gravarXlsx([{ nome: 'Planilha Orçamentária Sintética
       await p.waitForFunction(() => !/Ajustado ao lance/.test(document.getElementById('r-totais').textContent));
       return `${t} | desconto ${d}%`;
     });
-    await passo('baixar a planilha completa (9 abas) e a do edital preenchida', p, async () => {
+    await passo('baixar a planilha completa (10 abas, com a conferência antes de enviar) e a do edital preenchida', p, async () => {
       const [d1] = await Promise.all([p.waitForEvent('download'), p.click('#btn-baixar-completa')]);
       const abas = lerXlsx(fs.readFileSync(await d1.path()));
       fs.copyFileSync(await d1.path(), path.join(PRINTS, d1.suggestedFilename()));
-      exigir(abas.map((a) => a.nome).join('|') === 'Orçamento sintético|CPU|Composições próprias|BDI|Encargos sociais|Curva ABC|Cronograma|Carta-proposta|Alertas do Auditor', abas.map((a) => a.nome).join('|'));
+      exigir(abas.map((a) => a.nome).join('|') === 'Orçamento sintético|CPU|Composições próprias|BDI|Encargos sociais|Curva ABC|Cronograma|Carta-proposta|Alertas do Auditor|Conferência antes de enviar', abas.map((a) => a.nome).join('|'));
       exigir(abas.every((a) => a.linhas.flat().includes('Revisão e assinatura de engenheiro ou arquiteto responsável são obrigatórias.')), 'aba sem o aviso do engenheiro');
       const l13 = abas[0].linhas.find((l) => l[0] === '1.3');
       exigir(l13 && l13[6] === 241 && l13[8] === 0.1, `item 1.3: ${JSON.stringify(l13)}`);
       const [d2] = await Promise.all([p.waitForEvent('download'), p.click('#btn-baixar-edital')]);
       const ed = lerXlsx(fs.readFileSync(await d2.path()))[0].linhas, l12 = ed.find((l) => l[0] === '1.2');
       exigir(l12 && l12[6] === 540 && l12[7] > 540, `edital 1.2: ${JSON.stringify(l12)}`);
+      exigir(abas[9].linhas.some((l) => l[0] === 'I03' && l[6] === '(   )'), 'conferência sem o item de envio');
       return `${d1.suggestedFilename()} + ${d2.suggestedFilename()}`;
+    });
+    await passo('data-base 09/2026: preços do histórico e aviso de referência mais nova', p, async () => {
+      await p.fill('#l-data', '2026-09');
+      await p.dispatchEvent('#l-data', 'change');
+      exigir(/Existe referência mais nova: 2026-10/.test(await p.innerText('#l-base')), await p.innerText('#l-base'));
+      await p.click('#btn-montar');
+      await p.waitForFunction(() => /2026-09/.test(document.querySelector('#r-corpo tr:nth-child(1)')?.textContent || ''));
+      const linha = (await p.innerText('#r-corpo tr:nth-child(1)')).replace(/\s+/g, ' '), ref = await p.innerText('#r-referencia');
+      exigir(/SINAPI 990201 · 2026-09 · AM · não desonerado/.test(linha) && /80,00/.test(linha), linha);
+      exigir(/Preços do SINAPI de 2026-09, a data-base do edital\. Existe referência mais nova: 2026-10\./.test(ref), ref);
+      await p.fill('#l-data', '2026-10'); await p.dispatchEvent('#l-data', 'change'); await p.click('#btn-montar');
+      await p.waitForFunction(() => /2026-10/.test(document.querySelector('#r-corpo tr:nth-child(1)')?.textContent || ''));
+      return `${linha} | ${ref}`;
+    });
+    await passo('recarregar a página não perde o trabalho (rascunho no navegador)', p, async () => {
+      await p.reload();
+      await p.waitForSelector('#rascunho:not([hidden])');
+      const t = await p.innerText('#rascunho-texto');
+      await p.click('#btn-rascunho-continuar');
+      await p.waitForSelector('#passo-leitura:not([hidden])');
+      exigir(await p.inputValue('#m-desconto') === '10' && await p.inputValue('#b-iss') === '3', 'campos não voltaram');
+      await p.click('#btn-montar');
+      await p.waitForSelector('#passo-resultado:not([hidden])');
+      exigir(/Digitado 1 · Cotações 1/.test(await p.innerText('#r-totais')), 'preço digitado e cotações não voltaram');
+      return t;
     });
     await passo('1280 px: sem rolagem lateral', p, async () => {
       const larg = await p.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
@@ -148,6 +199,14 @@ fs.writeFileSync(EDITAL, gravarXlsx([{ nome: 'Planilha Orçamentária Sintética
     await passo('sem erro no console nem resposta 4xx/5xx', p, async () => {
       const erros = p.erros.filter((e) => !/favicon/.test(e));
       exigir(!erros.length, erros.join(' | '));
+    });
+    await passo('normas-obra.html: cliente que não é o dono não vê a fila de normas', p, async () => {
+      await p.goto(SITE + '/normas-obra.html');
+      await p.waitForSelector('#aviso:not([hidden])');
+      const t = await p.innerText('#aviso');
+      exigir(/Página só do dono/.test(t), t);
+      exigir(await p.locator('#lista-card').isHidden(), 'lista visível para quem não é dono');
+      return t;
     });
     // Plano Essencial: a tela trava com o aviso fixo (sem pop-up).
     const u = seed.usuarios.outra_org;

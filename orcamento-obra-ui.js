@@ -38,7 +38,66 @@
     return [...new Set(t.split(/\s+/).filter((p) => p.length >= 4 && !VAZIAS.has(p) && !/\d/.test(p)))].sort((a, b) => b.length - a.length).slice(0, max);
   }
 
-  if (typeof module !== 'undefined' && module.exports) { module.exports = { baseDoSupabase, lerCotacoes, numero, palavrasBusca }; return; }
+  // ---- Histórico por data-base (bases_preco_versoes / bases_preco_partes) ----
+  const mesDe = (d) => String(d || '').slice(0, 7);
+  // Data-base do edital ("AAAA-MM") + versões do SINAPI no histórico -> qual usar e o aviso. versao null = tabelas
+  // vigentes (sinapi_*). Sem histórico no banco (bases_preco.sql ainda não aplicado): segue como na fase 1.
+  function escolherReferencia(dataBase, versoes) {
+    const comPreco = (versoes || []).filter((v) => v.situacao === 'precos').sort((a, b) => (a.data_base < b.data_base ? 1 : -1));
+    const maisNova = mesDe(comPreco[0]?.data_base), maisVelha = mesDe(comPreco[comPreco.length - 1]?.data_base);
+    const db = mesDe(dataBase);
+    if (!comPreco.length || !/^\d{4}-\d{2}$/.test(db) || db === maisNova) return { versao: null, maisNova: maisNova || null, aviso: null };
+    if (db > maisNova) return { versao: null, maisNova, nivel: 'info', aviso: `A CAIXA ainda não publicou o SINAPI de ${db}. Usei o mais novo, ${maisNova}.` };
+    const exata = (versoes || []).find((v) => mesDe(v.data_base) === db);
+    if (exata?.situacao === 'zerada') return { versao: null, maisNova, nivel: 'erro', aviso: `O SINAPI de ${db} saiu sem preço e ainda não foi retificado pela CAIXA. Usei ${maisNova}: confira com a CPU do edital.` };
+    if (exata?.situacao === 'precos') return { versao: exata, maisNova, nivel: 'info', aviso: `Preços do SINAPI de ${db}, a data-base do edital. Existe referência mais nova: ${maisNova}.` };
+    return { versao: null, maisNova, nivel: 'erro', aviso: `O SINAPI de ${db} não está guardado no sistema (há de ${maisVelha} a ${maisNova}). Usei ${maisNova}: envie a CPU do edital para orçar na data-base certa.` };
+  }
+  // Partes do histórico -> a mesma base de baseDoSupabase. precos: { "tipo|codigo": [sem, com desoneração] };
+  // analitico: { composicao: [[tipo, codigo, coeficiente]] }; descricoes: { "tipo|codigo": [descrição, unidade] }.
+  function baseDoHistorico(precos, analitico, descricoes, desonerado, uf, referencia) {
+    const i = desonerado ? 1 : 0, out = {}, composicoes = {};
+    for (const [k, par] of Object.entries(precos || {})) if (Array.isArray(par) && par[i] !== null && par[i] !== undefined) out[k] = Number(par[i]);
+    for (const [comp, itens] of Object.entries(analitico || {})) {
+      const [descricao, unidade] = descricoes?.[`composicao|${comp}`] || ['', ''];
+      composicoes[comp] = { descricao, unidade, itens: itens.map(([tipo, codigo, coeficiente]) => {
+        const [d, u] = descricoes?.[`${tipo}|${codigo}`] || ['', ''];
+        return { tipo, codigo, descricao: d, unidade: u, coeficiente: Number(coeficiente) };
+      }) };
+    }
+    return { precos: out, composicoes, uf, desonerado, referencia: mesDe(referencia) };
+  }
+  // Catálogo -> "Bases no sistema: SINAPI 2026-10 (atualizada em 16/11/2026) · SICRO AM 07/2026 · ...".
+  const SO_CATALOGO = { ORSE: 'só o mês: preço digitado', 'SEINFRA-CE': 'só a versão: preço digitado' };
+  function textoBases(versoes, uf) {
+    const porBase = new Map();
+    for (const v of versoes || []) {
+      if (v.base === 'SICRO' && uf && v.abrangencia !== uf) continue;
+      const atual = porBase.get(v.base);
+      if (v.situacao !== 'zerada' && (!atual || v.data_base > atual.data_base)) porBase.set(v.base, v);
+    }
+    if (!porBase.size) return '';
+    const dia = (t) => (t ? new Date(t).toLocaleDateString('pt-BR', { timeZone: 'America/Manaus' }) : '');
+    return `Bases no sistema: ${[...porBase.values()].map((v) => `${v.base}${v.abrangencia !== 'BR' ? ` ${v.abrangencia}` : ''} ${v.versao}`
+      + (v.situacao === 'catalogo' ? ` (${SO_CATALOGO[v.base] || 'só o catálogo'})` : ` (atualizada em ${dia(v.coletado_em)})`)).join(' · ')}.`;
+  }
+
+  // ---- Rascunho no navegador (fase 1: recarregar perdia o trabalho) ----
+  const CHAVE_RASCUNHO = 'licitaplena_orcamento_obra_rascunho';
+  const VERSAO_RASCUNHO = 1;
+  // Só o necessário para voltar ao ponto: planilha lida, CPU, cronograma, preços digitados, cotações e os campos.
+  function montarRascunho(estado, campos, agora = new Date()) {
+    return JSON.stringify({ versao: VERSAO_RASCUNHO, salvoEm: agora.toISOString(), nomeArquivo: estado.nomeArquivo, abas: estado.abas, leitura: estado.leitura,
+      cpu: estado.cpu, crono: estado.crono, manuais: estado.manuais, cotacoes: estado.cotacoes, campos });
+  }
+  function lerRascunho(texto) {
+    try {
+      const r = JSON.parse(texto);
+      return r && r.versao === VERSAO_RASCUNHO && r.leitura && Array.isArray(r.abas) && r.campos && typeof r.campos === 'object' ? r : null;
+    } catch { return null; }
+  }
+
+  if (typeof module !== 'undefined' && module.exports) { module.exports = { baseDoSupabase, lerCotacoes, numero, palavrasBusca, escolherReferencia, baseDoHistorico, textoBases, montarRascunho, lerRascunho }; return; }
 
   const O = window.OrcObra, BDI = window.BdiCalculadora;
   // Só mensagem escrita por nós chega à tela; erro técnico (de rede, de biblioteca) vira texto simples.
@@ -46,7 +105,7 @@
   const mensagemSimples = (e, padrao) => (e?.simples ? e.message : padrao);
   const $ = (id) => document.getElementById(id);
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); // eslint-disable-line no-undef -- globais de supabase-config.js
-  const estado = { abas: null, leitura: null, cpu: null, crono: null, orc: null, manuais: {}, cotacoes: {}, sinapi: null, nomeArquivo: '', lances: null, similares: {} };
+  const estado = { abas: null, leitura: null, cpu: null, crono: null, orc: null, manuais: {}, cotacoes: {}, sinapi: null, nomeArquivo: '', lances: null, similares: {}, versoes: [], referencia: null };
   function aviso(texto, tipo) { const a = $('aviso'); a.textContent = texto || ''; a.className = texto ? `aviso ${tipo || 'info'}` : 'aviso'; }
 
   async function autenticar() {
@@ -54,7 +113,74 @@
     if (!session) { location.replace('login.html?voltar=/orcamento-obra'); return null; }
     const { data: cliente } = await sb.from('clientes').select('status').eq('id', session.user.id).maybeSingle();
     if (!cliente || cliente.status !== 'aprovado') { await sb.auth.signOut(); location.replace('login.html?voltar=/orcamento-obra'); return null; }
+    void carregarVersoes();
+    void oferecerAjuda(session.user.id);
+    oferecerRascunho();
     return cliente;
+  }
+
+  // ---- Bases e data-base ----
+  async function carregarVersoes() {
+    const { data, error } = await sb.from('bases_preco_versoes').select('id,base,abrangencia,data_base,versao,situacao,coletado_em').order('data_base', { ascending: false }).limit(500);
+    estado.versoes = error ? [] : data || []; // sem a tabela (SQL ainda não aplicado): segue sem histórico, como na fase 1
+    mostrarBases();
+  }
+  const versoesSinapi = () => estado.versoes.filter((v) => v.base === 'SINAPI' && v.abrangencia === 'BR');
+  function mostrarBases() {
+    $('m-bases').textContent = textoBases(estado.versoes, $('l-uf').value);
+    const r = escolherReferencia($('l-data').value, versoesSinapi());
+    $('l-base').textContent = r.aviso || (r.maisNova ? `SINAPI ${r.maisNova}: o mais novo no sistema.` : '');
+    $('l-base').className = r.nivel === 'erro' ? 'nota alerta-base' : 'nota';
+  }
+
+  // ---- O que costuma acontecer (estudo de quem ganha e quem perde) ----
+  async function mostrarEstudo() {
+    const E = O.estudo, c = estado.leitura?.cabecalho || {}, global = estado.leitura?.resumo?.global;
+    const tipo = E.tipoDeObra(c.objeto), faixa = global > 0 ? E.faixaDeValor(global) : null, uf = $('l-uf').value;
+    const { data, error } = await sb.from('orcamento_estudo_estatisticas').select('recorte,n,dados').in('recorte', E.recortesCandidatos(uf, tipo, faixa));
+    const r = error ? null : E.fraseDoEstudo(Object.fromEntries((data || []).map((x) => [x.recorte, x])), uf, tipo, faixa);
+    $('m-estudo').hidden = !r;
+    if (r) $('m-estudo-frase').textContent = `${r.frase} O motivo de cada queda não vem no dado aberto do Compras.gov.`;
+  }
+
+  // ---- "Ajudar a melhorar o Auditor" (desligado até o dono ligar; ver docs/orcamento-obra/privacidade-motivos-recusa.md) ----
+  const VERSAO_TEXTO_AJUDA = '2026-11-22';
+  async function oferecerAjuda(usuario) {
+    const { data: cfg, error } = await sb.from('orcamento_motivos_config').select('ligado').maybeSingle();
+    if (error || !cfg?.ligado) return; // desligado: a opção nem aparece
+    const { data: aceite } = await sb.from('orcamento_motivos_consentimento').select('usuario_id').eq('usuario_id', usuario).maybeSingle();
+    $('m-ajudar').hidden = false;
+    $('m-ajudar-sim').checked = Boolean(aceite);
+    $('m-ajudar-sim').addEventListener('change', async (ev) => {
+      const r = ev.target.checked
+        ? await sb.from('orcamento_motivos_consentimento').insert({ versao_texto: VERSAO_TEXTO_AJUDA })
+        : await sb.from('orcamento_motivos_consentimento').delete().eq('usuario_id', usuario);
+      if (r.error) { ev.target.checked = !ev.target.checked; aviso('Não foi possível salvar a sua escolha agora. Tente de novo.', 'erro'); }
+    });
+  }
+
+  // ---- Rascunho (fica só neste navegador) ----
+  const CAMPOS = ['l-uf', 'l-data', 'l-regime', 'b-tipo', 'b-ac', 'b-s', 'b-g', 'b-r', 'b-df', 'b-l', 'b-iss', 'b-pis', 'b-cofins', 'b-cprb', 'm-desconto', 'm-lance', 'm-modo', 'm-meses', 'm-lei', 'm-simples'];
+  function salvarRascunho() {
+    if (!estado.leitura) return;
+    const campos = Object.fromEntries(CAMPOS.map((id) => [id, $(id).type === 'checkbox' ? $(id).checked : $(id).value]));
+    try { window.localStorage.setItem(CHAVE_RASCUNHO, montarRascunho(estado, campos)); } catch { /* planilha grande demais ou navegador sem espaço: segue sem rascunho */ }
+  }
+  function oferecerRascunho() {
+    let r = null;
+    try { r = lerRascunho(window.localStorage.getItem(CHAVE_RASCUNHO)); } catch { r = null; }
+    if (!r) return;
+    $('rascunho').hidden = false;
+    $('rascunho-texto').textContent = `Você tem um orçamento em andamento: ${r.nomeArquivo || 'planilha'}, salvo em ${new Date(r.salvoEm).toLocaleString('pt-BR')}.`;
+    $('btn-rascunho-continuar').onclick = () => {
+      Object.assign(estado, { abas: r.abas, leitura: r.leitura, cpu: r.cpu, crono: r.crono, manuais: r.manuais || {}, cotacoes: r.cotacoes || {}, nomeArquivo: r.nomeArquivo, orc: null, similares: {} });
+      mostrarLeitura();
+      for (const id of CAMPOS) if (id in r.campos) { if ($(id).type === 'checkbox') $(id).checked = r.campos[id] === true; else $(id).value = String(r.campos[id] ?? ''); }
+      mostrarBases();
+      $('rascunho').hidden = true;
+      aviso('Orçamento recuperado. Clique em "Montar orçamento" para refazer as contas.', 'info');
+    };
+    $('btn-rascunho-apagar').onclick = () => { try { window.localStorage.removeItem(CHAVE_RASCUNHO); } catch { /* nada a apagar */ } $('rascunho').hidden = true; };
   }
 
   // ---- 1. Ler o arquivo (SheetJS) ----
@@ -89,6 +215,7 @@
       const abaCrono = abas.find((a) => /cronog/i.test(a.nome));
       Object.assign(estado, { abas, leitura, crono: abaCrono ? O.leitor.lerCronograma(abaCrono.linhas) : null, orc: null, manuais: {}, cotacoes: {}, similares: {}, nomeArquivo: $('f-edital').files[0].name.replace(/\.[^.]+$/, '') });
       mostrarLeitura();
+      salvarRascunho();
       aviso('');
     } catch (e) { aviso(mensagemSimples(e, 'Não foi possível ler a planilha. Confira o arquivo e tente de novo.'), 'erro'); }
   }
@@ -112,7 +239,11 @@
         + `<td data-rotulo="Unid.">${esc(i.unidade)}</td><td data-rotulo="Quant.">${esc(i.quantidade ?? '—')}</td><td data-rotulo="Preço do edital">${esc(i.precoUnitario ? reais(i.precoUnitario) : '—')}</td></tr>`)).join('');
     $('m-meses').value = estado.crono?.meses || 6;
     $('m-lei').value = c.lei === '13303' ? '13303' : '14133';
+    // Planilha mais SICRO que SINAPI: começa arredondando (NBR 5891); o edital manda e a pessoa pode trocar.
+    $('m-modo').value = (r.fontes.SICRO || 0) > (r.fontes.SINAPI || 0) ? 'arredondar' : 'truncar';
     preencherBdi();
+    mostrarBases();
+    void mostrarEstudo();
   }
 
   // ---- 3. Montar ----
@@ -143,9 +274,24 @@
     }
     return out;
   }
-  async function buscarSinapi(uf, desonerado) {
+  // Data-base antiga guardada no histórico: só os códigos da planilha, pela função do banco (a RLS vale).
+  async function buscarHistorico(versao, uf, desonerado, cods) {
+    const rpc = async (grupo, chaves) => {
+      const { data, error } = await sb.rpc('bases_preco_buscar', { p_versao: versao.id, p_grupo: grupo, p_chaves: chaves });
+      if (error) throw erroSimples('Não foi possível consultar o histórico do SINAPI agora. Tente de novo.');
+      return data || {};
+    };
+    const chaves = (cs) => cs.flatMap((c) => [`composicao|${c}`, `insumo|${c}`]);
+    const analitico = await rpc('analitico', cods);
+    const todos = [...new Set(cods.concat(Object.values(analitico).flat().map((x) => String(x[1]))))];
+    const precos = await rpc(`precos:${uf}`, chaves(todos));
+    const descricoes = await rpc('itens', chaves(todos));
+    return baseDoHistorico(precos, analitico, descricoes, desonerado, uf, versao.data_base);
+  }
+  async function buscarSinapi(uf, desonerado, referencia) {
     const cods = [...new Set(estado.leitura.itens.filter((i) => i.fonte === 'SINAPI').map((i) => i.codigo).filter((c) => /^\d{1,10}$/.test(c)))];
     if (!cods.length) return null;
+    if (referencia?.versao) return buscarHistorico(referencia.versao, uf, desonerado, cods);
     const campos = 'tipo,codigo,preco_sd,preco_cd,referencia';
     const custos = await emLotes(cods, 150, (l) => sb.from('sinapi_custos').select(campos).eq('uf', uf).in('codigo', l));
     const itens = await emLotes(cods, 40, (l) => sb.from('sinapi_composicao_itens').select('composicao,item_tipo,item_codigo,descricao,unidade,coeficiente').in('composicao', l));
@@ -161,7 +307,8 @@
       const uf = $('l-uf').value, desonerado = $('l-regime').value === 'sim';
       const dataBase = $('l-data').value || null, ano = Number(String(dataBase || '').slice(0, 4)) || new Date().getFullYear();
       const leitura = { ...estado.leitura, cabecalho: { ...estado.leitura.cabecalho, uf, dataBase, desonerado } };
-      estado.sinapi = await buscarSinapi(uf, desonerado);
+      estado.referencia = escolherReferencia(dataBase, versoesSinapi());
+      estado.sinapi = await buscarSinapi(uf, desonerado, estado.referencia);
       const bases = { ...(estado.cpu?.bases || {}) };
       if (estado.sinapi) bases.SINAPI = estado.cpu?.bases?.SINAPI ? { ...estado.sinapi, precos: { ...estado.sinapi.precos, ...estado.cpu.bases.SINAPI.precos }, composicoes: { ...estado.sinapi.composicoes, ...estado.cpu.bases.SINAPI.composicoes } } : estado.sinapi;
       const desconto = numero($('m-desconto').value);
@@ -180,6 +327,7 @@
       } else estado.orc = O.montador.montarOrcamento(leitura, op);
       estado.lances = estado.orc.globalReferencia ? O.montador.tabelaDeLances(leitura, op) : null;
       mostrarResultado();
+      salvarRascunho();
       aviso('');
     } catch (e) { aviso(mensagemSimples(e, 'Não foi possível montar o orçamento. Confira a planilha e tente de novo.'), 'erro'); } finally { $('btn-montar').disabled = false; }
   }
@@ -255,6 +403,8 @@
     $('r-totais').innerHTML = `${o.bdiNoUnitario ? 'Total da proposta (com BDI)' : `Custo direto <b>${esc(reais(o.total))}</b> · BDI ${esc(pct(o.bdi))} ·`} <b>Preço global ${esc(reais(o.globalProposta))}</b>`
       + `${o.globalReferencia ? ` · orçamento do edital ${esc(reais(o.globalReferencia))} (${esc(pct(o.globalProposta / o.globalReferencia))})` : ''}`
       + `<br>Preço de cada item: ${Object.entries(cont).map(([k, n]) => `${esc(ORIGEM[k])} ${n}`).join(' · ')}${estado.sinapi ? ` · SINAPI ${esc(estado.sinapi.uf)} ${esc(estado.sinapi.referencia)} ${estado.sinapi.desonerado ? 'desonerado' : 'não desonerado'}` : ''}`;
+    $('r-referencia').textContent = estado.referencia?.aviso || '';
+    $('r-referencia').className = estado.referencia?.aviso ? `aviso ${estado.referencia.nivel === 'erro' ? 'erro' : 'info'}` : 'aviso';
     if (o.lance) $('r-totais').innerHTML += `<br>Ajustado ao lance de ${esc(reais(o.lance))}: desconto linear de ${esc(pct(o.desconto.linear))} em cada preço, sobra ${esc(reais(o.sobra))} por causa dos centavos.`;
     $('r-lances').hidden = !estado.lances;
     $('r-lances-corpo').innerHTML = (estado.lances || []).map((x) => `<tr><td data-rotulo="Desconto">${esc(pct(x.desconto))}</td><td data-rotulo="Preço global">${esc(reais(x.global))}</td>`
@@ -279,7 +429,7 @@
 
   $('form-edital').addEventListener('submit', enviar);
   $('btn-montar').addEventListener('click', () => void montar());
-  $('btn-remontar').addEventListener('click', () => { guardarPendentes(); void montar(); });
+  $('btn-remontar').addEventListener('click', () => { guardarPendentes(); salvarRascunho(); void montar(); });
   $('p-corpo').addEventListener('click', (ev) => {
     const b = ev.target.closest('[data-usar-parecido]'); if (!b) return;
     const item = b.dataset.usarParecido, a = document.querySelector(`[data-parecidos="${CSS.escape(item)}"]`)?.achados?.[Number(b.dataset.i)];
@@ -292,6 +442,8 @@
   $('b-tipo').innerHTML = Object.entries(BDI.TIPOS).map(([k, t]) => `<option value="${k}">${esc(t.nome)}</option>`).join('');
   $('b-tipo').addEventListener('change', preencherBdi);
   $('l-regime').addEventListener('change', preencherBdi);
+  $('l-uf').addEventListener('change', () => { mostrarBases(); if (estado.leitura) void mostrarEstudo(); });
+  $('l-data').addEventListener('change', mostrarBases);
   $('btn-baixar-completa').addEventListener('click', () => estado.orc && baixarXlsx(O.montador.montarAbas(estado.orc), `orcamento-${estado.nomeArquivo || 'obra'}.xlsx`));
   $('btn-baixar-edital').addEventListener('click', () => {
     if (!estado.orc) return;

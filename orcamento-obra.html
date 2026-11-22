@@ -69,6 +69,10 @@ li.alerta a{color:var(--action-text);font-weight:600}
 .aviso{display:none;margin:12px 0;border:1px solid;border-radius:var(--radius-card);padding:12px 16px}
 .aviso.erro{display:block;color:var(--error-text);border-color:var(--error-border);background:var(--error-bg)}
 .aviso.info{display:block;color:var(--info-text);border-color:var(--info-border);background:var(--info-bg)}
+.nota.alerta-base{color:var(--error-text);font-weight:600}
+.estudo{margin:12px 0 0;padding:12px 16px;border:1px solid var(--info-border);border-radius:var(--radius-card);background:var(--info-bg);color:var(--info-text);line-height:1.5}
+.estudo b{display:block;margin-bottom:2px}
+.rascunho{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
 @media(max-width:640px){
   header{padding:8px 12px}main{padding:16px}.engenheiro{top:0;position:static}
   .grade.arquivos{grid-template-columns:1fr}
@@ -118,6 +122,7 @@ li.alerta a{color:var(--action-text);font-weight:600}
   <p>Envie a planilha orçamentária do edital (mesmo em branco). O time de agentes lê os itens, liga cada um à composição do SINAPI ou de outra tabela, monta CPU, BDI, encargos, curva ABC e cronograma, confere tudo contra a lei e devolve as planilhas prontas para revisão. <a href="sinapi.html">Voltar aos preços SINAPI</a></p></div>
   <p class="engenheiro" role="note">Revisão e assinatura de engenheiro ou arquiteto responsável são obrigatórias.</p>
   <div id="aviso" class="aviso" role="status" aria-live="polite"></div>
+  <div class="card rascunho" id="rascunho" hidden><span id="rascunho-texto"></span><span class="acoes"><button class="btn primario" type="button" id="btn-rascunho-continuar">Continuar de onde parei</button><button class="btn" type="button" id="btn-rascunho-apagar">Apagar e começar outro</button></span></div>
 
   <form class="card" id="form-edital">
     <h2>1. Envie a planilha do edital</h2>
@@ -126,7 +131,7 @@ li.alerta a{color:var(--action-text);font-weight:600}
       <div><label for="f-cpu">Composições do edital, CPU (opcional)</label><input type="file" id="f-cpu" accept=".xlsx,.xlsm,.xls,.ods"></div>
       <div><button class="btn primario" type="submit">Ler a planilha</button></div>
     </div>
-    <p class="nota">O arquivo é lido aqui no seu navegador e não é enviado a ninguém. PDF ainda não é lido: peça ao órgão o editável ou salve em Excel.</p>
+    <p class="nota">O arquivo é lido aqui no seu navegador e não é enviado a ninguém. O trabalho fica guardado só neste navegador, para você continuar se recarregar a página. PDF ainda não é lido: peça ao órgão o editável ou salve em Excel.</p>
   </form>
 
   <section class="card" id="passo-leitura" hidden>
@@ -138,6 +143,7 @@ li.alerta a{color:var(--action-text);font-weight:600}
       <div><label for="l-data">Data-base do edital</label><input id="l-data" type="month"></div>
       <div><label for="l-regime">Regime da sua empresa</label><select id="l-regime"><option value="sim">Desonerado (CPRB)</option><option value="nao">Não desonerado</option></select></div>
     </div>
+    <p class="nota" id="l-base" role="status"></p>
     <ul class="avisos" id="l-avisos"></ul>
     <div class="tabela-wrap"><table class="tabela"><thead><tr><th>Item</th><th>Código</th><th>Fonte</th><th>Descrição</th><th>Unid.</th><th>Quant.</th><th>Preço do edital</th></tr></thead><tbody id="l-corpo"></tbody></table></div>
   </section>
@@ -145,6 +151,9 @@ li.alerta a{color:var(--action-text);font-weight:600}
   <section class="card" id="passo-montar" hidden>
     <h2>3. Monte o orçamento</h2>
     <p class="nota">BDI pela fórmula do TCU (Acórdão 2622/2013). Os valores começam na média do TCU para o tipo de obra: troque pelos da sua empresa. ISS: alíquota da lei do município da obra.</p>
+    <p class="nota" id="m-bases"></p>
+    <div class="estudo" id="m-estudo" hidden><b>O que costuma acontecer</b><span id="m-estudo-frase"></span></div>
+    <p class="nota" id="m-ajudar" hidden><label for="m-ajudar-sim" style="display:inline-flex;align-items:center;margin:8px 0 0"><input type="checkbox" id="m-ajudar-sim">Ajudar a melhorar o Auditor</label> Quando você grava um pregão pela extensão, o texto público do agente de contratação sobre uma recusa vai, sem nome, CNPJ, CPF, e-mail ou telefone, para a base de motivos de recusa. Desmarque quando quiser. <a href="politica-privacidade.html">Política de privacidade</a></p>
     <div class="grade">
       <div style="grid-column:span 2"><label for="b-tipo">Tipo de obra (faixa do TCU)</label><select id="b-tipo"></select></div>
       <div><label for="b-ac">Adm. central %</label><input id="b-ac" inputmode="decimal"></div>
@@ -171,6 +180,7 @@ li.alerta a{color:var(--action-text);font-weight:600}
 
   <section class="card" id="passo-resultado" hidden>
     <h2>Resultado</h2>
+    <div id="r-referencia" class="aviso" role="status"></div>
     <p class="totais" id="r-totais"></p>
     <div id="r-lances" hidden><h3 class="sub">Tabela de lances (mesma planilha, outros descontos)</h3><div class="tabela-wrap curta"><table class="tabela"><thead><tr><th>Desconto</th><th>Preço global</th><th>% do orçado</th><th>Riscos</th></tr></thead><tbody id="r-lances-corpo"></tbody></table></div></div>
     <div class="tabela-wrap"><table class="tabela"><thead><tr><th>Item</th><th>Descrição e base usada</th><th>Quant.</th><th>Referência (sem BDI)</th><th>Unit. da proposta</th><th>Total</th></tr></thead><tbody id="r-corpo"></tbody></table></div>
@@ -191,7 +201,7 @@ li.alerta a{color:var(--action-text);font-weight:600}
 
   <section class="card" id="passo-baixar" hidden>
     <h2>5. Baixe as planilhas</h2>
-    <p class="nota">Orçamento sintético, CPU, composições próprias, BDI, encargos, curva ABC, cronograma físico-financeiro, carta-proposta (modelo) e os alertas, num arquivo só. Ou a própria planilha do edital, com os preços preenchidos.</p>
+    <p class="nota">Orçamento sintético, CPU, composições próprias, BDI, encargos, curva ABC, cronograma físico-financeiro, carta-proposta (modelo), os alertas e a conferência antes de enviar, num arquivo só. Ou a própria planilha do edital, com os preços preenchidos.</p>
     <div class="acoes"><button class="btn primario" type="button" id="btn-baixar-completa">Baixar planilha completa (.xlsx)</button><button class="btn" type="button" id="btn-baixar-edital">Baixar no formato do edital (.xlsx)</button></div>
   </section>
 </main>
@@ -199,6 +209,8 @@ li.alerta a{color:var(--action-text);font-weight:600}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="bdi-calculadora.js"></script>
 <script src="orcamento-obra-regras.js"></script>
+<script src="orcamento-obra-regras-catalogo.js"></script>
+<script src="orcamento-obra-estudo.js"></script>
 <script src="orcamento-obra-calculo.js"></script>
 <script src="orcamento-obra-leitor.js"></script>
 <script src="orcamento-obra-auditor.js"></script>
