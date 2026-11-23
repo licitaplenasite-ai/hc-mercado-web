@@ -230,7 +230,7 @@
         const botaoCpf = k === 'cpf_representante' && gestor ? '<button type="button" class="link" id="perfil-mostrar-cpf">Mostrar CPF completo</button>' : '';
         return `<div><label for="${id}">${ROTULOS[k]}</label>${entrada}${botaoCpf}</div>`;
       };
-      const logo = '<div class="perfil-logo"><img id="perfil-logo-previa" alt="Logo da empresa" hidden><label for="perfil-logo" class="btn">Enviar logo</label><input id="perfil-logo" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,.svg" class="perfil-arquivo"><span class="nota">${LOGO_FORMATOS}. Se for grande, a gente reduz.</span><div id="perfil-logo-aviso" class="aviso" role="status"></div></div>';
+      const logo = '<div class="perfil-logo"><img id="perfil-logo-previa" alt="Logo da empresa" hidden><label for="perfil-logo" class="btn">Enviar logo</label><input id="perfil-logo" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,.svg" class="perfil-arquivo"><span class="nota">' + LOGO_FORMATOS + '. Se for grande, a gente reduz.</span><div id="perfil-logo-aviso" class="aviso" role="status"></div></div>';
       if (alvoCabeca) alvoCabeca.innerHTML = logo;
       alvo.innerHTML = `
         ${alvoCabeca ? '' : `<div class="perfil-cabeca"><div><h2>Perfil da empresa</h2><p>Preencha uma vez. A proposta e as declarações usam estes dados.</p><p class="nota" id="perfil-identidade"></p></div>${logo}</div>`}
