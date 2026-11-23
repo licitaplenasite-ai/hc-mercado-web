@@ -8657,7 +8657,8 @@
     btn.disabled = true;
     alvo.innerHTML = '<div id="emp-analise-cnpj"><div class="carregando">Consultando os dados da empresa...</div></div>';
     // Ficha da BrasilAPI: só cabeçalho provisório enquanto o cadastro guardado (/api/analise-cnpj) não chega.
-    const ficha = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    // Prazo de 3 s: sem ele, a BrasilAPI lenta segurava a análise inteira (o cadastro guardado chega depois de qualquer jeito).
+    const ficha = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`, { signal: AbortSignal.timeout(3000) }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
     const comToken = async (url, opcoes = {}) => {
       const token = await obterTokenSessao();
       const resp = await fetch(url, { ...opcoes, headers: { ...(opcoes.headers || {}), Authorization: `Bearer ${token}` } });
