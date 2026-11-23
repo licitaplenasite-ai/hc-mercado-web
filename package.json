@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@netlify/aws-lambda-compat": "^2.0.0",
-    "@netlify/blobs": "^10.7.13",
+    "@netlify/blobs": "^11.1.9",
     "adm-zip": "^0.6.1",
     "js-tiktoken": "1.0.21",
     "mammoth": "^1.12.1",
