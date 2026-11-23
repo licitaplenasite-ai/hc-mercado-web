@@ -10,7 +10,7 @@ const fim = html.indexOf("  function classePrazoKanban(", inicio);
 assert.ok(inicio > 0 && fim > inicio);
 const codigo = html.slice(inicio, fim);
 
-function criarBanco(existente = null, prazos = []) {
+function criarBanco(existente = null, prazos = [], falhas = {}) {
   const gravacoes = [];
   const consultas = [];
   const banco = {
@@ -26,7 +26,7 @@ function criarBanco(existente = null, prazos = []) {
         update(dados) { consulta.acao = "update"; consulta.dados = dados; return this; },
         then(resolve) {
           const data = consulta.acao === "select" && tabela === "operacao_prazos_processo" ? prazos : null;
-          resolve({ data, error: null });
+          resolve({ data, error: falhas[`${tabela}:${consulta.acao}`] || null });
         },
       };
       return builder;
@@ -35,14 +35,17 @@ function criarBanco(existente = null, prazos = []) {
   return { banco, gravacoes, consultas };
 }
 
-function preparar(existente, prazos, etapas = null) {
-  const { banco, consultas } = criarBanco(existente, prazos);
+const avisosConsole = [];
+function preparar(existente, prazos, etapas = null, falhas = {}) {
+  const { banco, consultas } = criarBanco(existente, prazos, falhas);
   const contexto = {
     window: { __sbClient: banco },
     Map, Set, Promise, Object, Number, String, Date,
     localStorage: { getItem: () => "empresa" },
     document: {},
-    console,
+    console: { ...console, warn: (...args) => avisosConsole.push(args.join(" ")) },
+    LicitaOperacaoEdital: { requisitosDaEstrutura: () => ["Certidão negativa de débitos federais"] },
+    lerCacheLocalResumo: () => ({ estrutura: {} }),
     setTimeout,
     clearTimeout,
     aguardarSupabaseAutenticado: async () => {},
@@ -216,4 +219,56 @@ test("sem a tabela de etapas no banco não envia etapa_id", async () => {
   const novo = preparar(null);
   await novo.sincronizar("PNCP-2", { objeto: "Papel" }, "interesse");
   assert.equal("etapa_id" in novo.consultas.find(c => c.tabela === "operacao_processos" && c.acao === "insert").dados, false);
+});
+
+// Regressão 23/11 (pregão 012/2026 da ALEPA): o processo era criado, um passo seguinte falhava e a tela
+// desfazia o status; a segunda tentativa achava o processo e "funcionava". O status salvo não cai mais.
+test("processo criado continua salvo quando o checklist ou o prazo falham depois", async () => {
+  const erroBanco = { code: "42501", message: "new row violates row-level security policy", details: null, hint: null };
+  const { sincronizar } = preparar(null, [], null, {
+    "operacao_processos:update": erroBanco, "operacao_prazos_processo:insert": erroBanco,
+  });
+  avisosConsole.length = 0;
+  const resultado = await sincronizar("00000000000191-1-000012/2026", {
+    objeto: "Papel", numeroControlePNCP: "00000000000191-1-000012/2026", encerramento: "2026-12-01T10:00:00Z",
+  }, "participando");
+  assert.equal(resultado.id, "processo-novo");
+  assert.match(resultado.pendencia, /prazo de propostas/);
+  // O console mostra a mensagem real do banco, não "Object".
+  assert.ok(avisosConsole.some(a => a.includes("Checklist") && a.includes("42501 | new row violates")));
+  assert.ok(avisosConsole.some(a => a.includes("Prazo") && a.includes("row-level security")));
+});
+
+test("erro do banco vira texto claro na tela e completo no console", () => {
+  const contexto = {};
+  vm.runInNewContext(`${codigo}
+this.tecnico = textoErroTecnico; this.tela = mensagemErroAcompanhamento;`, contexto);
+  const rls = { code: "42501", message: "new row violates row-level security policy", details: null, hint: null };
+  assert.equal(contexto.tecnico(rls), "42501 | new row violates row-level security policy");
+  assert.match(contexto.tela(rls), /permissão/);
+  assert.match(contexto.tela({ code: "PGRST301", message: "JWT expired" }), /sessão expirou/);
+  assert.match(contexto.tela({ code: "", message: "TypeError: Failed to fetch" }), /sem conexão/);
+  assert.match(contexto.tela({ code: "P0001", message: "Limite de 3 processos ativos atingido para esta conta", hint: "Plano Teste." }), /Limite de 3.*Plano Teste/);
+  assert.match(contexto.tela({ code: "23505", message: "duplicate key value" }), /código 23505/);
+  assert.equal(contexto.tela(new Error("Escolha uma empresa antes de acompanhar o edital.")), "Escolha uma empresa antes de acompanhar o edital.");
+});
+
+// Voltar para a aba recarrega as empresas e desliga empresaAcompanhamentoPronta por instantes, com o seletor na tela.
+test("escolher o status durante a recarga das empresas espera a recarga e grava", async () => {
+  const gravados = [];
+  const contexto = {
+    Map, Set, Promise, Object, Date, String, console,
+    empresaAcompanhamentoPronta: false, empresaOperacionalId: "empresa", semEmpresaCadastrada: false, etapasFunil: null,
+    definirNoMapa: (...args) => gravados.push(args), salvarSnapshotKanban() {},
+  };
+  vm.runInNewContext(`${codigo}
+    sincronizarDossieOperacional = async () => ({ id: "p1", empresa: "HCM" }); atualizarStatusAcompanhamentoNaTela = () => {};
+    let terminar; carregamentoAcompanhamento = new Promise(ok => { terminar = () => { empresaAcompanhamentoPronta = true; ok(); }; });
+    this.terminar = () => terminar(); this.salvar = salvarStatusAcompanhamento;`, contexto);
+  const salvando = contexto.salvar("edital-1", { objeto: "Papel" }, "participando");
+  await new Promise(ok => setImmediate(ok));
+  assert.equal(gravados.length, 0);
+  contexto.terminar();
+  assert.deepEqual(JSON.parse(JSON.stringify(await salvando)), { empresaNome: "HCM", pendencia: null });
+  assert.deepEqual(gravados[0], ["status-licitacao", "edital-1", "participando", "empresa"]);
 });

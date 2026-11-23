@@ -59,6 +59,7 @@ test("o banco reconstitui dois acompanhamentos independentes e ignora processos 
     window: { __sbClient: banco },
     lerMapa: (nome, empresa) => mapas.get(`${empresa}:${nome}`) || {},
     salvarMapa: (nome, valor, empresa) => mapas.set(`${empresa}:${nome}`, valor),
+    sincronizacoesOperacionais: new Map(),
     Map, Set, Promise, Object, Array, Date, String,
   };
   vm.runInNewContext(`${html.slice(inicioEmpresa, fimEmpresa)}
