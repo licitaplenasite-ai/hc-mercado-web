@@ -38,3 +38,9 @@ jobs:
         # dados_robo) em vez de data/editais_vistos.json commitado no git - assim
         # essa execucao nao dispara mais uma publicacao completa do site no Netlify
         # (isso rodava 3x/dia, era a maior fatia dos disparos automaticos).
+
+      - name: Registrar sucesso na Saúde do sistema (admin)
+        if: success()
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/registrar_robo.js boletim

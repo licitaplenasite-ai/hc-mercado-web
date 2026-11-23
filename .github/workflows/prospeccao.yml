@@ -43,3 +43,9 @@ jobs:
           LIMITE_MINUTOS: "10"
           ADESOES_POR_RODADA: "1500"
         run: node scripts/coletar_prospeccao.js
+
+      - name: Registrar sucesso na Saúde do sistema (admin)
+        if: success()
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/registrar_robo.js prospeccao

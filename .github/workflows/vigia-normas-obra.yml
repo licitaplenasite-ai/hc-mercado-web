@@ -35,3 +35,9 @@ jobs:
           VIGIA_TCU_PAGINAS: "20"
           VIGIA_PAUSA_MS: "2000"
         run: node scripts/vigia_normas_obra.js
+
+      - name: Registrar sucesso na Saúde do sistema (admin)
+        if: success()
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/registrar_robo.js vigia_normas

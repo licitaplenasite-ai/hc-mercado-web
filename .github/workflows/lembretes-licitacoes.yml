@@ -44,3 +44,9 @@ jobs:
           VAPID_CHAVE_PUBLICA: ${{ secrets.VAPID_CHAVE_PUBLICA }}
           VAPID_CHAVE_PRIVADA: ${{ secrets.VAPID_CHAVE_PRIVADA }}
         run: node scripts/avisos_celular.js
+
+      - name: Registrar sucesso na Saúde do sistema (admin)
+        if: success()
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/registrar_robo.js lembretes

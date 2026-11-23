@@ -48,3 +48,9 @@ jobs:
           LIMITE_MINUTOS: "45"
           BASES_RETENCAO_MESES: "24"
         run: node scripts/coletar_bases_oficiais.js
+
+      - name: Registrar sucesso na Saúde do sistema (admin)
+        if: success()
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/registrar_robo.js bases_obra

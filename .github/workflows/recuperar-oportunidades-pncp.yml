@@ -66,3 +66,9 @@ jobs:
             exit 0
           fi
           node scripts/preparar_dossies_editais.js
+
+      - name: Registrar sucesso na Saúde do sistema (admin)
+        if: success()
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/registrar_robo.js ufs
