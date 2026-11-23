@@ -6171,9 +6171,18 @@
   // licitações abertas. Trocamos pro endpoint que o PRÓPRIO site pncp.gov.br usa na busca
   // (api/search) — responde em milissegundos e cobre TODO o histórico (não só "aberto agora"),
   // o que também é o que permite a busca por período (Publicado de/até) ser retroativa de verdade.
+  // Aviso quando parte da lista veio da última consulta guardada no servidor (PNCP fora do ar ou lento).
+  function avisoPncpGuardado(guardadoEm) {
+    const d = guardadoEm ? new Date(guardadoEm) : null;
+    if (!d || isNaN(d)) return "";
+    const quando = d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+    return `<div class="aviso">O PNCP não respondeu agora: parte da lista vem da última consulta guardada, de ${escapeHtml(quando)}.</div>`;
+  }
   async function buscarOportunidadesAbertas(ufs, palavras, maxPaginas) {
     const encontradosPorId = new Map();
     let falhaConexao = false;
+    // O proxy devolve a última resposta guardada quando o PNCP cai ou demora (X-Dados-Origem: guardado).
+    let guardadoEm = null;
     const ufsSelecionadas = normalizarUfs(ufs);
     const termos = [...new Set((palavras || []).map((p) => p.trim()).filter(Boolean))];
     // Cada expressão configurada precisa ser enviada ao PNCP. A versão anterior usava
@@ -6251,6 +6260,8 @@
       // válida pouco antes de ela chegar.
       const resp = await fetchPaginaComRetry(montarUrlPagina(termo, pagina, ufConsulta), 30000);
       if (!resp) return null;
+      const doCache = resp.headers.get("X-Dados-Origem") === "guardado" ? resp.headers.get("X-Dados-Guardados-Em") : null;
+      if (doCache && (!guardadoEm || doCache < guardadoEm)) guardadoEm = doCache;
       const texto = await resp.text();
       if (!texto) return null;
       try { return JSON.parse(texto); } catch (e) { return null; }
@@ -6281,7 +6292,7 @@
       }
     }
 
-    return { encontrados: [...encontradosPorId.values()], falhaConexao };
+    return { encontrados: [...encontradosPorId.values()], falhaConexao, guardadoEm };
   }
 
   // Monta um par rótulo:valor do dl.boletim-meta, mostrando "Não informado" em vez de
@@ -7276,9 +7287,9 @@
       let resultados = filtrarResultadosDoBoletim(resultadosBrutos);
       if (resp.falhaConexao) resultados = combinarResultadosDoBoletim(resultados, resultadosAnteriores);
       metaEl.textContent = metaBoletim(ufs, palavras);
-      let avisoHtml = resp.falhaConexao
+      let avisoHtml = (resp.falhaConexao
         ? '<div class="aviso">O portal do governo não respondeu agora. Mostramos também a última lista que já tínhamos; ela pode não ter os editais mais novos.</div>'
-        : "";
+        : "") + avisoPncpGuardado(resp.guardadoEm);
 
       resultados = combinarResultadosDoBoletim(resultados, await buscarExtrasSistemaS(ufs, palavras))
         .filter((r) => ufEstaSelecionada(r.uf, ufs));
@@ -7917,12 +7928,14 @@
       // histórico, não só "aberto agora" — ver comentário na função). O cache do robô
       // (tabela oportunidades_abertas no Supabase) é só um complemento pra garantir cobertura
       // extra caso o robô já tenha visto algo que a busca ao vivo não trouxe nesta página.
+      // A base salva é lida junto com a busca ao vivo (antes, só depois dela: duas esperas somadas).
+      const cachePromessa = carregarOportunidadesSupabase(ufs, false);
       const resp = await buscarOportunidadesAbertas(ufs, palavras, 20);
       let resultados = resp.encontrados;
       const falhaConexao = resp.falhaConexao;
       let avisoFonte = "";
 
-      const cache = await carregarOportunidadesSupabase(ufs, false);
+      const cache = await cachePromessa;
       if (cache && Array.isArray(cache.registros) && cache.registros.length > 0) {
         resultados = mesclarComCacheRobo(resultados, cache.registros, ufs, palavras);
       }
@@ -8009,7 +8022,7 @@
         return;
       }
 
-      let avisoConexao = avisoFonte;
+      let avisoConexao = avisoFonte + avisoPncpGuardado(resp.guardadoEm);
       if (falhaConexao) {
         avisoConexao += '<div class="aviso">A API pública do PNCP não respondeu (está lenta ou fora do ar no momento). Os resultados abaixo podem estar incompletos — tente novamente em alguns instantes.</div>';
       }

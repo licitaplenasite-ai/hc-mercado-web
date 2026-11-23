@@ -343,6 +343,7 @@ function contextoConsumidoresOportunidades(responder) {
     ["function normalizarUfs(", "function definirUfsNoSelect("],
     ["function normalizar(txt)", "// Tags automáticas do objeto"],
     ["const CAMPOS_DETALHE_PNCP", "async function carregarMeta("],
+    ["function avisoPncpGuardado(", "async function buscarOportunidadesAbertas("],
     ["async function buscarOportunidades({", 'document.getElementById("op-buscar").addEventListener'],
   ]) {
     const de = html.indexOf(inicio), ate = html.indexOf(fim, de);

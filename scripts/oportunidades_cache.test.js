@@ -54,7 +54,7 @@ function criarContexto({ palavras = "expediente", armazenado = {} } = {}) {
     filtroExtraDaTela: () => ({}),
     window: { BuscaExtra: { filtrarExtra: (lista) => lista, dataDoPeriodo: (r) => r.publicacao } },
   });
-  for (const nome of ["salvarFiltroOportunidades", "lerResultadoOportunidades", "salvarResultadoOportunidades", "definirNotaResultadoOportunidades", "buscarOportunidades"]) {
+  for (const nome of ["salvarFiltroOportunidades", "lerResultadoOportunidades", "salvarResultadoOportunidades", "definirNotaResultadoOportunidades", "avisoPncpGuardado", "buscarOportunidades"]) {
     vm.runInContext(extrairFuncao(nome), contexto);
   }
   const nota = () => elementos.get("op-resultado-nota")?.textContent || "";
@@ -78,6 +78,15 @@ test("primeira busca mostra loading, busca ao vivo e guarda o resultado", async 
   await busca;
   assert.deepEqual(x.renderizacoes, [["A"]]);
   assert.equal(JSON.parse(x.armazenamento.get("hc_oportunidades_resultado")).resultados.length, 1);
+});
+
+test("PNCP fora do ar e servidor devolveu o guardado: a lista sai com o aviso da data", async () => {
+  const x = criarContexto();
+  const busca = x.contexto.buscarOportunidades();
+  await tique();
+  x.consultas[0].resolve({ encontrados: [registro("A")], falhaConexao: false, guardadoEm: "2026-11-20T15:30:00Z" });
+  await busca;
+  assert.match(JSON.parse(x.armazenamento.get("hc_oportunidades_resultado")).aviso, /PNCP não respondeu agora: parte da lista vem da última consulta guardada, de 20\/11/);
 });
 
 test("reabrir com o mesmo filtro dentro da janela mostra o salvo sem consultar o PNCP", async () => {
