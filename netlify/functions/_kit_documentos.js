@@ -75,7 +75,7 @@ function certame(processo,edital){
 }
 const destinatario=c=>({t:'linhas',linhas:[`À ${c.orgao}`,c.linha,'A/C: Agente de Contratação / Pregoeiro(a)']});
 function emitente(empresa,dados,pe){
- return {nome:empresa.razao_social,linhas:[`CNPJ ${cnpjFormatado(empresa.cnpj)}`,dados.endereco,[pe.telefone,pe.email].filter(Boolean).join(' · ')].filter(Boolean)};
+ return {nome:empresa.razao_social,linhas:[`CNPJ ${cnpjFormatado(empresa.cnpj)}`,dados.endereco,[doc.telefoneFormatado(pe.telefone),pe.email].filter(Boolean).join(' · ')].filter(Boolean)};
 }
 function declaracao(empresa,processo,dados,body,fontes){
  const d=body.declaracao||{};const titulo=texto(d.titulo,'título',180);const modelo=texto(d.texto,'texto da declaração',20000);
@@ -103,6 +103,8 @@ function proposta(ctx,body,fontes){
  if(!Array.isArray(ids)||ids.length<1||ids.length>LIMITES.itens||ids.some(id=>!uuid(id))||new Set(ids).size!==ids.length)pendente('Selecione de 1 a 1000 itens sem duplicatas; o tamanho total também é limitado.');
  const campos={validade:texto(p.validade,'validade'),prazoEntrega:texto(p.prazoEntrega,'prazo de entrega'),pagamento:texto(p.pagamento,'pagamento'),unidades:{}};
  validarBudget(p); const indice=new Map(ctx.itens.map(i=>[i.id,i])); let total=0n;const tabela=[],textos=[],estrutura=[];
+ const extensoDaLinha=new Map(); // a tabela é reordenada abaixo; o extenso acompanha a própria linha
+ const porExtenso=(unit,sub)=>`Valor unitário: ${valorPorExtenso(unit)} (R$ ${dinheiro(unit)}) · Valor total do item: ${valorPorExtenso(sub)} (R$ ${dinheiro(sub)})`;
  const fabricantes=ctx.extra?.fabricantes||{};
  for(const id of [...ids].sort()){
  const i=indice.get(id);if(!i)falhar('Item indisponível.',404);if(i.tipo!=='item')pendente('Lote agregado requer detalhamento em itens individuais.');
@@ -111,19 +113,20 @@ function proposta(ctx,body,fontes){
  for(const c of ['marca','modelo'])if(i[c]!=null&&i[c]!=='')texto(i[c],c,500);
  const subtotal=totalItem(i.quantidade,i.valor_unitario_proposta);total+=subtotal;if(total>999999999999999n)pendente('Total excede o limite.');itens.push(i);
  const fabricante=typeof fabricantes[id]==='string'?fabricantes[id].slice(0,200):'';
- tabela.push([i.identificador,i.descricao,quantidade(i.quantidade),unidade,`${i.marca||'não informada'} / ${i.modelo||'não informado'}${fabricante?` / Fabricante: ${fabricante}`:''}`,dinheiro(decimal(i.valor_unitario_proposta,2)),dinheiro(subtotal)]);
- textos.push(`Item ${i.identificador}: ${i.descricao}\nQuantidade: ${quantidade(i.quantidade)} | Unidade informada pelo usuário: ${unidade}\nMarca: ${i.marca||'não informada'} | Modelo: ${i.modelo||'não informado'}${fabricante?` | Fabricante: ${fabricante}`:''}\nUnitário ofertado: R$ ${dinheiro(decimal(i.valor_unitario_proposta,2))} | Total: R$ ${dinheiro(subtotal)}`);
+ const linha=[i.identificador,i.descricao,quantidade(i.quantidade),unidade,`${i.marca||'não informada'} / ${i.modelo||'não informado'}${fabricante?` / Fabricante: ${fabricante}`:''}`,dinheiro(decimal(i.valor_unitario_proposta,2)),dinheiro(subtotal)];
+ const extenso=porExtenso(decimal(i.valor_unitario_proposta,2),subtotal);tabela.push(linha);extensoDaLinha.set(linha,extenso);
+ textos.push(`Item ${i.identificador}: ${i.descricao}\nQuantidade: ${quantidade(i.quantidade)} | Unidade informada pelo usuário: ${unidade}\nMarca: ${i.marca||'não informada'} | Modelo: ${i.modelo||'não informado'}${fabricante?` | Fabricante: ${fabricante}`:''}\nUnitário ofertado: R$ ${dinheiro(decimal(i.valor_unitario_proposta,2))} | Total: R$ ${dinheiro(subtotal)}\n${extenso}`);
  estrutura.push({id,identificador:i.identificador,descricaoEdital:i.descricao,quantidade:i.quantidade,unidade,marca:i.marca||null,modelo:i.modelo||null,fabricante:fabricante||null,unitario:i.valor_unitario_proposta,total:dinheiro(subtotal)});
  }
  fontes.push('Descrição, quantidade e preço ofertado: itens persistidos do processo. Unidade e condições informadas pelo usuário (sugeridas pelo edital ou pela Proposta padrão).');
  tabela.sort((a,b)=>ordemItem({identificador:a[0],id:''},{identificador:b[0],id:''}));
- return {titulo,campos,itens,tabela,textos,total:dinheiro(total),extenso:valorPorExtenso(total),estrutura};
+ return {titulo,campos,itens,tabela,extensos:tabela.map(l=>extensoDaLinha.get(l)),textos,total:dinheiro(total),extenso:valorPorExtenso(total),estrutura};
 }
 function blocosProposta({empresa,dados,processo,c,extra,r},sens){
  const pe=extra.perfilEmpresa||{},ed=extra.edital||{},modelo=ed.modelo||null;
  let n=0;const secao=t=>({t:'secao',texto:`${++n}. ${t}`});
  const proponente=[['Razão social',empresa.razao_social],['Nome fantasia',pe.nome_fantasia],['CNPJ',cnpjFormatado(empresa.cnpj)],['Inscrição estadual',pe.inscricao_estadual],['Inscrição municipal',pe.inscricao_municipal],
-  ['Porte',PORTE_TEXTO[pe.porte]],...(modelo?.campos?.includes('simples')?[]:[['Optante pelo Simples Nacional',optanteSimples(pe)]]),['Endereço',dados.endereco],['Telefone',pe.telefone],['E-mail',pe.email],['Representante legal',`${dados.representante} – ${dados.cargo}`]].filter(([,v])=>v);
+  ['Porte',PORTE_TEXTO[pe.porte]],...(modelo?.campos?.includes('simples')?[]:[['Optante pelo Simples Nacional',optanteSimples(pe)]]),['Endereço',dados.endereco],['Telefone',doc.telefoneFormatado(pe.telefone)],['E-mail',pe.email],['Representante legal',`${dados.representante} – ${dados.cargo}`]].filter(([,v])=>v);
  // Garantia: um valor só para o documento inteiro (o do edital); sem garantia no edital nem no modelo, a linha não sai.
  const cond={validade:['Validade da proposta',r.campos.validade],prazoEntrega:['Prazo de entrega',r.campos.prazoEntrega],localEntrega:ed.localEntrega?['Local de entrega',ed.localEntrega]:null,
   pagamento:['Condições de pagamento',r.campos.pagamento],simples:modelo?.campos?.includes('simples')?['Optante pelo Simples Nacional',optanteSimples(pe)]:null,garantia:ed.garantia?['Garantia',ed.garantia]:modelo?.campos?.includes('garantia')?['Garantia','Conforme o Termo de Referência, contada do recebimento definitivo']:null};
@@ -135,7 +138,7 @@ function blocosProposta({empresa,dados,processo,c,extra,r},sens){
  return [destinatario(c),{t:'titulo',texto:'PROPOSTA DE PREÇOS'},
   secao('Dados da proponente'),{t:'campos',linhas:proponente},
   ...(processo.objeto?[secao('Objeto'),{t:'texto',texto:processo.objeto}]:[]),
-  secao('Itens e preços'),{t:'itens',linhas:r.tabela,textos:r.textos,total:r.total,extenso:r.extenso},
+  secao('Itens e preços'),{t:'itens',linhas:r.tabela,extensos:r.extensos,textos:r.textos,total:r.total,extenso:r.extenso},
   secao('Condições da proposta'),{t:'campos',linhas:ordem.map(k=>cond[k])},
   secao('Dados bancários'),sens?(linhasBanco.length?{t:'campos',linhas:linhasBanco}:{t:'campos',linhas:[['Banco','____________'],['Agência','________'],['Conta','____________']]}):{t:'texto',texto:BANCO_PREVIA},
   secao('Declarações'),{t:'texto',texto:`${razao} declara, sob as penas da lei, que:`},{t:'lista',itens:declaracoes},
@@ -150,7 +153,7 @@ function exigenciasDoItem(descricao){
 // Ficha técnica / catálogo (estudo PE 467/2025, seção 4.3): um item por página; o texto do TR só entra na coluna "Exigência".
 function blocosFicha({empresa,dados,c,extra,r},sens){
  const pe=extra.perfilEmpresa||{},ed=extra.edital||{};
- const licitante=[`${empresa.razao_social} – CNPJ ${cnpjFormatado(empresa.cnpj)}`,dados.endereco,[pe.telefone,pe.email].filter(Boolean).join(' – ')].filter(Boolean).join(' – ');
+ const licitante=[`${empresa.razao_social} – CNPJ ${cnpjFormatado(empresa.cnpj)}`,dados.endereco,[doc.telefoneFormatado(pe.telefone),pe.email].filter(Boolean).join(' – ')].filter(Boolean).join(' – ');
  const pagina=it=>{let n=0;const secao=t=>({t:'secao',texto:`${++n}. ${t}`});return [
   {t:'titulo',texto:'FICHA TÉCNICA'},
   {t:'linhas',linhas:[`${c.linha} – ${c.orgao}`,`Item ${it.identificador} | Quantidade: ${quantidade(it.quantidade)} ${it.unidade}`,`Licitante: ${licitante}`]},

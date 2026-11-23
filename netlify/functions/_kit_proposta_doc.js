@@ -1,7 +1,7 @@
 // Documento profissional do kit (proposta e declarações): blocos -> texto da prévia (entra no revisaoHash) e DOCX A4.
 // O mesmo array de blocos vai para o navegador gerar o PDF (documento-pdf.js), então prévia, Word e PDF têm o mesmo conteúdo.
 // Blocos: {t:'linhas',linhas,alinhar} {t:'titulo',texto} {t:'secao',texto} {t:'texto',texto} {t:'campos',linhas:[[rótulo,valor]]}
-// {t:'itens',linhas,total,extenso} {t:'lista',itens} {t:'assinatura',local,nome,cargo,cpf} {t:'quebra'}.
+// {t:'itens',linhas,extensos,total,extenso} {t:'lista',itens} {t:'assinatura',local,nome,cargo,cpf} {t:'quebra'}.
 const AdmZip=require('adm-zip');
 const {UFS}=require('./_empresa_identificacao');
 
@@ -31,6 +31,18 @@ function nomeArquivo({tipo='Proposta',razaoSocial,numero,modalidade,orgao,extens
  const partes=[tipo,razaoSocial,numero?`${mod} ${numeroEdital(numero).replace(/\//g,'-')}`:'',orgaoCurto(orgao)].map(seguroArquivo).filter(Boolean);
  return `${partes.join(' - ').slice(0,150)}.${extensao}`;
 }
+// Telefone do Perfil no padrão brasileiro: "+5592991257297" -> "(92) 99125-7297", "9232345678" -> "(92) 3234-5678",
+// "08001234567" -> "0800 123 4567". Tira +55 e o zero de operadora; o que não reconhece volta como veio.
+function telefoneFormatado(v){
+ if(typeof v!=='string')return v;
+ let d=v.replace(/\D/g,'');
+ if(/^0[3589]00\d{7}$/.test(d))return `${d.slice(0,4)} ${d.slice(4,7)} ${d.slice(7)}`;
+ if((d.length===12||d.length===13)&&d.startsWith('55'))d=d.slice(2);
+ else if((d.length===11||d.length===12)&&d.startsWith('0'))d=d.slice(1);
+ if(/^[1-9]{2}[2-5]\d{7}$/.test(d))return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`;
+ if(/^[1-9]{2}9\d{8}$/.test(d))return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`;
+ return v;
+}
 const MESES=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
 function dataPorExtenso(d=new Date()){
  const p=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'numeric',day:'numeric'}).formatToParts(d).map(x=>[x.type,x.value]));
@@ -54,7 +66,7 @@ function textoDosBlocos(blocos){
    case 'lista':return b.itens.map(i=>`- ${i}`).join('\n');
    case 'tabela':return [b.cabecalho,...b.linhas].map(l=>l.join(' | ')).join('\n');
    // Mesmo texto por item da proposta em texto corrido (formato 1), para a prévia ler igual nos dois formatos.
-   case 'itens':return [...b.textos,`Total da proposta: R$ ${b.total} (${b.extenso})`].join('\n\n');
+   case 'itens':return [...b.textos,`Valor global da proposta: R$ ${b.total} (${b.extenso})`].join('\n\n');
    case 'assinatura':return `${b.local}\n\n\n______________________________\n${b.nome}\n${b.cargo}${b.cpf?`\nCPF: ${b.cpf}`:''}`;
    case 'quebra':return '';
    default:throw new Error('Bloco desconhecido.');
@@ -80,9 +92,12 @@ const tabela=(larguras,linhas,borda)=>`<w:tbl><w:tblPr><w:tblW w:w="${LARGURA}" 
 const COLUNAS=[['Item',700,'left'],['Descrição',3288,'left'],['Qtd.',700,'right'],['Unid.',1000,'left'],['Marca / modelo',1560,'left'],['Unitário (R$)',1110,'right'],['Total (R$)',1110,'right']];
 function tabelaItens(b){
  const cab=`<w:tr><w:trPr><w:tblHeader/><w:cantSplit/></w:trPr>${COLUNAS.map(([n,w,a])=>celula(par(n,{alinhar:a,depois:0,negrito:true,tamanho:17,cor:'FFFFFF'}),w,{fundo:COR_FAIXA})).join('')}</w:tr>`;
- const linhas=b.linhas.map((l,k)=>`<w:tr><w:trPr><w:cantSplit/></w:trPr>${l.map((v,i)=>celula(par(v,{alinhar:COLUNAS[i][2],depois:0,tamanho:17}),COLUNAS[i][1],{fundo:k%2?'F4F7FA':null})).join('')}</w:tr>`).join('');
- const total=`<w:tr><w:trPr><w:cantSplit/></w:trPr>${celula(par('Valor total da proposta',{alinhar:'right',depois:0,negrito:true,tamanho:18}),LARGURA-1110,{span:6,fundo:'EEF3F8'})}${celula(par(b.total,{alinhar:'right',depois:0,negrito:true,tamanho:18}),1110,{fundo:'EEF3F8'})}</w:tr>`;
- return tabela(COLUNAS.map(c=>c[1]),cab+linhas+total,bordas(COR_LINHA))+par(`Valor total por extenso: ${b.extenso}.`,{antes:120,depois:200,italico:true});
+ // Logo abaixo de cada item, linha da largura da tabela com unitário e total por extenso (keepNext: não separa do item).
+ const linhas=b.linhas.map((l,k)=>{const fundo=k%2?'F4F7FA':null,ext=b.extensos?.[k];
+  return `<w:tr><w:trPr><w:cantSplit/></w:trPr>${l.map((v,i)=>celula(par(v,{alinhar:COLUNAS[i][2],depois:0,tamanho:17,keep:Boolean(ext)}),COLUNAS[i][1],{fundo})).join('')}</w:tr>`
+   +(ext?`<w:tr><w:trPr><w:cantSplit/></w:trPr>${celula(par(ext,{depois:0,tamanho:15,italico:true,cor:COR_SUAVE}),LARGURA,{span:7,fundo})}</w:tr>`:'');}).join('');
+ const total=`<w:tr><w:trPr><w:cantSplit/></w:trPr>${celula(par('Valor global da proposta',{alinhar:'right',depois:0,negrito:true,tamanho:18}),LARGURA-1110,{span:6,fundo:'EEF3F8'})}${celula(par(b.total,{alinhar:'right',depois:0,negrito:true,tamanho:18}),1110,{fundo:'EEF3F8'})}</w:tr>`;
+ return tabela(COLUNAS.map(c=>c[1]),cab+linhas+total,bordas(COR_LINHA))+par(`Valor global da proposta por extenso: ${b.extenso}.`,{antes:120,depois:200,italico:true});
 }
 function tabelaCampos(linhas){
  const w=[2900,LARGURA-2900];
@@ -146,4 +161,4 @@ function blocosDeTexto(texto){
  const [titulo,...resto]=String(texto).split(/\n{2,}/);
  return [{t:'titulo',texto:titulo.trim()},...(resto.length?[{t:'texto',texto:resto.join('\n\n')}]:[])];
 }
-module.exports={numeroEdital,modalidadeTexto,orgaoCurto,nomeArquivo,dataPorExtenso,localDoEndereco,textoDosBlocos,docxDosBlocos,blocosDeTexto};
+module.exports={telefoneFormatado,numeroEdital,modalidadeTexto,orgaoCurto,nomeArquivo,dataPorExtenso,localDoEndereco,textoDosBlocos,docxDosBlocos,blocosDeTexto};

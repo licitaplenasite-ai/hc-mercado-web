@@ -85,12 +85,21 @@
       y -= depois;
     }
     // Tabela com quebra de página entre linhas; o cabeçalho se repete na página nova.
-    function tabela(larguras, cabecalhoLinha, linhas, { direita = [], tamanho = 8.5, rotulo = false, destaqueFinal = false } = {}) {
-      const total = larguras.reduce((a, b) => a + b, 0), ws = larguras.map((w) => (w / total) * LARGURA), pad = 3;
-      const desenharLinha = (valores, estilo) => {
+    // notas[k]: linha da largura toda logo abaixo da linha k (valor por extenso do item), sem separar da linha na quebra de página.
+    function tabela(larguras, cabecalhoLinha, linhas, { direita = [], tamanho = 8.5, rotulo = false, destaqueFinal = false, notas = [] } = {}) {
+      const total = larguras.reduce((a, b) => a + b, 0), ws = larguras.map((w) => (w / total) * LARGURA), pad = 3, tNota = tamanho - 1;
+      const linhasNota = (t) => (t ? quebrar(t, italico, tNota, LARGURA - 2 * pad) : []);
+      const alturaNota = (l) => (l.length ? l.length * tNota * 1.3 + 2 * pad : 0);
+      const desenharNota = (l) => {
+        const h = alturaNota(l);
+        pagina.drawRectangle({ x: MARGEM.esq, y: y - h, width: LARGURA, height: h, borderColor: LINHA, borderWidth: 0.5 });
+        l.forEach((s, k) => pagina.drawText(s, { x: MARGEM.esq + pad, y: y - pad - tNota * (k + 1) * 1.3 + tNota * 0.3, size: tNota, font: italico, color: SUAVE }));
+        y -= h;
+      };
+      const desenharLinha = (valores, estilo, reserva = 0) => {
         const conteudos = valores.map((v, i) => quebrar(v, estilo.fonte(i), tamanho, ws[i] - 2 * pad));
         const h = Math.max(...conteudos.map((c) => c.length)) * tamanho * 1.3 + 2 * pad;
-        if (y - h < MARGEM.base) { novaPagina(); if (cabecalhoLinha && estilo !== estiloCabecalho) desenharLinha(cabecalhoLinha, estiloCabecalho); }
+        if (y - h - reserva < MARGEM.base) { novaPagina(); if (cabecalhoLinha && estilo !== estiloCabecalho) desenharLinha(cabecalhoLinha, estiloCabecalho); }
         let x = MARGEM.esq;
         conteudos.forEach((c, i) => {
           const fundo = estilo.fundo(i);
@@ -103,7 +112,11 @@
       const estiloCabecalho = { fonte: () => negrito, fundo: () => FAIXA, cor: () => BRANCO };
       const estiloCorpo = { fonte: (i) => (rotulo && i === 0 ? negrito : normal), fundo: (i) => (rotulo && i === 0 ? CLARO : null), cor: (i) => (rotulo && i === 0 ? SUAVE : COR) };
       if (cabecalhoLinha) desenharLinha(cabecalhoLinha, estiloCabecalho);
-      linhas.forEach((l, k) => desenharLinha(l, destaqueFinal && k === linhas.length - 1 ? { fonte: () => negrito, fundo: () => CLARO, cor: () => COR } : estiloCorpo));
+      linhas.forEach((l, k) => {
+        const nota = linhasNota(notas[k]);
+        desenharLinha(l, destaqueFinal && k === linhas.length - 1 ? { fonte: () => negrito, fundo: () => CLARO, cor: () => COR } : estiloCorpo, alturaNota(nota));
+        if (nota.length) desenharNota(nota);
+      });
       y -= 8;
     }
     novaPagina();
@@ -117,9 +130,9 @@
         case 'tabela': tabela(b.larguras, b.cabecalho, b.linhas); break;
         case 'lista': for (const i of b.itens) { cabe(14); pagina.drawText('•', { x: MARGEM.esq + 4, y: y - 10.5, size: 10.5, font: normal, color: COR }); escrever(i, { recuo: 16, justificar: true, depois: 4 }); } break;
         case 'itens': {
-          const linhas = [...b.linhas, ['', '', '', '', '', 'Total', b.total]];
-          tabela(COLUNAS_ITENS, ['Item', 'Descrição', 'Qtd.', 'Unid.', 'Marca / modelo', 'Unitário (R$)', 'Total (R$)'], linhas, { direita: DIREITA_ITENS, destaqueFinal: true });
-          escrever(`Valor total por extenso: ${b.extenso}.`, { fonte: italico, depois: 10 });
+          const linhas = [...b.linhas, ['', '', '', '', '', 'Valor global', b.total]];
+          tabela(COLUNAS_ITENS, ['Item', 'Descrição', 'Qtd.', 'Unid.', 'Marca / modelo', 'Unitário (R$)', 'Total (R$)'], linhas, { direita: DIREITA_ITENS, destaqueFinal: true, notas: b.extensos || [] });
+          escrever(`Valor global da proposta por extenso: ${b.extenso}.`, { fonte: italico, depois: 10 });
           break;
         }
         case 'assinatura':

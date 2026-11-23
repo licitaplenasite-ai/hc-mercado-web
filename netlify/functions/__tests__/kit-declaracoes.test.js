@@ -204,9 +204,9 @@ test('proposta em tabela só para peça nova (formato 2); peça antiga continua 
  assert.match(antigo.previa,/\nItem 1: Caneta\nQuantidade: 2 \| Unidade informada pelo usuário: un\nMarca: não informada \| Modelo: não informado\nUnitário ofertado: R\$ 1,25 \| Total: R\$ 2,50\n/);
  f.state.kit[0].formato=2;f.state.kit[0].revisao_hash=null;
  const novo=await exportar();
- assert.match(novo.doc,/<w:tblHeader\/>/);assert.match(novo.doc,/Marca \/ modelo/);assert.match(novo.doc,/>Caneta</);assert.match(novo.doc,/>2,50</);assert.match(novo.doc,/Valor total por extenso: dois reais e cinquenta centavos\./);
+ assert.match(novo.doc,/<w:tblHeader\/>/);assert.match(novo.doc,/Marca \/ modelo/);assert.match(novo.doc,/>Caneta</);assert.match(novo.doc,/>2,50</);assert.match(novo.doc,/Valor global da proposta por extenso: dois reais e cinquenta centavos\./);
  // Prévia (revisada) já traz o extenso, nos dois formatos.
- assert.match(novo.previa,/Total da proposta: R\$ 2,50 \(dois reais e cinquenta centavos\)/);
+ assert.match(novo.previa,/Valor global da proposta: R\$ 2,50 \(dois reais e cinquenta centavos\)/);
  // Prévia e hash não mudam com o formato (revisões antigas continuam valendo).
  assert.equal(novo.previa,antigo.previa);assert.equal(novo.hash,antigo.hash);
  const lista=await f.run({acao:'listar'});assert.equal(lista.json.documentos[0].formato,2);assert.equal(lista.json.documentos[0].modeloCodigo,null);

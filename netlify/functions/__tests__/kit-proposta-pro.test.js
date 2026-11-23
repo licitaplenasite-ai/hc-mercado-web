@@ -61,6 +61,13 @@ test('tela: validade, prazo e pagamento vêm do edital; sem edital, da Proposta 
  assert.ok(!UI.declaracoesMarcadas(null).some(c=>c.startsWith('ME_EPP')));
  assert.ok(!UI.declaracoesMarcadas('me').some(c=>c.startsWith('DESEMP_')),'desempate só quem pode provar: desmarcado');
 });
+test('telefone no padrão brasileiro: tira +55/55/0, celular e fixo; 0800 agrupado; o que não reconhece volta como veio',()=>{
+ for(const [entrada,esperado] of [['+5592991257297','(92) 99125-7297'],['92991257297','(92) 99125-7297'],['5592991257297','(92) 99125-7297'],
+  ['9232345678','(92) 3234-5678'],['+55 (92) 3234-5678','(92) 3234-5678'],['092991257297','(92) 99125-7297'],['(92) 99125-7297','(92) 99125-7297'],
+  ['08001234567','0800 123 4567'],['0800 123 4567','0800 123 4567'],['','' ],['abc','abc'],['12','12'],['92 3333-4444 / 92 99999-0000','92 3333-4444 / 92 99999-0000'],['9212345678','9212345678']])
+  assert.equal(doc.telefoneFormatado(entrada),esperado,entrada);
+ assert.equal(doc.telefoneFormatado(null),null);assert.equal(doc.telefoneFormatado(undefined),undefined);
+});
 test('PDF: quebra de linha respeita a largura e caractere fora da fonte padrão vira "?"',()=>{
  const fonte={widthOfTextAtSize:(t,s)=>t.length*s*0.5};
  const linhas=PDF.quebrar('Proposta de preços para a Assembleia Legislativa',fonte,10,100);
@@ -83,7 +90,7 @@ function fixture(t,{dossie=true}={}){
  const logoCaminho=`${ids.org}/${ids.empresa}/perfil/logo-${sha(PNG)}.png`;
  const state={empresa:{id:ids.empresa,organizacao_id:ids.org,razao_social:'HCM LTDA',cnpj:'28786260000153'},
   perfil:{empresa_id:ids.empresa,organizacao_id:ids.org,versao:1,confirmado_em:'2026-11-20',dados_confirmados:{endereco:'Rua Itambé, 77, Centro, Belém/PA, CEP 66000-000',representante:'Representante QA',cargo:'Sócio Diretor'},proveniencia:[]},
-  perfilEmpresa:{nome_fantasia:null,telefone:'(91) 3333-4444',email:'contato@example.invalid',inscricao_estadual:'15.123.456-7',inscricao_municipal:null,porte:'demais',uf_sede:'PA',cpf_representante:CPF,banco:{banco:'Banco QA',agencia:'0001',conta:'12345-6',pix:'28786260000153',favorecido:''},proposta_padrao:{validade:'90 dias',prazo_entrega:'15 dias',pagamento:'30 dias'},logo_caminho:logoCaminho,logo_hash:sha(PNG)},
+  perfilEmpresa:{nome_fantasia:null,telefone:'+559133334444',email:'contato@example.invalid',inscricao_estadual:'15.123.456-7',inscricao_municipal:null,porte:'demais',uf_sede:'PA',cpf_representante:CPF,banco:{banco:'Banco QA',agencia:'0001',conta:'12345-6',pix:'28786260000153',favorecido:''},proposta_padrao:{validade:'90 dias',prazo_entrega:'15 dias',pagamento:'30 dias'},logo_caminho:logoCaminho,logo_hash:sha(PNG)},
   membro:{usuario_id:'usuario',organizacao_id:ids.org,empresa_id:ids.empresa,papel:'gestor'},
   processo:{id:ids.processo,organizacao_id:ids.org,empresa_id:ids.empresa,numero:'012/2026/2026',orgao:'ASSEMBLEIA LEGISLATIVA DO ESTADO DO PARA',modalidade:'Pregão - Eletrônico',objeto:'Aquisição de agendas permanentes',origem_externa_id:'05054937000163-1-000012/2026',documentos_exigidos:[]},
   itens:[{id:ids.item,organizacao_id:ids.org,processo_id:ids.processo,tipo:'item',identificador:'10001',descricao:'AGENDA PERMANENTE 13,5X19,2CM; CAPA COURVIN; 352 PÁGINAS',quantidade:'200.000',valor_unitario_proposta:'52.00',marca:'Tilibra',modelo:'Permanente',fabricante:'Tilibra Produtos de Papelaria'}],
@@ -141,7 +148,11 @@ test('proposta: prévia com destinatário, objeto, edital sem ano duplicado, CNP
  assert.doesNotMatch(previa,/2026\/2026|Registro de Preços/);
  assert.match(previa,/CNPJ: 28\.786\.260\/0001-53/);assert.match(previa,/Objeto\n\nAquisição de agendas permanentes/);
  assert.match(previa,/Marca: Tilibra \| Modelo: Permanente \| Fabricante: Tilibra Produtos de Papelaria/);
- assert.match(previa,/Total da proposta: R\$ 10\.400,00 \(dez mil e quatrocentos reais\)/);
+ assert.match(previa,/Valor global da proposta: R\$ 10\.400,00 \(dez mil e quatrocentos reais\)/);
+ // Pedido do dono (23/11): extenso por item, também no modelo do edital; telefone no padrão brasileiro.
+ const EXT='Valor unitário: cinquenta e dois reais (R$ 52,00) · Valor total do item: dez mil e quatrocentos reais (R$ 10.400,00)';
+ assert.ok(previa.includes(`Total: R$ 10.400,00\n${EXT}`));
+ assert.match(previa,/Telefone: \(91\) 3333-4444/);assert.ok(!previa.includes('+55'));
  assert.match(previa,/Local de entrega: Palácio Cabanagem, Belém\/PA/);
  assert.match(previa,/HCM LTDA declara, sob as penas da lei, que:\n\n- Que nos preços propostos/);
  assert.match(previa,/Belém\/PA, \[data do download\]/);assert.match(previa,/\[CPF do representante\]/);assert.match(previa,/\[Banco, agência, conta e Pix/);
@@ -152,11 +163,14 @@ test('proposta: prévia com destinatário, objeto, edital sem ano duplicado, CNP
  const w=await exportar();assert.equal(w.statusCode,200,w.body);
  assert.equal(w.json.nome,'Proposta - HCM LTDA - Pregão 012-2026 - Assembleia Legislativa do Estado do Para.docx');
  const zip=new AdmZip(Buffer.from(w.json.arquivoBase64,'base64')),xml=zip.readAsText('word/document.xml');
+ assert.ok(xml.includes(`>${EXT}<`));assert.match(xml,/<w:gridSpan w:val="7"\/>/);assert.match(xml,/>Valor global da proposta</);
+ assert.match(zip.readAsText('word/header1.xml'),/\(91\) 3333-4444 · contato@example\.invalid/);
  assert.match(xml,/CPF: 529\.982\.247-25/);assert.match(xml,/>12345-6</);assert.match(xml,/Belém\/PA, \d{1,2} de [a-zç]+ de \d{4}/);
  assert.ok(zip.getEntry('word/media/logo.png'));assert.match(zip.readAsText('word/footer1.xml'),/HCM LTDA · CNPJ 28\.786\.260\/0001-53/);
  const pdf=await exportar({saida:'pdf'});assert.equal(pdf.statusCode,200,pdf.body);assert.equal(pdf.json.mime,'application/pdf');
  assert.match(pdf.json.nome,/\.pdf$/);assert.equal(pdf.json.logo.tipo,'image/png');
  assert.equal(pdf.json.documento.blocos.find(b=>b.t==='assinatura').cpf,'529.982.247-25');
+ assert.deepEqual(pdf.json.documento.blocos.find(b=>b.t==='itens').extensos,[EXT]);
  assert.ok(!JSON.stringify(f.state.kit).includes(CPF)&&!JSON.stringify(f.state.kit).includes('12345-6'),'rascunho e revisão sem CPF nem banco');
  const ficha=await exportar({peca:'ficha'});assert.equal(ficha.statusCode,200,ficha.body);
  assert.equal(ficha.json.nome,'Ficha técnica - HCM LTDA - Pregão 012-2026 - Assembleia Legislativa do Estado do Para.docx');

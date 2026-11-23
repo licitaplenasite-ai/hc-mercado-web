@@ -26,10 +26,21 @@ test('proposta usa somente item persistido, condições obrigatórias e hash est
  assert.throws(()=>preparar({...contexto,itens:[{...contexto.itens[0],tipo:'lote'}]},proposta));
  assert.throws(()=>preparar({...contexto,itens:[{...contexto.itens[0],valor_unitario_proposta:null,valor_proposta:'1'}]},proposta));
 });
+test('extenso por item acompanha a própria linha depois da ordenação da tabela (prévia e blocos)',()=>{
+ const id2='22222222-2222-2222-2222-222222222222';
+ const c={...contexto,itens:[{...contexto.itens[0],identificador:'2',quantidade:'1.000',valor_unitario_proposta:'8.50'},{...contexto.itens[0],id:id2,identificador:'1',quantidade:'2.000',valor_unitario_proposta:'4.75'}]};
+ const r=preparar(c,{tipo:'proposta',proposta:{...proposta.proposta,itemIds:[id,id2],unidades:{[id]:'un',[id2]:'un'}}});
+ const b=r.documento(null).blocos.find(x=>x.t==='itens');
+ assert.deepEqual(b.linhas.map(l=>l[0]),['1','2']);
+ assert.deepEqual(b.extensos,['Valor unitário: quatro reais e setenta e cinco centavos (R$ 4,75) · Valor total do item: nove reais e cinquenta centavos (R$ 9,50)',
+  'Valor unitário: oito reais e cinquenta centavos (R$ 8,50) · Valor total do item: oito reais e cinquenta centavos (R$ 8,50)']);
+ assert.ok(r.previa.texto.includes('Total: R$ 8,50\nValor unitário: oito reais e cinquenta centavos (R$ 8,50)'));
+ assert.ok(r.previa.texto.includes('Valor global da proposta: R$ 18,00 (dezoito reais)'));
+});
 test('quantidade apresentada em pt-BR conserva valor e total exato',()=>{
  for(const [quantidade,apresentada,total] of [['2.000','2','25,00'],['1.500','1,5','18,75'],['80.000','80','1.000,00']]){
  const c={...contexto,itens:[{...contexto.itens[0],quantidade,valor_unitario_proposta:'12.50'}]};
- const r=preparar(c,proposta);assert.match(r.previa.texto,new RegExp(`Quantidade: ${apresentada} \\|`));assert.ok(r.previa.texto.includes(`Total da proposta: R$ ${total}`));
+ const r=preparar(c,proposta);assert.match(r.previa.texto,new RegExp(`Quantidade: ${apresentada} \\|`));assert.ok(r.previa.texto.includes(`Valor global da proposta: R$ ${total}`));
  assert.ok(new AdmZip(docx(r)).readAsText('word/document.xml').includes(`Quantidade: ${apresentada} |`));
  }
 });
@@ -41,7 +52,7 @@ test('DOCX reutilizado contém texto literal escapado e título',async()=>{
  const leitura=await require('mammoth').extractRawText({buffer:docx(r)});
  assert.match(leitura.value,/Material <A>/);
  assert.match(leitura.value,/Empresa & Filhos/);
- assert.match(leitura.value,/Total da proposta: R\$ 0,01/);
+ assert.match(leitura.value,/Valor global da proposta: R\$ 0,01/);
 });
 test('DOCX da declaração preserva linhas vazias e não altera minuta legada',()=>{
  const {montarDocx}=require('../netlify/functions/gerar-checklist');
@@ -69,8 +80,8 @@ test('formato 2: A4 com margens, cabeçalho da empresa, rodapé com página, tab
  assert.match(zip.readAsText('word/header1.xml'),/Empresa &amp; Filhos[^]*CNPJ 11\.222\.333\/0001-81/);
  assert.match(zip.readAsText('word/footer1.xml'),/ PAGE [^]* NUMPAGES /);
  assert.match(xml,/À Órgão[^]*Pregão Eletrônico nº 1\/2026[^]*Agente de Contratação/);
- assert.match(xml,/<w:tblHeader\/>[^]*Unitário \(R\$\)[^]*>Valor total da proposta<[^]*>0,01</);
- assert.match(xml,/Valor total por extenso: um centavo\./);
+ assert.match(xml,/<w:tblHeader\/>[^]*Unitário \(R\$\)[^]*>Valor global da proposta<[^]*>0,01</);
+ assert.match(xml,/Valor global da proposta por extenso: um centavo\./);
  assert.match(xml,/\[CPF do representante\]/);assert.match(xml,/Validade da proposta[^]*30 dias/);
  // Sem logo: cabeçalho só com os dados, sem mídia.
  assert.equal(zip.getEntry('word/media/logo.png'),null);
