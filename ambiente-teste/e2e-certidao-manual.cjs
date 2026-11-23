@@ -14,7 +14,7 @@ async function main() {
   const navegador = await chromium.launch({ channel: 'msedge', headless: true });
   const { usuarios: U, ids } = seed;
   const p = await novaPagina(navegador);
-  await p.goto(SITE + '/login.html'); await p.fill('#email', U.gestor.email); await p.fill('#senha', U.gestor.senha); // Turnstile pode demorar mais que os 20 s do entrar()
+  await p.goto(SITE + '/login.html'); await p.fill('#email', U.gestor.email); await p.fill('#senha', U.gestor.senha); // login próprio (sem o entrar()): mais folga que os 20 s
   await Promise.all([p.waitForURL(/painel.html|sistema/, { timeout: 60000, waitUntil: 'commit' }), p.click('#btn-entrar')]);
   fs.mkdirSync(PRINTS, { recursive: true });
   const ok = [];

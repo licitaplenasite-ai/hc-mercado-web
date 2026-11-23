@@ -176,7 +176,7 @@ async function main() {
       exigir(!(await pC.$('main .trava-plano')) && !(await pC.$('#aviso-carencia')), 'continua travado depois de renovar');
       return r;
     });
-    const erros = [pC, pD].flatMap(p => p.erros).filter(e => !/favicon|turnstile|challenges\.cloudflare|fonts\.g|wa\.me/i.test(e));
+    const erros = [pC, pD].flatMap(p => p.erros).filter(e => !/favicon|hcaptcha|fonts\.g|wa\.me/i.test(e));
     await passo('sem erro de página nem de console', null, async () => { exigir(!erros.some(e => /pageerror|console/.test(e)), erros.join(' | ')); return erros.slice(0, 5).join(' | ') || 'nenhum'; });
   } finally {
     await navegador.close();

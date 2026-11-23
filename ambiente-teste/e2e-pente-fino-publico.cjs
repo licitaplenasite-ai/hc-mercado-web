@@ -13,8 +13,8 @@ const admin = (metodo, caminho, corpo) => fetch(chaves.API_URL + '/auth/v1/admin
   method: metodo, body: corpo && JSON.stringify(corpo),
   headers: { apikey: chaves.SERVICE_ROLE_KEY, Authorization: 'Bearer ' + chaves.SERVICE_ROLE_KEY, 'content-type': 'application/json' },
 }).then(async (r) => { const t = await r.text(); if (!r.ok) throw new Error(`${metodo} ${caminho}: ${r.status} ${t.slice(0, 200)}`); return t ? JSON.parse(t) : null; });
-// Erros de JavaScript da página (o 4xx de recurso de terceiros fica de fora; o Turnstile local usa a chave de teste).
-const errosJs = (p) => p.erros.filter((e) => e.startsWith('pageerror') || (e.startsWith('console') && !/turnstile|challenges\.cloudflare|Failed to load resource/i.test(e)));
+// Erros de JavaScript da página (o 4xx de recurso de terceiros fica de fora; o hCaptcha local usa a chave de teste).
+const errosJs = (p) => p.erros.filter((e) => e.startsWith('pageerror') || (e.startsWith('console') && !/hcaptcha|Failed to load resource/i.test(e)));
 const PROIBIDO = /\b(JSON|RPC|fail-open|undefined|null|NaN|\[object|app\b)|\{'tipo'|5 dias (gr|de teste)|em breve\)/;
 const semRolagemLateral = (p) => p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
 

@@ -47,7 +47,8 @@
     button.entrar:disabled { background: var(--surface-sunken); color: var(--text-disabled); border-color: var(--border-default); cursor: not-allowed; }
     .consentimento { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 16px; color: var(--text-secondary); }
     .consentimento input { width: 16px; height: 16px; margin: 3px 0 0; flex: none; accent-color: var(--action-strong); }
-    .captcha-turnstile { max-width: 100%; margin-bottom: 16px; }
+    .captcha-rotulo { font: var(--text-label); color: var(--text-secondary); margin: 0 0 8px; }
+    .captcha-widget { margin-bottom: 16px; min-height: 78px; max-width: 100%; overflow-x: auto; }
     .captcha-aviso { font: var(--text-label); color: var(--text-secondary); margin: 0 0 16px; }
     /* Aviso: cor + texto + sinal (estado nunca só por cor); sem texto, some. */
     .aviso { margin: 0 0 16px; padding: 12px 16px; border-radius: var(--radius-card); border: 1px solid var(--info-border); background: var(--info-bg); color: var(--info-text); display: flex; gap: 8px; }
@@ -79,7 +80,8 @@
           <svg class="olho-fechado" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.9 10.9 0 0 1 12 20c-7 0-11-8-11-8a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9.1 9.1 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24"/><path d="M1 1l22 22"/></svg>
         </button></div>
     <div id="consentimento" class="consentimento"><input id="aceite" type="checkbox" required><span>Li e aceito os <a href="termos-de-uso.html" target="_blank" rel="noopener">Termos de Uso</a> e a <a href="politica-privacidade.html" target="_blank" rel="noopener">Política de Privacidade</a>.</span></div>
-    <div class="captcha-turnstile"></div>
+    <p class="captcha-rotulo">Verificação de segurança</p>
+    <div class="captcha-widget"></div>
     <p class="captcha-aviso" role="alert" hidden></p>
     <button id="enviar" type="submit" class="btn entrar">Criar conta e ativar acesso</button>
   </form>
@@ -102,7 +104,7 @@
 <script>
 (() => {
   SenhaCaptchaUi.ligarOlhosDaSenha(document);
-  const captcha = SenhaCaptchaUi.montarTurnstile(document, window); // Turnstile; sem chave configurada fica desligado
+  const captcha = SenhaCaptchaUi.montarCaptcha(document, window); // hCaptcha visível; sem chave configurada fica desligado
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   const token = new URL(location.href).searchParams.get("token") || "";
   const $ = id => document.getElementById(id);

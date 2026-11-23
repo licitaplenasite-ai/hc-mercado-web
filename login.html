@@ -58,7 +58,8 @@
   button.entrar { width: 100%; background: var(--action-strong); color: var(--action-on); }
   button.entrar:hover { background: var(--action-strong-hover); }
   button.entrar:disabled { background: var(--surface-sunken); color: var(--text-disabled); border-color: var(--border-default); cursor: not-allowed; }
-  .captcha-turnstile { max-width: 100%; }
+  .captcha-rotulo { font: var(--text-label); color: var(--text-secondary); margin: 0 0 8px; }
+  .captcha-widget { margin-bottom: 16px; min-height: 78px; max-width: 100%; overflow-x: auto; }
   .esqueci { margin: -8px 0 16px; text-align: right; }
   .captcha-aviso { font: var(--text-label); color: var(--text-secondary); margin: 0 0 16px; }
   /* Aviso: cor + texto + sinal (estado nunca só por cor). */
@@ -103,7 +104,8 @@
       </div>
 
       <p class="esqueci"><button type="button" class="btn btn-ter" id="btn-esqueci">Esqueci minha senha</button></p>
-      <div class="captcha-turnstile"></div>
+      <p class="captcha-rotulo">Verificação de segurança</p>
+      <div class="captcha-widget"></div>
       <p class="captcha-aviso" role="alert" hidden></p>
       <button type="submit" class="btn entrar" id="btn-entrar">Entrar</button>
     </form>
@@ -163,7 +165,7 @@
   const destino = destinoSeguro(parametros.get("voltar") || parametros.get("volta"));
 
   SenhaCaptchaUi.ligarOlhosDaSenha(document); // ícone de olho da senha
-  const captcha = SenhaCaptchaUi.montarTurnstile(document, window); // Turnstile; sem chave configurada fica desligado
+  const captcha = SenhaCaptchaUi.montarCaptcha(document, window); // hCaptcha visível; sem chave configurada fica desligado
 
   function mostrarAviso(texto, tipo) {
     const el = document.getElementById("aviso");
@@ -242,7 +244,7 @@
     const email = document.getElementById("email").value.trim();
     const senha = document.getElementById("senha").value;
 
-    // Token do Turnstile (vazio se o captcha estiver desligado). Quem exige é o Supabase (Attack Protection);
+    // Token do hCaptcha (vazio se o captcha estiver desligado). Quem exige é o Supabase (Attack Protection);
     // o token é de uso único, então o widget é resetado logo depois da tentativa.
     const captchaToken = await captcha.obterToken();
     const { data, error } = await sb.auth.signInWithPassword({ email, password: senha, options: { captchaToken } });

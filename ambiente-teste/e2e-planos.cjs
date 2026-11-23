@@ -332,7 +332,7 @@ async function main() {
       exigir(ia.status === 403 && /teste grátis terminou/.test(corpo), 'ferramenta no teste vencido: ' + ia.status + ' ' + corpo.slice(0, 160));
       return `${ia.status} ${corpo.slice(0, 120)}`;
     });
-    const erros = [pE, pA, pD, pV, pS, pT].flatMap(p => p.erros).filter(e => !/favicon|turnstile|challenges\.cloudflare|fonts\.g/i.test(e));
+    const erros = [pE, pA, pD, pV, pS, pT].flatMap(p => p.erros).filter(e => !/favicon|hcaptcha|fonts\.g/i.test(e));
     await passo('sem erro de página nas três contas', null, async () => { exigir(!erros.some(e => /pageerror/.test(e)), erros.join(' | ')); return erros.slice(0, 5).join(' | ') || 'nenhum'; });
   } finally { await navegador.close(); }
   fs.writeFileSync(path.join(PRINTS, 'resultado.json'), JSON.stringify(resultados, null, 2));

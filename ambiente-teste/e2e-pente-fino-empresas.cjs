@@ -138,7 +138,7 @@ async function main() {
       exigir(await p.locator('#aba-catalogo button:has-text("PDF")').count() >= 1, 'sem botão Catálogo em PDF');
     });
     await passo('empresas: console sem erro de JavaScript', p, async () => {
-      const js = p.erros.filter(e => /pageerror|console/.test(e) && !/Failed to load resource|favicon|challenges\.cloudflare|turnstile/i.test(e));
+      const js = p.erros.filter(e => /pageerror|console/.test(e) && !/Failed to load resource|favicon|hcaptcha/i.test(e));
       exigir(!js.length, js.join(' | '));
     });
 

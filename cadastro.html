@@ -129,7 +129,8 @@
   .planos-opcoes span { color: var(--text-secondary); font-size: 13px; }
   .planos-nota { color: var(--text-secondary); font-size: 13px; margin: 0 0 16px; }
   @media (max-width: 420px) { .planos-opcoes { grid-template-columns: 1fr; } }
-  .captcha-turnstile { max-width: 100%; }
+  .captcha-rotulo { font: var(--text-label); color: var(--text-secondary); margin: 0 0 8px; }
+  .captcha-widget { margin-bottom: 16px; min-height: 78px; max-width: 100%; overflow-x: auto; }
   .captcha-aviso { font: var(--text-label); color: var(--text-secondary); margin: 0 0 16px; }
   button.criar {
     width: 100%; height: 40px; padding: 0 16px; border: 1px solid transparent; border-radius: var(--radius-control);
@@ -337,7 +338,8 @@
         <span>Li e concordo com os <a href="termos-de-uso.html" target="_blank">Termos de uso</a> e a <a href="politica-privacidade.html" target="_blank">Política de Privacidade</a> da LicitaPlena.</span>
       </label>
 
-      <div class="captcha-turnstile"></div>
+      <p class="captcha-rotulo">Verificação de segurança</p>
+      <div class="captcha-widget"></div>
       <p class="captcha-aviso" role="alert" hidden></p>
 
       <button type="submit" class="criar" id="btn-criar">Criar cadastro</button>
@@ -403,7 +405,7 @@
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   SenhaCaptchaUi.ligarOlhosDaSenha(document); // ícone de olho da senha
-  const captcha = SenhaCaptchaUi.montarTurnstile(document, window); // Turnstile; sem chave configurada fica desligado
+  const captcha = SenhaCaptchaUi.montarCaptcha(document, window); // hCaptcha visível; sem chave configurada fica desligado
 
   function mostrarAviso(texto, tipo) {
     const el = document.getElementById("aviso");
@@ -600,7 +602,7 @@
       return;
     }
 
-    // Token do Turnstile (vazio se desligado); quem exige é o Supabase. Uso único: reseta após a tentativa.
+    // Token do hCaptcha (vazio se desligado); quem exige é o Supabase. Uso único: reseta após a tentativa.
     const captchaToken = await captcha.obterToken();
     const { error } = await sb.auth.signUp({
       email,

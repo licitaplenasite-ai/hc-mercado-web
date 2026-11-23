@@ -1,5 +1,5 @@
 /* global document, localStorage -- usado só dentro de p.evaluate (roda no navegador) */
-// E2E curto das mudanças de 19-20/11: Turnstile no login, painel rápido (dados_robo/dashboard_mercado), SINAPI,
+// E2E curto das mudanças de 19-20/11: captcha no login (hoje hCaptcha), painel rápido (dados_robo/dashboard_mercado), SINAPI,
 // curva ABC, CBS/IBS, alerta de logo clara, convite.html e admin.html. Ambiente: subir.cjs + servidor.cjs rodando.
 //   PORTA_TESTE=8820 node ambiente-teste/servidor.cjs
 //   SITE_TESTE=http://127.0.0.1:8820 node ambiente-teste/e2e-novidades-20261120.cjs
@@ -27,15 +27,18 @@ async function main() {
   try {
     const p = await novaPagina(navegador);
 
-    await passo('login com Turnstile de teste: token chega ao Supabase', p, async () => {
+    await passo('login com hCaptcha de teste: marca a caixinha e o token chega ao Supabase', p, async () => {
       await p.goto(SITE + '/login.html');
       await p.fill('#email', U.gestor.email); await p.fill('#senha', U.gestor.senha);
+      // Caixinha visível: com a chave de teste do hCaptcha o clique passa direto, sem desafio de imagens.
+      await p.frameLocator('.captcha-widget iframe').locator('#checkbox').click({ timeout: 20000 });
+      await p.waitForFunction(() => window.hcaptcha && window.hcaptcha.getResponse(), null, { timeout: 20000 });
       const pedido = p.waitForRequest((r) => r.url().includes('/auth/v1/token') && r.method() === 'POST', { timeout: 20000 });
       await Promise.all([p.waitForURL(/painel\.html|sistema/, { timeout: 30000 }), p.click('#btn-entrar')]);
       const token = JSON.parse((await pedido).postData() || '{}').gotrue_meta_security?.captcha_token;
-      exigir(token, 'login sem captcha_token no pedido ao Supabase (Turnstile não carregou?)');
+      exigir(token, 'login sem captcha_token no pedido ao Supabase (hCaptcha não carregou?)');
       const js = errosJs(p); exigir(!js.length, 'erros de console: ' + js.join(' | '));
-      return `captcha_token de ${token.length} caracteres (chave de teste da Cloudflare) enviado ao Auth local; entrou em ${p.url().replace(SITE, '')}`;
+      return `captcha_token de ${token.length} caracteres (chave de teste do hCaptcha) enviado ao Auth local; entrou em ${p.url().replace(SITE, '')}`;
     });
 
     await passo('painel: quadros Estados e rankings pelo resumo do robô', p, async () => {
@@ -139,7 +142,7 @@ async function main() {
     for (const pagina of ['convite.html', 'admin.html']) {
       await passo(`${pagina} carrega sem erro de console`, anon, async () => {
         anon.erros.length = 0;
-        await anon.goto(`${SITE}/${pagina}`); await anon.waitForLoadState('load'); await anon.waitForTimeout(4000); // Turnstile mantém conexão aberta: networkidle nunca chega
+        await anon.goto(`${SITE}/${pagina}`); await anon.waitForLoadState('load'); await anon.waitForTimeout(4000); // widget do captcha mantém conexão aberta: networkidle nunca chega
         const js = errosJs(anon); exigir(!js.length, 'erros: ' + js.join(' | '));
         return `sem erro de console/página; texto: ${(await anon.innerText('body')).replace(/\s+/g, ' ').slice(0, 120)}`;
       });

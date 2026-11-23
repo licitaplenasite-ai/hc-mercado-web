@@ -213,7 +213,7 @@ async function main() {
       await pC.waitForFunction(() => /venceu/.test(document.getElementById('situacao').textContent), null, { timeout: 20000 });
       exigir(await pC.isChecked('input[name="ciclo"][value="semestral"]') && await pC.isChecked('input[name="plano"][value="empresa"]'), 'renovação não sugere o plano e o ciclo atuais');
     });
-    const erros = [pC, pD].flatMap(p => p.erros).filter(e => !/favicon|turnstile|challenges\.cloudflare|fonts\.g/i.test(e));
+    const erros = [pC, pD].flatMap(p => p.erros).filter(e => !/favicon|hcaptcha|fonts\.g/i.test(e));
     await passo('sem erro de página nem de console', null, async () => { exigir(!erros.some(e => /pageerror|console/.test(e)), erros.join(' | ')); return erros.slice(0, 5).join(' | ') || 'nenhum'; });
   } finally {
     await navegador.close();

@@ -238,7 +238,7 @@ async function main() {
       exigir((await pD.getAttribute('#conteudo-normas a', 'href')) === link, 'link da fonte');
     });
     await servico('DELETE', `/rest/v1/orcamento_normas_novidades?link=eq.${encodeURIComponent(link)}`);
-    const erros = pD.erros.filter(e => !/favicon|turnstile|challenges\.cloudflare|fonts\.g|wa\.me/i.test(e));
+    const erros = pD.erros.filter(e => !/favicon|hcaptcha|fonts\.g|wa\.me/i.test(e));
     await passo('sem erro de página nem de console', null, async () => { exigir(!erros.some(e => /pageerror|console/.test(e)), erros.join(' | ')); return erros.slice(0, 5).join(' | ') || 'nenhum'; });
   } finally {
     await navegador.close();
