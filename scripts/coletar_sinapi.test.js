@@ -118,3 +118,11 @@ test("retificacoesPendentes: regrava mês com retificação nova, zerado ou falt
   const zerada = await S.retificacoesPendentes("2026-10", [{ data_base: "2026-09-01", arquivo: "SINAPI-2026-09-formato-xlsx_Retificacao01.zip", situacao: "zerada" }, ...gravadas.slice(1), { data_base: "2026-07-01", arquivo: "SINAPI-2026-07-formato-xlsx.zip", situacao: "precos" }], Date.UTC(2026, 9, 25), existe);
   assert.deepEqual(zerada.map((x) => x.mes), ["2026-09"]);
 });
+
+test("existe: só 404 é 'não publicado'; 429/403 repete e, se persistir, falha com o motivo (regressão 23/11/2026)", async () => {
+  const resposta = (...status) => { let i = 0; return async () => ({ status: status[Math.min(i++, status.length - 1)], headers: new Headers() }); };
+  assert.equal(await S.existe("https://x/a.zip", resposta(200), 0), true);
+  assert.equal(await S.existe("https://x/a.zip", resposta(404), 0), false);
+  assert.equal(await S.existe("https://x/a.zip", resposta(429, 429, 200), 0), true);
+  await assert.rejects(S.existe("https://x/a.zip", resposta(429, 403), 0), /HTTP 403 .*anti-robô/);
+});

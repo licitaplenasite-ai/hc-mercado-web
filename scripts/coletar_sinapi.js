@@ -35,6 +35,7 @@
 //   SINAPI_REFERENCIA          opcional "AAAA-MM" — força um mês (sem sondar)
 //   SINAPI_SO_HISTORICO        "1" — grava só o histórico daquele mês (carregar meses antigos sem trocar a vigente)
 //   SINAPI_MESES_REVISAR       3 — meses anteriores conferidos à procura de retificação
+//   SINAPI_PAUSA_MS            3000 — espera entre sondagens na CAIXA (o limitador anti-robô dela barra rajadas)
 //   SINAPI_LIMIAR_ZERADA       0.5 — fração de linhas sem preço que marca a referência como zerada
 //   BASES_RETENCAO_MESES       24 — ver scripts/bases_preco.js
 //   TAMANHO_LOTE_BANCO         1000
@@ -78,7 +79,24 @@ async function pedir(url, metodo, timeoutMs) {
   }
   throw new Error(`CAIXA repetiu o redirecionamento para ${url}. O site mudou?`);
 }
-const existe = async (url) => (await pedir(url, "HEAD", 30000)).status === 200;
+// Só 404 quer dizer "mês não publicado". A CAIXA (WAF Azion) responde 429 e depois 403 a pedidos em rajada: em
+// 23/11/2026 o robô contou isso como "não existe" e concluiu que nenhum mês estava publicado. Agora o robô espera
+// entre sondagens, repete com espera maior (Retry-After, se vier) e, se o bloqueio continuar, falha dizendo o motivo.
+const esperar = (ms) => new Promise((ok) => setTimeout(ok, ms));
+async function existe(url, pedirFn = pedir, pausaMs = num(process.env.SINAPI_PAUSA_MS, 3000)) {
+  let status;
+  for (let tentativa = 0; tentativa < 4; tentativa++) {
+    const r = await pedirFn(url, "HEAD", 30000);
+    status = r.status;
+    if (status === 200 || status === 404) {
+      await esperar(pausaMs);
+      return status === 200;
+    }
+    const retry = Number(r.headers?.get?.("retry-after"));
+    await esperar(Number.isFinite(retry) && retry > 0 ? Math.min(retry, 300) * 1000 : pausaMs * 10 * (tentativa + 1));
+  }
+  throw new Error(`CAIXA respondeu HTTP ${status} para ${url.split("/").pop()} (${status === 429 || status === 403 ? "limite/bloqueio anti-robô" : "erro do site"}). Tente mais tarde; não é falta de publicação.`);
+}
 async function acharReferencia(agora = Date.now()) {
   const forcado = process.env.SINAPI_REFERENCIA;
   if (forcado) {
@@ -312,4 +330,4 @@ async function falhar(e) {
 
 if (require.main === module) main().catch(falhar);
 
-module.exports = { pedir, partesSinapi, versaoSinapi, retificacoesPendentes, mesesParaTras, nomesDoMes, textosCompartilhados, mapaAbas, linhasDaAba, lerTabela, lerAnalitico, montarLinhas, semAcento, xmlTexto, abrirReferencia };
+module.exports = { pedir, existe,partesSinapi, versaoSinapi, retificacoesPendentes, mesesParaTras, nomesDoMes, textosCompartilhados, mapaAbas, linhasDaAba, lerTabela, lerAnalitico, montarLinhas, semAcento, xmlTexto, abrirReferencia };
