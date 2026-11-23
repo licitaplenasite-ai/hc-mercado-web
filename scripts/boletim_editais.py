@@ -30,10 +30,21 @@ ARQUIVO_HISTORICO = os.path.join(DIR_DADOS, "editais_vistos.json")
 USER_AGENT_NAVEGADOR = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
 NOME_REMETENTE = "LicitaPlena - Alertas de Editais"
-# Envio: ZeptoMail (ZEPTOMAIL_TOKEN, o mesmo dos lembretes e do site). O Gmail SMTP para em ~500
-# e-mails/dia (~100 clientes com 3 rodadas) e fica como reserva automatica: entra se o token faltar
-# ou se o ZeptoMail falhar naquele e-mail. Assunto, texto e HTML sao os mesmos nos dois caminhos.
+# Envio: SÓ pelo ZeptoMail (ZEPTOMAIL_TOKEN, o mesmo dos lembretes e do site), remetente boletim@licitaplena.com.br.
+# Decisão do dono (23/11): o boletim nunca mais sai do Gmail pessoal. Falha do ZeptoMail = mais uma tentativa depois de
+# ESPERA_ZEPTO_SEGUNDOS; se falhar de novo, o erro vai para o log e para logs_boletim, sem trocar de remetente.
+# Variáveis de ambiente:
+#   ZEPTOMAIL_TOKEN (obrigatória)       Send Mail token do Agent do ZeptoMail (com ou sem o prefixo "Zoho-enczapikey").
+#   SUPABASE_SERVICE_ROLE_KEY (obrig.)  histórico, clientes, edições e logs.
+#   BOLETIM_GMAIL_RESERVA (padrão vazio = desligado)  "1" liga a reserva pelo Gmail SMTP (EMAIL_REMETENTE e
+#                                       EMAIL_SENHA_APP) depois das 2 falhas do ZeptoMail. Só para emergência.
+#   BOLETIM_SOMENTE_EMAIL (padrão vazio) modo de teste: manda só para as contas com esse e-mail e não grava nada
+#                                       (sem marcar editais como vistos, sem criar/numerar edição, sem logs_boletim,
+#                                       sem Prospecta e sem WhatsApp). Input "somente_email" do workflow.
+#   JORNAIS_SEMPRE (padrão vazio)       "1" manda os jornais em qualquer rodada (testes).
 ZEPTOMAIL_URL = "https://api.zeptomail.com/v1.1/email"
+TENTATIVAS_ZEPTO = 2
+ESPERA_ZEPTO_SEGUNDOS = 15
 # Remetente do boletim (domínio verificado no ZeptoMail; não precisa de caixa). Respostas vão ao dono (Reply-To).
 REMETENTE_ZEPTO = "boletim@licitaplena.com.br"
 NOME_ZEPTO = "LicitaPlena Boletim"
@@ -886,10 +897,17 @@ def montar_email_texto(nome_empresa, filtro, edicao, quantidade, link, resumo=No
             "Acessar o boletim: " + link + "\n" + rodape)
 
 
+def somente_email():
+    # Modo de teste do workflow (input somente_email): e-mail em minúsculas, ou "" na rodada normal.
+    return (os.environ.get("BOLETIM_SOMENTE_EMAIL") or "").strip().lower()
+
+
 def registrar_log_boletim(destinatario, status, quantidade, mensagem_erro=None):
     # Cada tentativa de envio (sucesso, sem novidades ou erro) vira uma linha em
     # public.logs_boletim - e o que a secao "Envios do Boletim" do admin.html le.
     # Falha ao registrar o log nao pode derrubar o boletim, que ja foi enviado/tentado.
+    if somente_email():
+        return
     try:
         chave = _chave_servico()
         url = SUPABASE_URL + "/rest/v1/logs_boletim"
@@ -915,11 +933,15 @@ def registrar_log_boletim(destinatario, status, quantidade, mensagem_erro=None):
 
 def enviar_zeptomail(token, destino_email, nome_destinatario, assunto, texto, html_corpo):
     token = re.sub(r"^Zoho-enczapikey\s+", "", token.strip()).strip("\"'").strip()
+    # Limites do ZeptoMail (TM_8001/SM_129): nome até 250 e assunto até 500 caracteres; nome vazio vai sem a chave,
+    # como no envio do site (enviar-resumo-edital.js), em vez de "name": "" ou null.
+    nome = (nome_destinatario or "").strip()[:250]
+    destino = {"address": destino_email.strip(), **({"name": nome} if nome else {})}
     corpo = {
         "from": {"address": REMETENTE_ZEPTO, "name": NOME_ZEPTO},
         "reply_to": [{"address": RESPONDER_PARA, "name": "LicitaPlena"}],
-        "to": [{"email_address": {"address": destino_email, "name": nome_destinatario}}],
-        "subject": assunto,
+        "to": [{"email_address": destino}],
+        "subject": assunto[:500],
         "textbody": texto,
         "htmlbody": html_corpo,
     }
@@ -933,11 +955,14 @@ def enviar_zeptomail(token, destino_email, nome_destinatario, assunto, texto, ht
     except urllib.error.HTTPError as e:
         # Remetente recusado (SM_111/SM_113 ou "from"/"sender"): a mensagem diz qual endereço confirmar no Agent.
         corpo_erro = e.read().decode("utf-8", "replace")
-        if re.search(r"SM_11[13]|sender|from|domain", corpo_erro, re.I):
-            e.msg = "remetente recusado pelo ZeptoMail: confirme " + REMETENTE_ZEPTO + " como remetente verificado no Agent"
-        else:
-            # O motivo do 400 vem no corpo (código TM_/SM_ e mensagem); sem e-mail do destinatário no log.
-            e.msg = (e.msg or "") + " — " + re.sub(r"[\w.+-]+@[\w-]+\.[\w.]+", "<e-mail>", corpo_erro)[:300]
+        # O motivo do 400 vem no corpo (código TM_/SM_ e mensagem): vai sempre para o log, sem nenhum e-mail.
+        motivo = re.sub(r"[\w.+-]+@[\w-]+\.[\w.]+", "<e-mail>", corpo_erro)[:300]
+        dica = ""
+        if re.search(r"SM_111|SM_113|sender|domain", corpo_erro, re.I):
+            dica = "remetente recusado pelo ZeptoMail: confirme " + REMETENTE_ZEPTO + " no Agent — "
+        elif re.search(r"SM_128|SM_133", corpo_erro):
+            dica = "conta do ZeptoMail ainda em análise ou no limite do teste — "
+        e.msg = dica + (e.msg or "") + " — " + motivo
         raise
 
 
@@ -969,14 +994,23 @@ def enviar_email(destino_email, nome_destinatario, editais_novos, filtro="", fil
     texto = montar_email_texto(nome_destinatario, filtro, edicao, quantidade, link, resumo, cab)
     html_corpo = montar_email_html(nome_destinatario, filtro, edicao, quantidade, link, resumo, cab)
     token = os.environ.get("ZEPTOMAIL_TOKEN")
-    if token:
+    erro = RuntimeError("ZEPTOMAIL_TOKEN nao configurado (Settings > Secrets and variables > Actions no GitHub).")
+    for tentativa in range(1, TENTATIVAS_ZEPTO + 1) if token else []:
         try:
             enviar_zeptomail(token, destino_email, nome_destinatario, assunto, texto, html_corpo)
             return
         except Exception as e:
-            # So o tipo e o codigo HTTP: nunca o token nem o corpo da resposta.
-            log("ZeptoMail falhou (" + type(e).__name__ + " " + str(getattr(e, "code", "")) + " " + str(getattr(e, "msg", "")) + "); enviando pelo Gmail")
-    enviar_gmail(destino_email, assunto, texto, html_corpo)
+            erro = e
+            # Tipo, código HTTP e motivo do ZeptoMail (já sem e-mail); nunca o token.
+            log("ZeptoMail falhou (tentativa " + str(tentativa) + "/" + str(TENTATIVAS_ZEPTO) + ": " + type(e).__name__
+                + " " + str(getattr(e, "code", "")) + " " + str(getattr(e, "msg", e)) + ")")
+            if tentativa < TENTATIVAS_ZEPTO:
+                time.sleep(ESPERA_ZEPTO_SEGUNDOS)
+    if os.environ.get("BOLETIM_GMAIL_RESERVA") == "1":
+        log("BOLETIM_GMAIL_RESERVA=1: enviando pelo Gmail de reserva.")
+        enviar_gmail(destino_email, assunto, texto, html_corpo)
+        return
+    raise erro
 
 
 def registrar_edicao(destinatario, edicao, editais, filtro_id=FILTRO_ID_PADRAO, filtro_nome=None):
@@ -984,7 +1018,7 @@ def registrar_edicao(destinatario, edicao, editais, filtro_id=FILTRO_ID_PADRAO, 
     # os dias anteriores (supabase/boletim_edicoes.sql). Devolve o numero da edicao (None sem ele). Sem id de conta
     # (destinatario fixo) nao ha painel para abrir. Falha aqui nao pode derrubar o aviso.
     # Sem novidade a linha so e criada se o dia ainda nao tem edicao: nao apaga a lista de uma rodada anterior.
-    if not destinatario.get("id"):
+    if not destinatario.get("id") or somente_email():  # teste: não cria nem numera edição oficial
         return None
     try:
         numeros = [e.get("numeroControlePNCP") for e in editais if e.get("numeroControlePNCP")][:500]
@@ -1063,6 +1097,12 @@ def main():
         " fixo(s) + " + str(len(destinatarios) - len(DESTINATARIOS)) + " cliente(s) aprovado(s) no Supabase).")
 
     jornais = carregar_jornais() if e_rodada_dos_jornais() else []
+    teste = somente_email()
+    if teste:
+        destinatarios = [d for d in destinatarios if (d.get("email") or "").strip().lower() == teste]
+        jornais = [j for j in jornais if (j.get("email") or "").strip().lower() == teste]
+        log("MODO TESTE (somente_email): " + str(len(destinatarios)) + " boletim(ns) e " + str(len(jornais))
+            + " jornal(is) para " + teste + "; nada sera gravado.")
     log("Jornais nesta rodada: " + str(len(jornais)) + ".")
 
     ufs_necessarias = set()
@@ -1111,7 +1151,7 @@ def main():
                 log("E-mail enviado para " + d["email"] + " com " + str(len(filtrados)) + " edital(is).")
                 registrar_log_boletim(d, "enviado", len(filtrados))
 
-                whatsapp_cfg = d.get("whatsapp")
+                whatsapp_cfg = None if teste else d.get("whatsapp")
                 if whatsapp_cfg and whatsapp_cfg.get("telefone") and whatsapp_cfg.get("apikey"):
                     try:
                         mensagem = montar_mensagem_whatsapp(d["nome"], filtrados)
@@ -1125,7 +1165,7 @@ def main():
                 registrar_log_boletim(d, "sem_novidades", 0)
 
             empresa_id = (d.get("chave_historico") or "").partition("empresa:")[2]
-            if empresa_id in prospecta and filtrados:
+            if empresa_id in prospecta and filtrados and not teste:
                 try:
                     n = sugerir_no_funil(empresa_id, itens_prospecta(filtrados, d["palavras_chave"], prospecta[empresa_id]))
                     log(d["nome"] + ": Prospecta pos " + str(n) + " licitacao(oes) no Funil.")
@@ -1145,7 +1185,10 @@ def main():
     for j in jornais:
         enviar_jornal(j, pool, historico, cabecalhos)
 
-    salvar_historico(historico)
+    if teste:
+        log("MODO TESTE: historico de editais vistos nao foi alterado.")
+    else:
+        salvar_historico(historico)
     log("=== Fim da execucao ===")
 
 
