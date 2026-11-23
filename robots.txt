@@ -1,0 +1,23 @@
+# Robôs de busca e de IA podem ler o site público. As telas do sistema logado ficam de fora.
+User-agent: *
+Disallow: /painel
+Disallow: /admin
+Disallow: /operacao
+Disallow: /processos
+Disallow: /sistema
+Disallow: /quadros
+Disallow: /cliente
+Disallow: /convite
+Disallow: /responder-oportunidade
+Disallow: /resumo-processo
+Disallow: /prospeccao
+Disallow: /orcamento-obra
+Disallow: /assinar
+Disallow: /sinapi
+Disallow: /mao-de-obra
+Disallow: /hc
+Disallow: /api/
+Disallow: /data/
+Allow: /
+
+Sitemap: https://licitaplena.com.br/sitemap.xml

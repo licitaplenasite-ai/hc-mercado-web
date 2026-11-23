@@ -143,6 +143,18 @@ async function main() {
         exigir(errosJs(p).length === 0, errosJs(p).join(' | '));
         return `${visiveis} artigo(s) de boletim · ${n} links`;
       });
+      await passo(`${tam} páginas de SEO (ferramentas, públicos, blog, glossário, assessoria) e 404 de verdade`, p, async () => {
+        const paginas = ['/ferramentas/', '/ferramentas/orcamento-de-obras', '/para/mei-e-pequena-empresa', '/blog/', '/blog/mei-em-licitacao', '/blog/categoria/obras-e-engenharia', '/glossario', '/sobre', '/contato', '/assessoria-hc'];
+        let links = 0;
+        for (const caminho of paginas) {
+          await p.goto(SITE + caminho); await textoLimpo(p); links += await linksVivos(p);
+          exigir(await semRolagemLateral(p), `rolagem lateral em ${caminho}`);
+          exigir(errosJs(p).length === 0, errosJs(p).join(' | '));
+        }
+        const r = await fetch(SITE + '/pagina-que-nao-existe-' + Date.now());
+        exigir(r.status === 404 && /Página não encontrada/.test(await r.text()), 'endereço inexistente devia dar 404: ' + r.status);
+        return `${paginas.length} páginas · ${links} links`;
+      });
       await passo(`${tam} HC e extensão: links, pacote da extensão e imagem`, p, async () => {
         await p.goto(SITE + '/hc.html'); await textoLimpo(p); await linksVivos(p);
         exigir(errosJs(p).length === 0, errosJs(p).join(' | '));

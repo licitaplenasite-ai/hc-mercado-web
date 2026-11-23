@@ -10,6 +10,8 @@ const path = require("node:path");
 
 const RAIZ = path.join(__dirname, "..");
 const DESTINO = path.join(RAIZ, "publico");
+// Pastas das páginas públicas de SEO geradas por scripts/gerar_site_publico.js.
+const PASTAS_DO_SITE = ["blog", "ferramentas", "para"];
 
 // Arquivos da raiz que nunca são servidos (configuração de ferramentas).
 const IGNORADOS = new Set(["eslint.config.js", "package.json", "package-lock.json", "skills-lock.json", "biome.jsonc"]);
@@ -35,6 +37,8 @@ function montarPublico() {
   for (const nome of copiados) fs.copyFileSync(path.join(RAIZ, nome), path.join(DESTINO, nome));
   fs.mkdirSync(path.join(DESTINO, "data"));
   for (const nome of arquivosDeDados()) fs.copyFileSync(path.join(RAIZ, "data", nome), path.join(DESTINO, "data", nome));
+  // Páginas públicas de SEO geradas por scripts/gerar_site_publico.js (blog/, ferramentas/, para/): só os .html.
+  for (const pasta of PASTAS_DO_SITE.filter((p) => fs.existsSync(path.join(RAIZ, p)))) fs.cpSync(path.join(RAIZ, pasta), path.join(DESTINO, pasta), { recursive: true, filter: (f) => fs.statSync(f).isDirectory() || f.endsWith(".html") });
   // Prints dos tutoriais da Central de ajuda "?" (ajuda-ui.js e ajuda.html): só imagens .webp de dados fictícios, e os
   // vídeos curtos dos tutoriais (ajuda/videos/*.mp4|.webm) quando existirem.
   const ajuda = path.join(RAIZ, "ajuda");
@@ -56,4 +60,4 @@ if (require.main === module) {
   }).catch((e) => { console.error(e.message); process.exitCode = 1; });
 }
 
-module.exports = { montarPublico, arquivosDaRaiz, arquivosDeDados, publicarExtensao };
+module.exports = { montarPublico, arquivosDaRaiz, arquivosDeDados, publicarExtensao, PASTAS_DO_SITE };
