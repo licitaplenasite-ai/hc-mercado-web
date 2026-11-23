@@ -25,7 +25,7 @@
   }
 
   if (reduzir || !("IntersectionObserver" in window)) return;
-  var SELETOR = ".cabeca-secao, .ferr, .rota, .etapa, .dif, .agente, .plano, .passos3 li, .publicos li, .grade-blog li," +
+  var SELETOR = ".cabeca-secao, .ferr, .rota, .etapa, .dif, .agente, .plano, .passos3 li, .publicos li, .setor, .rc, .grade-blog li," +
     " .faixa-ia, .cta-final, .cartao, .chamada, .faq, .moldura-foto, .numeros, .fatos-site, .email, .cv-lista, .boletim-lado";
   var alvos = [].slice.call(document.querySelectorAll(SELETOR)).filter(function (el) { return !el.closest(".hero"); });
   if (!alvos.length) return;

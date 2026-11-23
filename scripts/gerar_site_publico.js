@@ -78,9 +78,21 @@ const SOFTWARE = {
 const faqSchema = (pares) => ({ "@type": "FAQPage", mainEntity: pares.map(([q, r]) => ({ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: r } })) });
 const migalhasSchema = (itens) => ({ "@type": "BreadcrumbList", itemListElement: itens.map(([nome, url], i) => ({ "@type": "ListItem", position: i + 1, name: nome, item: SITE + url })) });
 
+// Rodapé, rodada 3 (23/11): três cartões de contato com ícone em círculo de destaque que gira ao passar o mouse
+// (técnica do rodapé do site da HC, que veio do kit Construção da pasta de modelos), antes do mapa do site.
+const ICO = (d) => `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${d}</svg>`;
+const ICO_CHAT = ICO('<path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.6 8.6 0 0 1-3.9-.9L3 20.5l1.6-4.6A8.4 8.4 0 1 1 21 11.5z"/><path d="M8.5 11.5h.01M12 11.5h.01M15.5 11.5h.01"/>');
+const ICO_EMAIL = ICO('<rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 6.5 12 13l8.5-6.5"/>');
+const ICO_LOCAL = ICO('<path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.6"/>');
+function contatosRodape() {
+  const cartao = (tag, attrs, ico, rotulo, texto) => `<${tag} class="rc"${attrs}><span class="rc-ico">${ico}</span><small>${rotulo}</small><strong>${texto}</strong></${tag}>`;
+  return `<div class="rodape-contatos">${cartao("a", ` href="${ZAP_SUPORTE}" target="_blank" rel="noopener"`, ICO_CHAT, "WhatsApp", "(92) 98193-7781")}${cartao("a", ` href="mailto:${EMAIL}"`, ICO_EMAIL, "E-mail", EMAIL)}${cartao("div", "", ICO_LOCAL, "Base", "Manaus/AM, atendimento em todo o Brasil")}</div>`;
+}
+
 function mapaDoSite() {
   const col = (titulo, links) => `<div><p class="mapa-titulo">${titulo}</p><ul>${links.map(([h, t]) => `<li><a href="${h}">${esc(t)}</a></li>`).join("")}</ul></div>`;
-  return `<nav class="mapa-site" aria-label="Mapa do site">
+  return `${contatosRodape()}
+<nav class="mapa-site" aria-label="Mapa do site">
 ${col("Ferramentas", FERRAMENTAS.map((f) => [`/ferramentas/${f.slug}`, f.curto]))}
 ${col("Para quem é", PUBLICOS.map((p) => [`/para/${p.slug}`, p.nome]).concat([["/#planos", "Planos e preços"]]))}
 ${col("Conteúdo", [["/blog/", "Blog"], ...Object.entries(CATEGORIAS).map(([s, n]) => [`/blog/categoria/${s}`, n]), ["/glossario", "Glossário de licitação"]])}

@@ -11,12 +11,12 @@
   --text-disabled: #8a94a6; /* Texto de controles desativados. Não usar para informação necessária. */
   --brand-navy: #071b70; /* Azul-marinho da marca. Logotipo e identidade; não é cor de ação. */
   --brand-blue: #3772f8; /* Azul da marca. Foco, seleção e elementos gráficos; não usar como cor de texto sobre branco. */
-  --action-strong: #2255e0; /* Fundo do botão primário e da ação principal. Branco sobre #2255E0 ≈ 6,1:1. */
-  --action-strong-hover: #1a46c4; /* Estado hover do botão primário. */
+  --action-strong: #1f4fd8; /* Fundo do botão de ação (royal da paleta A). Branco sobre #1F4FD8 ≈ 6,6:1. */
+  --action-strong-hover: #1a42b8; /* Estado hover do botão de ação. */
   --action-on: #ffffff; /* Texto e ícone sobre action-strong. */
-  --action-text: #2255e0; /* Texto de link e botão terciário. Sobre branco ≈ 6,1:1. */
+  --action-text: #1f4fd8; /* Texto de link e botão terciário. Sobre branco ≈ 6,6:1. */
   --action-tint: #e8effe; /* Seleção de linha, item ativo de navegação, opção marcada. */
-  --focus-ring: #3772f8; /* Anel de foco visível: 2px com deslocamento de 2px. */
+  --focus-ring: #1f4fd8; /* Anel de foco visível: 2px com deslocamento de 2px. */
   --success-text: #0e6b4a; /* Texto e ícone de sucesso. Sobre success-bg ≈ 5,8:1. */
   --success-bg: #e7f5ee; /* Fundo de chip e aviso de sucesso. */
   --success-border: #a9dcc3; /* Borda de chip e aviso de sucesso. */
@@ -85,35 +85,51 @@
   --text-body: 400 14px/22px var(--font-sans); /* Corpo padrão de interface, tabelas e formulários. */
   --text-label: 500 12px/16px var(--font-sans); /* Rótulos de campo, metadados, cabeçalhos de coluna. */
 }
-/* Marca premium (23/11, dono pediu "mais vida"): dois tons do mesmo azul + um selo âmbar.
-   Regras e contrastes medidos em _historico/visual-premium/PROPOSTA.md. Degradê só em botão
-   primário, faixas de chamada, arte do login e detalhe do rodapé; cartões continuam lisos. */
+/* Marca premium (23/11). PALETA A escolhida pelo dono (rodada 3): marinho #0A1B4F, azul royal #1F4FD8,
+   destaque ciano elétrico #22D3EE (com parcimônia, o papel do verde-limão da HC; texto sobre ele sempre
+   marinho, 9:1), claro #F2F7FF e branco. O logo mantém os dois azuis dele (--brand-navy, --brand-blue).
+   PALETA EM UM SÓ LUGAR: para trocar cor ou degradê do site, mude só este bloco (os *-rgb servem aos brilhos). */
 :root, [data-theme="light"] {
-  --marca-escuro: #071b70; /* Azul-marinho: faixas, rodapé, números de destaque. */
-  --marca-medio: #2255e0; /* Azul de ação: ícones, detalhes, marcadores. */
-  --marca-claro: #e8effe; /* Placa de ícone, item ativo. */
-  --marca-claro-2: #f3f7ff; /* Fundo suave de seção. */
-  --marca-texto: #1a3fc4; /* Texto em azul sobre branco ou marca-claro (≥ 6,3:1). */
-  --marca-destaque: #ffb547; /* Selo âmbar: só sobre azul-escuro (8,5:1). */
-  --marca-rodape: #0a1847; /* Fundo do rodapé nos dois temas. */
-  --marca-titulo: #071b70; /* Títulos de tela e números de destaque (escuro: texto principal). */
-  --marca-on: #ffffff; /* Texto sobre o degradê da marca, nos dois temas. */
-  --grad-marca: linear-gradient(135deg, #071b70 0%, #123aa8 55%, #2459e6 100%); /* Texto branco ≥ 5,7:1. */
-  --grad-suave: linear-gradient(180deg, #f3f7ff 0%, #ffffff 100%);
-  --grad-linha: linear-gradient(90deg, #2255e0 0%, #6f97ff 60%, #ffb547 100%);
-  --sombra-cartao: 0 1px 2px rgba(7,27,112,0.06), 0 6px 20px rgba(7,27,112,0.07);
-  --sombra-cartao-forte: 0 2px 4px rgba(7,27,112,0.08), 0 18px 44px rgba(7,27,112,0.16);
+  --marca-escuro: #0a1b4f; /* Marinho: fundos escuros, rodapé, títulos. */
+  --marca-medio: #1f4fd8; /* Royal: links, ícones, estados (6,6:1 sobre branco). */
+  --marca-claro: #e3edff; /* Placa de ícone, item ativo. */
+  --marca-claro-2: #f2f7ff; /* Fundo suave de seção e cartão. */
+  --marca-texto: #1f4fd8; /* Texto azul sobre branco ou claro (≥ 5,6:1). */
+  --marca-titulo: #0a1b4f; /* Títulos e números de destaque (escuro: texto principal). */
+  --marca-on: #ffffff; /* Texto sobre o degradê marinho/royal. */
+  --destaque: #22d3ee; /* Ciano elétrico: botão principal, palavra de destaque, brilho, detalhe de ícone. */
+  --destaque-forte: #67e8f9; /* Hover do ciano. */
+  --destaque-texto: #0a1b4f; /* Texto sobre o ciano (9,1:1). */
+  --destaque-sobre-escuro: #22d3ee; /* Ciano como texto sobre marinho (9,1:1). */
+  --destaque-rgb: 34, 211, 238;
+  --medio-rgb: 31, 79, 216;
+  --escuro-rgb: 10, 27, 79;
+  --escuro-fundo-rgb: 6, 16, 48;
+  --fundo-escuro: #0a1b4f; /* Primeira tela, seções escuras, faixa de IA, arte do login. */
+  --marca-rodape: #071338; /* Base do rodapé nos dois temas. */
+  --claro-sobre-escuro: #dbe6ff; /* Texto de apoio sobre fundo escuro. */
+  --apoio-sobre-escuro: #b8c4ea; /* Texto mais fraco sobre fundo escuro (≥ 9:1). */
+  /* Grão leve por cima dos degradês escuros (ruído em SVG, como nas faixas da HC). */
+  --grao: url("data:image/svg+xml,%3Csvg xmlns='http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg' width='160' height='160'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+  --grad-marca: linear-gradient(135deg, #0a1b4f 0%, #163aa6 55%, #1f4fd8 100%); /* Texto branco ≥ 6,6:1. */
+  --grad-suave: linear-gradient(180deg, #f2f7ff 0%, #ffffff 100%);
+  --grad-linha: linear-gradient(90deg, var(--marca-medio) 0%, var(--destaque) 100%);
+  --degrade-hero: radial-gradient(ellipse 45% 60% at 88% 12%, rgba(var(--destaque-rgb), 0.18), transparent 70%), linear-gradient(90deg, rgba(var(--escuro-fundo-rgb), 0.96) 0%, rgba(var(--escuro-rgb), 0.88) 45%, rgba(var(--medio-rgb), 0.5) 100%), linear-gradient(0deg, rgba(var(--escuro-fundo-rgb), 0.75) 0%, transparent 40%);
+  --degrade-escuro: radial-gradient(circle at 12% 0%, rgba(var(--destaque-rgb), 0.16), transparent 40%), radial-gradient(circle at 95% 100%, rgba(var(--medio-rgb), 0.55), transparent 55%), linear-gradient(160deg, #0a1b4f 0%, #0d2266 55%, #14308f 100%);
+  --degrade-rodape: radial-gradient(circle at 85% 0%, rgba(var(--destaque-rgb), 0.1), transparent 40%), radial-gradient(circle at 0% 100%, rgba(var(--medio-rgb), 0.35), transparent 50%), linear-gradient(180deg, #0a1b4f 0%, #071338 100%);
+  --degrade-foto: linear-gradient(180deg, rgba(var(--escuro-fundo-rgb), 0.05) 15%, rgba(var(--escuro-fundo-rgb), 0.94) 100%);
+  --sombra-cartao: 0 1px 2px rgba(10,27,79,0.06), 0 6px 20px rgba(10,27,79,0.07);
+  --sombra-cartao-forte: 0 2px 4px rgba(10,27,79,0.08), 0 18px 44px rgba(10,27,79,0.16);
 }
 [data-theme="dark"] {
-  --marca-claro: #17264a;
-  --marca-claro-2: #0f1a3a;
-  --marca-texto: #8db0ff;
+  --marca-claro: #16244d;
+  --marca-claro-2: #0e1834;
+  --marca-texto: #8fb0ff;
   --marca-titulo: var(--text-primary);
-  --grad-suave: linear-gradient(180deg, #0f1a3a 0%, #0b1020 100%);
+  --grad-suave: linear-gradient(180deg, #0e1834 0%, #0b1020 100%);
   --sombra-cartao: 0 1px 2px rgba(0,0,0,0.4), 0 6px 20px rgba(0,0,0,0.3);
   --sombra-cartao-forte: 0 2px 4px rgba(0,0,0,0.45), 0 18px 44px rgba(0,0,0,0.5);
-}
-/* Logo livre (dono, 23/11): sem placa de fundo. No tema claro o símbolo fica nas cores da marca;
+}/* Logo livre (dono, 23/11): sem placa de fundo. No tema claro o símbolo fica nas cores da marca;
    no escuro o desenho inteiro fica branco. O filtro vale para todas as telas que usam a placa. */
 [data-theme="dark"] :is(.placa, .marca-placa, .header-placa, .app-marca-placa) img { filter: brightness(0) invert(1); }
 .title {

@@ -170,7 +170,7 @@ test('variáveis usadas pelos módulos reais resolvem para tokens do DS (tema cl
 test('hash dos tokens confere com a origem do Design System', () => {
   const crypto = require('node:crypto');
   const h = crypto.createHash('sha256').update(fs.readFileSync(path.join(raiz, 'ds-tokens.css'))).digest('hex');
-  assert.equal(h, '275e8687dc5cbee2ab4bafbd060076ba1cc3652fe5dd6e7c1feccb78f44566d1');
+  assert.equal(h, '2447407f73158c35a73e876fb192ea4d2320b7cb780b314c728e12a9f900db9a');
 });
 
 test('estilos da identificação: escopados em #identificacao e sem cor fixa (layout real em app-comercial-layout.test.cjs)', () => {

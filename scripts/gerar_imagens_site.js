@@ -1,6 +1,6 @@
 // Imagens do site público (rodada 2 do visual, 23/11): recorta e otimiza as fotos de scripts/site-publico/capas.js.
 // Uso: node scripts/gerar_imagens_site.js <pasta-com-as-fotos-originais.jpg>
-//   (as originais do Unsplash listadas em img/CREDITOS.md; não ficam no repositório para não pesar o git)
+//   (originais geradas no Google Flow, nomes em img/CREDITOS.md; não ficam no repositório para não pesar o git)
 // Saída:
 //   img/topo/<foto>-800.webp e -1600.webp  fundo da primeira tela do index (< 200 KB cada)
 //   img/fotos/<foto>-960.webp               fotos de seção (moldura) e da tela de entrar
@@ -15,7 +15,7 @@ const { lerArtigos, CATEGORIAS } = require("./gerar_site_publico");
 
 const RAIZ = path.join(__dirname, "..");
 const LIMITE_BYTES = 200 * 1024; // pedido do dono: no máximo 200 KB por imagem
-const FOTOS_SECAO = ["escritorio", "documentos", "topo-contrato"];
+const FOTOS_SECAO = ["escritorio", "documentos", "topo-contrato", "papelaria", "construcao", "servicos"];
 
 async function abrirNavegador() {
   try { return await chromium.launch(); } catch { return chromium.launch({ channel: "chrome" }); }
@@ -40,6 +40,9 @@ async function webp(pagina, foto, largura, altura, foco, qualidade) {
     const c = document.createElement("canvas"); c.width = largura; c.height = altura;
     const ctx = c.getContext("2d"); ctx.imageSmoothingQuality = "high";
     ctx.drawImage(img, (largura - w) * fx, (altura - h) * fy, w, h);
+    // Leve tom azulado: post-it, copo e luminária quentes das fotos do Flow não destoam da paleta só azul (rodada 3).
+    ctx.globalCompositeOperation = "color"; ctx.globalAlpha = 0.16; ctx.fillStyle = "#1f4fd8"; ctx.fillRect(0, 0, largura, altura);
+    ctx.globalCompositeOperation = "source-over"; ctx.globalAlpha = 1;
     return c.toDataURL("image/webp", qualidade).split(",")[1];
   }, { src: foto, largura, altura, foco, qualidade });
   return Buffer.from(b64, "base64");
@@ -51,13 +54,14 @@ function htmlCapaOg(foto, foco, rotulo, titulo) {
   return `<!doctype html><html><head><link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@600;700&display=block" rel="stylesheet">
 <style>*{box-sizing:border-box}body{margin:0;width:1200px;height:630px;overflow:hidden;font-family:Inter,sans-serif}
 .f{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:${foco}}
-.v{position:absolute;inset:0;background:linear-gradient(90deg,rgba(7,27,112,.97) 0%,rgba(7,27,112,.9) 40%,rgba(7,27,112,.22) 72%,rgba(7,27,112,0) 100%)}
-.l{position:absolute;left:0;right:0;bottom:0;height:8px;background:linear-gradient(90deg,#2255e0,#6f97ff 60%,#ffb547)}
+.tom{position:absolute;inset:0;background:#1f4fd8;mix-blend-mode:color;opacity:.16}
+.v{position:absolute;inset:0;background:linear-gradient(90deg,rgba(10,27,79,.97) 0%,rgba(10,27,79,.9) 40%,rgba(10,27,79,.22) 72%,rgba(10,27,79,0) 100%)}
+.l{position:absolute;left:0;right:0;bottom:0;height:8px;background:linear-gradient(90deg,#1f4fd8,#22d3ee)}
 .t{position:absolute;left:72px;top:64px;width:620px;color:#fff}
 .m{display:flex;align-items:center;gap:12px;font-weight:700;font-size:26px}.m img{width:40px;height:40px}
-.r{margin:96px 0 18px;color:#ffb547;font-weight:700;font-size:22px;letter-spacing:.02em}
+.r{margin:96px 0 18px;color:#22d3ee;font-weight:700;font-size:22px;letter-spacing:.02em}
 h1{margin:0;font:600 58px/1.08 Fraunces,serif;letter-spacing:-.01em}</style></head>
-<body><img class="f" src="${foto}"><div class="v"></div><div class="l"></div><div class="t"><div class="m"><img src="${LOGO}">LicitaPlena</div><p class="r">${esc(rotulo)}</p><h1>${esc(titulo)}</h1></div></body></html>`;
+<body><img class="f" src="${foto}"><div class="tom"></div><div class="v"></div><div class="l"></div><div class="t"><div class="m"><img src="${LOGO}">LicitaPlena</div><p class="r">${esc(rotulo)}</p><h1>${esc(titulo)}</h1></div></body></html>`;
 }
 
 async function main() {
