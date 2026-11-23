@@ -164,7 +164,9 @@ test('CPF: rascunho, prévia e revisão guardam só o marcador; a exportação l
  f.state.perfilEmpresa.cpf_representante=null;
  const sem=await f.run({acao:'exportar',documentoId:ids.doc,versaoEsperada:1,revisado:true,revisaoHash:p.json.revisaoHash});
  assert.equal(sem.statusCode,409);assert.match(sem.json.erro,/CPF do representante no Perfil/);
- const loteSem=await f.run({acao:'exportarDeclaracoes'});assert.equal(loteSem.statusCode,422);assert.deepEqual(loteSem.json.ignoradas,[{documentoId:ids.doc,motivo:'campos_pendentes'}]);
+ const loteSem=await f.run({acao:'exportarDeclaracoes'});assert.equal(loteSem.statusCode,422);assert.deepEqual(loteSem.json.ignoradas,[{documentoId:ids.doc,motivo:'sem_cpf'}]);
+ // Regressão 23/11: revisada e sem CPF dizia "Nenhuma declaração revisada"; agora aponta o Perfil.
+ assert.match(loteSem.json.erro,/Preencha o CPF do representante no Perfil da empresa/);assert.doesNotMatch(loteSem.json.erro,/Nenhuma declaração revisada/);
 });
 
 test('logo inválida ou com hash divergente: documento sai sem logo, como antes',async t=>{

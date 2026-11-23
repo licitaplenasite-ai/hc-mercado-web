@@ -64,11 +64,12 @@ async function exportarDeclaracoes({c,store,ctx,body,pendencias}){
    // CPF lido uma vez, só se alguma peça revisada pede; sem CPF no perfil a peça fica de fora.
    if(r.precisaCpf&&cpf===undefined)cpf=await lerCpf(c,ctx.empresa);
    const final=r.documento({cpf,data});
-   if(!final)ignoradas.push({documentoId:d.id,motivo:'campos_pendentes'});
+   if(!final)ignoradas.push({documentoId:d.id,motivo:r.precisaCpf&&!cpf?'sem_cpf':'campos_pendentes'});
    else{if(blocos.length)blocos.push({t:'quebra'});blocos.push(...final.blocos);base||={...final,nome:r.nome};incluidas.push(d.id);}
   }
  }
- if(!incluidas.length){const e=new Error('Nenhuma declaração revisada para exportar. Prepare e confirme a revisão antes.');e.status=422;e.ignoradas=ignoradas;throw e;}
+ // Revisada mas sem CPF no Perfil não é "não revisada": dizer o que falta, senão o usuário revisa de novo sem sair do lugar.
+ if(!incluidas.length){const e=new Error(ignoradas.some(i=>i.motivo==='sem_cpf')?SEM_CPF:'Nenhuma declaração revisada para exportar. Prepare e confirme a revisão antes.');e.status=422;e.ignoradas=ignoradas;throw e;}
  // Uma só: o arquivo leva o título dela; várias: "Declarações - HCM LTDA - Pregão 012-2026 - <órgão>".
  const titulo=incluidas.length>1?'Declarações':base.titulo;
  return {...await saidaArquivo(c,ctx.empresa,body,{titulo,emitente:base.emitente,rodape:base.rodape,blocos},ext=>base.nome(titulo.slice(0,70),ext)),incluidas,ignoradas};
