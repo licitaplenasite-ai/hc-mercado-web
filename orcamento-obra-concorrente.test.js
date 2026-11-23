@@ -257,4 +257,47 @@ test('real: proposta da Tendência (Excel e PDF) acha as etapas 30.2 e 30.3 que 
   const doPdf = K.analisarConcorrente({ concorrente: lido, edital, origem: 'pdf' });
   assert.deepEqual(chave(doPdf), chave(xlsx).filter((k) => k !== 'cpu_incompleta:'));
   assert.ok(tem(doPdf, 'leitura_documento:info'));
+  // Regressão de 23/11: o mesmo caso passando pela confirmação (guardada na aba e lida de volta).
+  const conferencia = P.conferirExtracao(lido);
+  assert.ok(U.precisaConfirmar({ origem: 'pdf', conferencia }), 'etapa 30.2 não fecha: pede confirmação');
+  const volta = U.lerLeituraGuardada(U.guardarLeitura({ concorrente: lido, edital, cpu: undefined, origem: 'pdf' }, conferencia));
+  assert.deepEqual(chave(K.analisarConcorrente(volta.pendente)), chave(doPdf));
+});
+
+// ---- Regressão (23/11, produção): depois de "Conferi e quero analisar", a caixa sumia e nada aparecia. ----
+// Caminho de dados da confirmação (PDF e foto): leitura -> precisa confirmar -> guardada na aba (sobrevive a
+// recarregar a página) -> lida de volta -> análise com nota, achados e rascunho.
+const U = require('./orcamento-obra-concorrente-ui.js');
+test('confirmação: foto sempre pede; PDF só com conta que não fecha; Excel nunca', () => {
+  assert.equal(U.precisaConfirmar({ origem: 'ia', conferencia: { ok: true } }), true);
+  assert.equal(U.precisaConfirmar({ origem: 'pdf', conferencia: { ok: false } }), true);
+  assert.equal(U.precisaConfirmar({ origem: 'pdf', conferencia: { ok: true } }), false);
+  assert.equal(U.precisaConfirmar({ origem: 'planilha' }), false);
+});
+const LEITURAS = {
+  pdf: () => P.lerMatriz(P.matrizDoPdf([[it('DATA BASE: SETEMBRO/2023 - SINAPI - AMAZONAS DESONERADO', 40, 700),
+    it(' 1.1 ', 51, 610, 10), it(' 97622 ', 79, 610, 18), it('DEMOLIÇÃO DE ALVENARIA', 108, 610), it('m³', 390, 610), it('10,00', 419, 610), it('80,00', 457, 610), it('900,00', 527, 610),
+    it('PREÇO GLOBAL DA OBRA (OFERTADO PELO LICITANTE)', 255, 520), it(' R$ 1.125,00 ', 491, 520)]])),
+  ia: () => P.lerMatriz(P.matrizDaIa([{ textos: ['DATA BASE: SETEMBRO/2023 - SINAPI - AMAZONAS DESONERADO'],
+    linhas: [{ item: '1.1', codigo: '97622', descricao: 'DEMOLIÇÃO DE ALVENARIA', unidade: 'm³', quantidade: '10,00', precoUnitario: '80,00', total: '900,00' }], rodape: { globalOfertado: '1.125,00' } }])),
+};
+for (const origem of ['pdf', 'ia']) {
+  test(`confirmação (${origem}): leitura guardada e recuperada gera a análise com nota, achados e rascunho`, () => {
+    const leitura = LEITURAS[origem](), conferencia = P.conferirExtracao(leitura);
+    assert.equal(conferencia.ok, false, '10 × 80 não dá 900');
+    assert.ok(U.precisaConfirmar({ origem, conferencia }));
+    const volta = U.lerLeituraGuardada(U.guardarLeitura({ concorrente: leitura, edital: edital(), cpu: undefined, origem }, conferencia));
+    assert.ok(volta, 'a leitura guardada volta inteira');
+    const r = K.analisarConcorrente(volta.pendente);
+    assert.ok(r.achados.some((a) => a.regra === 'total_nao_fecha' && a.item === '1.1'));
+    assert.ok(r.achados.some((a) => a.regra === 'item_faltando' && a.item === '1.2'));
+    assert.ok(r.placar.nota > 0);
+    assert.match(K.textoRecurso(r, {}), /I\. DOS FATOS[\s\S]*Item 1\.1/);
+  });
+}
+test('leitura guardada inválida, de outra versão ou de Excel é ignorada', () => {
+  assert.equal(U.lerLeituraGuardada(null), null);
+  assert.equal(U.lerLeituraGuardada('{'), null);
+  assert.equal(U.lerLeituraGuardada(JSON.stringify({ versao: 99, pendente: { origem: 'pdf', concorrente: { itens: [] } }, conferencia: {} })), null);
+  assert.equal(U.lerLeituraGuardada(JSON.stringify({ versao: 1, pendente: { origem: 'planilha', concorrente: { itens: [] } }, conferencia: {} })), null);
 });

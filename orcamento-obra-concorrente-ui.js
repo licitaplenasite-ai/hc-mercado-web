@@ -1,10 +1,24 @@
-/* global document, window, location, history, Blob, URL, module -- script de navegador (orcamento-obra.html) */
+/* global document, window, location, history, Blob, URL, console, module -- script de navegador (orcamento-obra.html) */
 // Aba "Analisar concorrente" do Orçamento de obra: lê a planilha do concorrente (Excel e PDF com texto no navegador;
 // foto ou PDF digitalizado pela IA, uma página por vez) e mostra os achados do Auditor com o rascunho de recurso.
 // A lógica fica em orcamento-obra-concorrente.js e orcamento-obra-pdf.js (testadas no Node); aqui só tela e arquivo.
 (function () {
   'use strict';
-  if (typeof module !== 'undefined' && module.exports) return;
+  // ---- Leitura à espera de confirmação (PDF ou foto) ----
+  // Fica guardada nesta aba do navegador (sessionStorage) até a análise sair: se a página recarregar entre a
+  // conferência e o "Confirmar" (Chrome descarta aba pesada, por exemplo), a pessoa volta ao mesmo ponto em vez de
+  // perder tudo sem aviso (bug de 23/11 em produção).
+  const CHAVE_LEITURA = 'licitaplena_concorrente_leitura', VERSAO_LEITURA = 1;
+  // Foto (IA) sempre pede confirmação; PDF só quando alguma conta não fecha; Excel nunca.
+  const precisaConfirmar = (lido) => Boolean(lido?.conferencia) && (!lido.conferencia.ok || lido.origem === 'ia');
+  const guardarLeitura = (pendente, conferencia) => JSON.stringify({ versao: VERSAO_LEITURA, pendente, conferencia });
+  function lerLeituraGuardada(texto) {
+    try {
+      const r = JSON.parse(texto);
+      return r?.versao === VERSAO_LEITURA && Array.isArray(r.pendente?.concorrente?.itens) && r.conferencia && ['pdf', 'ia'].includes(r.pendente.origem) ? r : null;
+    } catch { return null; }
+  }
+  if (typeof module !== 'undefined' && module.exports) { module.exports = { precisaConfirmar, guardarLeitura, lerLeituraGuardada }; return; }
   const O = window.OrcObra, $ = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const reais = (v) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -117,8 +131,11 @@
     if (tipo === 'pdf') {
       aviso('Lendo o PDF…');
       const pdf = await lerPdf(arquivo);
-      if (pdf.comTexto) { origem = 'pdf'; matriz = O.pdf.matrizDoPdf(pdf.paginas); }
-      else matriz = O.pdf.matrizDaIa(await lerComIa(await paginasComoImagem(pdf.doc)));
+      // destroy(): o pdf.js roda na própria página; segurar o documento só pesa a aba.
+      try {
+        if (pdf.comTexto) { origem = 'pdf'; matriz = O.pdf.matrizDoPdf(pdf.paginas); }
+        else matriz = O.pdf.matrizDaIa(await lerComIa(await paginasComoImagem(pdf.doc)));
+      } finally { void pdf.doc.destroy(); }
     } else matriz = O.pdf.matrizDaIa(await lerComIa(await fotoComoImagem(arquivo)));
     const leitura = O.pdf.lerMatriz(matriz);
     if (leitura.erro) throw erroSimples(origem === 'pdf' ? 'Não achei a tabela de itens neste PDF. Se for escaneado, envie como foto; se tiver o Excel, prefira.' : 'A IA não achou a tabela de itens. Confira se a foto está nítida e reta.');
@@ -142,23 +159,46 @@
       const lido = await lerConcorrente(arq);
       estado.pendente = { concorrente: lido.leitura, edital, cpu: cpu && Object.keys(cpu.bases).length ? cpu : undefined, origem: lido.origem };
       // PDF ou foto: mostra o que não fechou; foto (IA) sempre pede confirmação, mesmo com as contas certas.
-      if (lido.conferencia && (!lido.conferencia.ok || lido.origem === 'ia')) return mostrarConferencia(lido);
+      if (precisaConfirmar(lido)) {
+        try { window.sessionStorage.setItem(CHAVE_LEITURA, guardarLeitura(estado.pendente, lido.conferencia)); } catch { /* sem espaço: segue sem a cópia */ }
+        aviso('');
+        return mostrarConferencia(lido);
+      }
       analisar();
     } catch (e) { aviso(e?.simples ? e.message : 'Não foi possível ler a planilha do concorrente. Confira o arquivo e tente de novo.', 'erro'); } finally { $('btn-conc').disabled = false; }
   }
   function mostrarConferencia({ leitura, origem, conferencia: c }) {
-    aviso('');
     $('conc-conferir').hidden = false; $('cc-ok').checked = false;
     $('cc-resumo').textContent = `${origem === 'ia' ? 'A IA leu' : 'Li do PDF'} ${c.conferidos} itens, que somam ${reais(c.soma)}${leitura.resumo?.custoDireto ? ` (custo direto declarado: ${reais(leitura.resumo.custoDireto)})` : ''}. `
       + (c.ok ? 'Todas as contas fecham. Mesmo assim, confira alguns itens com o original.' : `${c.problemas.length} conta(s) não fecham: pode ser erro de leitura ou erro da própria planilha do concorrente. Confira no original.`);
     $('cc-problemas').innerHTML = c.problemas.slice(0, 60).map((p) => `<li>${esc(p)}</li>`).join('') + (c.problemas.length > 60 ? `<li>… e mais ${c.problemas.length - 60}.</li>` : '');
     $('conc-conferir').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
-  $('btn-cc-seguir').addEventListener('click', () => {
+  const esquecerLeitura = () => { try { window.sessionStorage.removeItem(CHAVE_LEITURA); } catch { /* nada guardado */ } };
+  // A caixa de conferência só some depois que o resultado está na tela; qualquer falha vira aviso (antes sumia calada).
+  $('btn-cc-seguir').addEventListener('click', (ev) => {
+    ev.preventDefault();
     if (!$('cc-ok').checked) { aviso('Marque que conferiu com o documento original para seguir.', 'erro'); $('cc-ok').focus(); return; }
-    $('conc-conferir').hidden = true; analisar();
+    if (!estado.pendente) { aviso('A leitura se perdeu. Clique em "Analisar a planilha" de novo.', 'erro'); return; }
+    try {
+      analisar();
+      $('conc-conferir').hidden = true;
+      esquecerLeitura();
+    } catch (e) {
+      console.error('analisar concorrente:', e); // único rastro para o suporte quando a análise falha
+      aviso('Não foi possível montar a análise com esta leitura. Tente de novo; se continuar, envie a planilha em Excel.', 'erro');
+    }
   });
-  $('btn-cc-cancelar').addEventListener('click', () => { $('conc-conferir').hidden = true; estado.pendente = null; aviso(''); });
+  $('btn-cc-cancelar').addEventListener('click', () => { $('conc-conferir').hidden = true; estado.pendente = null; esquecerLeitura(); aviso(''); });
+  // Página recarregada no meio da conferência: volta à mesma leitura.
+  let guardada = null;
+  try { guardada = lerLeituraGuardada(window.sessionStorage.getItem(CHAVE_LEITURA)); } catch { guardada = null; }
+  if (guardada) {
+    estado.pendente = guardada.pendente;
+    abrirAba(true);
+    mostrarConferencia({ leitura: guardada.pendente.concorrente, origem: guardada.pendente.origem, conferencia: guardada.conferencia });
+    aviso('A página foi recarregada. Recuperei a leitura da planilha do concorrente: confira e confirme para ver o resultado.', 'info');
+  }
 
   const NIVEL = { erro: 'Pode desclassificar', atencao: 'Atenção', info: 'Para saber' };
   const dados = () => ({ concorrente: $('fc-nome').value, orgao: $('fc-orgao').value, edital: $('fc-numero').value, empresa: $('fc-empresa').value });
