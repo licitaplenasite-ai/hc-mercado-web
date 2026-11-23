@@ -49,7 +49,7 @@
     { id: "boletim", titulo: "Caçador · Boletim", telas: ["#boletim"], print: "p02-boletim",
       passos: ["Menu → Boletim: as licitações novas do seu filtro, todo dia.", "Em Configurar, escolha estados e palavras.", "Quando chegam licitações novas, você recebe um aviso por e-mail com o botão Acessar o boletim, que abre esta mesma lista."] },
     { id: "calendario", titulo: "Calendário", telas: ["#calendario"], print: "p03-calendario",
-      passos: ["Menu → Calendário.", "Clique num dia para ver as licitações daquele dia."] },
+      passos: ["Menu → Boletim: o calendário fica dentro da tela do Boletim.", "Clique num dia para ver as licitações daquele dia."] },
     { id: "funil", titulo: "Funil", telas: ["#kanban"], print: "p05-funil",
       passos: ["Menu → Funil.", "Arraste o cartão entre as colunas (Tenho interesse, Participando, Ganhei...).", "No cartão, Abrir no sistema leva o processo para o CRM."] },
     { id: "precos", titulo: "Cotação · Pesquisa de Preços", telas: ["#precos"], print: "p06-precos",

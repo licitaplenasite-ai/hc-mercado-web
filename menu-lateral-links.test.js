@@ -43,7 +43,9 @@ const rotulos = (p) => {
 
 test('todas as páginas têm o mesmo conjunto e ordem de itens no menu (o painel só soma o Dashboard)', () => {
   const referencia = rotulos('sistema');
-  for (const item of ['Hoje', 'Calendário', 'Licitação anterior', 'Processos', 'Extensão', 'Orçamento de obra', 'Consultoria']) assert.ok(referencia.includes(item), item);
+  for (const item of ['Hoje', 'Licitação anterior', 'Processos', 'Extensão', 'Orçamento de obra', 'Consultoria']) assert.ok(referencia.includes(item), item);
+  // 23/11 (dono): Calendário abria a mesma tela do Boletim; sai do menu (o link antigo painel.html#calendario continua abrindo o Boletim).
+  assert.ok(!referencia.includes('Calendário'), 'menu sem Calendário duplicado');
   for (const p of paginas) {
     const lista = rotulos(p).filter((r) => r !== 'Dashboard');
     // Status das Ferramentas é controle interno desde 23/11: fica só na aba Saúde do sistema do admin.
@@ -54,7 +56,7 @@ test('todas as páginas têm o mesmo conjunto e ordem de itens no menu (o painel
 
 test('painel leva Hoje, Processos e Extensão para as páginas certas e Calendário/Licitação anterior para atalhos do próprio painel', () => {
   const nav = fs.readFileSync('painel.html', 'utf8').match(/<nav id="menu-principal"[\s\S]*?<\/nav>/)[0];
-  for (const [href, rotulo] of [['/sistema', 'Hoje'], ['processos.html', 'Processos'], ['extensao.html', 'Extensão'], ['#calendario', 'Calendário'], ['#licitacao-anterior', 'Licitação anterior']]) {
+  for (const [href, rotulo] of [['/sistema', 'Hoje'], ['processos.html', 'Processos'], ['extensao.html', 'Extensão'], ['#licitacao-anterior', 'Licitação anterior']]) {
     assert.ok(nav.includes(`<a href="${href}" title="${rotulo}">`), rotulo);
   }
   const html = fs.readFileSync('painel.html', 'utf8');
