@@ -141,3 +141,13 @@ test('B3: título curto da declaração e cláusula de sanção fora do lote', (
   ]);
   assert.deepEqual(lote.map((p) => p.titulo), ['Declaração exigida pelo edital (pág. 12)']);
 });
+
+// 23/11: processo horas em "Na fila…" esperando o cron do GitHub; etapa na fila pede o disparo dos robôs.
+test('acelerar a esteira só quando itens ou exigências estão na fila', () => {
+  const m = (lista) => new Map(lista.map(([etapa, estado]) => [etapa, { etapa, estado }]));
+  assert.equal(C.precisaAcelerar(m([['itens', 'pendente']])), true);
+  assert.equal(C.precisaAcelerar(m([['itens', 'feito'], ['exigencias', 'pendente']])), true);
+  assert.equal(C.precisaAcelerar(m([['itens', 'executando'], ['exigencias', 'aguardando_leitura']])), false);
+  assert.equal(C.precisaAcelerar(m([['cruzamento', 'pendente'], ['itens', 'falhou']])), false);
+  assert.equal(C.precisaAcelerar(new Map()), false);
+});
