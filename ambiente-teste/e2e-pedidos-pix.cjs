@@ -62,10 +62,11 @@ async function nasDuasLarguras(p, nome, antes) {
   }
   await p.setViewportSize({ width: 1280, height: 900 });
 }
-// Datas em UTC, como o current_date do banco (Supabase roda em UTC): depois das 21h de Brasília já é o dia seguinte.
-const mais = (dias) => { const d = new Date(); d.setUTCDate(d.getUTCDate() + dias); return d; };
+// Datas no dia de Brasília, como public.hoje_brasilia() do banco (o Supabase roda em UTC, mas a cobrança conta o dia daqui).
+const hojeBr = () => new Date(new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }) + 'T12:00:00Z');
+const mais = (dias) => { const d = hojeBr(); d.setUTCDate(d.getUTCDate() + dias); return d; };
 const iso = (d) => d.toISOString().slice(0, 10);
-const maisMeses = (m) => { const d = new Date(); d.setUTCMonth(d.getUTCMonth() + m); return iso(d); };
+const maisMeses = (m) => { const d = hojeBr(); d.setUTCMonth(d.getUTCMonth() + m); return iso(d); };
 
 async function main() {
   fs.mkdirSync(PRINTS, { recursive: true });

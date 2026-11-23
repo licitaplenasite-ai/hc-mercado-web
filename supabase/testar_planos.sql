@@ -3,6 +3,8 @@
 -- E empresa (1 CNPJ), A assessoria em teste (até 3), V teste vencido (só boletim) e depois Essencial, M membro de A,
 -- D dono (owner), X outra org. 21/11: cota de IA mensal por CNPJ, troca para IA barata, teto de abuso e extras.
 begin;
+-- current_date do teste no dia de Brasília, igual a public.hoje_brasilia() das funções (o banco roda em UTC).
+set local timezone = 'America/Sao_Paulo';
 insert into auth.users(id,email) values
  ('e2000000-0000-4000-8000-000000000001','pl-e@qa.invalid'),('e2000000-0000-4000-8000-000000000002','pl-a@qa.invalid'),
  ('e2000000-0000-4000-8000-000000000003','pl-v@qa.invalid'),('e2000000-0000-4000-8000-000000000004','pl-m@qa.invalid'),
@@ -427,5 +429,34 @@ begin
  if (select situacao||'/'||plano||'/'||vence_em from public.assinaturas where usuario_id=r)<>'ativa/essencial/'||(current_date+interval '1 month')::date then raise exception 'renovar: %',(select to_jsonb(a) from public.assinaturas a where usuario_id=r); end if;
  if not exists (select 1 from public.pagamentos where usuario_id=r and situacao='pago' and valor_centavos=12700 and referencia='Renovação') then raise exception 'pagamento da renovação'; end if;
  if public.plano_efetivo_titular(r)->>'plano'<>'essencial' then raise exception 'renovado continua travado'; end if;
+end $$;
+-- 22/11: fuso. Relógio simulado em 22/11/2026 às 22h de Brasília (01h de 23/11 em UTC): tudo conta o dia 22.
+create or replace function public.agora_brasilia() returns timestamp
+language sql stable set search_path = public as $$ select '2026-11-23 01:00:00+00'::timestamptz at time zone 'America/Sao_Paulo' $$;
+update public.config_cobranca set carencia_dias = 3 where id = 1;
+do $$
+declare r uuid:='e2000000-0000-4000-8000-000000000031'; v jsonb;
+begin
+ if public.hoje_brasilia()<>'2026-11-22' then raise exception '22h de Brasília virou: %',public.hoje_brasilia(); end if;
+ if ('2026-11-23 01:00:00+00'::timestamptz at time zone 'UTC')::date<>'2026-11-23' then raise exception 'em UTC seria dia 23'; end if;
+ -- Vence hoje (22): admin e robô dizem "vence hoje", não "em atraso".
+ update public.assinaturas set situacao='ativa', vence_em='2026-11-22' where usuario_id=r;
+ set local role authenticated; v:=public.admin_cobranca(); reset role;
+ if v->>'hoje'<>'2026-11-22' or not exists (select 1 from jsonb_array_elements(v->'vence_hoje') x where x->>'usuario_id'=r::text) then raise exception 'vence hoje às 22h: %',v; end if;
+ if not exists (select 1 from jsonb_array_elements(public.cobranca_rodar_diario()->'lembretes') x where x->>'usuario_id'=r::text and x->>'tipo'='vence_hoje') then raise exception 'lembrete vence hoje às 22h'; end if;
+ if (public.plano_efetivo_titular(r)->>'em_carencia')::boolean then raise exception 'vence hoje às 22h entrou na carência'; end if;
+ -- Vencendo em 7 dias (29) entra; 30 não.
+ update public.assinaturas set vence_em='2026-11-29' where usuario_id=r;
+ set local role authenticated; v:=public.admin_cobranca(); reset role;
+ if not exists (select 1 from jsonb_array_elements(v->'vencendo') x where x->>'usuario_id'=r::text) then raise exception 'vencendo em 7 dias às 22h'; end if;
+ update public.assinaturas set vence_em='2026-11-30' where usuario_id=r;
+ set local role authenticated; v:=public.admin_cobranca(); reset role;
+ if exists (select 1 from jsonb_array_elements(v->'vencendo') x where x->>'usuario_id'=r::text) then raise exception 'vencendo em 8 dias às 22h'; end if;
+ -- Último dia da carência (venceu 19, carência 3 até 22): continua usando e o robô não bloqueia.
+ update public.assinaturas set vence_em='2026-11-19' where usuario_id=r;
+ v:=public.plano_efetivo_titular(r);
+ if v->>'plano'<>'essencial' or not (v->>'em_carencia')::boolean then raise exception 'carência às 22h: %',v; end if;
+ perform public.cobranca_rodar_diario();
+ if (select situacao from public.assinaturas where usuario_id=r)<>'ativa' then raise exception 'robô bloqueou às 22h no último dia da carência'; end if;
 end $$;
 rollback;

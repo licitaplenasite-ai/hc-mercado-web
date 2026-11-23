@@ -1251,7 +1251,7 @@
     let n = String(a.telefone || "").replace(/\D/g, "");
     if (n.length === 10 || n.length === 11) n = "55" + n;
     if (!/^55\d{10,11}$/.test(n)) return null;
-    const venc = dataBr(a.vence_em).slice(0, 5), hoje = new Date().toISOString().slice(0, 10);
+    const venc = dataBr(a.vence_em).slice(0, 5), hoje = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" }); // dia de Brasília, como o banco
     const quando = a.vence_em > hoje ? `vence em ${venc}` : a.vence_em === hoje ? "vence hoje" : `venceu em ${venc}`;
     const texto = `Olá, ${String(a.nome || "").split(" ")[0] || "tudo bem"}! Passando para lembrar que a assinatura do LicitaPlena (plano ${a.plano_nome || a.plano}) ${quando}, no valor de ${reais(a.valor_centavos)}. `
       + `Para renovar, é só pagar pelo Pix na tela de planos: ${new URL("assinar.html", location.href).href}. Se já pagou, desconsidere. Obrigado!`;

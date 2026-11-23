@@ -274,6 +274,13 @@ language sql stable security definer set search_path = public as $$
 $$;
 revoke all on function public.carencia_cobranca() from public, anon;
 grant execute on function public.carencia_cobranca() to authenticated, service_role;
+-- 22/11: o banco roda em UTC e depois das 21h de Brasília current_date já é o dia seguinte. Assinatura, carência,
+-- bloqueio, "vence hoje", "vencendo" e o robô de cobrança contam o dia de Brasília. agora_brasilia() fica separada
+-- só para o teste SQL simular o relógio (testar_planos.sql troca ela dentro da transação e desfaz no rollback).
+create or replace function public.agora_brasilia() returns timestamp
+language sql stable set search_path = public as $$ select now() at time zone 'America/Sao_Paulo' $$;
+create or replace function public.hoje_brasilia() returns date
+language sql stable set search_path = public as $$ select public.agora_brasilia()::date $$;
 
 -- ---------------------------------------------------------------------------------------------------------------
 -- 3) O cálculo do plano: uma função só, usada por triggers, RLS, rotas /api e telas.
@@ -314,7 +321,7 @@ begin
       -- Vencimento com 5 dias de tolerância; teste vencido, vencida, suspensa e cancelada caem para "Teste encerrado"
       -- (código gratis): só o boletim por e-mail continua; nada é apagado.
       v_efetivo := case
-        when a.situacao = 'ativa' and (a.vence_em is null or a.vence_em + public.carencia_cobranca() >= current_date) then a.plano
+        when a.situacao = 'ativa' and (a.vence_em is null or a.vence_em + public.carencia_cobranca() >= public.hoje_brasilia()) then a.plano
         when a.situacao = 'teste' and (a.teste_ate is null or a.teste_ate > now()) then a.plano
         else 'gratis' end;
       v_teste := a.situacao = 'teste' and v_efetivo = a.plano;
@@ -353,7 +360,7 @@ begin
     'nome_contratado', (select nome from public.planos where codigo = v_contratado),
     'situacao', v_situacao, 'em_teste', v_teste, 'teste_ate', a.teste_ate, 'vence_em', a.vence_em,
     'plano_solicitado', a.plano_solicitado, 'bloqueado', v_efetivo = 'gratis',
-    'em_carencia', coalesce(a.situacao = 'ativa' and a.vence_em < current_date and v_efetivo <> 'gratis', false),
+    'em_carencia', coalesce(a.situacao = 'ativa' and a.vence_em < public.hoje_brasilia() and v_efetivo <> 'gratis', false),
     'carencia_ate', case when a.situacao in ('ativa', 'vencida') and a.vence_em is not null then a.vence_em + public.carencia_cobranca() end, 'extras', coalesce(to_jsonb(a.extras), '[]'::jsonb),
     'max_cnpjs', v_max_c, 'max_usuarios', v_max_u, 'max_processos', v_max_p, 'ia_mes', v_ia_mes, 'recursos', v_rec);
 end $$;
@@ -678,7 +685,7 @@ begin
   if g.usuario_id is null or g.plano is null or g.ciclo is null then raise exception 'Pagamento sem conta, plano ou ciclo'; end if;
   select * into a from public.assinaturas where usuario_id = g.usuario_id for update;
   if not found then raise exception 'Assinatura não encontrada'; end if;
-  v_inicio := greatest(current_date, coalesce(case when a.situacao = 'ativa' then a.vence_em end, current_date));
+  v_inicio := greatest(public.hoje_brasilia(), coalesce(case when a.situacao = 'ativa' then a.vence_em end, public.hoje_brasilia()));
   v_fim := (v_inicio + case g.ciclo when 'anual' then interval '1 year' when 'semestral' then interval '6 months' else interval '1 month' end)::date;
   update public.pagamentos set situacao = 'pago', pago_em = coalesce(pago_em, now()), periodo_inicio = v_inicio, periodo_fim = v_fim where id = g.id;
   update public.assinaturas set plano = g.plano, situacao = 'ativa', ciclo = g.ciclo, valor_centavos = g.valor_centavos,
@@ -868,7 +875,7 @@ begin
   return jsonb_build_object(
     'pendentes', (select count(*) from public.clientes where status = 'pendente'),
     'em_teste', (select count(*) from public.assinaturas a join public.clientes c on c.id = a.usuario_id where c.status = 'aprovado' and a.situacao = 'teste' and (a.teste_ate is null or a.teste_ate > now())),
-    'ativas', (select count(*) from public.assinaturas a join public.clientes c on c.id = a.usuario_id where c.status = 'aprovado' and a.situacao = 'ativa' and (a.vence_em is null or a.vence_em + 5 >= current_date)),
+    'ativas', (select count(*) from public.assinaturas a join public.clientes c on c.id = a.usuario_id where c.status = 'aprovado' and a.situacao = 'ativa' and (a.vence_em is null or a.vence_em + 5 >= public.hoje_brasilia())),
     'suspensas', (select count(*) from public.assinaturas where situacao = 'suspensa'),
     'por_plano', (select coalesce(jsonb_object_agg(plano, n), '{}'::jsonb) from (select plano, count(*) n from public.assinaturas group by plano) s),
     'avisos', (select coalesce(jsonb_agg(x order by x ->> 'quando'), '[]'::jsonb) from (
@@ -881,7 +888,7 @@ begin
         where a.situacao = 'teste' and a.teste_ate < now() and a.teste_ate > now() - interval '30 days'
       union all
       select jsonb_build_object('tipo', 'vencida', 'usuario_id', c.id, 'nome', coalesce(c.nome, c.email), 'quando', a.vence_em)
-        from public.assinaturas a join public.clientes c on c.id = a.usuario_id where a.situacao = 'ativa' and a.vence_em < current_date
+        from public.assinaturas a join public.clientes c on c.id = a.usuario_id where a.situacao = 'ativa' and a.vence_em < public.hoje_brasilia()
       union all
       select jsonb_build_object('tipo', 'plano_solicitado', 'usuario_id', c.id, 'nome', coalesce(c.nome, c.email), 'quando', a.plano_solicitado_em, 'plano', a.plano_solicitado)
         from public.assinaturas a join public.clientes c on c.id = a.usuario_id where a.plano_solicitado is not null
@@ -909,7 +916,7 @@ begin
   if v_valor is null or v_valor <= 0 then raise exception 'Informe o valor'; end if;
   insert into public.pagamentos (usuario_id, cliente_email, plano, ciclo, valor_centavos, metodo, vencimento, referencia, gateway, observacoes, criado_por)
     values (p_usuario, (select email from public.clientes where id = p_usuario), v_plano, v_ciclo, v_valor,
-      coalesce(p_dados ->> 'metodo', 'pix'), coalesce((p_dados ->> 'vencimento')::date, current_date), p_dados ->> 'referencia', 'pix_manual',
+      coalesce(p_dados ->> 'metodo', 'pix'), coalesce((p_dados ->> 'vencimento')::date, public.hoje_brasilia()), p_dados ->> 'referencia', 'pix_manual',
       p_dados ->> 'observacoes', public.admin_email_atual())
     returning id into g;
   if coalesce((p_dados ->> 'pago')::boolean, false) then
@@ -1020,7 +1027,7 @@ begin
   select * into p from public.planos where codigo = g.plano;
   select plano into v_plano_antes from public.assinaturas where usuario_id = g.usuario_id;
   insert into public.pagamentos (usuario_id, cliente_email, plano, ciclo, valor_centavos, metodo, vencimento, referencia, gateway, observacoes, criado_por)
-    values (g.usuario_id, (select email from public.clientes where id = g.usuario_id), g.plano, g.ciclo, g.valor_centavos, 'pix', current_date,
+    values (g.usuario_id, (select email from public.clientes where id = g.usuario_id), g.plano, g.ciclo, g.valor_centavos, 'pix', public.hoje_brasilia(),
       'Pedido ' || left(g.id::text, 8), 'pix_manual', 'Pix manual conferido pelo dono', public.admin_email_atual())
     returning id into v_pag;
   v := public.aplicar_pagamento_confirmado(v_pag, public.admin_email_atual());
@@ -1058,7 +1065,7 @@ begin
     'vencendo', (select coalesce(jsonb_agg(jsonb_build_object('usuario_id', a.usuario_id, 'nome', c.nome, 'email', c.email, 'telefone', c.telefone,
         'empresa', c.empresa, 'plano', a.plano, 'plano_nome', p.nome, 'ciclo', a.ciclo, 'valor_centavos', a.valor_centavos, 'vence_em', a.vence_em) order by a.vence_em), '[]'::jsonb)
       from public.assinaturas a join public.clientes c on c.id = a.usuario_id left join public.planos p on p.codigo = a.plano
-      where a.situacao = 'ativa' and a.vence_em between current_date and current_date + 7));
+      where a.situacao = 'ativa' and a.vence_em between public.hoje_brasilia() and public.hoje_brasilia() + 7));
 end $$;
 -- ---------------------------------------------------------------------------------------------------------------
 -- 10) Cobrança (22/11): o dono acompanha todo dia no admin (aba Cobrança). Vencendo em 7 dias, vence hoje, em atraso
@@ -1075,26 +1082,26 @@ revoke all on function public.valor_cobranca(public.assinaturas) from public, an
 
 create or replace function public.admin_cobranca() returns jsonb
 language plpgsql stable security definer set search_path = public as $$
-declare v_car integer := public.carencia_cobranca(); v_mes date := date_trunc('month', current_date)::date; v jsonb;
+declare v_car integer := public.carencia_cobranca(); v_mes date := date_trunc('month', public.hoje_brasilia())::date; v jsonb;
 begin
   if not public.admin_planos_autorizado() then raise exception 'Cobrança exige o proprietário com 2 fatores' using errcode = '42501'; end if;
   with contas as (
       select a.usuario_id, c.nome, c.email, c.telefone, c.empresa, a.plano, p.nome as plano_nome, a.ciclo,
-        public.valor_cobranca(a) as valor_centavos, a.vence_em, a.situacao, current_date - a.vence_em as dias_atraso,
+        public.valor_cobranca(a) as valor_centavos, a.vence_em, a.situacao, public.hoje_brasilia() - a.vence_em as dias_atraso,
         a.vence_em + v_car as carencia_ate,
-        case when a.situacao = 'vencida' or a.vence_em + v_car < current_date then 'bloqueado'
-          when a.vence_em = current_date then 'vence_hoje'
-          when a.vence_em > current_date and a.vence_em <= current_date + 7 then 'vencendo'
-          when a.vence_em < current_date then 'em_atraso' end as grupo
+        case when a.situacao = 'vencida' or a.vence_em + v_car < public.hoje_brasilia() then 'bloqueado'
+          when a.vence_em = public.hoje_brasilia() then 'vence_hoje'
+          when a.vence_em > public.hoje_brasilia() and a.vence_em <= public.hoje_brasilia() + 7 then 'vencendo'
+          when a.vence_em < public.hoje_brasilia() then 'em_atraso' end as grupo
       from public.assinaturas a join public.clientes c on c.id = a.usuario_id left join public.planos p on p.codigo = a.plano
       where a.situacao in ('ativa', 'vencida') and a.vence_em is not null and not public.eh_owner_admin_operacao(a.usuario_id))
-  select jsonb_build_object('carencia_dias', v_car, 'hoje', current_date,
+  select jsonb_build_object('carencia_dias', v_car, 'hoje', public.hoje_brasilia(),
       'vencendo', (select coalesce(jsonb_agg(to_jsonb(x) order by x.vence_em), '[]') from contas x where x.grupo = 'vencendo'),
       'vence_hoje', (select coalesce(jsonb_agg(to_jsonb(x) order by x.nome), '[]') from contas x where x.grupo = 'vence_hoje'),
       'em_atraso', (select coalesce(jsonb_agg(to_jsonb(x) order by x.vence_em), '[]') from contas x where x.grupo = 'em_atraso'),
       'bloqueados', (select coalesce(jsonb_agg(to_jsonb(x) order by x.vence_em desc), '[]') from contas x where x.grupo = 'bloqueado'),
       -- A receber: vence de hoje até o fim do mês. Em atraso: na carência ou bloqueado por falta de pagamento.
-      'a_receber_centavos', (select coalesce(sum(x.valor_centavos), 0) from contas x where x.vence_em >= current_date
+      'a_receber_centavos', (select coalesce(sum(x.valor_centavos), 0) from contas x where x.vence_em >= public.hoje_brasilia()
         and x.vence_em < (v_mes + interval '1 month')::date),
       'recebido_centavos', (select coalesce(sum(g.valor_centavos), 0) from public.pagamentos g where g.situacao = 'pago'
         and g.pago_em >= v_mes and g.pago_em < v_mes + interval '1 month'),
@@ -1127,7 +1134,7 @@ begin
   if coalesce(v_valor, 0) <= 0 then raise exception 'Conta sem valor de cobrança'; end if;
   insert into public.pagamentos (usuario_id, cliente_email, plano, ciclo, valor_centavos, metodo, vencimento, referencia, gateway, observacoes, criado_por)
     values (a.usuario_id, (select email from public.clientes where id = a.usuario_id), a.plano, coalesce(a.ciclo, 'mensal'), v_valor, 'pix',
-      current_date, 'Renovação', 'pix_manual', 'Renovação conferida pelo dono (Cobrança)', public.admin_email_atual())
+      public.hoje_brasilia(), 'Renovação', 'pix_manual', 'Renovação conferida pelo dono (Cobrança)', public.admin_email_atual())
     returning id into v_pag;
   return public.aplicar_pagamento_confirmado(v_pag, public.admin_email_atual());
 end $$;
@@ -1142,7 +1149,7 @@ declare v_car integer := public.carencia_cobranca(); v_bloq jsonb;
 begin
   with b as (
     update public.assinaturas a set situacao = 'vencida', atualizado_em = now(), atualizado_por = 'robo-cobranca'
-      where a.situacao = 'ativa' and a.vence_em is not null and a.vence_em + v_car < current_date
+      where a.situacao = 'ativa' and a.vence_em is not null and a.vence_em + v_car < public.hoje_brasilia()
         and not public.eh_owner_admin_operacao(a.usuario_id)
       returning a.*),
   h as (insert into public.assinaturas_historico (usuario_id, acao, depois, feito_por)
@@ -1153,9 +1160,9 @@ begin
   return jsonb_build_object('carencia_dias', v_car, 'bloqueados', v_bloq,
     'lembretes', (select coalesce(jsonb_agg(jsonb_build_object('usuario_id', a.usuario_id, 'email', c.email, 'nome', c.nome, 'plano_nome', p.nome,
         'valor_centavos', public.valor_cobranca(a), 'vence_em', a.vence_em, 'carencia_ate', a.vence_em + v_car,
-        'tipo', case when a.vence_em = current_date then 'vence_hoje' else 'vence_em_3_dias' end)), '[]')
+        'tipo', case when a.vence_em = public.hoje_brasilia() then 'vence_hoje' else 'vence_em_3_dias' end)), '[]')
       from public.assinaturas a join public.clientes c on c.id = a.usuario_id left join public.planos p on p.codigo = a.plano
-      where a.situacao = 'ativa' and a.vence_em in (current_date, current_date + 3) and not public.eh_owner_admin_operacao(a.usuario_id)));
+      where a.situacao = 'ativa' and a.vence_em in (public.hoje_brasilia(), public.hoje_brasilia() + 3) and not public.eh_owner_admin_operacao(a.usuario_id)));
 end $$;
 revoke all on function public.cobranca_rodar_diario() from public, anon, authenticated;
 grant execute on function public.cobranca_rodar_diario() to service_role;
