@@ -18,13 +18,15 @@ permissions:
 jobs:
   atualizar:
     runs-on: ubuntu-latest
-    timeout-minutes: 130
+    # 130 min estourava (15, 18 e 19/11): o job era cancelado na Fase 4c e o passo de
+    # commit não rodava. Soma dos orçamentos internos: ~70 min de coleta + ~70 de fases.
+    timeout-minutes: 180
     steps:
       - name: Checkout do repositório
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Configurar Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: "20"
 
@@ -35,7 +37,9 @@ jobs:
           RETENCAO_DIAS: "730"
           LIMITE_MINUTOS_CONTRATOS: "13"
           LIMITE_MINUTOS_MERCADO: "13"
-          CONCORRENCIA_PAGINAS: "5"
+          # Com a cadência global do scan nacional (INTERVALO_MS_CONTRATOS), 3 workers
+          # bastam para cobrir a latência (~3,5 s por página de 500) sem rajada.
+          CONCORRENCIA_PAGINAS: "3"
           CONCORRENCIA_ATAS: "6"
           LIMITE_MINUTOS_OPORTUNIDADES: "30"
           CONCORRENCIA_UF_OPORTUNIDADES: "3"
