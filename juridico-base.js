@@ -1,12 +1,14 @@
 /* global module */
-// Jurídico & Dúvidas (painel.html): perguntas e respostas e 5 modelos-base de peças. Mesmo módulo no navegador e no Node (testes).
+// Jurídico & Dúvidas (painel.html): perguntas e respostas e 10 modelos de peças, com base legal, prazo e "o que não pode faltar". Mesmo módulo no navegador e no Node (testes).
 // Conteúdo informativo, em linguagem simples; NÃO substitui advogado. Toda resposta cita o artigo e o link do texto oficial
 // (planalto.gov.br / gov.br). Onde o dispositivo não foi conferido no texto oficial, a resposta diz "confira" em vez de afirmar.
 // Revisão jurídica: PENDENTE para tudo deste arquivo (marcado em REVISAO_JURIDICA e mostrado na tela).
 (function (global) {
   'use strict';
   const REVISAO_JURIDICA = 'pendente';
-  const AVISO = 'Conteúdo informativo, não substitui advogado. Confira sempre o edital e o texto oficial da lei.';
+  const AVISO = 'Conteúdo informativo. Confira com um advogado antes de protocolar.';
+  // Parceira jurídica (decisão do dono: "Consultoria" leva à HC). Link simples, nunca pop-up.
+  const ADVOGADO = Object.freeze({ texto: 'Precisa de um advogado? Fale com a HC', url: 'https://www.hclicitacoes.com' });
 
   const L = {
     l14133: { norma: 'Lei 14.133/2021', url: 'https://www.planalto.gov.br/ccivil_03/_ato2019-2022/2021/lei/l14133.htm' },
@@ -141,8 +143,8 @@
       'Vícios insanáveis; não atender às especificações técnicas; preço inexequível ou acima do orçamento estimado; não demonstrar a exequibilidade quando exigido; ou descumprir outra exigência do edital, desde que insanável.',
       [b('l14133', 'art. 59, I a V')]),
     p('exequibilidade', 'julgamento', 'Meu preço ficou muito baixo. Podem me desclassificar por inexequível?',
-      'Só depois de verificar. A Administração pode fazer diligência ou pedir que você demonstre que o preço é viável (planilha, notas de compra, contratos). Em obras e serviços de engenharia, abaixo de 75% do orçado é inexequível. Em bens e serviços em geral, a IN 73/2022 trata como indício valores abaixo de 50% do orçado, a confirmar em diligência (confira o artigo).',
-      [b('l14133', 'art. 59, III, IV, §§ 2º e 4º'), b('in73', 'regra de exequibilidade (confira o artigo)')]),
+      'Só depois de verificar. A Administração pode fazer diligência ou pedir que você demonstre que o preço é viável (planilha, notas de compra, contratos). Em obras e serviços de engenharia, abaixo de 75% do orçado é inexequível. Em bens e serviços em geral, a IN 73/2022 trata como indício valores abaixo de 50% do orçado, a confirmar em diligência.',
+      [b('l14133', 'art. 59, III, IV, §§ 2º e 4º'), b('in73', 'art. 34')]),
     p('amostra', 'julgamento', 'O órgão pode pedir amostra?',
       'Pode, excepcionalmente e desde que previsto no edital: na pré-qualificação, no julgamento (em geral do provisoriamente vencedor) ou durante o contrato ou a ata. O edital deve dizer prazo, local e critérios de avaliação.',
       [b('l14133', 'arts. 17, § 3º, e 41, II')]),
@@ -174,7 +176,7 @@
       [b('l14133', 'art. 86, §§ 2º, 4º, 5º e 8º')]),
     p('srp-preco', 'srp', 'O custo subiu e a ata ficou inviável. Posso pedir revisão do preço registrado?',
       'Pode pedir alteração do preço registrado por fato imprevisível ou de consequência incalculável, força maior, caso fortuito, fato do príncipe ou mudança de tributo, com prova. No federal, o Decreto 11.462/2023 regula o pedido e a possível liberação do fornecedor. Use o modelo de reequilíbrio desta tela.',
-      [b('d11462', 'arts. 25 a 27 (confira)'), b('l14133', 'art. 124, II, d')]),
+      [b('d11462', 'arts. 25 e 27'),b('l14133', 'art. 124, II, d')]),
 
     // ---------- Contrato e pagamento ----------
     p('reequilibrio', 'contrato', 'Quando posso pedir reequilíbrio econômico-financeiro?',
@@ -219,6 +221,8 @@
       [b('l14133', 'art. 70, III')]),
   ]);
 
+  // Filtro por lei: o pregão federal da lei antiga (Decreto 10.024) responde à Lei 10.520; o resto é da Lei 14.133.
+  const leiDaPergunta = (q) => (q.bases.some((x) => x.norma.startsWith('Decreto 10.024')) ? '10520' : '14133');
   const normalizar = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
   // Busca por palavras (todas precisam aparecer em pergunta, resposta ou dispositivo), opcionalmente numa categoria.
   function buscarPerguntas(termo, categoria) {
@@ -237,53 +241,136 @@
     fundamentos: 'fundamentos', pedido: 'pedido', data_intimacao: 'data da intimação ou da ata', decisao: 'decisão recorrida',
     recorrente: 'empresa recorrente', numero_contrato: 'número do contrato ou da ata', item: 'item ou lote',
     valor_atual: 'valor atual', valor_pedido: 'valor pedido', evento: 'fato que alterou os custos',
+    data_abertura: 'data da abertura', motivo: 'motivo em uma frase', prazo_atual: 'prazo de entrega atual',
+    nova_data: 'nova data pedida', data_diligencia: 'data do pedido de diligência', pedido_diligencia: 'o que o órgão pediu',
+    resposta_diligencia: 'resposta e documentos enviados', valor_proposta: 'valor da proposta', valor_orcado: 'valor orçado pelo órgão',
+    composicao: 'como o preço foi formado',
   });
   const CAMPOS_EMPRESA = ['razao_social', 'cnpj', 'endereco', 'representante', 'cargo', 'cidade', 'data'];
   const CAMPOS_PROCESSO = ['orgao', 'autoridade', 'numero_edital', 'objeto'];
   const ABERTURA = '{{razao_social}}, inscrita no CNPJ sob o nº {{cnpj}}, com sede em {{endereco}}, por seu representante legal {{representante}} ({{cargo}}),';
   const FECHO = '\n\nNestes termos, pede deferimento.\n\n{{cidade}}, {{data}}.\n\n\n______________________________\n{{razao_social}}\n{{representante}} – {{cargo}}';
-  const m = (codigo, titulo, prazo, bases, campos, texto) => Object.freeze({ codigo, titulo, prazo, bases: Object.freeze(bases),
-    campos: Object.freeze([...CAMPOS_EMPRESA, ...CAMPOS_PROCESSO, ...campos]), texto: texto + FECHO, revisaoJuridica: REVISAO_JURIDICA });
+  const ASSINATURA = '\n\n{{cidade}}, {{data}}.\n\n\n______________________________\n{{razao_social}}\n{{representante}} – {{cargo}}';
+  // naoPodeFaltar: lista curta do que derruba a peça se faltar. lei: todos os modelos são da Lei 14.133 (filtro por lei).
+  // curto: texto para colar no chat do pregão (sem endereçamento nem fecho).
+  const m = (codigo, titulo, prazo, bases, campos, texto, naoPodeFaltar, { curto = false, fecho = FECHO } = {}) => Object.freeze({
+    codigo, titulo, prazo, lei: '14133', bases: Object.freeze(bases), naoPodeFaltar: Object.freeze(naoPodeFaltar), curto,
+    campos: Object.freeze(curto ? campos : [...CAMPOS_EMPRESA, ...CAMPOS_PROCESSO, ...campos]), texto: curto ? texto : texto + fecho,
+    revisaoJuridica: REVISAO_JURIDICA });
 
   const MODELOS = Object.freeze([
     m('esclarecimento', 'Pedido de esclarecimento', 'Até 3 dias úteis antes da abertura do certame (art. 164 da Lei 14.133/2021).',
-      [b('l14133', 'art. 164')], ['clausula', 'duvida'],
+      [b('l14133', 'art. 164')], ['data_abertura', 'clausula', 'duvida'],
       'Ao(À) {{autoridade}} – {{orgao}}\n\nRef.: Edital nº {{numero_edital}} – {{objeto}}\n\nPEDIDO DE ESCLARECIMENTO\n\n' + ABERTURA +
       ' vem, tempestivamente, com fundamento no art. 164 da Lei nº 14.133/2021, apresentar PEDIDO DE ESCLARECIMENTO, nos seguintes termos.\n\n' +
-      '1. TEMPESTIVIDADE\nO pedido é apresentado até 3 (três) dias úteis antes da data de abertura do certame, conforme o art. 164 da Lei nº 14.133/2021.\n\n' +
+      '1. TEMPESTIVIDADE\nA abertura do certame está marcada para {{data_abertura}}. O pedido é apresentado até 3 (três) dias úteis antes dessa data, conforme o art. 164 da Lei nº 14.133/2021.\n\n' +
       '2. TRECHO DO EDITAL\n{{clausula}}\n\n3. DÚVIDA\n{{duvida}}\n\n' +
-      '4. PEDIDO\nRequer seja esclarecido o ponto acima, com divulgação da resposta em sítio eletrônico oficial no prazo do parágrafo único do art. 164 da Lei nº 14.133/2021.'),
+      '4. PEDIDO\nRequer seja esclarecido o ponto acima, com divulgação da resposta em sítio eletrônico oficial no prazo do parágrafo único do art. 164 da Lei nº 14.133/2021.',
+      ['Data e protocolo dentro do prazo (3 dias úteis antes da abertura).', 'O número do item e a página exata do edital ou do termo de referência.',
+        'Uma pergunta objetiva por tópico, sem pedir mudança (mudança é impugnação).', 'Canal de envio que o edital indica (portal ou e-mail).']),
     m('impugnacao', 'Impugnação ao edital', 'Até 3 dias úteis antes da abertura do certame (art. 164 da Lei 14.133/2021).',
-      [b('l14133', 'art. 164')], ['clausula', 'fatos', 'fundamentos', 'pedido'],
+      [b('l14133', 'art. 164')], ['data_abertura', 'clausula', 'fatos', 'fundamentos', 'pedido'],
       'Ao(À) {{autoridade}} – {{orgao}}\n\nRef.: Edital nº {{numero_edital}} – {{objeto}}\n\nIMPUGNAÇÃO AO EDITAL\n\n' + ABERTURA +
       ' vem, tempestivamente, com fundamento no art. 164 da Lei nº 14.133/2021, apresentar IMPUGNAÇÃO ao edital em referência, pelas razões a seguir.\n\n' +
-      '1. TEMPESTIVIDADE\nA impugnação é apresentada até 3 (três) dias úteis antes da data de abertura do certame (art. 164 da Lei nº 14.133/2021).\n\n' +
+      '1. TEMPESTIVIDADE\nA abertura do certame está marcada para {{data_abertura}}. A impugnação é apresentada até 3 (três) dias úteis antes dessa data (art. 164 da Lei nº 14.133/2021).\n\n' +
       '2. CLÁUSULA IMPUGNADA\n{{clausula}}\n\n3. FATOS\n{{fatos}}\n\n4. FUNDAMENTOS\n{{fundamentos}}\n\n' +
-      '5. PEDIDO\n{{pedido}}\nRequer, ainda, que, havendo alteração que afete a formulação das propostas, o edital seja republicado com reabertura do prazo.'),
+      '5. PEDIDO\n{{pedido}}\nRequer, ainda, que, havendo alteração que afete a formulação das propostas, o edital seja republicado com reabertura do prazo (art. 55, § 1º, da Lei nº 14.133/2021).',
+      ['Protocolo até 3 dias úteis antes da abertura: depois disso, só cabe recurso ou representação ao tribunal de contas.',
+        'A cláusula transcrita e o artigo da lei que ela contraria.', 'Por que a exigência restringe a disputa ou não tem justificativa no processo.',
+        'Um pedido concreto: excluir, mudar ou explicar a exigência.']),
+    m('intencao_recurso', 'Intenção de recurso (texto curto para o chat)', 'Na hora, na própria sessão, no tempo que o pregoeiro abrir. Sem isso, perde-se o direito (art. 165, § 1º, I).',
+      [b('l14133', 'art. 165, § 1º, I')], ['item', 'decisao', 'motivo'],
+      'Manifestamos intenção de recorrer contra {{decisao}} no {{item}}. Motivo: {{motivo}}. Apresentaremos as razões no prazo de 3 dias úteis (art. 165, I, da Lei 14.133/2021).',
+      ['Enviar na sessão, no campo próprio do sistema, antes de o prazo fechar.', 'Dizer qual decisão e qual item.',
+        'Um motivo resumido e verdadeiro: o edital pode exigir intenção motivada.', 'Anotar a data da ata: dela contam os 3 dias úteis das razões.'],
+      { curto: true }),
     m('recurso', 'Recurso administrativo', '3 dias úteis da intimação ou da lavratura da ata; a intenção de recorrer deve ser manifestada na sessão (art. 165, I e § 1º, I).',
       [b('l14133', 'art. 165'), b('l14133', 'art. 168')], ['item', 'data_intimacao', 'decisao', 'fatos', 'fundamentos', 'pedido'],
       'Ao(À) Pregoeiro(a) / Agente de Contratação – {{orgao}}\nCom pedido de encaminhamento à {{autoridade}}, caso não haja reconsideração\n\nRef.: Edital nº {{numero_edital}} – {{objeto}} – {{item}}\n\nRECURSO ADMINISTRATIVO\n\n' + ABERTURA +
       ' tendo manifestado a intenção de recorrer na sessão, vem, com fundamento no art. 165, I, da Lei nº 14.133/2021, apresentar RAZÕES DE RECURSO contra a decisão abaixo.\n\n' +
       '1. TEMPESTIVIDADE\nA intimação ou a lavratura da ata ocorreu em {{data_intimacao}}. O recurso é apresentado dentro de 3 (três) dias úteis (art. 165, I e § 1º, I).\n\n' +
       '2. DECISÃO RECORRIDA\n{{decisao}}\n\n3. FATOS\n{{fatos}}\n\n4. FUNDAMENTOS\n{{fundamentos}}\n\n' +
-      '5. PEDIDO\n{{pedido}}\nRequer o recebimento do recurso com efeito suspensivo (art. 168) e, não havendo reconsideração em 3 (três) dias úteis, o seu encaminhamento à autoridade superior (art. 165, § 2º).'),
+      '5. PEDIDO\n{{pedido}}\nRequer o recebimento do recurso com efeito suspensivo (art. 168) e, não havendo reconsideração em 3 (três) dias úteis, o seu encaminhamento à autoridade superior (art. 165, § 2º).',
+      ['Ter manifestado a intenção de recorrer na sessão (sem ela, o recurso não é conhecido).', 'Data da ata ou da intimação e o cálculo dos 3 dias úteis.',
+        'A decisão atacada, com a cláusula do edital e o artigo da lei.', 'Provas: print do chat, documentos, atestados, a proposta do concorrente (peça vista, art. 165, § 5º).',
+        'Pedido de reforma e de envio à autoridade superior.']),
     m('contrarrazao', 'Contrarrazões ao recurso', 'Mesmo prazo do recurso (3 dias úteis), contado da intimação ou da divulgação do recurso (art. 165, § 4º).',
       [b('l14133', 'art. 165, § 4º')], ['item', 'recorrente', 'data_intimacao', 'fatos', 'fundamentos', 'pedido'],
       'Ao(À) Pregoeiro(a) / Agente de Contratação – {{orgao}}\n\nRef.: Edital nº {{numero_edital}} – {{objeto}} – {{item}}\n\nCONTRARRAZÕES AO RECURSO\n\n' + ABERTURA +
       ' vem, com fundamento no art. 165, § 4º, da Lei nº 14.133/2021, apresentar CONTRARRAZÕES ao recurso interposto por {{recorrente}}.\n\n' +
       '1. TEMPESTIVIDADE\nA interposição do recurso foi divulgada ou intimada em {{data_intimacao}}. As contrarrazões são apresentadas dentro de 3 (três) dias úteis (art. 165, § 4º).\n\n' +
       '2. SÍNTESE DO RECURSO\n{{fatos}}\n\n3. RAZÕES PARA MANTER A DECISÃO\n{{fundamentos}}\n\n' +
-      '4. PEDIDO\n{{pedido}}\nRequer seja negado provimento ao recurso e mantida a decisão recorrida.'),
-    // 5º modelo: reequilíbrio é o pedido mais comum depois de ganhar (contrato ou ata), e tem prazo que se perde (antes da prorrogação).
+      '4. PEDIDO\n{{pedido}}\nRequer seja negado provimento ao recurso e mantida a decisão recorrida.',
+      ['Data da divulgação do recurso e o cálculo dos 3 dias úteis.', 'Resposta ponto a ponto a cada argumento do recorrente.',
+        'O item do edital que a sua proposta ou documento atende, com a página.', 'Pedido para manter a decisão.']),
+    // Reequilíbrio é o pedido mais comum depois de ganhar (contrato ou ata), e tem prazo que se perde (antes da prorrogação).
     m('reequilibrio', 'Pedido de reequilíbrio econômico-financeiro', 'Durante a vigência do contrato e antes de eventual prorrogação (art. 131, parágrafo único).',
-      [b('l14133', 'art. 124, II, d'), b('l14133', 'art. 131, parágrafo único'), b('d11462', 'arts. 25 a 27 (ata de registro de preços; confira)')],
+      [b('l14133', 'art. 124, II, d'), b('l14133', 'art. 131, parágrafo único'), b('d11462', 'arts. 25 e 27 (ata de registro de preços)')],
       ['numero_contrato', 'item', 'evento', 'valor_atual', 'valor_pedido', 'fatos'],
       'Ao(À) {{autoridade}} – {{orgao}}\n\nRef.: Contrato / Ata nº {{numero_contrato}} – Edital nº {{numero_edital}} – {{objeto}}\n\nPEDIDO DE REEQUILÍBRIO ECONÔMICO-FINANCEIRO\n\n' + ABERTURA +
       ' contratada no instrumento em referência, vem, com fundamento no art. 124, II, "d", da Lei nº 14.133/2021, requerer o RESTABELECIMENTO DO EQUILÍBRIO ECONÔMICO-FINANCEIRO, pelas razões a seguir.\n\n' +
       '1. OPORTUNIDADE DO PEDIDO\nO pedido é formulado durante a vigência do instrumento e antes de eventual prorrogação (art. 131, parágrafo único, da Lei nº 14.133/2021).\n\n' +
       '2. FATO SUPERVENIENTE\n{{evento}}\n\n3. FATOS E PROVAS\n{{fatos}}\n[Anexar notas fiscais de compra antes e depois, cotações, índices oficiais e planilha de custos.]\n\n' +
       '4. IMPACTO NO PREÇO\nItem: {{item}}\nValor atual: {{valor_atual}}\nValor pedido: {{valor_pedido}}\n\n' +
-      '5. PEDIDO\nRequer a revisão do preço do item indicado para {{valor_pedido}}, com efeitos a partir da data do protocolo deste pedido, respeitada a matriz de riscos do contrato.'),
+      '5. PEDIDO\nRequer a revisão do preço do item indicado para {{valor_pedido}}, com efeitos a partir da data do protocolo deste pedido, respeitada a matriz de riscos do contrato.',
+      ['Pedido dentro da vigência e antes da prorrogação.', 'O fato novo e imprevisível (ou de consequência incalculável), com data.',
+        'Prova do custo antes e depois: notas fiscais, cotações, índice oficial.', 'Planilha mostrando o impacto no preço de cada item.',
+        'Na ata de registro de preços: pedido ao órgão gerenciador (Decreto 11.462/2023, art. 27).']),
+    m('prorrogacao_entrega', 'Pedido de prorrogação do prazo de entrega', 'Antes de o prazo de entrega vencer. Atraso sem motivo justificado pode gerar sanção (art. 155, VII).',
+      [b('l14133', 'art. 115, § 5º'), b('l14133', 'art. 155, VII'), b('l14133', 'art. 124, II, d')],
+      ['numero_contrato', 'item', 'prazo_atual', 'nova_data', 'evento', 'fatos'],
+      'Ao(À) {{autoridade}} – {{orgao}}\n\nRef.: Contrato / Nota de empenho / Ata nº {{numero_contrato}} – Edital nº {{numero_edital}} – {{objeto}}\n\nPEDIDO DE PRORROGAÇÃO DO PRAZO DE ENTREGA\n\n' + ABERTURA +
+      ' contratada no instrumento em referência, vem requerer a PRORROGAÇÃO DO PRAZO DE ENTREGA, pelas razões a seguir.\n\n' +
+      '1. PRAZO ATUAL E PEDIDO\nItem: {{item}}\nPrazo de entrega atual: {{prazo_atual}}\nNova data pedida: {{nova_data}}\nO pedido é feito antes do vencimento do prazo.\n\n' +
+      '2. MOTIVO\n{{evento}}\n\n3. FATOS E PROVAS\n{{fatos}}\n[Anexar comunicado do fabricante ou da transportadora, notas, e-mails e qualquer documento que mostre o impedimento.]\n\n' +
+      '4. FUNDAMENTOS\nO atraso decorre de fato alheio à vontade da contratada, o que afasta a hipótese de retardamento sem motivo justificado (art. 155, VII, da Lei nº 14.133/2021). ' +
+      'Se o impedimento decorrer de ato da Administração, o cronograma é prorrogado pelo tempo correspondente (art. 115, § 5º).\n\n' +
+      '5. PEDIDO\nRequer a prorrogação do prazo de entrega do item indicado até {{nova_data}}, sem aplicação de penalidade, mantidas as demais condições do contrato.',
+      ['Pedir ANTES de o prazo vencer, por escrito e com protocolo.', 'O motivo concreto e alheio à empresa (fabricante, transporte, greve, falta no mercado).',
+        'Prova do motivo: carta do fabricante, rastreio, notícia, e-mails.', 'Uma nova data realista, item por item.']),
+    m('diligencia', 'Resposta à diligência', 'O prazo que o pregoeiro ou o agente de contratação fixar no pedido. Responda dentro dele.',
+      [b('l14133', 'art. 64'), b('l14133', 'art. 59, § 2º'), b('l14133', 'art. 12, III')],
+      ['item', 'data_diligencia', 'pedido_diligencia', 'resposta_diligencia'],
+      'Ao(À) Pregoeiro(a) / Agente de Contratação – {{orgao}}\n\nRef.: Edital nº {{numero_edital}} – {{objeto}} – {{item}}\n\nRESPOSTA À DILIGÊNCIA\n\n' + ABERTURA +
+      ' vem, em atenção à diligência de {{data_diligencia}}, apresentar os esclarecimentos e documentos solicitados.\n\n' +
+      '1. O QUE FOI PEDIDO\n{{pedido_diligencia}}\n\n2. RESPOSTA E DOCUMENTOS\n{{resposta_diligencia}}\n\n' +
+      '3. OBSERVAÇÃO\nOs documentos enviados complementam informações já apresentadas e se referem a fatos existentes à época da abertura do certame (art. 64, I, da Lei nº 14.133/2021), ' +
+      'ou atualizam documento cuja validade expirou após o recebimento das propostas (art. 64, II).\n\n' +
+      '4. PEDIDO\nRequer o recebimento desta resposta e o prosseguimento da análise, com a aceitação da proposta e a habilitação da empresa.',
+      ['Responder dentro do prazo fixado, pelo canal indicado (em geral, anexo no sistema).', 'Responder a cada pergunta, na ordem em que foi feita.',
+        'Documento novo só para complementar o que já foi entregue ou atualizar o que venceu depois da abertura (art. 64).',
+        'Cotações e notas assinadas, com data, validade e local de entrega.']),
+    m('exequibilidade', 'Defesa de exequibilidade da proposta', 'O prazo que o agente de contratação fixar (em obras, costuma ser curto, como 24 horas). Peça mais prazo por escrito, se precisar.',
+      [b('l14133', 'art. 59, III, IV, §§ 2º, 4º e 5º'), b('in73', 'arts. 33 e 34')],
+      ['item', 'valor_proposta', 'valor_orcado', 'composicao', 'fatos'],
+      'Ao(À) Pregoeiro(a) / Agente de Contratação – {{orgao}}\n\nRef.: Edital nº {{numero_edital}} – {{objeto}} – {{item}}\n\nDEMONSTRAÇÃO DE EXEQUIBILIDADE DA PROPOSTA\n\n' + ABERTURA +
+      ' vem, com fundamento no art. 59, § 2º, da Lei nº 14.133/2021, demonstrar que a sua proposta é exequível.\n\n' +
+      '1. A PROPOSTA\nValor da proposta: {{valor_proposta}}\nValor orçado pela Administração: {{valor_orcado}}\n' +
+      'O percentual abaixo do orçamento, por si só, não basta para desclassificar: a lei permite à Administração fazer diligência ou pedir a demonstração da exequibilidade ' +
+      '(art. 59, § 2º), e o Tribunal de Contas da União entende que a linha de 75% em obras e serviços de engenharia (art. 59, § 4º) é presunção relativa, que admite prova em contrário (Acórdão 465/2024-Plenário).\n\n' +
+      '2. COMO O PREÇO FOI FORMADO\n{{composicao}}\n\n3. PROVAS\n{{fatos}}\n' +
+      '[Anexar: cotações válidas e assinadas, com local de entrega e frete; composições de custo; notas fiscais e contratos semelhantes já executados; declaração de compromisso dos fornecedores.]\n\n' +
+      '4. TRIBUTOS E ENCARGOS\nOs tributos (PIS, COFINS, ISS e demais) e os encargos trabalhistas estão nos percentuais da lei e da convenção coletiva. A redução veio de custos da própria empresa, como indicado acima.\n\n' +
+      '5. GARANTIA ADICIONAL\nEm obras e serviços de engenharia, a empresa está ciente da garantia adicional exigida da proposta inferior a 85% do orçado (art. 59, § 5º).\n\n' +
+      '6. PEDIDO\nRequer seja reconhecida a exequibilidade da proposta, com a sua aceitação e o prosseguimento do certame.',
+      ['Responder no prazo fixado; se a cotação depende de fornecedor, pedir mais prazo por escrito antes de vencer.',
+        'Cotação válida (não vencida), assinada, com local de entrega e frete.', 'Não mexer em quantidades, coeficientes e produtividade das composições do órgão.',
+        'Mão de obra no mínimo igual à convenção coletiva; tributos nunca abaixo da lei.', 'Mostrar onde está a economia (insumo, frete, administração central, lucro).',
+        'Declaração dos fornecedores de manter o preço durante a execução.']),
+    m('declaracoes', 'Declarações comuns', 'Junto com a proposta ou a habilitação, como o edital pedir. Apague as que o edital não exige.',
+      [b('l14133', 'art. 63, I, IV e § 1º'), b('l14133', 'art. 68, VI'), b('l14133', 'art. 14'), b('l14133', 'art. 4º, § 2º')],
+      [],
+      'Ao(À) {{autoridade}} – {{orgao}}\n\nRef.: Edital nº {{numero_edital}} – {{objeto}}\n\nDECLARAÇÕES\n\n' + ABERTURA + ' DECLARA, sob as penas da lei:\n\n' +
+      'a) que cumpre plenamente os requisitos de habilitação do edital (art. 63, I, da Lei nº 14.133/2021);\n\n' +
+      'b) que cumpre as exigências de reserva de cargos para pessoa com deficiência e para reabilitado da Previdência Social, previstas em lei e em outras normas (art. 63, IV);\n\n' +
+      'c) que a sua proposta econômica compreende a integralidade dos custos para atendimento dos direitos trabalhistas assegurados na Constituição, nas leis trabalhistas, nas normas infralegais, nas convenções coletivas de trabalho e nos termos de ajustamento de conduta vigentes na data de entrega das propostas (art. 63, § 1º);\n\n' +
+      'd) que não emprega menor de 18 anos em trabalho noturno, perigoso ou insalubre, nem menor de 16 anos, salvo como aprendiz a partir de 14 anos (art. 68, VI, da Lei nº 14.133/2021 e art. 7º, XXXIII, da Constituição);\n\n' +
+      'e) que não se enquadra em nenhum dos impedimentos de participação do art. 14 da Lei nº 14.133/2021;\n\n' +
+      'f) [só para ME/EPP] que é microempresa ou empresa de pequeno porte e que, no ano-calendário da licitação, ainda não celebrou contratos com a Administração Pública cujos valores somados extrapolem a receita bruta máxima de empresa de pequeno porte (art. 4º, § 2º, da Lei nº 14.133/2021).',
+      ['Conferir no edital quais declarações ele pede e em que modelo (alguns sistemas já pedem pelo portal, com um clique).',
+        'Declaração falsa é infração e pode levar a inidoneidade (art. 155, VIII, e art. 156, § 5º).', 'Assinatura do representante legal e data.',
+        'No plano Empresa, o Kit de proposta já gera as declarações do edital em Word.'],
+      { fecho: ASSINATURA }),
   ]);
 
   const obterModelo = (codigo) => MODELOS.find((x) => x.codigo === codigo) || null;
@@ -301,7 +388,7 @@
     return { texto, faltando };
   }
 
-  const api = { REVISAO_JURIDICA, AVISO, CATEGORIAS, PERGUNTAS, buscarPerguntas, normalizar, ROTULOS, MODELOS, obterModelo, preencherModelo };
+  const api = { REVISAO_JURIDICA, AVISO, ADVOGADO, leiDaPergunta, CATEGORIAS, PERGUNTAS, buscarPerguntas, normalizar, ROTULOS, MODELOS, obterModelo, preencherModelo };
   global.JuridicoBase = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(globalThis);

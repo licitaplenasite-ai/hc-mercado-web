@@ -2337,12 +2337,14 @@
   </section>
 
   <section id="juridico">
-    <h2 style="margin-top:0;">Perguntas, modelos e peças reais</h2>
-    <p class="dica-clique" style="margin:0 0 14px;">Respostas curtas com o artigo da lei, modelos-base para preencher e peças reais do ComprasNet com a resposta do pregoeiro. Conteúdo informativo, não substitui advogado.</p>
+    <h2 style="margin-top:0;">Jurídico: modelos, prazos e artigos</h2>
+    <p class="dica-clique" style="margin:0 0 14px;">Modelos de peças já preenchidos com os dados do processo, calculadora de prazos da Lei 14.133, artigos curtos com a fonte oficial, perguntas e respostas e peças reais com a resposta do pregoeiro.</p>
     <div class="secao-conteudo-principal">
     <link rel="stylesheet" href="juridico.css">
     <div id="juridico-central"></div>
     <script src="juridico-base.js"></script>
+    <script src="juridico-artigos.js"></script>
+    <script src="juridico-prazos.js"></script>
     <script src="juridico-ui.js"></script>
     </div>
     <h2>Envie sua dúvida</h2>
@@ -2598,21 +2600,25 @@
     btn.addEventListener("click", () => window.print());
   });
 
-  // ---- Jurídico & Dúvidas: perguntas, modelos-base e banco de peças (juridico-ui.js) + formulário de contato ----
+  // ---- Jurídico & Dúvidas: busca, modelos, prazos, artigos, perguntas e peças reais (juridico-ui.js) + formulário de contato ----
   if (window.JuridicoUI) {
-    JuridicoUI.renderizar(document.getElementById("juridico-central"), {
+    // Data do banco (timestamptz) -> dia de Brasília "AAAA-MM-DD", para a calculadora de prazos e o modelo.
+    const diaBrasilia = (v) => { const t = v ? Date.parse(v) : NaN; return Number.isNaN(t) ? null : new Date(t).toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" }); };
+    window.__juridico = JuridicoUI.renderizar(document.getElementById("juridico-central"), {
       empresa: () => window.__clienteAtual,
       listarProcessos: async () => {
-        const { data, error } = await window.__sbClient.from("operacao_processos").select("id,numero,orgao,objeto").order("data_sessao", { ascending: false, nullsFirst: false }).limit(50);
+        const consultar = (colunas) => window.__sbClient.from("operacao_processos").select(colunas).order("data_sessao", { ascending: false, nullsFirst: false }).limit(50);
+        let { data, error } = await consultar("id,numero,orgao,objeto,data_sessao,data_resultado");
+        if (error) ({ data, error } = await consultar("id,numero,orgao,objeto,data_sessao")); // banco sem data_resultado
         if (error) throw error;
-        return data || [];
+        return (data || []).map((p) => ({ ...p, abertura: diaBrasilia(p.data_sessao), ata: p.data_resultado || null }));
       },
-      buscarPecas: async ({ termos, tipos, orgao, so14133, limite }) => {
+      buscarPecas: async ({ termos, tipos, orgao, lei, limite }) => {
         let q = window.__sbClient.from("pecas_juridicas").select("id,tipo,pregao,uasg,orgao,data,empresa_nome,empresa_cnpj,texto,resposta,resultado,lei,url")
           .in("tipo", tipos).order("data", { ascending: false }).limit(limite);
         for (const t of termos) q = q.ilike("busca", `%${t}%`);
         if (orgao) q = q.ilike("orgao", `%${orgao}%`);
-        if (so14133) q = q.eq("lei", "14133");
+        if (["14133", "10520", "8666"].includes(lei)) q = q.eq("lei", lei);
         const { data, error } = await q;
         if (error) throw new Error(/relation|does not exist|schema cache/i.test(error.message || "") ? "O banco de peças ainda não está ligado neste ambiente." : "Não foi possível buscar as peças agora.");
         return data || [];
@@ -2625,15 +2631,21 @@
         const link = document.createElement("a"); link.href = url; link.download = `${minuta.tipo}.docx`; link.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
       },
+      // PDF pela impressão do navegador num quadro escondido: sem janela nova nem aviso que bloqueia a tela.
       imprimir: (titulo, texto) => {
-        const janela = window.open("", "_blank");
-        if (!janela) { alert("Permita a janela de impressão para salvar o PDF."); return; }
-        janela.document.title = titulo;
-        const pre = janela.document.createElement("div");
+        document.getElementById("jur-quadro-impressao")?.remove();
+        const quadro = document.createElement("iframe");
+        quadro.id = "jur-quadro-impressao";
+        quadro.title = titulo;
+        quadro.style.cssText = "position:fixed;width:0;height:0;border:0;right:0;bottom:0";
+        document.body.append(quadro);
+        const d = quadro.contentDocument;
+        d.title = titulo;
+        const pre = d.createElement("div");
         pre.style.cssText = "white-space:pre-wrap;font:12pt/1.5 Arial,sans-serif;max-width:17cm;margin:1.5cm auto;color:#000";
         pre.textContent = texto;
-        janela.document.body.append(pre);
-        janela.focus(); janela.print();
+        d.body.append(pre);
+        quadro.contentWindow.focus(); quadro.contentWindow.print();
       },
     });
   }
@@ -5507,7 +5519,11 @@
       // Esclarecimento/impugnação: a Central de Defesa fica no Resumo do edital. Recurso/contrarrazão: seção Jurídico.
       abrirLink: (tipo) => {
         if (tipo === "defesa") abrirModalIA(lerMapa("kanban-editais")[id] || edital);
-        else document.querySelector('nav button[data-alvo="juridico"]')?.click();
+        else {
+          document.querySelector('nav button[data-alvo="juridico"]')?.click();
+          // Abre o modelo de recurso já com órgão, número, objeto e datas do processo (juridico-ui.js).
+          void window.__juridico?.abrirModelo("recurso", edital.processoId);
+        }
       },
     });
   }

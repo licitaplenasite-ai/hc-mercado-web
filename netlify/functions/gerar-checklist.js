@@ -168,6 +168,11 @@ function textoXmlValido(texto) {
   });
 }
 
+// Tipos de peça do Jurídico (juridico-base.js MODELOS) e da Central de Defesa. O teste scripts/juridico-modelos.test.js
+// confere que todo modelo da tela está aqui.
+const TIPOS_MINUTA = ["esclarecimento", "impugnacao", "intencao_recurso", "recurso", "contrarrazao", "reequilibrio",
+  "prorrogacao_entrega", "diligencia", "exequibilidade", "declaracoes"];
+
 exports.handler = async (event) => {
   if (event.httpMethod === "OPTIONS") return responder(event, 204, "");
   if (event.httpMethod !== "POST") return responder(event, 405, JSON.stringify({ erro: "Método não permitido." }));
@@ -179,7 +184,7 @@ exports.handler = async (event) => {
   const edital = dados.edital && typeof dados.edital === "object" ? dados.edital : {};
   const resumo = dados.resumoEstruturado && typeof dados.resumoEstruturado === "object" ? dados.resumoEstruturado : {};
   const minuta = dados.minuta;
-  if (minuta && (!["esclarecimento", "impugnacao", "recurso", "contrarrazao", "reequilibrio"].includes(minuta.tipo) || minuta.revisado !== true || typeof minuta.texto !== "string" || !minuta.texto.trim() || minuta.texto.length > 50000 || !textoXmlValido(minuta.texto))) return responder(event, 422, JSON.stringify({ erro: "Revise a minuta e informe um texto válido de até 50000 caracteres e um tipo válido." }));
+  if (minuta && (!TIPOS_MINUTA.includes(minuta.tipo) || minuta.revisado !== true || typeof minuta.texto !== "string" || !minuta.texto.trim() || minuta.texto.length > 50000 || !textoXmlValido(minuta.texto))) return responder(event, 422, JSON.stringify({ erro: "Revise a minuta e informe um texto válido de até 50000 caracteres e um tipo válido." }));
   if (!minuta && !podeGerarChecklist(resumo)) return responder(event, 422, JSON.stringify({ erro: "O checklist requer a leitura do edital e requisitos identificados. Gere o Resumo do Edital antes de exportar." }));
   const arquivo = montarDocx(edital, resumo, minuta);
   return { ...responder(event, 200, arquivo.toString("base64"), {
@@ -189,5 +194,5 @@ exports.handler = async (event) => {
   }), isBase64Encoded: true };
 };
 
-exports.__test = { montarDocx, conteudoDocumento, util, podeGerarChecklist, coberturaDocumento };
+exports.__test = { montarDocx, conteudoDocumento, util, podeGerarChecklist, coberturaDocumento, TIPOS_MINUTA };
 exports.montarDocx = montarDocx;

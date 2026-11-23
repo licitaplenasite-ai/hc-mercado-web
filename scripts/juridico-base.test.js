@@ -33,8 +33,9 @@ test('busca ignora acento e maiúscula, exige todas as palavras e filtra por cat
   assert.equal(J.buscarPerguntas('').length, J.PERGUNTAS.length);
 });
 
-test('modelos: 5 peças, campo vazio vira [PREENCHER], valor não injeta variável e não há CPF', () => {
-  assert.deepEqual(J.MODELOS.map((m) => m.codigo), ['esclarecimento', 'impugnacao', 'recurso', 'contrarrazao', 'reequilibrio']);
+test('modelos: 10 peças, campo vazio vira [PREENCHER], valor não injeta variável e não há CPF', () => {
+  assert.deepEqual(J.MODELOS.map((m) => m.codigo), ['esclarecimento', 'impugnacao', 'intencao_recurso', 'recurso', 'contrarrazao', 'reequilibrio',
+    'prorrogacao_entrega', 'diligencia', 'exequibilidade', 'declaracoes']);
   for (const m of J.MODELOS) {
     assert.equal(m.revisaoJuridica, 'pendente');
     assert.ok(!/cpf/i.test(m.texto), m.codigo);

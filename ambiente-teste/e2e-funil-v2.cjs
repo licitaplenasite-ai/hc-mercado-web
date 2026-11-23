@@ -68,7 +68,7 @@ async function print(p, nome) { await p.screenshot({ path: path.join(PRINTS, nom
       await dlg.waitFor({ state: 'visible' });
       exigir(await dlg.getByText('Feito pela esteira automática').count() >= 1, 'tarefa da esteira não apareceu marcada');
       exigir(await dlg.getByRole('button', { name: 'Abrir a Central de Defesa' }).count() === 1, 'sem link da Central de Defesa');
-      exigir(await dlg.getByRole('button', { name: 'Ir ao Jurídico' }).count() === 1, 'sem link do Jurídico');
+      exigir(await dlg.getByRole('button', { name: 'Preparar recurso ou contrarrazão' }).count() === 1, 'sem link do Jurídico');
       await dlg.locator('input[data-funil-marcar="analisar-mercado"]').check();
       await p.waitForFunction(() => /2 de 15/.test(document.querySelector('#funil-checklist-titulo')?.textContent || ''));
       const banco = psql(`select checklist_funil ? 'analisar-mercado' from operacao_processos where empresa_id=${q(EMP)} and origem_externa_id=${q(ORIGEM)}`);
