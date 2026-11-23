@@ -12,22 +12,21 @@ for (const p of paginas) {
     const html = fs.readFileSync(`${p}.html`, 'utf8');
     const nav = html.match(/<nav id="menu-principal"[\s\S]*?<\/nav>/)[0];
     assert.match(nav, /<a href="prospeccao\.html"[^>]*>[\s\S]*?Prospecção/);
-    assert.match(nav, /<a href="bdi\.html"[^>]*>[\s\S]*?Calculadora de BDI/);
-    assert.match(nav, /<a href="sinapi\.html"[^>]*>[\s\S]*?Preços SINAPI/);
-    assert.ok(nav.indexOf('Calculadora de BDI') < nav.indexOf('Preços SINAPI'), 'SINAPI logo após BDI');
-    assert.ok(nav.indexOf('Inteligência de Mercado') < nav.indexOf('Prospecção'), 'Prospecção logo após Inteligência de Mercado');
-    assert.match(nav, /<a href="mao-de-obra\.html"[^>]*>[\s\S]*?Mão de obra/);
-    assert.ok(nav.indexOf('Preços SINAPI') < nav.indexOf('Mão de obra'), 'Mão de obra logo após SINAPI');
-    // Orçamento de obra logo após SINAPI; no Essencial a própria tela mostra o aviso da trava (main data-recurso).
+    // 23/11 (dono): tudo de obra num lugar só — Orçamento de obra e, logo abaixo, SINAPI, BDI e Mão de obra como subitens.
     assert.match(nav, /<a href="orcamento-obra\.html"[^>]*>[\s\S]*?ph-toolbox[\s\S]*?Orçamento de obra/);
-    assert.ok(nav.indexOf('Preços SINAPI') < nav.indexOf('Orçamento de obra') && nav.indexOf('Orçamento de obra') < nav.indexOf('Mão de obra'), 'Orçamento de obra entre SINAPI e Mão de obra');
+    assert.match(nav, /<a class="nav-sub[^"]*" href="sinapi\.html"[^>]*>[\s\S]*?Preços SINAPI/);
+    assert.match(nav, /<a class="nav-sub[^"]*" href="bdi\.html"[^>]*>[\s\S]*?Calculadora de BDI/);
+    assert.match(nav, /<a class="nav-sub[^"]*" href="mao-de-obra\.html"[^>]*>[\s\S]*?Mão de obra/);
+    const ordem = ['Orçamento de obra', 'Preços SINAPI', 'Calculadora de BDI', 'Mão de obra'].map((r) => nav.indexOf(r));
+    assert.deepEqual([...ordem].sort((a, b) => a - b), ordem, 'Orçamento de obra, SINAPI, BDI e Mão de obra nessa ordem');
+    assert.ok(nav.indexOf('Inteligência de Mercado') < nav.indexOf('Prospecção'), 'Prospecção logo após Inteligência de Mercado');
     // Consultoria abre o site da HC em nova aba: hc.html enquanto LICITAPLENA_HC_SITE estiver vazia (ajuda-ui.js troca o href).
     assert.ok(nav.includes('<a href="hc.html" target="_blank" rel="noopener" data-hc-site title="Consultoria">'), 'Consultoria');
     assert.match(html, /<script src="supabase-config\.js"><\/script>/);
     assert.match(html, /<script src="ajuda-ui\.js"/);
     const ativos = { prospeccao: 'prospeccao.html', bdi: 'bdi.html', sinapi: 'sinapi.html', 'mao-de-obra': 'mao-de-obra.html' };
-    if (ativos[p]) assert.match(nav, new RegExp(`<a href="${ativos[p]}" class="ativo"`));
-    else assert.doesNotMatch(nav, /href="(prospeccao|bdi|sinapi|mao-de-obra)\.html" class="ativo"/);
+    if (ativos[p]) assert.match(nav, new RegExp(`<a (class="nav-sub ativo" href="${ativos[p]}"|href="${ativos[p]}" class="ativo")`));
+    else assert.doesNotMatch(nav, /(href="(prospeccao|bdi|sinapi|mao-de-obra)\.html" class="ativo"|class="nav-sub ativo")/);
   });
 }
 
