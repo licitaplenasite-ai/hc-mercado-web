@@ -47,6 +47,7 @@
     background: var(--cartao); border: 1px solid var(--border-strong); color: var(--texto);
     padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 13px;
   }
+  header a.link-topo { display: inline-block; background: var(--cartao); border: 1px solid var(--border-strong); color: var(--texto); padding: 8px 14px; border-radius: 8px; font-size: 13px; text-decoration: none; }
   main { max-width: 1100px; margin: 0 auto; padding: 28px 24px; }
   .tabs { display: flex; gap: 8px; margin-bottom: 20px; }
   .tabs button {
@@ -217,6 +218,7 @@
   /* Tablet (768px) */
   @media (max-width: 880px) {
     header { padding: 16px 20px; flex-wrap: wrap; row-gap: 10px; }
+    header > div:last-child { display: flex; flex-wrap: wrap; gap: 6px; }
     header h1 { font-size: 16px; }
     main { max-width: 100%; padding: 20px 16px; }
     .tabs { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 6px; -webkit-overflow-scrolling: touch; }
@@ -297,6 +299,7 @@
       <h1>Painel Admin</h1>
     </div>
     <div>
+      <a href="normas-obra.html" id="link-normas-obra" class="link-topo" style="display:none;" title="Novidades de normas de obra (TCU, SINAPI, Lei 14.133) para aprovar ou descartar">Normas de obra</a>
       <button id="btn-mfa-config" title="Configurar/desativar autenticação em duas etapas">🔒 2FA</button>
       <button type="button" class="btn-tema">Tema escuro</button>
       <button id="btn-sair">Sair</button>
@@ -754,6 +757,7 @@
     document.getElementById("tab-planos").style.display = adminAtual && adminAtual.role === "owner" ? "" : "none";
     document.getElementById("tab-financeiro").style.display = adminAtual && adminAtual.role === "owner" ? "" : "none";
     document.getElementById("tab-pedidos").style.display = adminAtual && adminAtual.role === "owner" ? "" : "none";
+    document.getElementById("link-normas-obra").style.display = adminAtual && adminAtual.role === "owner" ? "" : "none";
   }
 
   // Chave "config_admin" em public.dados_robo (mesma tabela chave->jsonb usada pelo
