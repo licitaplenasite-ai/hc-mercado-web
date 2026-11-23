@@ -607,6 +607,7 @@ function extrairFonteOrcamentaria(item) {
 // próxima rodada recupera sozinha: falha parcial não é falha do robô.
 const LIMITE_HORAS_UF_PENDENTE = parseFloat(process.env.LIMITE_HORAS_UF_PENDENTE || "24");
 const LIMITE_HORAS_SEM_COBERTURA = parseFloat(process.env.LIMITE_HORAS_SEM_COBERTURA || "48");
+const LIMITE_HORAS_SEM_COBERTURA_MAXIMO = parseFloat(process.env.LIMITE_HORAS_SEM_COBERTURA_MAXIMO || "120");
 
 function ufsPendentesDeAtualizacao(existentes, agora = new Date()) {
   // Virar o dia UTC não garante uma coleta recente durante o expediente local.
@@ -650,7 +651,12 @@ async function coletarOportunidadesAbertas(caminhoArquivo) {
   // workers ainda preparam e consolidam resultados em paralelo, mas somente uma
   // chamada ao endpoint sai a cada intervalo. Assim 27 UFs cabem no orçamento
   // sem transformar uma rajada em 26 falhas de cobertura.
-  const INTERVALO_MS = parseInt(process.env.INTERVALO_MS_OPORTUNIDADES || "700", 10);
+  // Medido em 23/11 (fora do runner): 1 chamada/s ou 1 a cada 2 s toma 429 depois de ~25
+  // chamadas; 1 a cada 3 s fez 20 seguidas sem nenhum. O limite é de ~20 por minuto por
+  // origem. Com 700-900 ms, cada 429 custava pausas de 5-20 s para todos: a fase rendia
+  // ~1 página a cada 5 s, e as UFs grandes não terminavam. 3 s = ~600 páginas em 30 min
+  // (as 27 UFs somam ~730 páginas).
+  const INTERVALO_MS = parseInt(process.env.INTERVALO_MS_OPORTUNIDADES || "3000", 10);
   // Quando a própria fonte fica indisponível, insistir nas 27 UFs multiplica
   // timeouts sem recuperar dado algum. Três sondas independentes falhando antes
   // do primeiro sucesso caracterizam indisponibilidade da fonte, não falta de
@@ -860,7 +866,7 @@ async function coletarOportunidadesAbertas(caminhoArquivo) {
 
   console.log(
     `[oportunidades] Concluído: ${todas.length} vistas nesta execução (UFs ok: ${ufsOk.length}, falhas em: ${ufsComFalha.join(", ") || "nenhuma"}). ` +
-    `Total acumulado após fundir/podar (retenção ${RETENCAO_DIAS_OPORTUNIDADES}d): ${registros.length} registros.`
+    `Registros a regravar (vistos agora; o resto fica no banco, retenção ${RETENCAO_DIAS_OPORTUNIDADES}d): ${registros.length}.`
   );
 
   const falhasDestaExecucao = [...new Set(ufsComFalha)];
@@ -1532,11 +1538,13 @@ async function hidratarOportunidadesDoSupabase(caminhoArquivo) {
     console.log("[supabase] Sem metadado anterior de oportunidades — tratando como 1ª execução.");
     return;
   }
-  const linhas = await baixarTodasAsLinhas("oportunidades_abertas", "dado");
-  const registros = linhas.map((l) => l.dado);
+  // Só o metadado: baixar as ~53-71 mil linhas (dado jsonb, ~1 KB cada) a cada rodada estourava
+  // o statement timeout (57014, 23/11) e custava ~70 MB de egress por rodada, ~9 rodadas/dia.
+  // Não precisa: o upsert por chave só grava o que veio da fonte agora, as linhas não vistas
+  // ficam como estão no banco, e a retenção é podada lá (removerMaisAntigosQue).
   const fs = await import("node:fs/promises");
-  await fs.writeFile(caminhoArquivo, JSON.stringify({ ...meta, registros }), "utf8");
-  console.log(`[supabase] Hidratada(s) ${registros.length} oportunidade(s) do Supabase pra continuar o incremental.`);
+  await fs.writeFile(caminhoArquivo, JSON.stringify({ ...meta, registros: [] }), "utf8");
+  console.log("[supabase] Metadado de oportunidades hidratado (linhas ficam no banco; só o que vier da fonte é regravado).");
 }
 
 async function sincronizarOportunidadesNoSupabase(oportunidades) {
@@ -1594,36 +1602,6 @@ async function main() {
   console.log(`Iniciando coleta incremental${somenteOportunidades ? " (somente oportunidades)" : ""}. Retenção: ${RETENCAO_DIAS} dias.`);
 
   const pendencias = [];
-  if (!somenteOportunidades) {
-    const caminhoContratos = path.join(dirDados, "contratos_recentes.json");
-    const caminhoContratosMeta = path.join(dirDados, "contratos_meta.json");
-    await hidratarContratosDoSupabase(caminhoContratos, caminhoContratosMeta);
-    iniciarFase(LIMITE_MINUTOS_CONTRATOS);
-    const contratos = await coletarContratos(caminhoContratos);
-    // Scan parcial retoma do cursor na próxima rodada; só é erro se a última janela
-    // concluída (dataFinal) ficar mais de LIMITE_HORAS_SEM_COBERTURA para trás.
-    const limiteContratos = fmtData(new Date(Date.now() - LIMITE_HORAS_SEM_COBERTURA * 60 * 60 * 1000));
-    if (contratos.parcial && !(String(contratos.dataFinal) >= limiteContratos)) pendencias.push(`contratos: scan nacional sem concluir desde ${contratos.dataFinal}`);
-    else if (contratos.parcial) console.warn(`[contratos] Coleta parcial; retoma na próxima rodada (última janela concluída: ${contratos.dataFinal}).`);
-    await sincronizarContratosNoSupabase(contratos);
-    // Painel cai nas RPCs antigas se o resumo faltar; falha aqui não deve derrubar a coleta.
-    try {
-      await salvarBlob("dados_robo", "dashboard_mercado", resumoDashboardMercado(contratos.registros));
-    } catch (e) {
-      console.warn(`[supabase] Resumo dashboard_mercado não gravado: ${e && e.message}`);
-    }
-    const ids = contratos.consultaPendente?.paginacao?.ids || [];
-    await salvarBlob("dados_robo", "contratos_coleta_pendente", { atualizadoEm: contratos.atualizadoEm, ids, hash: hashProgressoAtas(ids) });
-    await gravarJson(caminhoContratos, contratos);
-    const { registros: _registrosContratos, novosNaExecucao: _novosContratos, ...contratosMeta } = contratos;
-    if (contratosMeta.consultaPendente?.paginacao) {
-      const { ids: _ids, ...paginacao } = contratosMeta.consultaPendente.paginacao;
-      contratosMeta.consultaPendente = { ...contratosMeta.consultaPendente, paginacao };
-    }
-    await gravarJson(caminhoContratosMeta, contratosMeta);
-    console.log("Gravado data/contratos_meta.json (metadado leve, vai pro git)");
-  }
-
   const caminhoOportunidades = path.join(dirDados, "oportunidades_abertas.json");
   await hidratarOportunidadesDoSupabase(caminhoOportunidades);
   const oportunidades = await coletarOportunidadesAbertas(caminhoOportunidades);
@@ -1651,14 +1629,52 @@ async function main() {
     );
   }
 
+  // Atraso acima de 48 h que está sendo recuperado (esta rodada concluiu alguma UF) é aviso;
+  // erro com e-mail só quando a recuperação não avança, ou quando uma UF passa de
+  // LIMITE_HORAS_SEM_COBERTURA_MAXIMO (o backlog de uma UF grande parada não fica escondido).
   const ufsAtrasadas = ufsSemCoberturaRecente(oportunidades.coberturaPorUf, LIMITE_HORAS_SEM_COBERTURA);
-  if (ufsAtrasadas.length) pendencias.push(`cobertura de oportunidades há mais de ${LIMITE_HORAS_SEM_COBERTURA} h: ${ufsAtrasadas.join(", ")}`);
+  const ufsParadas = ufsSemCoberturaRecente(oportunidades.coberturaPorUf, LIMITE_HORAS_SEM_COBERTURA_MAXIMO);
+  const avancou = !oportunidades.semPendencias && (oportunidades.ufsOkNaExecucao || []).length > 0;
+  if (ufsParadas.length) pendencias.push(`cobertura de oportunidades há mais de ${LIMITE_HORAS_SEM_COBERTURA_MAXIMO} h: ${ufsParadas.join(", ")}`);
+  else if (ufsAtrasadas.length && !avancou) pendencias.push(`cobertura de oportunidades há mais de ${LIMITE_HORAS_SEM_COBERTURA} h sem avanço nesta rodada: ${ufsAtrasadas.join(", ")}`);
+  else if (ufsAtrasadas.length) console.warn(`[oportunidades] Recuperando atraso de mais de ${LIMITE_HORAS_SEM_COBERTURA} h (${oportunidades.ufsOkNaExecucao.length} UF(s) concluída(s) nesta rodada): ${ufsAtrasadas.join(", ")}.`);
   else if (oportunidades.ufsComFalha.length) console.warn(`[oportunidades] UFs ainda não coletadas nas últimas ${LIMITE_HORAS_UF_PENDENTE} h (a próxima rodada retoma): ${oportunidades.ufsComFalha.join(", ")}.`);
   if (somenteOportunidades) {
     if (pendencias.length) throw new Error(pendencias.join("; "));
     console.log("Recuperação de oportunidades finalizada com sucesso.");
     return;
   }
+
+  // Contratos depois das oportunidades (antes vinha primeiro): a hidratação e o upsert de
+  // contratos levavam ~10 min, e o boletim depende só das oportunidades. Cada fase tem seu
+  // próprio orçamento (iniciarFase), então a ordem só decide quem roda se o job morrer.
+  const caminhoContratos = path.join(dirDados, "contratos_recentes.json");
+  const caminhoContratosMeta = path.join(dirDados, "contratos_meta.json");
+  await hidratarContratosDoSupabase(caminhoContratos, caminhoContratosMeta);
+  iniciarFase(LIMITE_MINUTOS_CONTRATOS);
+  const contratos = await coletarContratos(caminhoContratos);
+  // Scan parcial retoma do cursor na próxima rodada; só é erro se a última janela
+  // concluída (dataFinal) ficar mais de LIMITE_HORAS_SEM_COBERTURA para trás.
+  const limiteContratos = fmtData(new Date(Date.now() - LIMITE_HORAS_SEM_COBERTURA * 60 * 60 * 1000));
+  if (contratos.parcial && !(String(contratos.dataFinal) >= limiteContratos)) pendencias.push(`contratos: scan nacional sem concluir desde ${contratos.dataFinal}`);
+  else if (contratos.parcial) console.warn(`[contratos] Coleta parcial; retoma na próxima rodada (última janela concluída: ${contratos.dataFinal}).`);
+  await sincronizarContratosNoSupabase(contratos);
+  // Painel cai nas RPCs antigas se o resumo faltar; falha aqui não deve derrubar a coleta.
+  try {
+    await salvarBlob("dados_robo", "dashboard_mercado", resumoDashboardMercado(contratos.registros));
+  } catch (e) {
+    console.warn(`[supabase] Resumo dashboard_mercado não gravado: ${e && e.message}`);
+  }
+  const ids = contratos.consultaPendente?.paginacao?.ids || [];
+  await salvarBlob("dados_robo", "contratos_coleta_pendente", { atualizadoEm: contratos.atualizadoEm, ids, hash: hashProgressoAtas(ids) });
+  await gravarJson(caminhoContratos, contratos);
+  const { registros: _registrosContratos, novosNaExecucao: _novosContratos, ...contratosMeta } = contratos;
+  if (contratosMeta.consultaPendente?.paginacao) {
+    const { ids: _ids, ...paginacao } = contratosMeta.consultaPendente.paginacao;
+    contratosMeta.consultaPendente = { ...contratosMeta.consultaPendente, paginacao };
+  }
+  await gravarJson(caminhoContratosMeta, contratosMeta);
+  console.log("Gravado data/contratos_meta.json (metadado leve, vai pro git)");
 
   const caminhoMercado = path.join(dirDados, "mercado_segmentos.json");
   const caminhoMercadoMeta = path.join(dirDados, "mercado_meta.json");
