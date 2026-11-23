@@ -24,20 +24,33 @@
 //
 // Variáveis (todas opcionais, menos a chave):
 //   SUPABASE_SERVICE_ROLE_KEY  obrigatória para gravar (scripts/supabase_dados.js)
-//   PROSPECCAO_UFS             "AM" (lista separada por vírgula)
+//   PROSPECCAO_UFS             as 27 (lista separada por vírgula; o workflow divide em 3 grupos)
+//   PROSPECCAO_GRUPO           nome do grupo da matriz (chaves prospeccao_estado_<grupo> e prospeccao_cobertura_<grupo>)
+//   PROSPECCAO_TIPOS           contrato,ata,pca
+//   PROSPECCAO_IRP             0 desliga a IRP (nacional: só um grupo da matriz coleta)
+//   FRESCOR_HORAS              36 — etapa fechada há menos que isso não roda de novo
+//   LIMITE_HORAS_SEM_COBERTURA 48 — etapa sem fechar há mais que isso faz o robô falhar (e-mail)
 //   DIAS_HORIZONTE             400 — quanto à frente guardar (contratos vencendo, PCA)
-//   PAUSA_MS                   250 entre chamadas às fontes públicas
+//   PAUSA_MS                   250 entre chamadas às fontes públicas (429: Retry-After ou backoff com jitter)
 //   LIMITE_MINUTOS             10 — tamanho da rodada: passou disso, para na próxima unidade e a rodada seguinte retoma
 //   TAMANHO_LOTE_BANCO         500
 //   ADESOES_POR_RODADA         1500 — teto de consultas a 5_consultarAdesoesItem por rodada (uma por item de ata)
 //   ADESOES_VALIDADE_DIAS      3 — adesão consultada há menos que isso não é consultada de novo
 //   ITENS_ATA_PNCP_MAX         30 — itens lidos por ata fora do Compras.gov
-//   PROSPECCAO_REINICIAR       1 — ignora o progresso do dia e recomeça
+//   PROSPECCAO_REINICIAR       1 — ignora o progresso salvo e recomeça
+//   MODO_SECO=1 (+ AMOSTRA_SECO) rodada real sem chave e sem gravar nada (ver modoSeco())
 //
 // Rodadas: o trabalho é dividido em etapas (irp, UF:contrato, UF:ata, UF:pca) e, dentro delas, em unidades (UASG,
-// ata, órgão/ano). O progresso do dia fica em dados_robo (chave prospeccao_estado); cada rodada grava as unidades
-// que fecha e a seguinte pula o que já foi feito. A limpeza do que não voltou só roda quando a etapa fecha.
-const { restFetch, upsertEmLotes, buscarBlob, salvarBlob } = require("./supabase_dados");
+// ata, órgão/ano). O progresso fica em dados_robo (prospeccao_estado_<grupo>) e atravessa os dias: a rodada pega a
+// etapa pela metade ou a mais antiga, grava as unidades que fecha e a seguinte pula o que já foi feito. A limpeza do
+// que não voltou só roda quando a etapa fecha (corte = início da volta).
+const supabase = require("./supabase_dados");
+// Banco por indireção: o MODO_SECO troca por um banco em memória (nada é gravado; ver modoSeco()).
+const banco = { ...supabase };
+const restFetch = (...a) => banco.restFetch(...a);
+const upsertEmLotes = (...a) => banco.upsertEmLotes(...a);
+const buscarBlob = (...a) => banco.buscarBlob(...a);
+const salvarBlob = (...a) => banco.salvarBlob(...a);
 const { semCpf } = require("../netlify/functions/_cpf");
 
 const PNCP = "https://pncp.gov.br";
@@ -203,34 +216,64 @@ function linhaPgc(item, org, uf, coletadoEm) {
 
 // ---------- rede ----------
 
-async function obter(url, { fetch = globalThis.fetch, tentativas = 3, pausaMs = num(process.env.PAUSA_MS, 250) } = {}) {
+let chamadas = 0; // chamadas às fontes públicas na rodada (vai para o resumo do log)
+async function obter(url, { fetch = globalThis.fetch, tentativas = 4, pausaMs = num(process.env.PAUSA_MS, 250) } = {}) {
   for (let t = 1; ; t++) {
     await esperar(pausaMs);
+    chamadas++;
     try {
       const r = await fetch(url, { headers: { "User-Agent": UA, Accept: "application/json" }, signal: globalThis.AbortSignal.timeout(60000) });
       if (r.status === 204 || r.status === 404) return null;
       if (r.ok) return await r.json();
       if (r.status < 500 && r.status !== 429) throw Object.assign(new Error(`HTTP ${r.status}`), { definitivo: true });
-      throw new Error(`HTTP ${r.status}`);
+      // 429: Retry-After do portal ou backoff exponencial com jitter (teto 60 s), como no robô do PNCP (a6ce839).
+      throw Object.assign(new Error(`HTTP ${r.status}`), { esperaMs: r.status === 429 ? esperaAposLimite(r.headers?.get?.("retry-after"), t) : 2000 * t });
     } catch (e) {
       if (e.definitivo || t >= tentativas) throw new Error(`${url.split("?")[0]}: ${e.message}`);
-      await esperar(2000 * t);
+      await esperar(e.esperaMs ?? 2000 * t);
     }
   }
 }
+const esperaAposLimite = (retryAfter, t) => (Number(retryAfter) > 0 ? Number(retryAfter) * 1000 : Math.min(60000, 5000 * 2 ** (t - 1)) * (0.5 + Math.random() / 2));
 
-// Todas as páginas da busca do PNCP (500 por página; teto de 40 páginas = 20 mil documentos por consulta).
-async function buscarPncp(parametros, op) {
+// A busca do PNCP recusa pagina × tam_pagina acima de 10.000 (HTTP 400 "Janela de resultados muito grande"): em 22/11
+// SP tinha 14.292 atas com adesão e 202.313 contratos vigentes, MG 28.176 atas. UF que não cabe é lida por município.
+const JANELA_BUSCA = 10000;
+
+// Todas as páginas de uma consulta à busca do PNCP (500 por página, até a janela). manter(doc) escolhe o que fica na
+// memória: SP tem 200 mil contratos vigentes e só os que vencem no horizonte interessam.
+async function buscarPncp(parametros, op, manter = () => true) {
   const itens = [];
-  for (let pagina = 1; pagina <= 40; pagina++) {
+  let vistos = 0;
+  let total = 0;
+  for (let pagina = 1; pagina * 500 <= JANELA_BUSCA; pagina++) {
     const q = new URLSearchParams({ ...parametros, ordenacao: "-data", pagina: String(pagina), tam_pagina: "500" });
     const j = await obter(`${PNCP}/api/search?${q}`, op);
     const lote = j?.items || [];
-    itens.push(...lote);
-    if (lote.length < 500 || itens.length >= Number(j?.total || 0)) break;
+    total = Number(j?.total || 0);
+    vistos += lote.length;
+    for (const d of lote) if (manter(d)) itens.push(d);
+    if (lote.length < 500 || vistos >= total) break;
   }
+  if (total > JANELA_BUSCA) console.warn(`busca do PNCP com ${total} documentos (${new URLSearchParams(parametros)}): lidos só os ${vistos} mais recentes`);
   return itens;
 }
+
+// Lotes de uma consulta por UF: "todos" (a UF inteira) quando cabe na janela; senão um lote por município (código IBGE,
+// o mesmo que a busca do PNCP aceita em "municipios"). Conferido em 22/11: no AM a soma dos 62 municípios dá 6.961 dos
+// 6.964 contratos vigentes da UF.
+const municipiosCache = new Map();
+async function lotesDaUf(parametros, uf, op) {
+  const j = await obter(`${PNCP}/api/search?${new URLSearchParams({ ...parametros, ufs: uf, pagina: "1", tam_pagina: "1" })}`, op);
+  if (Number(j?.total || 0) <= JANELA_BUSCA) return ["todos"];
+  if (!municipiosCache.has(uf)) {
+    const lista = (await obter(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${uf}/municipios`, op)) || [];
+    municipiosCache.set(uf, lista.map((m) => String(m.id)).filter((c) => /^\d{7}$/.test(c)));
+  }
+  if (!municipiosCache.get(uf).length) throw new Error(`${uf}: lista de municípios do IBGE vazia`);
+  return municipiosCache.get(uf);
+}
+const parametrosDoLote = (parametros, uf, lote) => ({ ...parametros, ufs: uf, ...(lote === "todos" ? {} : { municipios: lote }) });
 
 // Páginas do Compras.gov dados abertos ({resultado, paginasRestantes}).
 async function paginasCompras(caminho, parametros, op, maxPaginas = 40) {
@@ -244,27 +287,70 @@ async function paginasCompras(caminho, parametros, op, maxPaginas = 40) {
 }
 
 
-// ---------- progresso do dia (rodadas) ----------
+// ---------- progresso e rodízio (rodadas) ----------
 
-const CHAVE_ESTADO = "prospeccao_estado";
+// Rodízio pelas 27 UFs: cada etapa (irp, UF:contrato, UF:ata, UF:pca) guarda quando fechou pela última vez; a rodada
+// pega primeiro a que está pela metade, depois a mais antiga (nunca feita = mais antiga). Etapa fechada há menos de
+// FRESCOR_HORAS não roda de novo. Até 22/11 o progresso era "do dia" e recomeçava todo dia pelo AM: o PCA nunca
+// chegava a ser coletado e as outras 26 UFs nunca entravam.
+const UFS_BRASIL = "AC AL AM AP BA CE DF ES GO MA MG MS MT PA PB PE PI PR RJ RN RO RR RS SC SE SP TO".split(" ");
+const TIPOS_UF = ["contrato", "ata", "pca"];
 const venceu = (ctx) => Date.now() > ctx.prazoFinal;
+const grupoAtual = () => String(process.env.PROSPECCAO_GRUPO || "todas").replace(/[^a-z0-9]/gi, "");
+const chaveEstado = () => `prospeccao_estado_${grupoAtual()}`;
+const chaveCobertura = () => `prospeccao_cobertura_${grupoAtual()}`;
 
-// Progresso gravado em dados_robo: o dia, o instante de corte da limpeza (igual em todas as rodadas do dia), as unidades
-// já feitas e o que as etapas seguintes precisam saber das anteriores (órgãos por UF, atas que o Compras.gov cobriu).
-async function carregarEstado(hoje, inicio, ler = (chave) => buscarBlob("dados_robo", chave)) {
-  const salvo = process.env.PROSPECCAO_REINICIAR ? null : await ler(CHAVE_ESTADO).catch(() => null);
-  const base = salvo && salvo.dia === hoje ? salvo : { dia: hoje, coletadoEm: new Date(inicio).toISOString(), feitos: [], orgaos: {}, comItens: {} };
-  return { ...base, feitos: new Set(base.feitos), orgaos: base.orgaos || {}, comItens: base.comItens || {} };
+// Progresso em dados_robo (uma chave por grupo de UFs da matriz do workflow): etapas (início da volta em andamento,
+// último fechamento e linhas), unidades já feitas da volta em andamento, órgãos por UF (o PCA precisa) e atas que o
+// Compras.gov cobriu (a ata precisa entre rodadas). O estado antigo "do dia" (sem versao) é descartado.
+async function carregarEstado(inicio, ler = (chave) => buscarBlob("dados_robo", chave)) {
+  const salvo = process.env.PROSPECCAO_REINICIAR ? null : await ler(chaveEstado()).catch(() => null);
+  const base = salvo && salvo.versao === 2 ? salvo : { versao: 2, desde: new Date(inicio).toISOString(), feitos: [], orgaos: {}, comItens: {}, etapas: {} };
+  return { ...base, feitos: new Set(base.feitos), orgaos: base.orgaos || {}, comItens: base.comItens || {}, etapas: base.etapas || {} };
 }
 const estadoSerializavel = (est) => ({ ...est, feitos: [...est.feitos] });
 
+// Ordem da rodada: em andamento primeiro, depois a mais antiga; sai a que fechou há menos de frescorHoras.
+function filaEtapas(chaves, etapas, agora, frescorHoras) {
+  const ultima = (k) => Date.parse(etapas[k]?.concluidaEm) || 0;
+  const prioridade = (k) => (etapas[k]?.inicio ? -1 : ultima(k));
+  return chaves.filter((k) => etapas[k]?.inicio || agora - ultima(k) >= frescorHoras * 36e5).sort((a, b) => prioridade(a) - prioridade(b));
+}
+
+// Etapa fechada: grava quando e quantas linhas, e esquece as unidades dela (a próxima volta refaz tudo).
+function fecharEtapa(est, chave, agora = Date.now()) {
+  const e = est.etapas[chave];
+  e.concluidaEm = new Date(agora).toISOString();
+  e.linhas = e.linhasAndamento || 0;
+  delete e.inicio; delete e.linhasAndamento;
+  const [uf, tipo] = chave.split(":");
+  if (tipo) for (const k of [...est.feitos]) if (k.startsWith(`${tipo}:${uf}:`)) est.feitos.delete(k);
+  if (tipo === "ata") delete est.comItens[uf];
+}
+
+// Etapas sem fechar há mais de horas (quem nunca fechou conta do início do estado): é o que vira erro do robô.
+function etapasAtrasadas(chaves, est, horas, agora = Date.now()) {
+  return chaves.filter((k) => agora - (Date.parse(est.etapas[k]?.concluidaEm) || Date.parse(est.desde) || 0) > horas * 36e5);
+}
+
+// Resumo pequeno que a tela e o Status das Ferramentas leem (dados_robo, chave prospeccao_cobertura_<grupo>).
+function resumoCobertura(est, chaves, agora = Date.now()) {
+  return {
+    atualizadoEm: new Date(agora).toISOString(), grupo: grupoAtual(),
+    etapas: Object.fromEntries(chaves.map((k) => {
+      const e = est.etapas[k] || {};
+      return [k, { concluidaEm: e.concluidaEm || null, linhas: e.linhas ?? null, emAndamento: Boolean(e.inicio) }];
+    })),
+  };
+}
+
 // Roda fn(chave) nas unidades que ainda faltam, até o prazo da rodada. true = todas feitas. Cada unidade fechada
-// é gravada no progresso na hora: se a rodada morrer, a próxima recomeça dali.
+// entra no progresso na hora: se a rodada morrer, a próxima recomeça dali. ctx.amostra (só MODO_SECO) corta a lista.
 async function unidades(chaves, est, ctx, fn) {
-  for (const k of chaves) {
+  for (const k of ctx.amostra ? chaves.slice(0, ctx.amostra) : chaves) {
     if (est.feitos.has(k)) continue;
     if (venceu(ctx)) return false;
-    await fn(k);
+    if ((await fn(k)) === false) return false; // unidade com subunidades que não couberam na rodada: não marca
     est.feitos.add(k);
     await ctx.salvar(est);
   }
@@ -282,13 +368,23 @@ function anotarOrgao(mapa, d) {
 }
 
 async function etapaContrato(uf, est, ctx) {
-  const contratos = await buscarPncp({ tipos_documento: "contrato", status: "vigente", ufs: uf }, ctx.op);
+  const parametros = { tipos_documento: "contrato", status: "vigente" };
   const mapa = (est.orgaos[uf] = est.orgaos[uf] || {});
-  contratos.forEach((d) => anotarOrgao(mapa, d));
-  const linhas = contratos.filter((d) => d.uf === uf && contratoInteressa(d, ctx.hoje, ctx.ate)).map((d) => linhaContrato(d, ctx.coletadoEm));
-  console.log(`${uf} contratos: ${contratos.length} vigentes, ${linhas.length} vencem até ${ctx.ate}`);
-  await gravar(linhas, `tipo=eq.contrato&uf=eq.${uf}`, ctx, `${uf} contrato`);
-  return true;
+  const lotes = await lotesDaUf(parametros, uf, ctx.op);
+  let vistos = 0;
+  let guardados = 0;
+  const ok = await unidades(lotes.map((l) => `contrato:${uf}:${l}`), est, ctx, async (k) => {
+    const contratos = await buscarPncp(parametrosDoLote(parametros, uf, k.split(":")[2]), ctx.op, (d) => {
+      vistos++;
+      anotarOrgao(mapa, d);
+      return d.uf === uf && contratoInteressa(d, ctx.hoje, ctx.ate);
+    });
+    guardados += contratos.length;
+    await gravar(contratos.map((d) => linhaContrato(d, ctx.coletadoEm)), null, ctx, `${uf} contrato`);
+  });
+  console.log(`${uf} contratos: ${vistos} vigentes lidos nesta rodada (${lotes.length} lote(s)), ${guardados} vencem até ${ctx.ate}${ok ? "" : "; continua na próxima rodada"}`);
+  if (ok) await limpar(`tipo=eq.contrato&uf=eq.${uf}`, ctx);
+  return ok;
 }
 
 // Itens de uma ata que não está no Compras.gov: itens da contratação de origem + resultado de cada um (fornecedor e valor).
@@ -315,42 +411,47 @@ async function itensAtaPncp(doc, ata, ctx, memo = new Map()) {
 }
 
 async function etapaAta(uf, est, ctx) {
-  const atas = (await buscarPncp({ tipos_documento: "ata", status: "vigente", ufs: uf, permite_adesao: "true" }, ctx.op))
-    .filter((d) => d.uf === uf && !d.cancelado && dia(d.data_fim_vigencia) >= ctx.hoje);
+  const parametros = { tipos_documento: "ata", status: "vigente", permite_adesao: "true" };
   const mapa = (est.orgaos[uf] = est.orgaos[uf] || {});
-  atas.forEach((d) => anotarOrgao(mapa, d));
-  const porAta = new Map(atas.map((d) => [d.numero_controle_pncp, linhaAta(d, ctx.coletadoEm)]));
   const comItens = new Set(est.comItens[uf] || []);
-  // Compras.gov: itens com fornecedor, quantidade, empenhado e máximo de adesão, por UASG gerenciadora (código numérico de até 6 dígitos).
-  const gerenciadoras = [...new Set(atas.map((d) => String(d.unidade_codigo || "")).filter((c) => /^\d{5,6}$/.test(c)))];
-  let ok = await unidades(gerenciadoras.map((u) => `ata:${uf}:cg:${u}`), est, ctx, async (k) => {
-    const itens = await paginasCompras("/modulo-arp/2_consultarARPItem", {
-      codigoUnidadeGerenciadora: k.split(":")[3], dataVigenciaInicialMin: hojeBrasilia(Date.now(), -730), dataVigenciaInicialMax: ctx.hoje,
-    }, ctx.op);
-    const linhas = [];
-    for (const it of itens) {
-      const ata = porAta.get(it.numeroControlePncpAta);
-      if (!ata || it.itemExcluido || dia(it.dataVigenciaFinal) < ctx.hoje) continue;
-      comItens.add(it.numeroControlePncpAta);
-      linhas.push(linhaItemAta(it, ata, ctx.coletadoEm));
-    }
-    est.comItens[uf] = [...comItens];
-    await gravar(linhas, null, ctx, `${uf} ata (Compras.gov)`);
+  const lotes = await lotesDaUf(parametros, uf, ctx.op);
+  let total = 0;
+  // Um lote (a UF inteira ou um município) por vez; dentro dele, as unidades de sempre (UASG do Compras.gov, ata do PNCP).
+  const ok = await unidades(lotes.map((l) => `ata:${uf}:lote:${l}`), est, ctx, async (kLote) => {
+    const atas = await buscarPncp(parametrosDoLote(parametros, uf, kLote.split(":")[3]), ctx.op,
+      (d) => d.uf === uf && !d.cancelado && dia(d.data_fim_vigencia) >= ctx.hoje);
+    total += atas.length;
+    atas.forEach((d) => anotarOrgao(mapa, d));
+    const porAta = new Map(atas.map((d) => [d.numero_controle_pncp, linhaAta(d, ctx.coletadoEm)]));
+    // Compras.gov: itens com fornecedor, quantidade, empenhado e máximo de adesão, por UASG gerenciadora (código numérico de até 6 dígitos).
+    const gerenciadoras = [...new Set(atas.map((d) => String(d.unidade_codigo || "")).filter((c) => /^\d{5,6}$/.test(c)))];
+    const cg = await unidades(gerenciadoras.map((u) => `ata:${uf}:cg:${u}`), est, ctx, async (k) => {
+      const itens = await paginasCompras("/modulo-arp/2_consultarARPItem", {
+        codigoUnidadeGerenciadora: k.split(":")[3], dataVigenciaInicialMin: hojeBrasilia(Date.now(), -730), dataVigenciaInicialMax: ctx.hoje,
+      }, ctx.op);
+      const linhas = [];
+      for (const it of itens) {
+        const ata = porAta.get(it.numeroControlePncpAta);
+        if (!ata || it.itemExcluido || dia(it.dataVigenciaFinal) < ctx.hoje) continue;
+        comItens.add(it.numeroControlePncpAta);
+        linhas.push(linhaItemAta(it, ata, ctx.coletadoEm));
+      }
+      est.comItens[uf] = [...comItens];
+      await gravar(linhas, null, ctx, `${uf} ata (Compras.gov)`);
+    });
+    if (!cg) return false;
+    // Resto (fora do Compras.gov, ou UASG sem item vigente): itens e resultados pelo PNCP; sem item, fica a linha da ata.
+    const memo = new Map();
+    const resto = new Map(atas.filter((d) => !comItens.has(d.numero_controle_pncp)).map((d) => [`ata:${uf}:pncp:${d.numero_controle_pncp}`, d]));
+    return unidades([...resto.keys()], est, ctx, async (k) => {
+      const d = resto.get(k);
+      const ata = porAta.get(d.numero_controle_pncp);
+      const itens = await itensAtaPncp(d, ata, ctx, memo);
+      await gravar(itens.length ? itens : [ata], null, ctx, `${uf} ata (PNCP${itens.length ? " com itens" : " sem item"})`);
+    });
   });
-  if (!ok) return false;
-  // Resto (fora do Compras.gov, ou UASG sem item vigente): itens e resultados pelo PNCP; sem item, fica a linha da ata.
-  const memo = new Map();
-  const resto = new Map(atas.filter((d) => !comItens.has(d.numero_controle_pncp)).map((d) => [`ata:${uf}:pncp:${d.numero_controle_pncp}`, d]));
-  ok = await unidades([...resto.keys()], est, ctx, async (k) => {
-    const d = resto.get(k);
-    const ata = porAta.get(d.numero_controle_pncp);
-    const itens = await itensAtaPncp(d, ata, ctx, memo);
-    await gravar(itens.length ? itens : [ata], null, ctx, `${uf} ata (PNCP${itens.length ? " com itens" : " sem item"})`);
-  });
-  if (ok) {
-    console.log(`${uf} atas com adesão: ${atas.length} (${comItens.size} com itens do Compras.gov, ${gerenciadoras.length} UASGs, ${resto.size} pelo PNCP)`);
-    await limpar(`tipo=eq.ata&uf=eq.${uf}`, ctx);
-  }
+  console.log(`${uf} atas com adesão lidas nesta rodada: ${total} (${lotes.length} lote(s); ${comItens.size} com itens do Compras.gov)${ok ? "" : "; continua na próxima rodada"}`);
+  if (ok) await limpar(`tipo=eq.ata&uf=eq.${uf}`, ctx);
   return ok;
 }
 
@@ -390,7 +491,7 @@ async function coletarPcaOrgao(uf, cnpj, org, a, ctx) {
   return linhas.filter((l) => dentro(l.data_ref, ctx.hoje, ctx.ate));
 }
 
-async function etapaPca(uf, est, ctx, orgaosCompletos) {
+async function etapaPca(uf, est, ctx) {
   const orgaos = est.orgaos[uf] || {};
   const ano = Number(ctx.hoje.slice(0, 4));
   const chaves = Object.keys(orgaos).flatMap((cnpj) => [ano, ano + 1].map((a) => `pca:${uf}:${cnpj}:${a}`));
@@ -398,9 +499,9 @@ async function etapaPca(uf, est, ctx, orgaosCompletos) {
     const [, , cnpj, a] = k.split(":");
     await gravar(await coletarPcaOrgao(uf, cnpj, orgaos[cnpj], Number(a), ctx), null, ctx, `${uf} pca`);
   });
-  // Sem a lista completa de órgãos (contratos/atas ainda não fecharam) não limpa: grava o que veio.
-  if (ok && orgaosCompletos && chaves.length) await limpar(`tipo=eq.pca&uf=eq.${uf}`, ctx);
-  return ok && orgaosCompletos;
+  // Só roda depois de contrato e ata da UF fecharem ao menos uma vez (lista de órgãos completa): pode limpar.
+  if (ok) await limpar(`tipo=eq.pca&uf=eq.${uf}`, ctx);
+  return ok;
 }
 
 // Adesões já usadas: 5_consultarAdesoesItem, uma consulta por item (ata + UASG + item). Só item de ata vigente do Compras.gov
@@ -420,7 +521,7 @@ async function consultarAdesoes(l, op) {
 
 async function etapaAdesoes(uf, ctx) {
   const teto = num(process.env.ADESOES_POR_RODADA, 1500);
-  const corte = new Date(Date.parse(ctx.coletadoEm) - num(process.env.ADESOES_VALIDADE_DIAS, 3) * 864e5).toISOString();
+  const corte = new Date(Date.now() - num(process.env.ADESOES_VALIDADE_DIAS, 3) * 864e5).toISOString();
   const rotulo = `${uf} adesões consultadas`;
   let feitas = 0;
   while (feitas < teto && !venceu(ctx)) {
@@ -458,59 +559,111 @@ async function gravar(linhas, filtroLimpeza, ctx, rotulo) {
   const unicas = semRepetir(linhas);
   await upsertEmLotes(TABELA, unicas, "id", num(process.env.TAMANHO_LOTE_BANCO, 500));
   if (rotulo) ctx.gravadas[rotulo] = (ctx.gravadas[rotulo] || 0) + unicas.length;
+  if (ctx.etapa) ctx.etapa.linhasAndamento = (ctx.etapa.linhasAndamento || 0) + unicas.length;
   if (filtroLimpeza) await limpar(filtroLimpeza, ctx);
   return unicas.length;
 }
 const limpar = (filtro, ctx) => restFetch(`${TABELA}?${filtro}&coletado_em=lt.${encodeURIComponent(ctx.coletadoEm)}`, { method: "DELETE" });
 
-async function main() {
+async function main({ seco = false } = {}) {
   const inicio = Date.now();
   const hoje = hojeBrasilia(inicio);
-  const est = await carregarEstado(hoje, inicio);
+  const est = await carregarEstado(inicio);
+  let salvoEm = 0;
   const ctx = {
-    hoje, ate: hojeBrasilia(inicio, num(process.env.DIAS_HORIZONTE, 400)), coletadoEm: est.coletadoEm, op: {}, gravadas: {},
-    prazoFinal: inicio + num(process.env.LIMITE_MINUTOS, 10) * 60000, salvar: (e) => salvarBlob("dados_robo", CHAVE_ESTADO, estadoSerializavel(e)),
+    hoje, ate: hojeBrasilia(inicio, num(process.env.DIAS_HORIZONTE, 400)), coletadoEm: null, etapa: null, op: {}, gravadas: {},
+    amostra: seco ? num(process.env.AMOSTRA_SECO, 0) : 0, prazoFinal: inicio + num(process.env.LIMITE_MINUTOS, 10) * 60000,
+    // O estado tem os órgãos de cada UF (centenas de KB): grava no máximo a cada 30 s, e sempre ao fechar etapa.
+    salvar: async (e, sempre = false) => {
+      if (!sempre && Date.now() - salvoEm < 30000) return;
+      salvoEm = Date.now();
+      await salvarBlob("dados_robo", chaveEstado(), estadoSerializavel(e));
+    },
   };
-  const ufs = String(process.env.PROSPECCAO_UFS || "AM").split(",").map((s) => s.trim().toUpperCase()).filter((s) => /^[A-Z]{2}$/.test(s));
+  const lista = (v, padrao) => String(v || padrao).split(",").map((s) => s.trim()).filter(Boolean);
+  const ufs = lista(process.env.PROSPECCAO_UFS, UFS_BRASIL.join(",")).map((s) => s.toUpperCase()).filter((s) => UFS_BRASIL.includes(s));
+  const tipos = lista(process.env.PROSPECCAO_TIPOS, TIPOS_UF.join(",")).map((t) => t.toLowerCase()).filter((t) => TIPOS_UF.includes(t));
+  const chaves = [...(process.env.PROSPECCAO_IRP !== "0" ? ["irp"] : []), ...ufs.flatMap((uf) => tipos.map((t) => `${uf}:${t}`))];
+  const fila = filaEtapas(chaves, est.etapas, inicio, num(process.env.FRESCOR_HORAS, 36));
   const pendentes = [];
   let falhas = 0;
+  const fechou = (k) => Boolean(est.etapas[k]?.concluidaEm);
+  const salvarCobertura = () => salvarBlob("dados_robo", chaveCobertura(), resumoCobertura(est, chaves));
+  const funcoes = {
+    irp: async () => { await gravar(await coletarIrps(ctx), "tipo=eq.irp", ctx, "irp"); return true; },
+    contrato: (uf) => etapaContrato(uf, est, ctx), ata: (uf) => etapaAta(uf, est, ctx), pca: (uf) => etapaPca(uf, est, ctx),
+  };
 
-  // fn devolve true quando a etapa fechou; etapa que falha ou não cabe na rodada volta na próxima.
-  async function etapa(chave, fn) {
-    if (est.feitos.has(chave)) return true;
-    if (venceu(ctx)) { pendentes.push(chave); return false; }
+  for (const chave of fila) {
+    if (venceu(ctx)) { pendentes.push(chave); continue; }
+    const [uf, tipo] = chave === "irp" ? [null, "irp"] : chave.split(":");
+    // PCA precisa da lista de órgãos da UF: espera contrato e ata (os desta rodada) fecharem ao menos uma vez.
+    if (tipo === "pca" && !["contrato", "ata"].filter((t) => tipos.includes(t)).every((t) => fechou(`${uf}:${t}`))) { pendentes.push(chave); continue; }
+    const e = (est.etapas[chave] = est.etapas[chave] || {});
+    if (!e.inicio) { e.inicio = new Date().toISOString(); e.linhasAndamento = 0; }
+    // Corte da limpeza = início da volta: o que a volta regravou fica, o que não voltou sai quando ela fecha.
+    ctx.coletadoEm = e.inicio; ctx.etapa = e;
+    const [t0, c0] = [Date.now(), chamadas];
     try {
-      const ok = await fn();
-      if (ok) est.feitos.add(chave); else pendentes.push(chave);
-      await ctx.salvar(est);
-      return ok;
-    } catch (e) {
+      if (await funcoes[tipo](uf)) fecharEtapa(est, chave); else pendentes.push(chave);
+    } catch (err) {
       falhas++; pendentes.push(chave);
-      console.error(`${chave} falhou (mantido o da véspera; retoma na próxima rodada):`, e.message);
-      return false;
+      console.warn(`${chave} falhou (mantido o que já estava gravado; retoma na próxima rodada):`, err.message);
     }
+    ctx.etapa = null;
+    console.log(`${chave}: ${Math.round((Date.now() - t0) / 1000)} s, ${chamadas - c0} chamadas, ${e.concluidaEm && !e.inicio ? `fechou com ${e.linhas} linhas` : "pela metade"}`);
+    await ctx.salvar(est, true);
+    await salvarCobertura().catch((err) => console.warn("cobertura não gravada:", err.message));
   }
-
-  await etapa("irp", async () => { await gravar(await coletarIrps(ctx), "tipo=eq.irp", ctx, "irp"); return true; });
-  for (const uf of ufs) {
-    const contrato = await etapa(`${uf}:contrato`, () => etapaContrato(uf, est, ctx));
-    const ata = await etapa(`${uf}:ata`, () => etapaAta(uf, est, ctx));
-    await etapa(`${uf}:pca`, () => etapaPca(uf, est, ctx, contrato && ata));
+  if (!seco) {
+    for (const uf of ufs) {
+      if (!fechou(`${uf}:ata`) || venceu(ctx)) continue;
+      try { if (!(await etapaAdesoes(uf, ctx))) pendentes.push(`${uf}:adesoes`); } catch (e) { falhas++; console.warn(`${uf} adesões falhou:`, e.message); }
+    }
+    // O que já passou da data (prazo de IRP, fim de vigência, data desejada) sai da tabela.
+    await restFetch(`${TABELA}?data_ref=lt.${hoje}`, { method: "DELETE" });
   }
-  for (const uf of ufs) {
-    if (!est.feitos.has(`${uf}:ata`)) continue;
-    try { if (!(await etapaAdesoes(uf, ctx))) pendentes.push(`${uf}:adesoes`); } catch (e) { falhas++; console.error(`${uf} adesões falhou:`, e.message); }
-  }
-  // O que já passou da data (prazo de IRP, fim de vigência, data desejada) sai da tabela.
-  await restFetch(`${TABELA}?data_ref=lt.${hoje}`, { method: "DELETE" });
+  await salvarCobertura().catch(() => {});
   const resumo = Object.entries(ctx.gravadas).map(([k, v]) => `${k}=${v}`).join("; ");
-  console.log(`Prospecção ${hoje}, rodada de ${Math.round((Date.now() - inicio) / 1000)} s: ${resumo || "nada novo gravado"}. ${pendentes.length ? `Falta: ${pendentes.join(", ")} (a próxima rodada retoma).` : "Dia completo."}`);
-  if (falhas) process.exitCode = 1;
+  console.log(`Prospecção ${hoje} (grupo ${grupoAtual()}), rodada de ${Math.round((Date.now() - inicio) / 1000)} s e ${chamadas} chamadas às fontes: ${resumo || "nada novo gravado"}. `
+    + `Etapas com coleta completa: ${chaves.filter(fechou).length}/${chaves.length}. ${pendentes.length ? `Falta: ${pendentes.join(", ")} (a próxima rodada retoma).` : "Tudo em dia."}`);
+  // Falha pontual ou etapa pela metade é o normal do rodízio (aviso). Erro do robô (e e-mail) só quando alguma etapa
+  // passa de LIMITE_HORAS_SEM_COBERTURA sem fechar, como no robô do PNCP (a6ce839).
+  const limiteHoras = num(process.env.LIMITE_HORAS_SEM_COBERTURA, 48);
+  const atrasadas = etapasAtrasadas(chaves, est, limiteHoras);
+  if (atrasadas.length && !seco) {
+    console.error(`Sem coleta completa há mais de ${limiteHoras} h: ${atrasadas.join(", ")}`);
+    process.exitCode = 1;
+  } else if (falhas) console.warn(`${falhas} falha(s) nesta rodada; nenhuma etapa atrasada além de ${limiteHoras} h.`);
+  return { est, chaves };
 }
 
-if (require.main === module) main().catch((e) => { console.error(e); process.exit(1); });
+// MODO_SECO=1: rodada real contra PNCP/Compras.gov sem chave e sem gravar nada (banco em memória). Imprime as contagens.
+//   MODO_SECO=1 PROSPECCAO_UFS=AM,SP PROSPECCAO_TIPOS=ata,pca PROSPECCAO_IRP=0 AMOSTRA_SECO=20 LIMITE_MINUTOS=15 node scripts/coletar_prospeccao.js
+async function modoSeco() {
+  const blobs = new Map();
+  const linhas = new Map();
+  Object.assign(banco, {
+    buscarBlob: async (_t, k) => blobs.get(k) ?? null,
+    salvarBlob: async (_t, k, d) => { blobs.set(k, JSON.parse(JSON.stringify(d))); },
+    upsertEmLotes: async (_t, ls) => { ls.forEach((l) => linhas.set(l.id, l)); return ls.length; },
+    restFetch: async () => ({ ok: true, json: async () => [] }),
+  });
+  const { est, chaves } = await main({ seco: true });
+  const contagem = {};
+  for (const l of linhas.values()) contagem[`${l.uf || "BR"} ${l.tipo}`] = (contagem[`${l.uf || "BR"} ${l.tipo}`] || 0) + 1;
+  console.log("[seco] linhas por UF e tipo (nada foi gravado):", JSON.stringify(contagem));
+  console.log("[seco] etapas:", chaves.map((k) => `${k}=${est.etapas[k]?.concluidaEm ? `fechou (${est.etapas[k].linhas} linhas)` : "pela metade"}`).join("; "));
+  for (const [nome, re] of [["limpeza", /limpeza/], ["expediente", /expediente/], ["construção", /construc/]]) {
+    const achou = [...linhas.values()].filter((l) => re.test(l.busca));
+    console.log(`[seco] "${nome}": ${achou.length} linhas`, achou.slice(0, 2).map((l) => `${l.uf} ${l.tipo}: ${(l.descricao || l.objeto || "").slice(0, 70)}`));
+  }
+}
+
+if (require.main === module) (process.env.MODO_SECO === "1" ? modoSeco() : main()).catch((e) => { console.error(e); process.exit(1); });
 
 module.exports = {
   hojeBrasilia, normalizar, desfazerMojibake, nomeBusca, contratoInteressa, linhaContrato, linhaAta, linhaItemAta, linhaItemAtaPncp, somarAdesoes, linhaIrp, linhaPcaPncp, linhaPgc,
   semRepetir, obter, unidades, carregarEstado, estadoSerializavel, itensAtaPncp, consultarAdesoes,
+  filaEtapas, fecharEtapa, etapasAtrasadas, resumoCobertura, esperaAposLimite, UFS_BRASIL, buscarPncp, lotesDaUf,
 };
