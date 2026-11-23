@@ -61,6 +61,9 @@ input::placeholder{color:var(--text-secondary);opacity:1}
 .tabela small.adesao b{color:var(--text-primary)}
 .tabela small.adesao.esgotada,.tabela small.adesao.esgotada b{color:var(--attention-text)}
 .vazio{padding:24px;text-align:center}
+#cobertura{margin:4px 0 12px;font-size:13px;color:var(--text-secondary)}
+#cobertura summary{cursor:pointer;color:var(--action-text);font-weight:600}
+.cobertura-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:4px 12px;list-style:none;padding:8px 0 0;margin:0}
 .aviso{display:none;margin:12px 0;border:1px solid;border-radius:var(--radius-card);padding:12px 16px}
 .aviso.erro{display:block;color:var(--error-text);border-color:var(--error-border);background:var(--error-bg)}
 .aviso.info{display:block;color:var(--info-text);border-color:var(--info-border);background:var(--info-bg)}
@@ -111,7 +114,7 @@ input::placeholder{color:var(--text-secondary);opacity:1}
 </nav>
 <div class="nav-gaveta-fundo" id="nav-gaveta-fundo" hidden></div>
 <main data-recurso="prospeccao">
-  <div class="topo"><h1><span class="rotulo-agente">Caçador</span> Prospecção</h1><p>Saiba o que o órgão vai comprar antes do edital: planos de contratação do ano, intenções de registro de preço abertas, atas com saldo para adesão e contratos que vão vencer. Dados públicos do PNCP e do Compras.gov, atualizados uma vez por dia.</p></div>
+  <div class="topo"><h1><span class="rotulo-agente">Caçador</span> Prospecção</h1><p>Saiba o que o órgão vai comprar antes do edital: planos de contratação do ano, intenções de registro de preço abertas, atas com saldo para adesão e contratos que vão vencer. Dados públicos do PNCP e do Compras.gov, coletados estado por estado e atualizados a cada 2 ou 3 dias.</p></div>
   <form class="card" id="form-filtros">
     <div class="filtros">
       <div><label for="f-uf">UF</label><select id="f-uf"><option value="">Todas</option><option>AC</option><option>AL</option><option>AM</option><option>AP</option><option>BA</option><option>CE</option><option>DF</option><option>ES</option><option>GO</option><option>MA</option><option>MG</option><option>MS</option><option>MT</option><option>PA</option><option>PB</option><option>PE</option><option>PI</option><option>PR</option><option>RJ</option><option>RN</option><option>RO</option><option>RR</option><option>RS</option><option>SC</option><option>SE</option><option>SP</option><option>TO</option></select></div>
@@ -131,6 +134,8 @@ input::placeholder{color:var(--text-secondary);opacity:1}
   </div>
   <p class="nota explica">Confira sempre o documento oficial pelo link de cada linha. Atas: só as que permitem adesão e seguem vigentes por mais 30 dias; o período não se aplica a elas. Nas atas do Compras.gov, "já aderido" mostra as adesões informadas pelo portal (conferidas a cada poucos dias); nas demais atas o portal não informa saldo nem adesões. Com palavras na busca, o que só cita o termo na especificação do item fica recolhido.</p>
   <p id="contador"></p>
+  <p class="nota" id="cobertura-texto"></p>
+  <details id="cobertura" hidden></details>
   <div class="tabela-wrap"><table class="tabela"><thead id="tabela-cabecalho"></thead><tbody id="tabela-corpo"></tbody></table></div>
 </main>
 </div>

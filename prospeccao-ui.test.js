@@ -47,3 +47,28 @@ test("corpoHtml: nome primeiro, 'só na especificação' recolhido (hidden) atr�
   assert.match(html, /Mostrar 1 resultado que só cita o termo na especificação/);
   assert.doesNotMatch(UI.corpoHtml([{ ...base, descricao: "PAPEL A4" }], AGORA), /btn-espec|hidden/);
 });
+
+test("mensagem de vazio diz por quê e o que fazer", () => {
+  const cob = { AM: { concluidaEm: "2026-11-23T10:00:00Z" }, SP: { concluidaEm: null, emAndamento: true } };
+  assert.match(UI.mensagemVazio("pca", { uf: "SP", palavras: "limpeza" }, cob), /Ainda não temos o plano de compras \(PCA\) de SP: a coleta está em andamento/);
+  assert.match(UI.mensagemVazio("pca", { uf: "AM", palavras: "limpeza" }, cob), /Nada encontrado em AM com esse filtro\. Tente outra palavra/);
+  assert.match(UI.mensagemVazio("ata", { uf: "", palavras: "construção" }, cob), /Nada encontrado nas 1 UFs já coletadas; as outras 26 ainda estão em andamento\. Tente outra palavra/);
+  assert.match(UI.mensagemVazio("contrato", { uf: "", palavras: "" }, {}), /Ainda não temos os contratos vencendo de nenhuma UF/);
+  assert.match(UI.mensagemVazio("irp", { uf: "AM", palavras: "x" }, cob), /poucas IRPs no Brasil todo/);
+  // Sem cobertura (API antiga ou policy ausente): mensagem genérica, ainda com sugestão.
+  assert.match(UI.mensagemVazio("pca", { uf: "AM", palavras: "" }, null), /Tente uma palavra do seu ramo/);
+  assert.doesNotMatch(UI.mensagemVazio("ata", { uf: "AM", palavras: "" }, null), /período/);
+});
+
+test("cobertura: data da última coleta por UF e resumo de 'Todas'", () => {
+  const cob = { AM: { concluidaEm: "2026-11-23T10:00:00Z" }, SP: { concluidaEm: "2026-11-21T10:00:00Z", emAndamento: true }, RJ: { emAndamento: true } };
+  assert.equal(UI.textoCobertura("pca", "AM", cob), "Última coleta completa de AM: 23/11/2026.");
+  assert.equal(UI.textoCobertura("pca", "SP", cob), "Última coleta completa de SP: 21/11/2026 (atualização em andamento).");
+  assert.equal(UI.textoCobertura("pca", "RJ", cob), "RJ ainda não tem coleta completa (em andamento).");
+  assert.equal(UI.textoCobertura("pca", "", cob), "2 de 27 UFs já coletadas (a mais antiga em 21/11/2026); as outras estão em andamento.");
+  assert.equal(UI.textoCobertura("pca", "", null), "");
+  const html = UI.coberturaHtml("pca", cob);
+  assert.match(html, /<b>AM<\/b> 23\/11\/2026/); assert.match(html, /<b>RJ<\/b> em andamento/); assert.match(html, /<b>TO<\/b> aguardando/);
+  assert.equal((html.match(/<li>/g) || []).length, 27);
+  assert.equal(UI.coberturaHtml("irp", cob), "");
+});

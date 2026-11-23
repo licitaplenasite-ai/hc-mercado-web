@@ -96,4 +96,12 @@ create policy prospeccao_itens_select_autenticado on public.prospeccao_itens
   for select to authenticated using (public.cliente_aprovado());
 -- Sem policy de escrita: só service_role (bypassrls) grava.
 
+-- v3 (22/11/2026): resumo da cobertura da coleta (quando cada UF e tipo fechou a última coleta completa), gravado pelo
+-- robô em dados_robo (chaves prospeccao_cobertura_<grupo>). A tela e o Status das Ferramentas leem para explicar o vazio
+-- ("ainda não temos o plano de compras desse estado"). Só essas chaves; o progresso do robô (prospeccao_estado_*) não.
+drop policy if exists dados_robo_select_prospeccao_cobertura on public.dados_robo;
+create policy dados_robo_select_prospeccao_cobertura on public.dados_robo for select to authenticated
+  using (public.cliente_aprovado() and chave like 'prospeccao\_cobertura\_%');
+grant select on public.dados_robo to authenticated;
+
 commit;
