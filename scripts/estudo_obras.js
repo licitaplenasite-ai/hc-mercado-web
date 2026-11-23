@@ -1,6 +1,8 @@
 // Estudo contínuo de quem ganha e quem perde em obra (Orçamentista, fase 2). Robô semanal:
 //   node scripts/estudo_obras.js                 coleta dos dados abertos e recalcula as estatísticas
-//   node scripts/estudo_obras.js --semente x.csv carrega a amostra do estudo de 22/11 (amostra-obras-comprasgov.csv)
+//   node scripts/estudo_obras.js --semente scripts/sementes/amostra-obras-20261122.csv
+//     carrega a amostra do estudo de 22/11 (carga inicial, uma vez; na nuvem: workflow estudo-obras.yml, semente=1).
+//     O CSV do repositório é o de _historico/orcamentista sem órgão, município, número PNCP e vencedor (repo público).
 //
 // Fonte (pública, sem login; robots.txt de repositorio.dados.gov.br só bloqueia o Googlebot em /segrt/):
 //   repositorio.dados.gov.br/seges/comprasgov/propostas/AAAA/MM/propostas-AAAA-MM.csv.zip  todas as propostas de cada

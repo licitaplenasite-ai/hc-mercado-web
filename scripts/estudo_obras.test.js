@@ -121,3 +121,12 @@ test("URLs do repositório seguem o LEIAME (propostas com hífen, compras com su
   assert.equal(E.urlPropostas("2026-10"), "https://repositorio.dados.gov.br/seges/comprasgov/propostas/2026/10/propostas-2026-10.csv.zip");
   assert.equal(E.urlCompras("2026-10"), "https://repositorio.dados.gov.br/seges/comprasgov/pncp/2026/10/compra_2026_10.csv.zip");
 });
+
+test("semente do repositório (workflow estudo-obras.yml, semente=1): lê as 1466 disputas e não traz órgão nem vencedor", () => {
+  const texto = require("node:fs").readFileSync(require("node:path").join(__dirname, "sementes", "amostra-obras-20261122.csv"), "utf8");
+  const cabecalho = texto.split(/\r?\n/)[0].split(";").map((c) => c.trim()); // trim tira o BOM do UTF-8
+  for (const proibida of ["orgao", "vencedor", "municipio", "numero_controle_pncp"]) assert.ok(!cabecalho.includes(proibida), proibida);
+  const ds = E.disputasDaAmostra(texto);
+  assert.equal(ds.length, 1466);
+  assert.ok(ds.every((d) => d.fonte === "amostra_20261122" && /^[0-9]{17}$/.test(d.id_compra)));
+});

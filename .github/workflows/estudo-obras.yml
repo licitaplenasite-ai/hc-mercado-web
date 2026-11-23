@@ -6,8 +6,12 @@ name: Estudo de obras (quem ganha e quem perde)
 # Segunda às 13:00 UTC (10h de Brasília). Só baixa de novo quando algum arquivo mudou. Sem CNPJ nem nome no banco.
 # Também coleta os motivos de recusa do chat, se o dono ligou a coleta (desligada por padrão).
 # Falha de fonte ou formato: o job falha (e-mail do GitHub) e o motivo fica em dados_robo "estudo_obras_estado".
-# Precisa de supabase/orcamento_estudo.sql aplicado antes. Carga inicial (uma vez, local):
-#   node scripts/estudo_obras.js --semente _historico/orcamentista/amostra-obras-comprasgov.csv
+# Precisa de supabase/orcamento_estudo.sql aplicado antes.
+# Carga inicial (uma vez, na nuvem, sem a máquina do dono): Actions > este workflow > Run workflow com semente=1.
+# Carrega scripts/sementes/amostra-obras-20261122.csv (amostra do estudo de 22/11, com disputas de 2023 em diante,
+# mais antigas que os 18 meses que o robô relê) e recalcula as estatísticas. É a amostra de _historico/orcamentista
+# sem órgão, município, número PNCP e nome do vencedor: o repositório é público e o banco do estudo não guarda nome.
+# Rodar de novo é seguro: a semente nunca sobrescreve disputa já coletada pelo robô.
 concurrency:
   group: estudo-obras
   cancel-in-progress: false
@@ -15,7 +19,12 @@ concurrency:
 on:
   schedule:
     - cron: "0 13 * * 1"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      semente:
+        description: "1 = só carrega a amostra do estudo de 22/11 (carga inicial) e recalcula"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -35,4 +44,7 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           ESTUDO_MESES: "18"
           LIMITE_MINUTOS: "28"
-        run: node scripts/estudo_obras.js
+          SEMENTE: ${{ github.event.inputs.semente || '' }}
+        run: |
+          if [ "$SEMENTE" = "1" ]; then node scripts/estudo_obras.js --semente scripts/sementes/amostra-obras-20261122.csv
+          else node scripts/estudo_obras.js; fi

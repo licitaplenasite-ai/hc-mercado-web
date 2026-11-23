@@ -126,3 +126,98 @@ test("existe: só 404 é 'não publicado'; 429/403 repete e, se persistir, falha
   assert.equal(await S.existe("https://x/a.zip", resposta(429, 429, 200), 0), true);
   await assert.rejects(S.existe("https://x/a.zip", resposta(429, 403), 0), /HTTP 403 .*anti-robô/);
 });
+
+// ---------- rota reserva (ZIP local) e "falha nunca apaga o que está gravado" ----------
+// Banco falso: troca o fetch global (supabase_dados.js usa fetch) e anota cada pedido.
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const AdmZip = require("adm-zip");
+const UFS27 = "AC AL AM AP BA CE DF ES GO MA MG MS MT PA PB PE PI PR RJ RN RO RR RS SC SE SP TO".split(" ");
+const colunaDe = (i) => (i < 26 ? String.fromCharCode(65 + i) : "A" + String.fromCharCode(39 + i));
+const c = (ref, v) => (typeof v === "number" ? `<c r="${ref}"><v>${v}</v></c>` : `<c r="${ref}" t="inlineStr"><is><t>${v}</t></is></c>`);
+function zipSinapi(dir, nome, preco) {
+  const cab = `<row r="4">${UFS27.map((uf, i) => c(`${colunaDe(5 + i)}4`, uf)).join("")}</row>`;
+  const linha = (cod, desc) => `<row r="11">${c("A11", "G")}${c("B11", cod)}${c("C11", desc)}${c("D11", "M2")}${UFS27.map((_, i) => (preco ? c(`${colunaDe(5 + i)}11`, preco) : "")).join("")}</row>`;
+  const aba = (cod, desc) => `<worksheet><sheetData>${cab}${linha(cod, desc)}</sheetData></worksheet>`;
+  const abas = { ISD: aba(370, "AREIA"), ICD: aba(370, "AREIA"), CSD: aba(104658, "PISO"), CCD: aba(104658, "PISO"),
+    "Analítico": `<worksheet><sheetData><row r="12">${c("B12", 104658)}${c("C12", "INSUMO")}${c("D12", 370)}${c("E12", "AREIA")}${c("G12", 0.5)}</row></sheetData></worksheet>` };
+  const xlsx = new AdmZip(), nomes = Object.keys(abas);
+  xlsx.addFile("xl/workbook.xml", Buffer.from(`<workbook><sheets>${nomes.map((n, i) => `<sheet name="${n}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join("")}</sheets></workbook>`));
+  xlsx.addFile("xl/_rels/workbook.xml.rels", Buffer.from(`<Relationships>${nomes.map((_, i) => `<Relationship Id="rId${i + 1}" Type="x" Target="worksheets/sheet${i + 1}.xml"/>`).join("")}</Relationships>`));
+  nomes.forEach((n, i) => xlsx.addFile(`xl/worksheets/sheet${i + 1}.xml`, Buffer.from(abas[n])));
+  const zip = new AdmZip();
+  zip.addFile("SINAPI_Referência_2026_10.xlsx", xlsx.toBuffer());
+  const caminho = path.join(dir, nome);
+  zip.writeZip(caminho);
+  return caminho;
+}
+function bancoFalso({ vigente = null, versoes = [], falharEm = null } = {}) {
+  const pedidos = [];
+  globalThis.fetch = async (url, op = {}) => {
+    const metodo = op.method || "GET", u = String(url);
+    pedidos.push({ metodo, u });
+    if (!u.includes("supabase.co")) return new Response("bloqueado", { status: 403 }); // CAIXA barrando o robô
+    if (falharEm && u.includes(falharEm) && metodo === "POST") return new Response("erro", { status: 500 });
+    if (u.includes("sinapi_itens?select=referencia")) return Response.json(vigente ? [{ referencia: vigente }] : []);
+    if (u.includes("bases_preco_versoes?base=eq.SINAPI")) return Response.json(versoes);
+    if (u.includes("bases_preco_versoes?on_conflict")) return Response.json([{ id: 7 }]);
+    if (u.includes("dados_robo?chave")) return Response.json([]);
+    return new Response(null, { status: 201 });
+  };
+  return pedidos;
+}
+const apagouVigente = (pedidos) => pedidos.some((p) => p.metodo === "DELETE" && /\/sinapi_/.test(p.u));
+const pastaZip = fs.mkdtempSync(path.join(os.tmpdir(), "sinapi-teste-"));
+const fetchOriginal = globalThis.fetch;
+test.after(() => { globalThis.fetch = fetchOriginal; fs.rmSync(pastaZip, { recursive: true, force: true }); });
+process.env.SUPABASE_SERVICE_ROLE_KEY ||= "chave-de-teste";
+
+test("referenciaDoArquivo: nome oficial, retificação, mês vem do nome e precisa bater com SINAPI_REFERENCIA", () => {
+  assert.deepEqual(S.referenciaDoArquivo("/tmp/x/SINAPI-2026-10-formato-xlsx.zip", ""), { mes: "2026-10", url: "https://www.caixa.gov.br/Downloads/sinapi-relatorios-mensais/SINAPI-2026-10-formato-xlsx.zip", arquivo: "/tmp/x/SINAPI-2026-10-formato-xlsx.zip" });
+  assert.equal(S.referenciaDoArquivo("SINAPI-2025-10-formato-xlsx_Retificacao01.zip", "2025-10").mes, "2025-10");
+  assert.throws(() => S.referenciaDoArquivo("SINAPI-2026-10-formato-xlsx.zip", "2026-09"), /é de 2026-10, mas SINAPI_REFERENCIA pede 2026-09/);
+  assert.throws(() => S.referenciaDoArquivo("sinapi outubro (1).zip", ""), /nome oficial/);
+  assert.throws(() => S.referenciaDoArquivo("SINAPI-2026-13-formato-xlsx.zip", ""), /nome oficial/);
+});
+
+test("download da CAIXA bloqueado: erro e nenhum pedido ao banco (a referência vigente fica intacta)", async () => {
+  const pedidos = bancoFalso({ vigente: "2026-09-01" });
+  await assert.rejects(S.coletarMes({ mes: "2026-10", url: "https://www.caixa.gov.br/Downloads/sinapi-relatorios-mensais/SINAPI-2026-10-formato-xlsx.zip" }, UFS27, { vigente: true, lote: 1000 }), /Download do SINAPI falhou: HTTP 403/);
+  assert.equal(pedidos.filter((p) => p.u.includes("supabase.co")).length, 0);
+});
+
+test("rota reserva: ZIP local grava a vigente, só apaga a referência anterior depois, e grava o histórico", async () => {
+  const pedidos = bancoFalso({ vigente: "2026-09-01" });
+  const ref = S.referenciaDoArquivo(zipSinapi(pastaZip, "SINAPI-2026-10-formato-xlsx.zip", 12.5), "2026-10");
+  const lido = await S.coletarMes(ref, UFS27, { vigente: true, lote: 1000 });
+  assert.equal(lido.custos.length, 27 * 2);
+  assert.ok(!pedidos.some((p) => p.u.includes("caixa.gov.br")), "não fala com a CAIXA");
+  const ultimoUpsert = pedidos.findLastIndex((p) => p.metodo === "POST" && /\/sinapi_/.test(p.u));
+  const primeiroDelete = pedidos.findIndex((p) => p.metodo === "DELETE" && /\/sinapi_/.test(p.u));
+  assert.ok(ultimoUpsert >= 0 && primeiroDelete > ultimoUpsert, "limpeza só depois de gravar tudo");
+  assert.ok(pedidos.filter((p) => p.metodo === "DELETE" && /\/sinapi_/.test(p.u)).every((p) => p.u.includes("referencia=lt.2026-10-01")));
+  assert.ok(pedidos.some((p) => p.u.includes("bases_preco_versoes?on_conflict")), "histórico gravado");
+});
+
+test("falha no meio da gravação (sinapi_custos): erro e nada apagado", async () => {
+  const pedidos = bancoFalso({ vigente: "2026-09-01", falharEm: "sinapi_custos" });
+  const ref = S.referenciaDoArquivo(path.join(pastaZip, "SINAPI-2026-10-formato-xlsx.zip"), "");
+  await assert.rejects(S.coletarMes(ref, UFS27, { vigente: true, lote: 1000 }), /sinapi_custos/);
+  assert.equal(apagouVigente(pedidos), false);
+});
+
+test("ZIP mais antigo que a vigente não rebaixa a referência (pede so_historico)", async () => {
+  const pedidos = bancoFalso({ vigente: "2026-11-01" });
+  const ref = S.referenciaDoArquivo(path.join(pastaZip, "SINAPI-2026-10-formato-xlsx.zip"), "");
+  await assert.rejects(S.coletarMes(ref, UFS27, { vigente: true, lote: 1000 }), /mais antigo que a referência vigente \(2026-11\).*so_historico=1/);
+  assert.ok(!pedidos.some((p) => /\/sinapi_/.test(p.u) && p.metodo !== "GET"));
+});
+
+test("ZIP zerado de um mês já gravado com preço: alarme, sem marcar o mês como zerado e sem apagar nada", async () => {
+  const pedidos = bancoFalso({ vigente: "2026-10-01", versoes: [{ data_base: "2026-10-01", situacao: "precos", arquivo: "SINAPI-2026-10-formato-xlsx_Retificacao01.zip" }] });
+  const pasta = fs.mkdtempSync(path.join(pastaZip, "zerado-"));
+  const ref = S.referenciaDoArquivo(zipSinapi(pasta, "SINAPI-2026-10-formato-xlsx.zip", null), "");
+  await assert.rejects(S.coletarMes(ref, UFS27, { vigente: true, lote: 1000 }), (e) => e.zerada === true);
+  assert.ok(!pedidos.some((p) => p.metodo !== "GET"), "nenhuma escrita");
+});

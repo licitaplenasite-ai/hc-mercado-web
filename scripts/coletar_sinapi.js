@@ -27,18 +27,29 @@
 // publicou "_RetificacaoNN" mais nova que a gravada (ou o mês estava zerado ou faltando), regrava o histórico do mês.
 // Alarme no padrão dos robôs: estado em dados_robo "bases_preco_saude" (saudeFonte, ultimoErro, ultimoSucessoEm) e saída
 // com erro, que o GitHub Actions avisa por e-mail.
+// Rota reserva (23/11/2026: o WAF da CAIXA barra o robô com 429/403 e as tabelas ficaram vazias): uma pessoa baixa no
+// navegador o MESMO ZIP oficial (SINAPI-AAAA-MM-formato-xlsx[_RetificacaoNN].zip), anexa a um Release do repositório
+// e roda o workflow sinapi.yml com arquivo_release=<tag>. O job baixa o anexo e passa SINAPI_ARQUIVO: o robô não fala
+// com a CAIXA, confere que o nome do arquivo é o oficial e bate com SINAPI_REFERENCIA (vazia = mês do nome) e segue o
+// fluxo normal (upsert, histórico, checagem de zerada, saúde). Nada roda na máquina do dono.
+// Falha nunca apaga o que está gravado: download, leitura e conferência vêm antes de qualquer escrita; a referência
+// anterior só é apagada depois que a nova subiu inteira; mês mais velho que o vigente só entra como histórico (não
+// rebaixa a vigente); arquivo zerado não marca como "zerada" um mês que já está gravado com preço.
 //
 // Variáveis:
 //   SUPABASE_SERVICE_ROLE_KEY  obrigatória para gravar (scripts/supabase_dados.js)
 //   SINAPI_UFS                 todas as 27 (lista separada por vírgula, ex.: "AC,PB")
 //   SINAPI_MESES_ATRAS         6 — quantos meses voltar procurando a última referência publicada
 //   SINAPI_REFERENCIA          opcional "AAAA-MM" — força um mês (sem sondar)
+//   SINAPI_ARQUIVO             opcional — caminho de um ZIP oficial já baixado (rota reserva, ver abaixo)
 //   SINAPI_SO_HISTORICO        "1" — grava só o histórico daquele mês (carregar meses antigos sem trocar a vigente)
 //   SINAPI_MESES_REVISAR       3 — meses anteriores conferidos à procura de retificação
 //   SINAPI_PAUSA_MS            3000 — espera entre sondagens na CAIXA (o limitador anti-robô dela barra rajadas)
 //   SINAPI_LIMIAR_ZERADA       0.5 — fração de linhas sem preço que marca a referência como zerada
 //   BASES_RETENCAO_MESES       24 — ver scripts/bases_preco.js
 //   TAMANHO_LOTE_BANCO         1000
+const fs = require("node:fs");
+const path = require("node:path");
 const AdmZip = require("adm-zip");
 const { restFetch, upsertEmLotes } = require("./supabase_dados");
 const bp = require("./bases_preco");
@@ -97,7 +108,17 @@ async function existe(url, pedirFn = pedir, pausaMs = num(process.env.SINAPI_PAU
   }
   throw new Error(`CAIXA respondeu HTTP ${status} para ${url.split("/").pop()} (${status === 429 || status === 403 ? "limite/bloqueio anti-robô" : "erro do site"}). Tente mais tarde; não é falta de publicação.`);
 }
+// Rota reserva: ZIP local. O nome tem que ser o oficial (é o que vai para fonte_url/arquivo no catálogo e para a
+// conferência de retificação) e o mês tem que bater com SINAPI_REFERENCIA, para não gravar um mês no lugar de outro.
+function referenciaDoArquivo(caminho, forcado = process.env.SINAPI_REFERENCIA) {
+  const nome = path.basename(caminho);
+  const mes = /^SINAPI-(\d{4}-(?:0[1-9]|1[0-2]))-formato-xlsx(?:_Retificacao\d{2})?\.zip$/.exec(nome)?.[1];
+  if (!mes) throw new Error(`SINAPI_ARQUIVO "${nome}" não tem o nome oficial da CAIXA (SINAPI-AAAA-MM-formato-xlsx.zip ou _RetificacaoNN.zip). Anexe o arquivo como veio do site, sem renomear.`);
+  if (forcado && forcado !== mes) throw new Error(`SINAPI_ARQUIVO é de ${mes}, mas SINAPI_REFERENCIA pede ${forcado}. Confira o arquivo anexado.`);
+  return { mes, url: BASE + nome, arquivo: caminho };
+}
 async function acharReferencia(agora = Date.now()) {
+  if (process.env.SINAPI_ARQUIVO) return referenciaDoArquivo(process.env.SINAPI_ARQUIVO);
   const forcado = process.env.SINAPI_REFERENCIA;
   if (forcado) {
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(forcado)) throw new Error("SINAPI_REFERENCIA deve ser AAAA-MM.");
@@ -239,10 +260,14 @@ function versaoSinapi(mes, url, situacao, itens, zerados) {
 }
 
 // Baixa e lê um mês. zerada: arquivo publicado sem preço (ver cabeçalho).
-async function lerMes(ref, ufs) {
+async function baixarZip(ref) {
+  if (ref.arquivo) return fs.readFileSync(ref.arquivo);
   const r = await pedir(ref.url, "GET", 300000);
   if (!r.ok) throw new Error(`Download do SINAPI falhou: HTTP ${r.status}`);
-  const pacote = abrirReferencia(Buffer.from(await r.arrayBuffer()));
+  return Buffer.from(await r.arrayBuffer());
+}
+async function lerMes(ref, ufs) {
+  const pacote = abrirReferencia(await baixarZip(ref));
   const tabela = (aba) => lerTabela(pacote.lerAba(aba), pacote.compartilhados, aba, ufs);
   let itens = [], custos = [], lidas = [];
   for (const [sd, cd] of [["ISD", "ICD"], ["CSD", "CCD"]]) {
@@ -260,6 +285,9 @@ async function lerMes(ref, ufs) {
 }
 
 async function gravarVigente(ref, ufs, { itens, custos, analitico }, lote) {
+  // Mês mais velho que o vigente (ex.: ZIP errado na rota reserva) misturaria preço antigo com o atual: recusa.
+  const [atual] = await (await restFetch("sinapi_itens?select=referencia&order=referencia.desc&limit=1")).json();
+  if (atual && String(atual.referencia).slice(0, 7) > ref.mes) throw new Error(`SINAPI ${ref.mes} é mais antigo que a referência vigente (${String(atual.referencia).slice(0, 7)}): nada trocado. Para guardar só no histórico, use so_historico=1.`);
   // Itens antes dos custos (chave estrangeira). Limpeza só depois de gravar tudo: falha no meio não apaga a referência anterior.
   await upsertEmLotes("sinapi_itens", itens, "tipo,codigo", lote);
   await upsertEmLotes("sinapi_custos", custos, "uf,tipo,codigo", lote);
@@ -276,7 +304,9 @@ async function coletarMes(ref, ufs, { vigente, lote }) {
   const lido = await lerMes(ref, ufs);
   const todas = ufs.length === TODAS_UFS.length;
   if (lido.zerada) {
-    if (todas) await bp.gravarVersao(versaoSinapi(ref.mes, ref.url, "zerada", lido.itens.length, lido.zerados), []);
+    // Não esconde um mês que já está gravado com preço (ex.: reenvio do arquivo original depois da retificação).
+    const comPreco = todas && (await bp.versoesGravadas("SINAPI")).some((v) => String(v.data_base).slice(0, 7) === ref.mes && v.situacao === "precos");
+    if (todas && !comPreco) await bp.gravarVersao(versaoSinapi(ref.mes, ref.url, "zerada", lido.itens.length, lido.zerados), []);
     throw Object.assign(new Error(`SINAPI ${ref.mes} (${ref.url.split("/").pop()}) veio sem preço em ${lido.zerados} linhas: referência zerada, nada trocado. Aguardando a retificação da CAIXA.`), { zerada: true });
   }
   if (vigente) await gravarVigente(ref, ufs, lido, lote);
@@ -310,7 +340,8 @@ async function main() {
   console.log(`SINAPI ${ref.mes}: ${ref.url}${soHistorico ? " (só histórico)" : ""}`);
   const lido = await coletarMes(ref, ufs, { vigente: !soHistorico, lote });
   console.log(`Referência ${ref.mes}: ${lido.itens.length} insumos/composições, ${lido.custos.length} preços em ${ufs.length} UF(s) (${ufs.join(",")}), ${lido.analitico.length} itens de composição analítica.`);
-  if (ufs.length === TODAS_UFS.length && !process.env.SINAPI_REFERENCIA) {
+  // Com mês forçado ou arquivo da rota reserva não sonda a CAIXA atrás de retificação (o bloqueio derrubaria a execução).
+  if (ufs.length === TODAS_UFS.length && !process.env.SINAPI_REFERENCIA && !process.env.SINAPI_ARQUIVO) {
     for (const r of await retificacoesPendentes(ref.mes, await bp.versoesGravadas("SINAPI"))) {
       console.log(`Histórico: regravando ${r.url} (retificação, mês zerado ou faltando).`);
       await coletarMes(r, ufs, { vigente: false, lote });
@@ -330,4 +361,4 @@ async function falhar(e) {
 
 if (require.main === module) main().catch(falhar);
 
-module.exports = { pedir, existe,partesSinapi, versaoSinapi, retificacoesPendentes, mesesParaTras, nomesDoMes, textosCompartilhados, mapaAbas, linhasDaAba, lerTabela, lerAnalitico, montarLinhas, semAcento, xmlTexto, abrirReferencia };
+module.exports = { pedir, existe, acharReferencia, referenciaDoArquivo, coletarMes, partesSinapi, versaoSinapi, retificacoesPendentes, mesesParaTras, nomesDoMes, textosCompartilhados, mapaAbas, linhasDaAba, lerTabela, lerAnalitico, montarLinhas, semAcento, xmlTexto, abrirReferencia };

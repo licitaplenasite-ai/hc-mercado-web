@@ -9,6 +9,12 @@ name: SINAPI (preços de insumos e composições da CAIXA)
 # recusa referência zerada (falha = e-mail do GitHub + estado em dados_robo "bases_preco_saude").
 # Não escreve no repositório: só no Supabase. Precisa de supabase/sinapi_todas_ufs.sql e bases_preco.sql aplicados.
 # Carregar meses antigos no histórico: Run workflow com referencia=AAAA-MM e so_historico=1 (um mês por vez).
+# Rota reserva (o WAF da CAIXA barra o robô com 429/403, como em 23/11/2026): alguém baixa o ZIP no navegador em
+# caixa.gov.br/sinapi, cria um Release neste repositório com a tag sinapi-AAAA-MM e o ZIP anexado SEM renomear, e
+# roda este workflow com arquivo_release=sinapi-AAAA-MM. O job baixa o anexo com o GITHUB_TOKEN (só leitura) e o
+# robô lê o arquivo em vez de falar com a CAIXA; o resto do fluxo é o mesmo. A base fica no Supabase: nada depende
+# da máquina de ninguém nem do portal da CAIXA no ar na hora do orçamento.
+# Falha (download, arquivo errado, zerado, banco) nunca apaga a referência gravada: ver cabeçalho do script.
 concurrency:
   group: sinapi
   cancel-in-progress: false
@@ -30,6 +36,10 @@ on:
         description: "1 = só grava o histórico do mês (não troca a referência vigente)"
         required: false
         default: ""
+      arquivo_release:
+        description: "Rota reserva: tag do Release com o ZIP oficial anexado (ex.: sinapi-2026-10). Vazio = baixa da CAIXA"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -44,6 +54,19 @@ jobs:
         with:
           node-version: "20"
       - run: npm ci
+      - name: Baixar o ZIP anexado ao Release (rota reserva)
+        if: github.event.inputs.arquivo_release != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.inputs.arquivo_release }}
+        run: |
+          [[ "$TAG" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "::error::Tag inválida: $TAG"; exit 1; }
+          pasta="$RUNNER_TEMP/sinapi"; mkdir -p "$pasta"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern 'SINAPI-*-formato-xlsx*.zip' --dir "$pasta"
+          arquivos=("$pasta"/*.zip)
+          [ "${#arquivos[@]}" = 1 ] || { echo "::error::O Release $TAG precisa ter exatamente 1 ZIP SINAPI-AAAA-MM-formato-xlsx*.zip (achei ${#arquivos[@]})."; exit 1; }
+          ls -l "${arquivos[0]}"
+          echo "SINAPI_ARQUIVO=${arquivos[0]}" >> "$GITHUB_ENV"
       - name: Coletar SINAPI
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
