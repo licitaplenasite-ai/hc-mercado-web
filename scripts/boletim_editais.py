@@ -114,8 +114,13 @@ SEGMENTO_PARA_PALAVRAS_CHAVE = {
 }
 
 
+def mascarar_email(texto):
+    # LGPD: o log do Actions é público (repositório público). "fulano@gmail.com" vira "fu***@gmail.com".
+    return re.sub(r"([\w.+-]{1,2})[\w.+-]*@([\w-]+\.[\w.]+)", r"\1***@\2", str(texto))
+
+
 def log(msg):
-    linha = "[" + datetime.now().strftime("%d/%m/%Y %H:%M:%S") + "] " + msg
+    linha = "[" + datetime.now().strftime("%d/%m/%Y %H:%M:%S") + "] " + mascarar_email(msg)
     print(linha, flush=True)
 def hoje_e_feriado_nacional():
     try:
@@ -703,7 +708,9 @@ def carregar_cabecalhos(ids, hoje=None):
     lista = ",".join(ids)
     try:
         clientes = _get_json("clientes?select=id,nome,codigo&id=in.(" + lista + ")")
-        assinaturas = _get_json("assinaturas?select=usuario_id,situacao,teste_ate,vence_em,planos(nome)&usuario_id=in.(" + lista + ")")
+        # planos!assinaturas_plano_fkey: assinaturas tem 2 chaves para planos (plano e plano_solicitado); sem dizer qual,
+        # o PostgREST responde 300 (Multiple Choices) e o boletim saiu sem cabeçalho de 21 a 23/11.
+        assinaturas = _get_json("assinaturas?select=usuario_id,situacao,teste_ate,vence_em,planos!assinaturas_plano_fkey(nome)&usuario_id=in.(" + lista + ")")
     except Exception as e:
         log("AVISO: dados do cabecalho do boletim indisponiveis (" + str(e) + ").")
         return {}
@@ -928,6 +935,9 @@ def enviar_zeptomail(token, destino_email, nome_destinatario, assunto, texto, ht
         corpo_erro = e.read().decode("utf-8", "replace")
         if re.search(r"SM_11[13]|sender|from|domain", corpo_erro, re.I):
             e.msg = "remetente recusado pelo ZeptoMail: confirme " + REMETENTE_ZEPTO + " como remetente verificado no Agent"
+        else:
+            # O motivo do 400 vem no corpo (código TM_/SM_ e mensagem); sem e-mail do destinatário no log.
+            e.msg = (e.msg or "") + " — " + re.sub(r"[\w.+-]+@[\w-]+\.[\w.]+", "<e-mail>", corpo_erro)[:300]
         raise
 
 

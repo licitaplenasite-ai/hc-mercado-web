@@ -327,3 +327,28 @@ def test_boletim_sai_de_boletim_com_resposta_para_o_dono(monkeypatch):
     b.enviar_zeptomail("token-falso", "a@b.c", "A", "Assunto", "texto", "<p>x</p>")
     assert enviados[0]["from"] == {"address": "boletim@licitaplena.com.br", "name": "LicitaPlena Boletim"}
     assert enviados[0]["reply_to"] == [{"address": "licitaplena.site@gmail.com", "name": "LicitaPlena"}]
+
+
+# ---- 23/11: log público sem e-mail e cabeçalho com a chave certa de planos ----
+def test_mascarar_email_esconde_endereco_no_log():
+    import boletim_editais as b
+    assert b.mascarar_email("E-mail enviado para fulano.tal@gmail.com com 3") == "E-mail enviado para fu***@gmail.com com 3"
+    assert b.mascarar_email("sem e-mail aqui") == "sem e-mail aqui"
+
+
+def test_cabecalho_usa_chave_explicita_de_planos(monkeypatch):
+    import boletim_editais as b
+    pedidos = []
+
+    def falso(caminho):
+        pedidos.append(caminho)
+        if caminho.startswith("clientes"):
+            return [{"id": "c1", "nome": "Fulano", "codigo": "LP-0001"}]
+        return [{"usuario_id": "c1", "situacao": "ativa", "vence_em": "2027-01-10", "planos": {"nome": "Empresa"}}]
+
+    monkeypatch.setattr(b, "_get_json", falso)
+    cab = b.carregar_cabecalhos(["c1"], hoje=b.date(2026, 11, 23))
+    # Sem "!assinaturas_plano_fkey" o PostgREST responde 300 (duas chaves para planos) e o cabeçalho some.
+    assert any("planos!assinaturas_plano_fkey(nome)" in p for p in pedidos)
+    assert cab["c1"]["codigo"] == "LP-0001"
+    assert "Empresa" in cab["c1"]["vigencia"]
