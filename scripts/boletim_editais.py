@@ -935,6 +935,15 @@ def montar_email_texto(nome_empresa, filtro, edicao, quantidade, link, resumo=No
             "Acessar o boletim: " + link + "\n" + rodape)
 
 
+def destinatarios_do_teste(teste, destinatarios, jornais):
+    # Devolve f(email, cliente_id) -> bool. Com "@": compara o e-mail; sem "@": compara o código do cliente.
+    if "@" in teste:
+        return lambda email, _id: (email or "").strip().lower() == teste
+    ids = [d.get("id") for d in destinatarios] + [j.get("cliente_id") for j in jornais]
+    codigos = {i: str(c.get("codigo") or "").strip().lower() for i, c in carregar_cabecalhos(ids).items()}
+    return lambda _email, cid: bool(cid) and codigos.get(cid) == teste
+
+
 def somente_email():
     # Modo de teste do workflow (input somente_email): e-mail em minúsculas, ou "" na rodada normal.
     return (os.environ.get("BOLETIM_SOMENTE_EMAIL") or "").strip().lower()
@@ -1137,8 +1146,11 @@ def main():
     jornais = carregar_jornais() if e_rodada_dos_jornais() else []
     teste = somente_email()
     if teste:
-        destinatarios = [d for d in destinatarios if (d.get("email") or "").strip().lower() == teste]
-        jornais = [j for j in jornais if (j.get("email") or "").strip().lower() == teste]
+        # O repositório é público e o input do workflow aparece na página da rodada: aceita também o CÓDIGO do
+        # cliente (clientes.codigo, o "Identificação do cliente" do cabeçalho), para o teste não expor e-mail.
+        alvo = destinatarios_do_teste(teste, destinatarios, jornais)
+        destinatarios = [d for d in destinatarios if alvo(d.get("email"), d.get("id"))]
+        jornais = [j for j in jornais if alvo(j.get("email"), j.get("cliente_id"))]
         log("MODO TESTE (somente_email): " + str(len(destinatarios)) + " boletim(ns) e " + str(len(jornais))
             + " jornal(is) para " + teste + "; nada sera gravado.")
     log("Jornais nesta rodada: " + str(len(jornais)) + ".")

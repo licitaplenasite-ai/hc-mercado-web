@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       somente_email:
-        description: "Teste: manda o boletim so para este e-mail (precisa ser de uma conta aprovada). Nao marca editais como vistos, nao cria edicao nem numero, nao grava log. Vazio = rodada normal para todos os clientes."
+        description: "Teste: manda o boletim so para este CODIGO de cliente (Identificacao do cliente; preferivel, o repositorio e publico) ou e-mail (precisa ser de uma conta aprovada). Nao marca editais como vistos, nao cria edicao nem numero, nao grava log. Vazio = rodada normal para todos os clientes."
         required: false
         default: ""
 

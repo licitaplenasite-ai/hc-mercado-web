@@ -448,3 +448,12 @@ def test_layout_resiste_ao_gmail_escuro_e_tem_cabecalho_em_tabela():
     rotulos = re.findall(r'<td width="38%"[^>]*>([^<]+)</td>', html)
     assert rotulos == ["Identificação do cliente", "Empresa", "Filtro", "Vigência da assinatura"]
     assert html.index("Edição nº") < html.index("Data do processamento") < html.index("Identificação do cliente") < html.index("Aos cuidados de") < html.index("Acessar o boletim")
+
+
+def test_modo_teste_aceita_codigo_do_cliente(monkeypatch):
+    import boletim_editais as b
+    monkeypatch.setattr(b, "carregar_cabecalhos", lambda ids: {"c1": {"codigo": "LP-0001"}, "c2": {"codigo": "LP-0002"}})
+    alvo = b.destinatarios_do_teste("lp-0002", [{"id": "c1"}, {"id": "c2"}], [])
+    assert [cid for cid in ("c1", "c2", None) if alvo("x@y.com", cid)] == ["c2"]
+    por_email = b.destinatarios_do_teste("x@y.com", [], [])
+    assert por_email("X@Y.com ", None) and not por_email("z@y.com", "c1")
