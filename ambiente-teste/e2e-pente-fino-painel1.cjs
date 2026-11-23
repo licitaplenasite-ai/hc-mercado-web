@@ -122,7 +122,7 @@ async function main() {
     await passo('1280 · Menu lateral: cada item abre o lugar certo', p, async () => {
       const esperado = { Hoje: '/sistema', Dashboard: '#dashboard', Boletim: '#boletim', 'Calendário': '#boletim', 'Encontrar Licitações': '#oportunidades',
         'Inteligência de Mercado': '#diagnostico', 'Prospecção': '/prospeccao.html', 'Licitação anterior': '#diagnostico', 'Analisar concorrente': '#empresa',
-        'Convênios e Emendas Federais': '#transparencia', 'Pesquisa de Preços': '#precos', 'Calculadora de BDI': '/bdi.html', 'Preços SINAPI': '/sinapi.html',
+        'Convênios e Emendas Federais': '#transparencia', 'Pesquisa de Preços': '#precos', 'Calculadora de BDI': '/bdi.html', 'Preços SINAPI': '/sinapi.html', 'Orçamento de obra': '/orcamento-obra.html',
         'Mão de obra': '/mao-de-obra.html', Funil: '#kanban', Quadros: '/quadros.html', Processos: '/processos.html', 'Minhas empresas e documentos': '/operacao.html',
         'Extensão': '/extensao.html', 'Jurídico & Dúvidas': '#juridico', 'Status das Ferramentas': '#status' };
       const itens = await p.$$eval('#menu-principal > a, #menu-principal > button', (e) => e.map((x) => ({ txt: x.querySelector('.nav-label')?.innerText.trim(), target: x.target })));
