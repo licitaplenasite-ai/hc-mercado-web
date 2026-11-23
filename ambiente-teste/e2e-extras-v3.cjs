@@ -177,10 +177,11 @@ function limpar() {
       psql(`insert into pecas_juridicas(id,tipo,texto,orgao,lei,url,data,busca) values ('${ID_PECA}','impugnacao','Impugnação fictícia e2e-v3 sobre exigência de amostra.','MUNICIPIO FICTICIO','14133',
         'https://pncp.gov.br/app/editais/99999999000191/2026/1','2026-11-19','impugnacao ficticia e2e-v3 sobre exigencia de amostra municipio ficticio');`);
       await p.goto(SITE + '/painel.html#juridico');
-      await p.waitForSelector('#juridico-central .jur-item', { timeout: 20000 });
+      // Tela nova do Jurídico (c6064f5): abas e filtro de lei em <select> no lugar do checkbox 14.133.
+      await p.waitForSelector('#juridico-central .jur-abas', { timeout: 20000 });
       await p.click('#jur-aba-banco');
       await p.fill('#jur-banco-palavras', 'amostra');
-      await p.check('#jur-banco-14133');
+      await p.selectOption('#jur-banco-lei', '14133');
       await p.click('#jur-painel-banco .jur-primario');
       await p.waitForSelector('#jur-painel-banco a:has-text("Abrir no PNCP")', { timeout: 20000 });
       await p.locator('#juridico').screenshot({ path: path.join(PRINTS, 'v3-10-pecas-pncp-1280.png') });

@@ -174,7 +174,7 @@ async function main() {
       await p.goto(SITE + '/painel.html#juridico'); await p.waitForTimeout(3000);
       await p.evaluate(() => document.querySelector('nav button[data-alvo="juridico"]')?.click()); await p.waitForTimeout(1500);
       const j = await p.innerText('#juridico');
-      exigir(/Perguntas, modelos/.test(j) && !JARGAO.test(j) && !/não há robô de lances|revisão jurídica pendente/.test(j), 'jurídico: ' + (j.match(JARGAO) || [j.slice(0, 120)])[0]);
+      exigir(/Jurídico: modelos, prazos e artigos/.test(j) && !JARGAO.test(j) && !/não há robô de lances|revisão jurídica pendente/.test(j), 'jurídico: ' + (j.match(JARGAO) || [j.slice(0, 120)])[0]);
       await p.screenshot({ path: path.join(PRINTS, 'juridico-1280.png'), fullPage: false });
       await p.evaluate(() => document.querySelector('nav button[data-alvo="status"]')?.click());
       await p.waitForFunction(() => !/Verificando/.test(document.querySelector('#status-cartoes').innerText), null, { timeout: 30000 });
