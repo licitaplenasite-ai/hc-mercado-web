@@ -74,15 +74,18 @@ function limpar() {
       return 'site provável, contato, aderência e "uso justo" sem número';
     });
 
-    await passo('Ajuda: sem botão morto de WhatsApp nem "em breve" quando não há número configurado', p, async () => {
-      await p.evaluate(() => window.LicitaPlenaAjuda.abrir());
+    await passo('Ajuda: botão "Falar no WhatsApp" com o número do suporte de supabase-config.js', p, async () => {
+      // O servidor local serve um supabase-config.js próprio (URL/chave locais), sem o número: entra aqui o do arquivo real.
+      const numero = (fs.readFileSync(path.join(__dirname, '..', 'supabase-config.js'), 'utf8').match(/LICITAPLENA_WHATSAPP_SUPORTE = "(\d*)"/) || [])[1];
+      exigir(numero === '5592981937781', `número do suporte: ${numero}`);
+      await p.evaluate((n) => { window.LICITAPLENA_WHATSAPP_SUPORTE = n; window.LicitaPlenaAjuda.abrir(); }, numero);
       await p.waitForSelector('.lp-gaveta-fundo:not([hidden]) .lp-lista-tutoriais', { timeout: 10000 });
       const t = await p.innerText('.lp-gaveta-fundo:not([hidden]) .lp-gaveta');
-      exigir(!/em breve/i.test(t) && !/WhatsApp/.test(t) && /Mandar dúvida à equipe/.test(t), `ajuda: ${t.slice(0, 300)}`);
-      // O servidor local serve um supabase-config.js próprio (URL/chave locais), sem o número: o botão do WhatsApp não aparece.
+      const href = await p.getAttribute('.lp-gaveta-fundo:not([hidden]) a:has-text("Falar no WhatsApp")', 'href');
+      exigir(!/em breve/i.test(t) && href && href.startsWith(`https://wa.me/${numero}?text=`) && /Mandar dúvida à equipe/.test(t), `ajuda: ${href} ${t.slice(0, 300)}`);
       await p.locator('.lp-gaveta-fundo:not([hidden]) .lp-gaveta').screenshot({ path: path.join(PRINTS, 'v3-03-ajuda-video-whatsapp-1280.png') });
       await p.keyboard.press('Escape');
-      return 'sem "em breve" · sem WhatsApp sem número · "Mandar dúvida" presente';
+      return 'sem "em breve" · "Falar no WhatsApp" abre wa.me/' + numero + ' · "Mandar dúvida" presente';
     });
 
     await passo('Celular: tipo "Oportunidade nova no boletim" nas preferências de aviso', p, async () => {

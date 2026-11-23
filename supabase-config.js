@@ -7,7 +7,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_yH695cc52QUKYfFEgV5RwQ_0a8GLIeb";
 const TURNSTILE_SITEKEY = "";
 // WhatsApp do suporte: TROCAR pelo número de suporte (botão da Central de ajuda, ajuda-ui.js): só dígitos com DDI 55, ex.: "55" + DDD + número.
 // Vazio = botão "WhatsApp (em breve)" desligado. "var" de propósito: vira window.LICITAPLENA_WHATSAPP_SUPORTE.
-var LICITAPLENA_WHATSAPP_SUPORTE = "";
+var LICITAPLENA_WHATSAPP_SUPORTE = "5592981937781"; // mesmo número da HC/HCM (decisão do dono, 22/11)
 // HC Licitações (parceira, página hc.html e chamadas "Fale com a HC"): TROCAR pelo número e site da HC. Vazio = botões somem.
 // WhatsApp: só dígitos com DDI 55. Site: endereço completo começando com https://.
 var LICITAPLENA_HC_WHATSAPP = "5592981937781";
