@@ -34,3 +34,25 @@ test("pagamentos: falha na 1ª página é erro; depois dela, guarda o que leu co
   const r = await consultarAno("1", 2026, "t");
   assert.deepEqual([r.ok, r.dados.length, r.parcial], [true, 15, true]);
 });
+
+test("pagamentos: consulta com o Portal falhando não fica guardada; a completa fica (2ª vez não gasta o token)", async () => {
+  require("../_cache_publico")._limparMemoria();
+  const { comoLogado } = require("./fixtures/login-aprovado");
+  const handler = comoLogado(require("../despesas-fornecedor.js").handler);
+  const tokenAnterior = process.env.TRANSPARENCIA_TOKEN;
+  process.env.TRANSPARENCIA_TOKEN = "t";
+  const evento = { httpMethod: "GET", queryStringParameters: { cnpj: "14220230000170" } };
+  try {
+    global.fetch = async () => ({ ok: false });
+    assert.match(JSON.parse((await handler(evento)).body).erro, /Portal da Transparência/);
+    const pedidas = portal([3]);
+    const a = await handler(evento);
+    assert.equal(JSON.parse(a.body).totalDocumentos, 12);
+    const antes = pedidas.length;
+    const b = await handler(evento);
+    assert.equal(b.headers["X-Dados-Origem"], "cache");
+    assert.equal(pedidas.length, antes);
+  } finally {
+    if (tokenAnterior === undefined) delete process.env.TRANSPARENCIA_TOKEN; else process.env.TRANSPARENCIA_TOKEN = tokenAnterior;
+  }
+});

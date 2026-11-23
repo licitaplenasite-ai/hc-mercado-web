@@ -11,6 +11,7 @@
 //
 // Uso: GET /.netlify/functions/pncp-arquivos?cnpj=...&ano=...&sequencial=...
 const { cabecalhosPadrao, exigirAprovadoComLimite } = require("./_auth");
+const { comCache, cabecalhosDoCache } = require("./_cache_publico");
 const BASE_URL = "https://pncp.gov.br/api/pncp/v1/orgaos";
 const BASE_URL_COMPRA = "https://pncp.gov.br/api/consulta/v1/orgaos";
 
@@ -32,7 +33,20 @@ exports.handler = async (event) => {
     return { statusCode: 400, headers, body: JSON.stringify({ erro: "Informe cnpj, ano e sequencial válidos.", arquivos: [], situacaoCompraNome: null, situacaoCompraId: null }) };
   }
 
-  let arquivos = [];
+  // Lista de documentos e situação saem juntas (antes, uma depois da outra) e ficam guardadas 10 min entre clientes;
+  // com o PNCP fora do ar volta a última resposta (_cache_publico.js). Resposta sem nada (as 2 falharam) não é guardada.
+  try {
+    const r = await comCache(`pncp-arquivos|${cnpj}|${ano}|${sequencial}`, async () => {
+      const [arquivos, situacao] = await Promise.all([lerArquivos(cnpj, ano, sequencial), lerSituacao(cnpj, ano, sequencial)]);
+      return { arquivos, ...situacao };
+    }, { frescoS: 600, guardar: (v) => v.arquivos.length > 0 || v.situacaoCompraNome !== null });
+    return { statusCode: 200, headers: { ...headers, ...cabecalhosDoCache(r) }, body: JSON.stringify({ erro: null, ...r.valor }) };
+  } catch {
+    return { statusCode: 200, headers, body: JSON.stringify({ erro: null, arquivos: [], situacaoCompraNome: null, situacaoCompraId: null }) };
+  }
+};
+
+async function lerArquivos(cnpj, ano, sequencial) {
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 15000);
@@ -41,23 +55,21 @@ exports.handler = async (event) => {
       signal: ctrl.signal,
     });
     clearTimeout(t);
-    if (resp.ok) {
-      const dados = await resp.json();
-      arquivos = (Array.isArray(dados) ? dados : []).map((a) => ({
-        sequencialDocumento: a.sequencialDocumento,
-        titulo: a.titulo || "",
-        tipoDocumentoNome: a.tipoDocumentoNome || a.tipoDocumentoDescricao || "",
-        dataPublicacaoPncp: a.dataPublicacaoPncp || null,
-      }));
-    }
+    if (!resp.ok) return [];
+    const dados = await resp.json();
+    return (Array.isArray(dados) ? dados : []).map((a) => ({
+      sequencialDocumento: a.sequencialDocumento,
+      titulo: a.titulo || "",
+      tipoDocumentoNome: a.tipoDocumentoNome || a.tipoDocumentoDescricao || "",
+      dataPublicacaoPncp: a.dataPublicacaoPncp || null,
+    }));
   } catch (e) {
-    // segue mesmo sem lista de arquivos — não impede de mostrar a situação da compra
+    return []; // segue mesmo sem lista de arquivos — não impede de mostrar a situação da compra
   }
+}
 
-  // Busca a situação atual da compra (separado, não crítico: se falhar, só não mostra o
-  // aviso de status, mas a lista de arquivos continua funcionando normalmente).
-  let situacaoCompraNome = null;
-  let situacaoCompraId = null;
+// Situação atual da compra (não crítico: se falhar, só não mostra o aviso de status, mas a lista de arquivos continua).
+async function lerSituacao(cnpj, ano, sequencial) {
   try {
     const ctrl2 = new AbortController();
     const t2 = setTimeout(() => ctrl2.abort(), 10000);
@@ -66,14 +78,10 @@ exports.handler = async (event) => {
       signal: ctrl2.signal,
     });
     clearTimeout(t2);
-    if (respCompra.ok) {
-      const dadosCompra = await respCompra.json();
-      situacaoCompraNome = dadosCompra.situacaoCompraNome || null;
-      situacaoCompraId = dadosCompra.situacaoCompraId ?? null;
-    }
+    if (!respCompra.ok) return { situacaoCompraNome: null, situacaoCompraId: null };
+    const dadosCompra = await respCompra.json();
+    return { situacaoCompraNome: dadosCompra.situacaoCompraNome || null, situacaoCompraId: dadosCompra.situacaoCompraId ?? null };
   } catch (e) {
-    // não crítico
+    return { situacaoCompraNome: null, situacaoCompraId: null }; // não crítico
   }
-
-  return { statusCode: 200, headers, body: JSON.stringify({ erro: null, arquivos, situacaoCompraNome, situacaoCompraId }) };
-};
+}

@@ -5,6 +5,7 @@
 //
 // Uso: GET /.netlify/functions/pncp-itens?cnpj=...&ano=...&sequencial=...
 const { cabecalhosPadrao, exigirAprovadoComLimite } = require("./_auth");
+const { comCache, cabecalhosDoCache } = require("./_cache_publico");
 const BASE_URL = "https://pncp.gov.br/api/pncp/v1/orgaos";
 
 // Ver nota em pncp-proxy.js: alguns endpoints do PNCP resetam a conexão sem User-Agent de
@@ -36,59 +37,67 @@ exports.handler = async (event) => {
   if (cnpj.length !== 14 || !ano || !sequencial || (paginado && (!Number.isInteger(paginaPedida) || paginaPedida < 1 || paginaPedida > 1000))) {
     return { statusCode: 400, headers, body: JSON.stringify({ erro: "Informe cnpj, ano e sequencial válidos.", itens: [] }) };
   }
+  // Itens de um edital mudam pouco (retificação): 10 min guardado entre clientes, e com o PNCP fora do ar volta a última
+  // lista com a data (_cache_publico.js). Lista vazia não é guardada: pode ser o PNCP falhando no meio da paginação.
   try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 15000);
-    const tamanhoPagina = 100;
-    const itensPorNumero = new Map();
-    try {
-      for (let pagina = paginado ? paginaPedida : 1; pagina <= (paginado ? paginaPedida : 20); pagina += 1) {
-        const resp = await fetch(`${BASE_URL}/${cnpj}/compras/${ano}/${sequencial}/itens?pagina=${pagina}&tamanhoPagina=${tamanhoPagina}`, {
-          headers: { Accept: "application/json", "User-Agent": USER_AGENT_NAVEGADOR },
-          signal: ctrl.signal,
-        });
-        if (!resp.ok) {
-          if (paginado) throw new Error(`PNCP indisponível (${resp.status})`);
-          break;
-        }
-        const dados = await resp.json();
-        const lote = Array.isArray(dados) ? dados : (dados.data || []);
-        if (!Array.isArray(lote) || lote.length === 0) break;
-        let novos = 0;
-        for (const item of lote) {
-          const chave = String(item.numeroItem ?? item.numero ?? "");
-          if (!chave || itensPorNumero.has(chave)) continue;
-          itensPorNumero.set(chave, item);
-          novos += 1;
-        }
-        // Algumas versões da API devolvem uma lista única e ignoram paginação. Parar ao
-        // detectar repetição evita loops e ainda preserva todos os itens recebidos.
-        if (lote.length < tamanhoPagina || novos === 0) break;
-      }
-    } finally {
-      clearTimeout(t);
-    }
-    const itens = [...itensPorNumero.values()].map((i) => ({
-      numero: i.numeroItem,
-      descricao: i.descricao || "",
-      quantidade: i.quantidade,
-      unidade: i.unidadeMedida || "",
-      valorUnitarioEstimado: i.valorUnitarioEstimado,
-      valorTotal: i.valorTotal,
-      materialOuServico: i.materialOuServicoNome || "",
-      situacao: i.situacaoCompraItemNome || "",
-      beneficio: i.tipoBeneficioNome || "",
-      criterioJulgamento: i.criterioJulgamentoNome || "",
-      orcamentoSigiloso: i.orcamentoSigiloso === true,
-      margemPreferencia: margemPreferencia(i),
-      exigenciaConteudoNacional: i.exigenciaConteudoNacional === true,
-      ncmNbs: [i.ncmNbsCodigo, i.ncmNbsDescricao].filter(Boolean).join(" - "),
-      // CATMAT do Compras.gov (só em compras publicadas por ele): "Ver mercado deste item" busca por ele.
-      codigoCatalogo: /^\d{1,12}$/.test(String(i.catalogoCodigoItem ?? "")) ? String(i.catalogoCodigoItem) : null,
-      informacaoComplementar: i.informacaoComplementar || "",
-    }));
-    return { statusCode: 200, headers, body: JSON.stringify({ erro: null, itens, proximaPagina: paginado && itens.length === tamanhoPagina ? paginaPedida + 1 : null }) };
+    const r = await comCache(`pncp-itens|${cnpj}|${ano}|${sequencial}|${paginado ? paginaPedida : "todas"}`,
+      () => lerItens(cnpj, ano, sequencial, paginado, paginaPedida), { frescoS: 600, guardar: (corpo) => !corpo.includes('"itens":[]') });
+    return { statusCode: 200, headers: { ...headers, ...cabecalhosDoCache(r) }, body: r.valor };
   } catch (e) {
     return { statusCode: 200, headers, body: JSON.stringify({ erro: String((e && e.message) || e), itens: [] }) };
   }
 };
+
+async function lerItens(cnpj, ano, sequencial, paginado, paginaPedida) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 15000);
+  const tamanhoPagina = 100;
+  const itensPorNumero = new Map();
+  try {
+    for (let pagina = paginado ? paginaPedida : 1; pagina <= (paginado ? paginaPedida : 20); pagina += 1) {
+      const resp = await fetch(`${BASE_URL}/${cnpj}/compras/${ano}/${sequencial}/itens?pagina=${pagina}&tamanhoPagina=${tamanhoPagina}`, {
+        headers: { Accept: "application/json", "User-Agent": USER_AGENT_NAVEGADOR },
+        signal: ctrl.signal,
+      });
+      if (!resp.ok) {
+        if (paginado) throw new Error(`PNCP indisponível (${resp.status})`);
+        break;
+      }
+      const dados = await resp.json();
+      const lote = Array.isArray(dados) ? dados : (dados.data || []);
+      if (!Array.isArray(lote) || lote.length === 0) break;
+      let novos = 0;
+      for (const item of lote) {
+        const chave = String(item.numeroItem ?? item.numero ?? "");
+        if (!chave || itensPorNumero.has(chave)) continue;
+        itensPorNumero.set(chave, item);
+        novos += 1;
+      }
+      // Algumas versões da API devolvem uma lista única e ignoram paginação. Parar ao
+      // detectar repetição evita loops e ainda preserva todos os itens recebidos.
+      if (lote.length < tamanhoPagina || novos === 0) break;
+    }
+  } finally {
+    clearTimeout(t);
+  }
+  const itens = [...itensPorNumero.values()].map((i) => ({
+    numero: i.numeroItem,
+    descricao: i.descricao || "",
+    quantidade: i.quantidade,
+    unidade: i.unidadeMedida || "",
+    valorUnitarioEstimado: i.valorUnitarioEstimado,
+    valorTotal: i.valorTotal,
+    materialOuServico: i.materialOuServicoNome || "",
+    situacao: i.situacaoCompraItemNome || "",
+    beneficio: i.tipoBeneficioNome || "",
+    criterioJulgamento: i.criterioJulgamentoNome || "",
+    orcamentoSigiloso: i.orcamentoSigiloso === true,
+    margemPreferencia: margemPreferencia(i),
+    exigenciaConteudoNacional: i.exigenciaConteudoNacional === true,
+    ncmNbs: [i.ncmNbsCodigo, i.ncmNbsDescricao].filter(Boolean).join(" - "),
+    // CATMAT do Compras.gov (só em compras publicadas por ele): "Ver mercado deste item" busca por ele.
+    codigoCatalogo: /^\d{1,12}$/.test(String(i.catalogoCodigoItem ?? "")) ? String(i.catalogoCodigoItem) : null,
+    informacaoComplementar: i.informacaoComplementar || "",
+  }));
+  return JSON.stringify({ erro: null, itens, proximaPagina: paginado && itens.length === tamanhoPagina ? paginaPedida + 1 : null });
+}

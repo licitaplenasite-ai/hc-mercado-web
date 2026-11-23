@@ -6,6 +6,8 @@ const handler = comoLogado(require("../pncp-proxy").handler);
 const evento = (url) => ({ httpMethod: "GET", headers: {}, queryStringParameters: { url } });
 
 async function comFetch(respostas, fn) {
+  // Cada teste começa sem nada guardado (o proxy guarda as respostas 200 por URL).
+  require("../_cache_publico")._limparMemoria();
   const original = global.fetch, chamadas = [];
   global.fetch = async (url, op) => {
     chamadas.push({ url, op });
@@ -36,6 +38,19 @@ test("pncp-proxy para depois de 3 redirects", () =>
     const r = await handler(evento("https://pncp.gov.br/api/search?q=a"));
     assert.equal(r.statusCode, 502);
     assert.equal(chamadas.length, 4);
+  }));
+
+test("pncp-proxy guarda só a resposta 200: a mesma URL volta sem ir ao PNCP; erro do PNCP passa adiante", () =>
+  comFetch([{ status: 429, corpo: '{"erro":"limite"}' }, { status: 200, corpo: '{"items":[1]}' }], async (chamadas) => {
+    const url = "https://pncp.gov.br/api/search?q=cadeira&pagina=1";
+    const erro = await handler(evento(url));
+    assert.equal(erro.statusCode, 429);
+    assert.equal(erro.body, '{"erro":"limite"}');
+    const a = await handler(evento(url));
+    assert.deepEqual([a.statusCode, a.body, a.headers["X-Dados-Origem"]], [200, '{"items":[1]}', "ao-vivo"]);
+    const b = await handler(evento(url));
+    assert.deepEqual([b.statusCode, b.body, b.headers["X-Dados-Origem"]], [200, '{"items":[1]}', "cache"]);
+    assert.equal(chamadas.length, 2);
   }));
 
 test("pncp-proxy continua recusando host fora do PNCP", async () => {

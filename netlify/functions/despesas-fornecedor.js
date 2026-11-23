@@ -11,6 +11,9 @@ const BASE_URL = "https://api.portaldatransparencia.gov.br/api-de-dados";
 const FASE_PAGAMENTO = 3;
 const ANOS_A_CONSULTAR = 4; // ano atual + 3 anteriores
 const { cabecalhosPadrao, exigirUsuarioAprovado, verificarLimiteDiario } = require("./_auth");
+const { comCache, cabecalhosDoCache } = require("./_cache_publico");
+// Sem prazo, uma página travada do Portal segurava a tela inteira (até 8 páginas em série por ano).
+const PRAZO_PAGINA_MS = 8000;
 
 // O Portal pagina a lista (só a 1ª página fazia o "total pago" sair bem menor que o real). Até MAX_PAGINAS por ano:
 // 4 anos x 8 = 32 subrequisições, dentro do limite de 50 do Cloudflare gratuito. Passou disso, o total sai marcado como parcial.
@@ -20,6 +23,7 @@ async function consultarPagina(cnpj, ano, pagina, token) {
     const url = `${BASE_URL}/despesas/documentos-por-favorecido?codigoPessoa=${cnpj}&fase=${FASE_PAGAMENTO}&ano=${ano}&pagina=${pagina}`;
     const resp = await fetch(url, {
       headers: { Accept: "application/json", "chave-api-dados": token },
+      signal: globalThis.AbortSignal.timeout(PRAZO_PAGINA_MS),
     });
     if (!resp.ok) return { ok: false, dados: [] };
     const texto = await resp.text();
@@ -71,6 +75,18 @@ exports.handler = async (event) => {
     };
   }
 
+  // Pagamentos de um CNPJ mudam no máximo 1 vez por dia: guardados 12 h entre clientes (poupa a cota do token do Portal)
+  // e, com o Portal fora do ar, volta a última consulta com a data. Só resposta sem falha é guardada.
+  let falhou = false;
+  const r = await comCache(`despesas-fornecedor|${cnpj}`, async () => {
+    const corpo = await consultarPagamentos(cnpj, token);
+    falhou = corpo.falhouAlguma;
+    return corpo.json;
+  }, { frescoS: 12 * 3600, guardar: () => !falhou });
+  return { statusCode: 200, headers: { ...headers, ...cabecalhosDoCache(r) }, body: r.valor };
+};
+
+async function consultarPagamentos(cnpj, token) {
   const anoAtual = new Date().getFullYear();
   const anos = Array.from({ length: ANOS_A_CONSULTAR }, (_, i) => anoAtual - i);
 
@@ -108,9 +124,8 @@ exports.handler = async (event) => {
   documentos.sort((a, b) => (b.data || "").localeCompare(a.data || ""));
 
   return {
-    statusCode: 200,
-    headers,
-    body: JSON.stringify({
+    falhouAlguma,
+    json: JSON.stringify({
       cnpj,
       totalPago,
       porAno,
@@ -120,5 +135,5 @@ exports.handler = async (event) => {
       erro: !algumaOk && falhouAlguma ? "Não foi possível consultar o Portal da Transparência agora." : null,
     }),
   };
-};
+}
 exports.consultarAno = consultarAno;

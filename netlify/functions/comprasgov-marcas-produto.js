@@ -14,6 +14,7 @@
 //   ?termo=caneta&codigoItem=622254         -> 200 compras de um item CATMAT exato (o catalogoCodigoItem do PNCP), 1 subrequisição.
 
 const { cabecalhosPadrao, exigirAprovadoComLimite } = require("./_auth");
+const { comCache, cabecalhosDoCache } = require("./_cache_publico");
 const CATALOGO_URL = "https://cnbs.estaleiro.serpro.gov.br/cnbs-api/material/v1/palavra";
 const PRECO_URL = "https://dadosabertos.compras.gov.br/modulo-pesquisa-preco/1_consultarMaterial";
 const LINK_COMPRA = "https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/public/landing?destino=acompanhamento-compra&compra=";
@@ -257,6 +258,49 @@ async function paginaDoPdm(pdm, { pagina = 1, tamanhoPagina, uf, signal }) {
 }
 const porData = (a, b) => String(b.dataResultado).localeCompare(String(a.dataResultado));
 
+// Medido 23/11: a 1ª consulta de um produto leva 7-9 s na fonte e as seguintes 0,1-0,6 s; numa busca com 8-12 produtos
+// do catálogo, 1 ou 2 lentos seguravam a resposta inteira. Passado o prazo, se ao menos um produto já trouxe compras,
+// responde com o que chegou; os que faltam voltam como "pendente" (a tela os mostra como botão e carrega ao clicar).
+const PRAZO_PARCIAL_MS = 3500;
+async function consultarComPrazo(promessas, prazoMs = PRAZO_PARCIAL_MS) {
+  const estados = promessas.map(() => null);
+  let avisarComItens;
+  const algumaComItens = new Promise((ok) => { avisarComItens = ok; });
+  const acompanhadas = promessas.map((p, i) => p.then(
+    (value) => { estados[i] = { status: "fulfilled", value }; if (value.itens.length) avisarComItens(); },
+    (reason) => { estados[i] = { status: "rejected", reason }; }));
+  let relogio;
+  const prazo = new Promise((ok) => { relogio = setTimeout(ok, prazoMs); relogio.unref?.(); });
+  try {
+    await Promise.race([Promise.all(acompanhadas), Promise.all([algumaComItens, prazo])]);
+  } finally {
+    clearTimeout(relogio);
+  }
+  return estados.map((e) => e || { status: "pendente" });
+}
+
+// Busca por termo (sem produto escolhido): catálogo + 1 página de cada produto. Devolve o corpo JSON e se é parcial.
+async function buscarPorTermo(termo, uf, atributos, signal) {
+  const catalogo = await buscarJson(`${CATALOGO_URL}?${new URLSearchParams({ palavra: termo })}`, signal);
+  const pdms = selecionarPdms(catalogo, termo);
+  if (!pdms.length) return { corpo: JSON.stringify({ ok: true, itens: [], catalogos: [], atributos }), parcial: false };
+  const tamanhoPagina = Math.max(10, Math.floor(MAX_LINHAS / pdms.length));
+  const consultas = await consultarComPrazo(pdms.map((pdm) => paginaDoPdm(pdm, { tamanhoPagina, uf, signal })));
+  const grupos = consultas.filter((consulta) => consulta.status === "fulfilled").map((consulta) => consulta.value);
+  // Pendente entra no catálogo sem total (vai para o fim da sua faixa); a tela pagina ele ao ser escolhido.
+  const pendentes = pdms.filter((_, k) => consultas[k].status === "pendente").map((pdm) => ({ ...pdm, total: null }));
+  // O total de compras de cada PDM vem de graça na mesma resposta: decide qual produto aparece primeiro.
+  const ordem = ordenarPorVolume([...grupos.map((g) => g.pdm), ...pendentes]).map((p, k) => ({ ...p, ordem: k }));
+  const posicao = new Map(ordem.map((p) => [p.codigo, p.ordem]));
+  grupos.sort((a, b) => posicao.get(a.pdm.codigo) - posicao.get(b.pdm.codigo));
+  const itens = marcarEspecificacao(grupos.flatMap((grupo) => grupo.itens.map((i) => ({ ...i, ordemCatalogo: posicao.get(grupo.pdm.codigo) })).sort(porData)).slice(0, MAX_LINHAS), termo);
+  const falhas = consultas.filter((c) => c.status !== "fulfilled").length;
+  return {
+    corpo: JSON.stringify({ ok: true, fonte: "Catálogo e Pesquisa de Preços do Compras.gov", catalogos: ordem.filter((p) => p.total !== 0), atributos, itens, consultasComFalha: falhas }),
+    parcial: falhas > 0,
+  };
+}
+
 exports.handler = async (event) => {
   // Proxy do governo: CORS só do nosso domínio, login aprovado, teto por minuto da conta e teto diário por IP (abuso 20/11).
   const headers = cabecalhosPadrao(event);
@@ -277,34 +321,28 @@ exports.handler = async (event) => {
   const controlador = new AbortController();
   const timeout = setTimeout(() => controlador.abort(), 25000);
   const atributos = separarEspecificacao(termo).atributos.map((a) => a.rotulo);
+  // Chave só com o que a tela pediu (dado público): o mesmo termo de outro cliente reaproveita a resposta.
+  const chave = ["marcas-produto", semAcento(termo), uf, codigoPdm ?? "", codigoItem ?? "", pagina, textoSeguro(q.produto, 120)].join("|");
+  let parcial = false;
   try {
-    if (codigoPdm !== null || codigoItem !== null) {
-      // Paginação de um produto já escolhido (ou item CATMAT exato): o nome vem do parâmetro da tela.
-      const pdm = codigoItem !== null ? { codigo: codigoItem, tipo: "codigoItemCatalogo", descricao: textoSeguro(q.produto, 120) || termo, ordem: 0 }
-        : { codigo: codigoPdm, descricao: textoSeguro(q.produto, 120) || "Produto do catálogo", ordem: 0 };
-      const r = await paginaDoPdm(pdm, { pagina, tamanhoPagina: LINHAS_POR_PAGINA, uf, signal: controlador.signal });
-      return { statusCode: 200, headers: { ...headers, "Cache-Control": CACHE },
-        body: JSON.stringify({ ok: true, fonte: "Pesquisa de Preços do Compras.gov", catalogo: r.pdm, pagina, paginas: r.paginas, atributos, itens: marcarEspecificacao(r.itens.sort(porData), termo) }) };
-    }
-
-    const catalogo = await buscarJson(`${CATALOGO_URL}?${new URLSearchParams({ palavra: termo })}`, controlador.signal);
-    const pdms = selecionarPdms(catalogo, termo);
-    if (!pdms.length) return { statusCode: 200, headers: { ...headers, "Cache-Control": CACHE }, body: JSON.stringify({ ok: true, itens: [], catalogos: [], atributos }) };
-
-    const tamanhoPagina = Math.max(10, Math.floor(MAX_LINHAS / pdms.length));
-    const consultas = await Promise.allSettled(pdms.map((pdm) => paginaDoPdm(pdm, { tamanhoPagina, uf, signal: controlador.signal })));
-    const grupos = consultas.filter((consulta) => consulta.status === "fulfilled").map((consulta) => consulta.value);
-    // O total de compras de cada PDM vem de graça na mesma resposta: decide qual produto aparece primeiro.
-    const ordem = ordenarPorVolume(grupos.map((g) => g.pdm)).map((p, k) => ({ ...p, ordem: k }));
-    const posicao = new Map(ordem.map((p) => [p.codigo, p.ordem]));
-    grupos.sort((a, b) => posicao.get(a.pdm.codigo) - posicao.get(b.pdm.codigo));
-    const itens = marcarEspecificacao(grupos.flatMap((grupo) => grupo.itens.map((i) => ({ ...i, ordemCatalogo: posicao.get(grupo.pdm.codigo) })).sort(porData)).slice(0, MAX_LINHAS), termo);
-    const falhas = consultas.filter((c) => c.status === "rejected").length;
+    const r = await comCache(chave, async () => {
+      if (codigoPdm !== null || codigoItem !== null) {
+        // Paginação de um produto já escolhido (ou item CATMAT exato): o nome vem do parâmetro da tela.
+        const pdm = codigoItem !== null ? { codigo: codigoItem, tipo: "codigoItemCatalogo", descricao: textoSeguro(q.produto, 120) || termo, ordem: 0 }
+          : { codigo: codigoPdm, descricao: textoSeguro(q.produto, 120) || "Produto do catálogo", ordem: 0 };
+        const p = await paginaDoPdm(pdm, { pagina, tamanhoPagina: LINHAS_POR_PAGINA, uf, signal: controlador.signal });
+        return JSON.stringify({ ok: true, fonte: "Pesquisa de Preços do Compras.gov", catalogo: p.pdm, pagina, paginas: p.paginas, atributos, itens: marcarEspecificacao(p.itens.sort(porData), termo) });
+      }
+      const busca = await buscarPorTermo(termo, uf, atributos, controlador.signal);
+      parcial = busca.parcial;
+      return busca.corpo;
+      // A fonte muda no máximo 1 vez por dia: 6 h novo, 7 dias guardado para quando ela cair. Parcial não é guardado.
+    }, { frescoS: 6 * 3600, guardar: () => !parcial });
     return {
       statusCode: 200,
-      // Resposta parcial (alguma consulta falhou) não fica em cache: a próxima busca tenta de novo.
-      headers: falhas ? headers : { ...headers, "Cache-Control": CACHE },
-      body: JSON.stringify({ ok: true, fonte: "Catálogo e Pesquisa de Preços do Compras.gov", catalogos: ordem.filter((p) => p.total !== 0), atributos, itens, consultasComFalha: falhas }),
+      // Resposta parcial (alguma consulta falhou ou ficou pendente) não fica em cache: a próxima busca tenta de novo.
+      headers: { ...headers, ...(parcial ? {} : { "Cache-Control": CACHE }), ...cabecalhosDoCache(r) },
+      body: r.valor,
     };
   } catch (erro) {
     return { statusCode: 502, headers, body: JSON.stringify({ ok: false, erro: "Não foi possível consultar as fontes públicas agora." }) };
@@ -322,3 +360,4 @@ module.exports.separarEspecificacao = separarEspecificacao;
 module.exports.marcarEspecificacao = marcarEspecificacao;
 module.exports.MAX_PDMS = MAX_PDMS;
 module.exports.ordenarPorVolume = ordenarPorVolume;
+module.exports.consultarComPrazo = consultarComPrazo;

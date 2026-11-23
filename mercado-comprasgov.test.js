@@ -122,6 +122,9 @@ test('mensagemBusca: zero compras com consulta que falhou pede para tentar de no
   assert.match(M.mensagemBusca(0, 0, 0), /^Nenhuma compra para este termo/);
   assert.equal(M.mensagemBusca(5, 3, 0), '5 compra(s) encontradas, 3 com marca declarada.');
   assert.match(M.mensagemBusca(5, 3, 2), /resultado parcial/);
+  // Fonte fora do ar: o servidor devolveu o guardado e a tela diz de quando é.
+  assert.match(M.mensagemBusca(5, 3, 0, '2026-11-20T15:00:00Z'), /não respondeu agora: mostrando dados guardados de 20\/11\./);
+  assert.equal(M.mensagemBusca(5, 3, 0, 'data-ruim'), '5 compra(s) encontradas, 3 com marca declarada.');
 });
 
 test('marcaModelo: número depois da 1ª palavra vira modelo; marca de várias palavras e "/" ficam inteiras', () => {

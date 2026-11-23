@@ -82,6 +82,30 @@ async function comFetchHandler(status, limiteUso, fn) {
 }
 const pedido = (corpo) => ({ httpMethod: "POST", headers: { authorization: "Bearer T" }, body: JSON.stringify(corpo) });
 
+test("handler: consulta vencida + fontes fora do ar devolve a guardada (com a data) e não a apaga", async () => {
+  const anterior = global.fetch, chaveAnterior = process.env.SUPABASE_SERVICE_ROLE_KEY, gravacoes = [];
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "srv";
+  const vencida = { chave: "x", situacao: "completo", gerado_em: "2026-10-01T12:00:00Z", compras: [], casamentos: [] };
+  global.fetch = async (url, op = {}) => {
+    const u = new URL(url);
+    if (u.pathname === "/auth/v1/user") return Response.json({ id: U });
+    if (u.pathname === "/rest/v1/clientes") return Response.json([{ status: "aprovado" }]);
+    if (u.pathname === "/rest/v1/rpc/incrementar_uso") return Response.json(1);
+    if (u.pathname === "/rest/v1/historico_consultas" && (op.method || "GET") === "GET") return Response.json([vencida]);
+    if (u.hostname.includes("supabase")) { gravacoes.push(u.pathname); return Response.json([]); }
+    throw new Error("fonte fora do ar");
+  };
+  try {
+    const r = await handler(pedido({ acao: "consultar", uasg: "788820", catmat: "1" }));
+    const j = JSON.parse(r.body);
+    assert.deepEqual([r.statusCode, j.guardado, j.gerado_em], [200, true, "2026-10-01T12:00:00Z"]);
+    assert.ok(!gravacoes.includes("/rest/v1/historico_consultas"), "não sobrescreve a consulta guardada com lista vazia");
+  } finally {
+    global.fetch = anterior;
+    if (chaveAnterior === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY; else process.env.SUPABASE_SERVICE_ROLE_KEY = chaveAnterior;
+  }
+});
+
 test("handler: cadastro não aprovado 403 antes de qualquer fonte; órgãos com cota própria", async () => {
   await comFetchHandler("pendente", 1, async (chamadas) => {
     assert.equal((await handler(pedido({ acao: "orgaos", q: "base naval" }))).statusCode, 403);

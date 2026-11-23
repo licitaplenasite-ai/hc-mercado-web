@@ -40,7 +40,11 @@ function criarHandler({enabled=()=>process.env.IMPORTACAO_PNCP_LOCAL==='1',servi
  if(lote){
   const numeros=await numerosDaPagina(ref.cnpj,ref.ano,ref.seq,b.pagina,LOTE,{fetch:fetchImpl,timeoutMs});
   const fontes=[],recusados=[];
-  for(const n of numeros){try{fontes.push(await buscarFonteItem(ref,n,{fetchImpl,timeoutMs}));}catch(err){if(err.status!==422)throw err;recusados.push(n);}}
+  // Leitura no PNCP de 5 em 5 itens ao mesmo tempo (antes 1 por vez: 15 esperas somadas por lote); a ordem e a gravação ficam iguais.
+  for(let i=0;i<numeros.length;i+=5){
+   const leituras=await Promise.allSettled(numeros.slice(i,i+5).map(n=>buscarFonteItem(ref,n,{fetchImpl,timeoutMs})));
+   leituras.forEach((l,k)=>{if(l.status==='fulfilled')fontes.push(l.value);else if(l.reason?.status!==422)throw l.reason;else recusados.push(numeros[i+k]);});
+  }
   const negado=await confirmar();if(negado)return negado;
   const contagem={importado:0,inalterado:0,fonte_alterada:0},colisoes=[];
   for(const f of fontes){const r=await gravar(f);if(r?.estado==='colisao_manual'){colisoes.push(f.item.numero);continue;}if(!valido(r))falhar(`Persistência do item ${f.item.numero} não confirmada.`,503);contagem[r.estado]++;}

@@ -9,6 +9,7 @@
 // robô baixa: a consulta nova fica 'parcial' e o robô da esteira completa na rodada seguinte.
 const { cabecalhosPadrao, exigirUsuarioAprovado, verificarLimiteDiario } = require("./_auth");
 const L = require("./_licitacao_anterior");
+const { comCache } = require("./_cache_publico");
 
 const SUPABASE_URL = "https://lsqjamqvmrcyrvowndiu.supabase.co";
 const LIMITE_DIARIO = 30;
@@ -97,7 +98,10 @@ exports.handler = async (event) => {
     if (dados?.acao === "orgaos") {
       const cotaOrgaos = await verificarLimiteDiario(usuario.userId, "licitacao-anterior-orgaos", LIMITE_DIARIO_ORGAOS);
       if (!cotaOrgaos.ok) return responder(429, { erro: cotaOrgaos.erro || "Limite diário de buscas de órgão atingido. Tente amanhã." });
-      return responder(200, { orgaos: await buscarOrgaos(dados.q) });
+      // Autocompletar: a mesma digitação de outro cliente não volta ao PNCP por 1 dia (_cache_publico.js).
+      const termo = String(dados.q || "").trim().slice(0, 80).toLocaleLowerCase("pt-BR");
+      const r = await comCache(`licitacao-anterior-orgaos|${termo}`, () => buscarOrgaos(termo), { frescoS: 86400, guardar: (v) => v.length > 0 });
+      return responder(200, { orgaos: r.valor });
     }
     if (dados?.acao !== "consultar") return responder(400, { erro: "Ação inválida." });
     const c = validarConsulta(dados);
@@ -106,25 +110,36 @@ exports.handler = async (event) => {
     const chave = chaveConsulta(c, desdeAno);
     const alvos = [{ numero: null, catmat: c.catmat, descricao: c.palavras || "" }];
     const comBanco = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
+    const responderGuardado = async (linha) => responder(200, { ...(await lerGuardado(linha)), casamentos: linha.casamentos, alvos, situacao: linha.situacao, gerado_em: linha.gerado_em, guardado: true });
+    let linhaVencida = null;
     if (comBanco) {
       const [linha] = await (await rest(`historico_consultas?chave=eq.${encodeURIComponent(chave)}&select=*`)).json();
-      if (linha && linha.situacao !== "falhou" && Date.now() - Date.parse(linha.gerado_em) < VALIDADE_MS) {
-        return responder(200, { ...(await lerGuardado(linha)), casamentos: linha.casamentos, alvos, situacao: linha.situacao, gerado_em: linha.gerado_em, guardado: true });
+      if (linha && linha.situacao !== "falhou") {
+        if (Date.now() - Date.parse(linha.gerado_em) < VALIDADE_MS) return responderGuardado(linha);
+        linhaVencida = linha;
       }
     }
-    const cota = await verificarLimiteDiario(usuario.userId, "licitacao-anterior", LIMITE_DIARIO);
-    if (!cota.ok) return responder(429, { erro: cota.erro || "Limite diário de consultas atingido. Tente amanhã." });
-    // 36 + login, cache, cota e até 5 gravações = abaixo das 50 subrequisições do Cloudflare grátis.
-    const r = await L.coletar({ uasg: c.uasg, alvos, palavrasBusca: c.catmat ? "" : c.palavras, desdeAno, orcamento: 36 });
-    const gerado_em = new Date().toISOString();
-    if (comBanco) {
-      await L.gravar(rest, r);
-      await rest("historico_consultas?on_conflict=chave", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-        body: JSON.stringify([{ chave, uasg: c.uasg, catmat: c.catmat, palavras: c.palavras, desde_ano: desdeAno, compras: r.compras.map((x) => x.id_compra),
-          casamentos: r.casamentos, situacao: "parcial", erro: null, gerado_em }]) });
+    try {
+      const cota = await verificarLimiteDiario(usuario.userId, "licitacao-anterior", LIMITE_DIARIO);
+      if (!cota.ok) return responder(429, { erro: cota.erro || "Limite diário de consultas atingido. Tente amanhã." });
+      // 36 + login, cache, cota e até 5 gravações = abaixo das 50 subrequisições do Cloudflare grátis.
+      const r = await L.coletar({ uasg: c.uasg, alvos, palavrasBusca: c.catmat ? "" : c.palavras, desdeAno, orcamento: 36 });
+      // Fonte fora do ar vira aviso (não exceção) e lista vazia: não apaga a consulta guardada, devolve ela com a data.
+      if (linhaVencida && !r.compras.length && r.avisos?.length) return responderGuardado(linhaVencida);
+      const gerado_em = new Date().toISOString();
+      if (comBanco) {
+        await L.gravar(rest, r);
+        await rest("historico_consultas?on_conflict=chave", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+          body: JSON.stringify([{ chave, uasg: c.uasg, catmat: c.catmat, palavras: c.palavras, desde_ano: desdeAno, compras: r.compras.map((x) => x.id_compra),
+            casamentos: r.casamentos, situacao: "parcial", erro: null, gerado_em }]) });
+      }
+      return responder(200, { compras: r.compras, itens: r.itens, participacoes: r.participacoes, casamentos: r.casamentos, alvos,
+        situacao: "parcial", parcial: r.parcial, avisos: r.avisos, gerado_em, guardado: false });
+    } catch (e) {
+      // Fontes fora do ar e já havia esta consulta (vencida): devolve a guardada, com a data (gerado_em), em vez de erro.
+      if (linhaVencida) return responderGuardado(linhaVencida);
+      throw e;
     }
-    return responder(200, { compras: r.compras, itens: r.itens, participacoes: r.participacoes, casamentos: r.casamentos, alvos,
-      situacao: "parcial", parcial: r.parcial, avisos: r.avisos, gerado_em, guardado: false });
   } catch (e) {
     console.warn(`[licitacao-anterior] ${String(e?.message || e).slice(0, 200)}`);
     return responder(502, { erro: "As fontes públicas não responderam agora. Tente de novo em alguns minutos." });

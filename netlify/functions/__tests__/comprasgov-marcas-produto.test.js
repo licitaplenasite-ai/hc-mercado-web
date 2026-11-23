@@ -227,3 +227,38 @@ test("codigoItem (CATMAT do PNCP) faz 1 consulta exata por codigoItemCatalogo e 
     global.fetch = original;
   }
 });
+
+test("busca por termo: produto lento vira pendente (resposta parcial sem esperar) e não é guardada; completa é guardada", async () => {
+  const { consultarComPrazo } = require("../comprasgov-marcas-produto");
+  require("../_cache_publico")._limparMemoria();
+  const original = global.fetch;
+  let lento = true, chamadas = 0;
+  global.fetch = async (url) => {
+    chamadas += 1;
+    const u = new URL(String(url));
+    if (u.hostname.includes("cnbs")) return { ok: true, json: async () => [{ codigoPdm: 1, descricaoPDM: "Grampeador" }, { codigoPdm: 2, descricaoPDM: "Grampeador alicate" }] };
+    if (u.searchParams.get("codigo") === "2" && lento) await new Promise((ok) => setTimeout(ok, 400));
+    return { ok: true, json: async () => ({ totalRegistros: 5, resultado: [{ marca: "BRW", descricaoItem: "GRAMPEADOR", precoUnitario: 10, idCompraItem: "153038059004520250000100001" }] }) };
+  };
+  try {
+    // Prazo curto para o teste: o pendente não segura a resposta depois que um produto já trouxe compras.
+    const inicio = Date.now();
+    const estados = await consultarComPrazo([Promise.resolve({ itens: [1] }), new Promise((ok) => setTimeout(() => ok({ itens: [1] }), 300))], 30);
+    assert.deepEqual(estados.map((e) => e.status), ["fulfilled", "pendente"]);
+    assert.ok(Date.now() - inicio < 200);
+    // Sem nenhum produto com compras, espera todos (não devolve tela vazia por pressa).
+    const todos = await consultarComPrazo([Promise.resolve({ itens: [] }), new Promise((ok) => setTimeout(() => ok({ itens: [1] }), 60))], 10);
+    assert.deepEqual(todos.map((e) => e.status), ["fulfilled", "fulfilled"]);
+
+    lento = false;
+    const a = await handler({ queryStringParameters: { termo: "grampeador" } });
+    assert.equal(a.headers["X-Dados-Origem"], "ao-vivo");
+    const antes = chamadas;
+    const b = await handler({ queryStringParameters: { termo: "Grampeador " } });
+    assert.equal(b.headers["X-Dados-Origem"], "cache");
+    assert.equal(chamadas, antes, "a 2ª busca do mesmo termo não vai à fonte");
+    assert.equal(b.body, a.body);
+  } finally {
+    global.fetch = original;
+  }
+});
