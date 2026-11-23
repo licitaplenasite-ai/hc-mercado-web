@@ -280,4 +280,58 @@ async function importarPlanilha({token,organizacaoId,processoId,body}){
  for(const l of salvos)conferirLinha(l,organizacaoId,processoId);
  return {status:200,body:{gravados:salvos.length,resumo:v.resumo,linhas,itens:salvos.map(publicoPreco)}};
 }
-module.exports={rest,salvarItemProcesso,validarItem,chaveDeLinha,publico,publicoPreco,salvarPrecoItem,salvarReferencia,salvarPremissas,lerPremissas,importarPlanilha,salvarContador,lerContador};
+// ---------- Escolha dos itens (operacao_itens_participar.sql) ----------
+// Edital com centenas de itens: a empresa marca em quais vai participar. participar=false fica guardado e fora da proposta.
+// Leitura própria (não muda o select do kit nem o hash da revisão). Escolha não toca atualizado_em; oferta, sim (igual a salvarItem).
+const INDISPONIVEL_ESCOLHA='A escolha de itens ainda não está disponível neste ambiente. Peça para aplicar a atualização do banco.';
+const MAX_ESCOLHA=1000;
+const SELECT_ESCOLHA=selectLista+',participar,tipo_beneficio';
+async function exigirOkEscolha(r){if(!r.ok&&await colunaInexistente(r))falhar(INDISPONIVEL_ESCOLHA,503);return exigirOk(r);}
+function publicoEscolha(l){return {...publicoPreco(l),participar:l.participar!==false,tipoBeneficio:Number.isInteger(l.tipo_beneficio)?l.tipo_beneficio:null};}
+async function lerEscolha({token,organizacaoId,processoId,empresaId}){
+ escopo(organizacaoId,processoId);if(!uuid(empresaId))falhar('Escopo inválido.',400);
+ const r=await rest(token,`/rest/v1/operacao_itens_resultado?processo_id=eq.${processoId}&organizacao_id=eq.${organizacaoId}&tipo=eq.item&select=${SELECT_ESCOLHA}&order=id.asc&limit=${MAX_ESCOLHA}`,{headers:{Prefer:'count=exact'}});
+ const rows=await exigirOkEscolha(r);
+ const total=/\/(\d+)$/.exec(r.headers.get('content-range')||'');
+ if(!Array.isArray(rows)||!total||Number(total[1])!==rows.length)falhar(`O processo tem mais de ${MAX_ESCOLHA} itens. A escolha de itens não cobre todos.`,503);
+ for(const l of rows)conferirLinha(l,organizacaoId,processoId);
+ // Porte do Perfil da empresa: sem tabela, sem linha ou sem permissão = não informado (a tela pede para preencher).
+ let porte=null;
+ try{const p=await rest(token,`/rest/v1/operacao_perfil_empresa?empresa_id=eq.${empresaId}&organizacao_id=eq.${organizacaoId}&select=porte`);if(p.ok){const [l]=await p.json();porte=['mei','me','epp','demais'].includes(l?.porte)?l.porte:null;}}catch{porte=null;}
+ return {status:200,body:{itens:rows.sort(ordemItem).map(publicoEscolha),porte}};
+}
+async function salvarEscolha({token,organizacaoId,processoId,body}){
+ escopo(organizacaoId,processoId);exigirChaves(body,['itemIds','participar']);
+ const ids=body.itemIds;
+ if(typeof body.participar!=='boolean'||!Array.isArray(ids)||!ids.length||ids.length>MAX_ESCOLHA||ids.some(id=>!uuid(id))||new Set(ids.map(id=>id.toLowerCase())).size!==ids.length)falhar('Itens inválidos para a escolha.',400);
+ // shortcut: lotes de 100 não são atômicos entre si; falha no meio deixa os primeiros gravados (a tela recarrega e mostra o real).
+ let gravados=0;
+ for(let n=0;n<ids.length;n+=100){
+  const lote=ids.slice(n,n+100).map(id=>id.toLowerCase());
+  const linhas=await exigirOkEscolha(await rest(token,`/rest/v1/operacao_itens_resultado?id=in.(${lote.join(',')})&processo_id=eq.${processoId}&organizacao_id=eq.${organizacaoId}&tipo=eq.item&select=id,organizacao_id,processo_id,participar`,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({participar:body.participar})}));
+  if(!Array.isArray(linhas))falhar('Serviço de itens indisponível.',503);
+  for(const l of linhas)conferirLinha(l,organizacaoId,processoId);
+  gravados+=linhas.length;
+  if(linhas.length!==lote.length)falhar(`Item indisponível. ${gravados} de ${ids.length} foram gravados; atualize a lista.`,404);
+ }
+ return {status:200,body:{gravados,participar:body.participar}};
+}
+// Oferta direto da lista (preço, marca, modelo): valor null limpa. Mesmas regras de salvarItem (limite do total e preço mínimo).
+async function salvarOferta({token,organizacaoId,processoId,body}){
+ escopo(organizacaoId,processoId,body.itemId);exigirChaves(body,['valorUnitario','marca','modelo']);
+ if(Object.keys(body).some(k=>!['acao','empresaId','processoId','itemId','valorUnitario','marca','modelo'].includes(k)))falhar('Campos da oferta inválidos.',400);
+ const valor=opcional(body.valorUnitario,2,'Valor unitário'),marca=texto(body.marca,'a marca',500,false),modelo=texto(body.modelo,'o modelo',500,false);
+ const atuais=await exigirOk(await rest(token,caminhoItem(body.itemId,organizacaoId,processoId)+'&select='+selectLista));
+ if(!Array.isArray(atuais)||atuais.length!==1)falhar('Item indisponível.',404);
+ conferirLinha(atuais[0],organizacaoId,processoId);
+ const minimo=atuais[0].valor_unitario_minimo??null;
+ if(valor){
+  if(atuais[0].quantidade!=null)try{totalItem(atuais[0].quantidade,valor.texto);}catch{falhar('Total do item excede o limite. Confira o valor unitário.',400);}
+  if(minimo!==null&&escalado(minimo,2)>valor.n)falhar(abaixoDoMinimo(valor.texto,minimo),422);
+ }
+ const guarda=valor&&minimo!==null?`&or=(valor_unitario_minimo.is.null,valor_unitario_minimo.lte.${valor.texto})`:'';
+ const l=await patchItem(token,organizacaoId,processoId,body.itemId,{valor_unitario_proposta:valor?.texto??null,marca,modelo,atualizado_em:new Date().toISOString()},guarda);
+ if(!l)falhar('O item mudou enquanto você editava. Atualize e tente de novo.',409);
+ return {status:200,body:{item:publicoPreco(l)}};
+}
+module.exports={rest,salvarItemProcesso,validarItem,chaveDeLinha,publico,publicoPreco,salvarPrecoItem,salvarReferencia,salvarPremissas,lerPremissas,importarPlanilha,salvarContador,lerContador,lerEscolha,salvarEscolha,salvarOferta};

@@ -35,6 +35,9 @@
   const P = () => modulo('LicitaPrecificacao', './precificacao-item.js');
   const planilha = () => modulo('LicitaPlanilhaItens', './planilha-itens.js');
   const abc = () => modulo('LicitaCurvaABC', './curva-abc.js');
+  const escolhaMod = () => modulo('LicitaItensEscolha', './itens-escolha-ui.js');
+  // Valor digitado em pt-BR ("52,00", "1.500,00") → texto canônico do servidor ("52.00", "1500.00").
+  const normalizar = (t, casas) => (escolhaMod()?.normalizarDecimal ? escolhaMod().normalizarDecimal(t, casas) : String(t ?? '').trim());
   // Preço escolhido em sinapi.html ("Usar este preço"): mesma chave lá e aqui.
   const CHAVE_SINAPI = 'licitaplena_sinapi_preco';
 
@@ -98,9 +101,12 @@
     const total = (q * v + 500n) / 1000n;
     return total > LIMITE ? null : total;
   }
+  // Com ponto de milhar: "R$ 10.400,00".
   function reais(centavos) {
-    return `R$ ${centavos / 100n},${String(centavos % 100n).padStart(2, '0')}`;
+    return `R$ ${String(centavos / 100n).replace(/\B(?=(\d{3})+$)/g, '.')},${String(centavos % 100n).padStart(2, '0')}`;
   }
+  // Texto canônico do banco ("1500.00") → "R$ 1.500,00"; fora do formato, mostra como veio.
+  const reaisTexto = (t) => { const n = decimalPositivo(String(t ?? ''), 2); return n === null ? `R$ ${String(t ?? '').replace('.', ',')}` : reais(n); };
   // Linha do cartão do item. Item importado do PNCP chega sem valor ofertado (antes: "R$ null") e com a
   // quantidade do banco em 3 casas ("500.000", que em pt-BR se lê quinhentos mil): mostra "500" e "não informado".
   // Mesma ordem do servidor (_kit_proposta_itens.js ordemItem): número do item em ordem natural, depois id.
@@ -108,7 +114,7 @@
   const ordemItem = (a, b) => COLLATOR.compare(String(a.identificador ?? ''), String(b.identificador ?? '')) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
   function linhaQuantidade(i, total) {
     const q = String(i.quantidade ?? '').replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '').replace('.', ',');
-    const v = i.valorUnitario === null || i.valorUnitario === undefined || i.valorUnitario === '' ? 'não informado' : `R$ ${String(i.valorUnitario).replace('.', ',')}`;
+    const v = i.valorUnitario === null || i.valorUnitario === undefined || i.valorUnitario === '' ? 'não informado' : reaisTexto(i.valorUnitario);
     return `Quantidade: ${q}${i.unidade ? ` ${i.unidade}` : ''} · Unitário: ${v} · Total: ${total === null ? 'indisponível' : reais(total)}`;
   }
   function texto(valor, max) {
@@ -116,7 +122,8 @@
     return valor.trim();
   }
   // Retorna {ok, erros, dados}. Campos opcionais vazios viram null.
-  function validarItemCampos(c) {
+  function validarItemCampos(campos) {
+    const c = { ...campos, quantidade: normalizar(campos.quantidade, 3), valorUnitario: normalizar(campos.valorUnitario, 2) };
     const erros = {};
     const identificador = texto(c.identificador, 180);
     if (!identificador) erros.identificador = 'Informe o identificador do item (até 180 caracteres, sem caracteres de controle).';
@@ -125,8 +132,8 @@
     const marca = texto(c.marca || '', 500), modelo = texto(c.modelo || '', 500);
     if (marca === null) erros.marca = 'Confira a marca (até 500 caracteres).';
     if (modelo === null) erros.modelo = 'Confira o modelo (até 500 caracteres).';
-    if (decimalPositivo(c.quantidade, 3) === null) erros.quantidade = 'Quantidade: número positivo com até 3 casas decimais, dentro do limite. Ex.: 2.500';
-    if (decimalPositivo(c.valorUnitario, 2) === null) erros.valorUnitario = 'Valor unitário: número positivo com até 2 casas decimais, dentro do limite. Ex.: 1.10';
+    if (decimalPositivo(c.quantidade, 3) === null) erros.quantidade = 'Quantidade: número positivo com até 3 casas decimais, com vírgula. Ex.: 2,5';
+    if (decimalPositivo(c.valorUnitario, 2) === null) erros.valorUnitario = 'Valor unitário: reais com vírgula, maior que zero. Ex.: 52,00 ou 1.500,00';
     if (!erros.quantidade && !erros.valorUnitario && totalCentavos(c.quantidade, c.valorUnitario) === null) erros.total = 'O total do item excede o limite. Confira quantidade e valor unitário.';
     const ok = Object.keys(erros).length === 0;
     return { ok, erros, dados: ok ? { identificador, descricao, marca: marca || null, modelo: modelo || null, quantidade: c.quantidade, valorUnitario: c.valorUnitario } : null };
@@ -362,8 +369,8 @@
         <label>Descrição <textarea name="descricao" maxlength="10000"></textarea></label>
         <label>Marca <input name="marca" maxlength="500" autocomplete="off"></label>
         <label>Modelo <input name="modelo" maxlength="500" autocomplete="off"></label>
-        <label>Quantidade <input name="quantidade" inputmode="decimal" autocomplete="off" placeholder="Ex.: 2.500"></label>
-        <label>Valor unitário (R$) <input name="valorUnitario" inputmode="decimal" autocomplete="off" placeholder="Ex.: 1.10"></label>
+        <label>Quantidade <input name="quantidade" inputmode="decimal" autocomplete="off" placeholder="Ex.: 2,5"></label>
+        <label>Valor unitário (R$) <input name="valorUnitario" inputmode="decimal" autocomplete="off" placeholder="Ex.: 52,00"></label>
         <p data-item-total></p>
         <p data-item-erros role="alert"></p>
         <div class="itens-acoes" data-sinapi hidden><span class="itens-apoio" data-sinapi-texto></span><button type="button" data-sinapi-usar>Usar no valor unitário</button></div>
@@ -387,6 +394,7 @@
         <p data-item-importar-estado role="status" aria-live="polite"></p>
         <div class="itens-acoes"><button type="submit" class="app-primario" data-item-importar-enviar>Importar este item</button><button type="button" data-item-importar-todos>Importar todos os itens do edital</button></div>
       </form>
+      <section data-item-escolha></section>
       <div data-item-lista></div>
       <button type="button" data-item-mais hidden>Carregar mais itens</button>
       <section data-curva class="itens-curva" aria-labelledby="itens-curva-titulo" hidden>
@@ -416,6 +424,10 @@
       svg.append(corpo, arco); s.append(svg, 'Dado do edital');
       return s;
     }
+    // Escolha dos itens (itens-escolha-ui.js): sem o módulo na página, o quadro não aparece e o resto segue igual.
+    const escolha = escolhaMod()?.montar ? escolhaMod().montar({ alvo: el('[data-item-escolha]'), doc, chamar: (corpo) => chamar(corpo), total: totalCentavos, reais,
+      aoSalvar: () => { if (typeof aoSalvar === 'function') aoSalvar(); },
+      aoMudar: (novo) => { const i = itens.find((x) => x.id === novo.id); if (i) { Object.assign(i, { valorUnitario: novo.valorUnitario, marca: novo.marca, modelo: novo.modelo }); renderLista(); } } }) : null;
     const form = el('[data-item-form]');
     const campos = () => Object.fromEntries(['identificador', 'descricao', 'marca', 'modelo', 'quantidade', 'valorUnitario'].map((n) => [n, form.elements[n].value]));
     const pedir = (corpo) => requisitar('/api/kit-documentos', { method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'same-origin',
@@ -428,7 +440,7 @@
 
     function estado(t, tipo) { el('[data-item-estado]').textContent = t || ''; el('[data-item-estado]').dataset.itemEstado = tipo || ''; }
     function atualizarTotal() {
-      const c = campos(), t = totalCentavos(c.quantidade, c.valorUnitario);
+      const c = campos(), t = totalCentavos(normalizar(c.quantidade, 3), normalizar(c.valorUnitario, 2));
       el('[data-item-total]').textContent = t === null ? 'Total do item: informe quantidade e valor válidos.' : `Total do item: ${reais(t)}`;
     }
     function bloquear(v) { ocupado = v; for (const s of ['[data-item-salvar]', '[data-item-atualizar]', '[data-item-mais]', '[data-item-importar-enviar]', '[data-item-importar-todos]', '[data-planilha-baixar]', '[data-portal-baixar]', '[data-planilha-importar]']) el(s).disabled = v; }
@@ -626,7 +638,7 @@
         n.custo.value = virgula(campos.custoUnitario);
         const s = await salvarCusto(i);
         if (!vivo) return;
-        texto = s?.ok ? `Custo do catálogo salvo: R$ ${virgula(campos.custoUnitario)}.${s.aviso ? ` ${s.aviso}` : ''}` : `Custo do catálogo não foi salvo: ${s?.erro || 'tente de novo'}`;
+        texto = s?.ok ? `Custo do catálogo salvo: ${reaisTexto(campos.custoUnitario)}.${s.aviso ? ` ${s.aviso}` : ''}` : `Custo do catálogo não foi salvo: ${s?.erro || 'tente de novo'}`;
         if (!s?.ok || s.aviso) tipo = 'erro';
       }
       preencherMarca(i, campos, texto, tipo);
@@ -634,7 +646,8 @@
     function cartaoItem(i) {
       const t = totalCentavos(i.quantidade, i.valorUnitario);
       const li = h('li', {},
-        h('div', { classe: 'itens-cabeca' }, h('strong', { texto: i.identificador }), i.origemPncp === true ? seloEdital() : null),
+        h('div', { classe: 'itens-cabeca' }, h('strong', { texto: i.identificador }), i.origemPncp === true ? seloEdital() : null,
+          escolha?.participa(i.id) === false ? h('span', { classe: 'selo-fora', texto: 'Fora da proposta' }) : null),
         h('p', { texto: i.descricao }),
         h('p', { texto: linhaQuantidade(i, t) }),
         h('p', { texto: `Marca: ${i.marca || 'não informada'} · Modelo: ${i.modelo || 'não informado'}` }),
@@ -690,7 +703,7 @@
         const c = calc.get(i.id);
         n.alvo.textContent = c?.alvo !== undefined ? P().formatarReais(c.alvo) : '—';
         n.limite.textContent = c?.limite !== undefined ? P().formatarReais(c.limite) : '—';
-        n.minimo.textContent = i.valorUnitarioMinimo ? `R$ ${virgula(i.valorUnitarioMinimo)}` : 'Não gravado';
+        n.minimo.textContent = i.valorUnitarioMinimo ? reaisTexto(i.valorUnitarioMinimo) : 'Não gravado';
         const avisos = c?.semCusto ? [c.aviso] : [c?.erroAlvo, c?.erroLimite, c?.aviso, c?.freteUnidade > 0n ? `Inclui frete rateado de ${P().formatarReais(c.freteUnidade)} por unidade.` : ''];
         n.aviso.textContent = avisos.filter(Boolean).join(' ');
         n.usar.disabled = c?.limite === undefined;
@@ -756,7 +769,7 @@
     }
     async function salvarCusto(i) {
       const n = nos.get(i.id); if (!n) return;
-      const t = n.custo.value.trim(), c = t ? P().lerDinheiro(t) : null;
+      const t = n.custo.value.trim(), c = t ? P().lerDinheiro(normalizar(t, 2)) : null;
       if (t && (c === null || c === 0n)) { marcar(n.custoEstado, 'Use reais com vírgula, maior que zero. Ex.: 51,20', 'erro'); n.custo.setAttribute('aria-invalid', 'true'); return { ok: false, erro: 'Use reais com vírgula, maior que zero. Ex.: 51,20' }; }
       n.custo.removeAttribute('aria-invalid');
       const valor = c === null ? null : canonico(c, 2);
@@ -777,7 +790,7 @@
       const { r, j } = await chamar({ acao: 'salvarPrecoItem', ...v.corpo });
       if (!vivo) return;
       const atual = nos.get(i.id);
-      if (r && r.ok && j?.item) { i.valorUnitarioMinimo = j.item.valorUnitarioMinimo; i.custoUnitario = j.item.custoUnitario; atualizarPrecos(); marcar(atual?.usarEstado, `Preço mínimo gravado: R$ ${virgula(i.valorUnitarioMinimo)}`, 'ok'); return; }
+      if (r && r.ok && j?.item) { i.valorUnitarioMinimo = j.item.valorUnitarioMinimo; i.custoUnitario = j.item.custoUnitario; atualizarPrecos(); marcar(atual?.usarEstado, `Preço mínimo gravado: ${reaisTexto(i.valorUnitarioMinimo)}`, 'ok'); return; }
       atualizarPrecos(); marcar(atual?.usarEstado, j?.erro || 'Não foi possível gravar agora. Tente de novo.', 'erro');
     }
 
@@ -797,6 +810,8 @@
         numeroProcesso = typeof j.processo?.numero === 'string' ? j.processo.numero : '';
         const primeiraVez = precoDisponivel === null;
         precoDisponivel = j.precoDisponivel === true;
+        if (reiniciar && escolha) await escolha.recarregar();
+        if (!vivo || g !== geracao) return;
         renderLista(); estado(mensagemFinal, mensagemFinal ? 'ok' : '');
         if (primeiraVez && precoDisponivel) void carregarPremissas();
       } catch (e) {
@@ -820,7 +835,9 @@
       if (ocupado || !vivo) return;
       bloquear(true); avisoPlanilha('Preparando a planilha…', 'carregando');
       try {
-        const todos = await todosItens();
+        const lidos = await todosItens();
+        // Arquivo do portal: só os itens marcados em "Vou participar" (sem a escolha disponível, todos, como antes).
+        const todos = paraPortal ? lidos.filter((i) => escolha?.participa(i.id) !== false) : lidos;
         const csv = paraPortal ? planilha().gerarCsvPortal(todos) : planilha().gerarCsv(todos);
         if (!vivo) return;
         const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
@@ -919,7 +936,9 @@
       const i = itens.find((x) => x.id === id);
       if (!i || ocupado) return;
       edicao = id; tentativa = null;
-      for (const n of ['identificador', 'descricao', 'marca', 'modelo', 'quantidade', 'valorUnitario']) form.elements[n].value = i[n] ?? '';
+      for (const n of ['identificador', 'descricao', 'marca', 'modelo']) form.elements[n].value = i[n] ?? '';
+      form.elements.quantidade.value = String(i.quantidade ?? '').replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '').replace('.', ',');
+      form.elements.valorUnitario.value = escolhaMod() ? escolhaMod().campoReais(i.valorUnitario) : virgula(i.valorUnitario);
       el('[data-item-cancelar]').hidden = false; mostrarSinapi(); atualizarTotal(); estado(MSG.editando, 'vazio');
       el('#itens-titulo')?.focus?.();
     }
@@ -948,6 +967,7 @@
       avisoImportar(resultado.texto, 'ok');
       if (typeof aoSalvar === 'function') { try { aoSalvar(); } catch { /* sem efeito na importação */ } }
       await carregar({ reiniciar: true });
+      if (vivo && escolha && j?.estado === 'importado') { const extra = await escolha.marcarImportado(j.itemId); if (vivo && extra) { avisoImportar(resultado.texto + extra, 'ok'); renderLista(); } }
     }
     async function importarTodos() {
       if (ocupado || !vivo) return;
@@ -967,6 +987,7 @@
       if (resultado.soma.importados || resultado.soma.alterados) {
         if (typeof aoSalvar === 'function') { try { aoSalvar(); } catch { /* sem efeito na importação */ } }
         await carregar({ reiniciar: true });
+        if (vivo && resultado.soma.importados && escolha) avisoImportar(`${resultado.texto} Os itens novos chegam desmarcados: escolha abaixo em quais você vai participar.`, 'ok');
       }
     }
     function cancelarEdicao() { edicao = null; tentativa = null; form.reset(); el('[data-item-cancelar]').hidden = true; atualizarTotal(); estado('', ''); }
@@ -1022,7 +1043,7 @@
     if (carregarCatalogo) Promise.resolve().then(() => carregarCatalogo(contexto.empresaId)).then((l) => { if (vivo) catalogoProdutos = Array.isArray(l) ? l : []; }, () => { catalogoProdutos = []; });
 
     return {
-      fechar() { vivo = false; geracao += 1; for (const c of contadores.values()) c?.fechar?.(); alvo.replaceChildren(); },
+      fechar() { vivo = false; geracao += 1; escolha?.fechar(); for (const c of contadores.values()) c?.fechar?.(); alvo.replaceChildren(); },
       temAlteracoesNaoSalvas: () => vivo && (Object.values(campos()).some((v) => v !== '') || edicao !== null || previa?.podeAplicar === true),
     };
   }
