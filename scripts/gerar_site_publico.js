@@ -12,6 +12,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { FERRAMENTAS, PUBLICOS, GLOSSARIO } = require("./site-publico/paginas");
+const { ICONES } = require("./site-publico/icones");
 
 const RAIZ = path.join(__dirname, "..");
 const SITE = "https://licitaplena.com.br";
@@ -154,6 +155,7 @@ ${indexar ? `<meta property="og:url" content="${url}">\n` : ""}<meta property="o
 <link rel="stylesheet" href="/ds-tokens.css">
 <script>(function(){var t=null;try{t=localStorage.getItem("licitaplena_tema");}catch(e){}document.documentElement.dataset.theme=t==="escuro"?"dark":"light";})();</script>
 ${indexar ? jsonld(grafo) + "\n" : ""}<style>${CSS}</style>
+<link rel="stylesheet" href="/marca.css">
 </head>
 <body>
 <a class="pular" href="#conteudo">Pular para o conteúdo</a>
@@ -180,6 +182,8 @@ const chamada = (titulo = "Teste grátis por 14 dias", texto = "Sem cartão de c
 const faqHtml = (pares) => `<h2>Perguntas frequentes</h2><div class="faq">${pares.map(([q, r]) => `<details><summary>${esc(q)}</summary><p>${esc(r)}</p></details>`).join("")}</div>`;
 const cartaoArtigo = (a, nivel = "h3") => `<li class="cartao"><p class="rotulo">${esc(CATEGORIAS[a.categoria])}</p><${nivel}><a href="/blog/${a.slug}">${esc(a.titulo)}</a></${nivel}><p>${esc(a.resumo)}</p></li>`;
 const ferramentaPorSlug = (s) => FERRAMENTAS.find((f) => f.slug === s);
+// Cartão ilustrado (index e /ferramentas/): placa clara com ícone e detalhe azul-escuro embaixo (marca.css).
+const cartaoFerramenta = (f, nivel = "h3") => `<li class="ferr"><span class="ferr-ico">${ICONES[f.slug]}</span><${nivel}><a href="/ferramentas/${f.slug}">${esc(f.nome)}</a></${nivel}><p>${esc(f.descricao)}</p><span class="ferr-mais" aria-hidden="true">Conhecer a ferramenta</span></li>`;
 
 // ---------- Páginas ----------
 function paginasFerramentas(artigos) {
@@ -191,7 +195,7 @@ function paginasFerramentas(artigos) {
     migalhas: [["Início", "/"], ["Ferramentas", "/ferramentas/"]],
     schemas: [SOFTWARE],
     corpo: `<h1>Ferramentas do LicitaPlena</h1><p class="lead">Cada ferramenta cuida de uma parte da licitação, do edital publicado à proposta. Todas usam dados públicos oficiais.</p>
-<ul class="grade">${FERRAMENTAS.map((f) => `<li class="cartao"><p class="rotulo">${esc(f.agente)}</p><h2><a href="/ferramentas/${f.slug}">${esc(f.nome)}</a></h2><p>${esc(f.descricao)}</p></li>`).join("")}</ul>${chamada()}`,
+<ul class="ferr-grade">${FERRAMENTAS.map((f) => cartaoFerramenta(f, "h2")).join("")}</ul>${chamada()}`,
   });
   const paginas = FERRAMENTAS.map((f) => [`ferramentas/${f.slug}.html`, pagina({
     arquivo: `ferramentas/${f.slug}.html`, titulo: f.titulo, descricao: f.descricao,
@@ -360,6 +364,7 @@ function montarIndex(html, artigos) {
   const blog = `<ul class="grade-blog">${artigos.slice(0, 3).map((a) => `<li><p class="sobretitulo">${esc(CATEGORIAS[a.categoria])}</p><h3><a href="/blog/${a.slug}">${esc(a.titulo)}</a></h3><p>${esc(a.resumo)}</p></li>`).join("")}</ul>`;
   let saida = trocarBloco(html, "seo-cabeca", cabeca);
   saida = trocarBloco(saida, "do-blog", blog);
+  saida = trocarBloco(saida, "ferramentas", `<ul class="ferr-grade">${FERRAMENTAS.map((f) => cartaoFerramenta(f)).join("")}</ul>`);
   return trocarBloco(saida, "mapa-do-site", mapaDoSite());
 }
 
