@@ -177,3 +177,17 @@ test("main: chama o expurgo de 5 anos depois dos cadastros", async () => {
   await robo.main({ DATA_ARQUIVO: "20261119" }, { ...b, rest, fetch: fetchCom({ "20261119_CEIS.zip": zipDe(amostra("CEIS")), "20261119_CNEP.zip": zipDe(amostra("CNEP")) }), tentativas: 1 });
   assert.deepEqual(rpcs, ["rpc/sancoes_empresas_expurgar"]);
 });
+
+test("main sem data fixa usa o último arquivo publicado, mesmo de dias atrás (CGU parou em 19/11/2026)", async () => {
+  const b = bancoFalso();
+  const pedidos = [];
+  const rest = async (caminho, op) => (caminho.startsWith("rpc/") ? { json: async () => 0 } : b.rest(caminho, op));
+  const tresDiasAtras = robo.diaBrasilia(Date.now(), -3);
+  const arquivos = { [`${tresDiasAtras}_CEIS.zip`]: zipDe(amostra("CEIS")), [`${tresDiasAtras}_CNEP.zip`]: zipDe(amostra("CNEP")) };
+  const fetch = async (url) => { pedidos.push(url.split("/").pop()); return fetchCom(arquivos)(url); };
+  await robo.main({}, { ...b, rest, fetch, tentativas: 1 });
+  assert.equal(pedidos.filter((p) => p.endsWith("_CEIS.zip")).length, 4); // hoje, -1, -2 (403) e -3 (achou)
+  assert.equal(b.linhas.size > 0, true);
+  // Mais velho que a janela: aí sim é erro (fonte parada há mais de uma semana).
+  await assert.rejects(robo.main({ JANELA_DIAS: "3" }, { ...bancoFalso(), rest, fetch, tentativas: 1 }), /2 etapa\(s\) com falha/);
+});
