@@ -64,7 +64,6 @@ async function nasDuasLarguras(p, nome, antes) {
 const hojeBr = () => new Date(new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }) + 'T12:00:00Z');
 const mais = (dias) => { const d = hojeBr(); d.setUTCDate(d.getUTCDate() + dias); return d; };
 const iso = (d) => d.toISOString().slice(0, 10);
-const maisMeses = (m) => { const d = hojeBr(); d.setUTCMonth(d.getUTCMonth() + m); return iso(d); };
 
 async function main() {
   fs.mkdirSync(PRINTS, { recursive: true });
@@ -159,7 +158,7 @@ async function main() {
       exigir(/Sua assinatura venceu/.test(t) && /Renovar/.test(t) && !(await pC.$('#aviso-carencia')), 'trava: ' + t);
       exigir((await servico('GET', `/rest/v1/clientes?id=eq.${C.id}&select=id`)).length === 1, 'cliente apagado');
     });
-    await passo('dono: cliente aparece em "Bloqueados" e "Recebi: renovar" libera por mais 1 mês', null, async () => {
+    await passo('dono: cliente aparece em "Bloqueados" e "Recebi: renovar" libera por 1 mês a partir do vencimento original', null, async () => {
       await pD.click('.tabs button[data-status="visao"]');
       await pD.click('.tabs button[data-status="cobranca"]');
       const bloq = `#cobranca-bloqueados tr[data-cobranca="${C.id}"]`;
@@ -168,8 +167,10 @@ async function main() {
       await pD.waitForFunction(() => /Renovado|Não foi/.test(document.getElementById('resultado-cobranca').textContent), null, { timeout: 20000 });
       const r = await pD.innerText('#resultado-cobranca');
       exigir(/Renovado/.test(r), r);
+      // Bloqueado há 1 dia: renova a partir do vencimento original (venceu há 4 dias), não de hoje.
+      const doVencimento = (() => { const d = mais(-4); d.setUTCMonth(d.getUTCMonth() + 1); return iso(d); })();
       const a = (await servico('GET', `/rest/v1/assinaturas?usuario_id=eq.${C.id}&select=situacao,vence_em,plano`))[0];
-      exigir(a.situacao === 'ativa' && a.plano === 'empresa' && a.vence_em === maisMeses(1), 'assinatura: ' + JSON.stringify(a));
+      exigir(a.situacao === 'ativa' && a.plano === 'empresa' && a.vence_em === doVencimento, 'assinatura: ' + JSON.stringify(a));
       await pC.goto(SITE + '/painel.html');
       await pC.waitForTimeout(5000);
       exigir(!(await pC.$('main .trava-plano')) && !(await pC.$('#aviso-carencia')), 'continua travado depois de renovar');

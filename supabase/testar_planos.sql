@@ -421,14 +421,27 @@ begin
  perform public.admin_definir_carencia(7);
  reset role;
  if public.plano_efetivo_titular(r)->>'plano'<>'essencial' then raise exception 'carência de 7 dias não valeu'; end if;
- -- Bloqueado + Recebi: renovar = ativa por 1 mês a partir de hoje, pelo mesmo ponto único do pagamento.
+ -- Bloqueado há menos de 30 dias + Recebi: renovar = ativa por 1 mês a partir do VENCIMENTO ORIGINAL (carência 7:
+ -- venceu há 20, bloqueado há 13), pelo mesmo ponto único do pagamento.
  update public.assinaturas set situacao='vencida', vence_em=current_date-20 where usuario_id=r;
  set local role authenticated;
  v:=public.admin_renovar_assinatura(r);
  reset role;
- if (select situacao||'/'||plano||'/'||vence_em from public.assinaturas where usuario_id=r)<>'ativa/essencial/'||(current_date+interval '1 month')::date then raise exception 'renovar: %',(select to_jsonb(a) from public.assinaturas a where usuario_id=r); end if;
+ if (select situacao||'/'||plano||'/'||vence_em from public.assinaturas where usuario_id=r)<>'ativa/essencial/'||(current_date-20+interval '1 month')::date then raise exception 'renovar bloqueado < 30 dias: %',(select to_jsonb(a) from public.assinaturas a where usuario_id=r); end if;
  if not exists (select 1 from public.pagamentos where usuario_id=r and situacao='pago' and valor_centavos=12700 and referencia='Renovação') then raise exception 'pagamento da renovação'; end if;
  if public.plano_efetivo_titular(r)->>'plano'<>'essencial' then raise exception 'renovado continua travado'; end if;
+ -- Pagou na carência (venceu há 2 dias): renova do vencimento original, sem ganhar os 2 dias.
+ update public.assinaturas set situacao='ativa', vence_em=current_date-2 where usuario_id=r;
+ set local role authenticated; perform public.admin_renovar_assinatura(r); reset role;
+ if (select vence_em from public.assinaturas where usuario_id=r)<>(current_date-2+interval '1 month')::date then raise exception 'renovar na carência: %',(select vence_em from public.assinaturas where usuario_id=r); end if;
+ -- Bloqueado há mais de 30 dias (venceu há 60, carência 7): ciclo novo a partir do dia do pagamento.
+ update public.assinaturas set situacao='vencida', vence_em=current_date-60 where usuario_id=r;
+ set local role authenticated; perform public.admin_renovar_assinatura(r); reset role;
+ if (select vence_em from public.assinaturas where usuario_id=r)<>(current_date+interval '1 month')::date then raise exception 'renovar bloqueado > 30 dias: %',(select vence_em from public.assinaturas where usuario_id=r); end if;
+ -- Bloqueado há 28 dias, mas o mês contado do vencimento original já passou: também começa hoje (senão voltaria vencido).
+ update public.assinaturas set situacao='vencida', vence_em=current_date-35 where usuario_id=r;
+ set local role authenticated; perform public.admin_renovar_assinatura(r); reset role;
+ if (select vence_em from public.assinaturas where usuario_id=r)<>(current_date+interval '1 month')::date then raise exception 'renovar com período passado: %',(select vence_em from public.assinaturas where usuario_id=r); end if;
 end $$;
 -- 22/11: fuso. Relógio simulado em 22/11/2026 às 22h de Brasília (01h de 23/11 em UTC): tudo conta o dia 22.
 create or replace function public.agora_brasilia() returns timestamp
@@ -458,5 +471,8 @@ begin
  if v->>'plano'<>'essencial' or not (v->>'em_carencia')::boolean then raise exception 'carência às 22h: %',v; end if;
  perform public.cobranca_rodar_diario();
  if (select situacao from public.assinaturas where usuario_id=r)<>'ativa' then raise exception 'robô bloqueou às 22h no último dia da carência'; end if;
+ -- Pagou às 22h na carência: renova do vencimento original (19/12).
+ set local role authenticated; perform public.admin_renovar_assinatura(r); reset role;
+ if (select vence_em from public.assinaturas where usuario_id=r)<>'2026-12-19' then raise exception 'renovar às 22h: %',(select vence_em from public.assinaturas where usuario_id=r); end if;
 end $$;
 rollback;

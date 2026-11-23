@@ -391,6 +391,7 @@
       <div class="cartao-lista" style="padding:20px 24px;margin-bottom:20px;">
         <h3 style="margin-top:0;">Cobrança do mês</h3>
         <p class="nota-equipe">Olhe esta aba todo dia. "Cobrar no WhatsApp" abre o WhatsApp com uma mensagem pronta: você confere e envia, nada sai sozinho. Caiu o Pix? Use "Recebi: renovar" e a conta volta na hora (com pedido em aberto, libera o pedido; sem pedido, renova o mesmo plano e ciclo).</p>
+        <p class="nota-equipe" id="regra-renovacao"><strong>Regra da renovação:</strong> quem paga na carência ou bloqueado renova a partir do vencimento original (atrasar não dá dias de graça); bloqueado há mais de 30 dias começa um ciclo novo no dia do pagamento.</p>
         <div class="cards-resumo" id="cobranca-totais"><div class="carregando">Carregando...</div></div>
         <form id="form-carencia" class="form-equipe" style="margin-top:16px;">
           <label for="carencia-dias">Carência depois do vencimento (dias)</label>
@@ -1275,7 +1276,7 @@
         return `<tr data-cobranca="${escapeHtml(a.usuario_id)}"><td>${escapeHtml(a.nome || a.email || "-")}<br><span class="sub">${escapeHtml(a.email || "")}${a.telefone ? " · " + escapeHtml(a.telefone) : ""}</span></td>
           <td>${escapeHtml(a.plano_nome || a.plano)} · ${NOMES_CICLO[a.ciclo] || "-"}</td><td>${reais(a.valor_centavos)}</td><td>${dataBr(a.vence_em)}${atraso}</td>
           <td><div class="acoes">${zap ? `<a class="btn-secundario" href="${escapeHtml(zap)}" target="_blank" rel="noopener">Cobrar no WhatsApp</a>` : `<a class="btn-secundario" href="mailto:${escapeHtml(a.email || "")}">Cobrar por e-mail</a>`}
-            <button type="button" class="btn-aprovar" data-renovar="${escapeHtml(a.usuario_id)}">Recebi: renovar</button></div></td></tr>`;
+            <button type="button" class="btn-aprovar" data-renovar="${escapeHtml(a.usuario_id)}" aria-describedby="regra-renovacao" title="Renova a partir do vencimento original; bloqueado há mais de 30 dias começa um ciclo novo hoje">Recebi: renovar</button></div></td></tr>`;
       }).join("")}</tbody></table>` : `<div class="vazio">${VAZIO[grupo]}</div>`;
     }
     document.querySelectorAll("#secao-cobranca [data-renovar]").forEach((b) => b.addEventListener("click", async () => {

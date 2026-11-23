@@ -676,7 +676,7 @@ update public.clientes c set plano = a.plano from public.assinaturas a where a.u
 -- ---------------------------------------------------------------------------------------------------------------
 create or replace function public.aplicar_pagamento_confirmado(p_pagamento uuid, p_feito_por text default 'servidor') returns jsonb
 language plpgsql security definer set search_path = public as $$
-declare g public.pagamentos%rowtype; a public.assinaturas%rowtype; v_inicio date; v_fim date;
+declare g public.pagamentos%rowtype; a public.assinaturas%rowtype; v_hoje date; v_inicio date; v_fim date;
 begin
   select * into g from public.pagamentos where id = p_pagamento for update;
   if not found then raise exception 'Pagamento não encontrado'; end if;
@@ -685,8 +685,17 @@ begin
   if g.usuario_id is null or g.plano is null or g.ciclo is null then raise exception 'Pagamento sem conta, plano ou ciclo'; end if;
   select * into a from public.assinaturas where usuario_id = g.usuario_id for update;
   if not found then raise exception 'Assinatura não encontrada'; end if;
-  v_inicio := greatest(public.hoje_brasilia(), coalesce(case when a.situacao = 'ativa' then a.vence_em end, public.hoje_brasilia()));
+  -- 22/11: renova a partir do vencimento original, mesmo pagando na carência ou já bloqueado (atrasar não dá dias de
+  -- graça, padrão do mercado). Bloqueado há mais de 30 dias (ou com o período antigo já todo passado) começa ciclo
+  -- novo no dia do pagamento, para não pagar meses que não usou. Teste, suspensa e cancelada também começam hoje.
+  v_hoje := public.hoje_brasilia();
+  v_inicio := case when a.situacao in ('ativa', 'vencida') and a.vence_em is not null
+    and v_hoje - (a.vence_em + public.carencia_cobranca()) <= 30 then a.vence_em else v_hoje end;
   v_fim := (v_inicio + case g.ciclo when 'anual' then interval '1 year' when 'semestral' then interval '6 months' else interval '1 month' end)::date;
+  if v_fim <= v_hoje then
+    v_inicio := v_hoje;
+    v_fim := (v_inicio + case g.ciclo when 'anual' then interval '1 year' when 'semestral' then interval '6 months' else interval '1 month' end)::date;
+  end if;
   update public.pagamentos set situacao = 'pago', pago_em = coalesce(pago_em, now()), periodo_inicio = v_inicio, periodo_fim = v_fim where id = g.id;
   update public.assinaturas set plano = g.plano, situacao = 'ativa', ciclo = g.ciclo, valor_centavos = g.valor_centavos,
     vence_em = v_fim, plano_solicitado = null, atualizado_em = now(), atualizado_por = p_feito_por where usuario_id = g.usuario_id;
@@ -1120,7 +1129,7 @@ begin
 end $$;
 
 -- "Recebi: renovar": com pedido em aberto, libera o pedido (extras e ciclo dele); sem pedido, renova o mesmo plano,
--- ciclo e valor pelo ponto único aplicar_pagamento_confirmado (atraso ou bloqueado renova a partir de hoje).
+-- ciclo e valor pelo ponto único aplicar_pagamento_confirmado (renova do vencimento original; bloqueado há mais de 30 dias, de hoje).
 create or replace function public.admin_renovar_assinatura(p_usuario uuid) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare a public.assinaturas%rowtype; v_pedido uuid; v_pag uuid; v_valor integer;
