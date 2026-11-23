@@ -4744,6 +4744,21 @@
     clearTimeout(aviso.temporizador);
     aviso.temporizador = setTimeout(() => { aviso.textContent = ""; }, erro ? 12000 : 5000);
   }
+  // Erro do Supabase é objeto simples ({ message, code, details, hint }): no console aparecia só "Object".
+  function textoErroTecnico(erro) {
+    if (!erro || typeof erro !== "object") return String(erro);
+    return [erro.code, erro.message, erro.details, erro.hint].filter(Boolean).join(" | ") || String(erro);
+  }
+  // O que a pessoa lê na tela: o motivo em português e o que fazer, nunca o texto cru do banco.
+  function mensagemErroAcompanhamento(erro) {
+    const texto = String(erro?.message || erro || "");
+    if (erro?.code === "P0001" && texto) return texto + (erro.hint ? ` ${erro.hint}` : "");
+    if (erro?.code === "42501" || /row-level security|permission denied/i.test(texto)) return "seu usuário não tem permissão para acompanhar editais nesta empresa. Peça acesso a quem administra a conta.";
+    if (erro?.code === "PGRST301" || /JWT|sess[aã]o/i.test(texto)) return "sua sessão expirou. Atualize a página e entre de novo.";
+    if (/Failed to fetch|NetworkError|Load failed|fetch failed/i.test(texto)) return "sem conexão com o servidor. Confira a internet e tente de novo.";
+    if (typeof erro?.code !== "string" && texto) return texto; // Error da própria tela (sem code do banco)
+    return `o banco recusou a gravação${erro?.code ? ` (código ${erro.code})` : ""}. Tente de novo em instantes.`;
+  }
   async function empresaOperacionalParaDossie(empresaId = null) {
     if (!contextoOperacionalPromise) {
       contextoOperacionalPromise = (async () => {
@@ -4842,20 +4857,29 @@
               geradoEm = dados.geradoEm || null;
             }
           }
-        } catch (erro) { console.warn("Checklist do resumo indisponível:", erro); }
+        } catch (erro) { console.warn("Checklist do resumo indisponível:", textoErroTecnico(erro)); }
       }
       if (requisitos.length) {
         const { error } = await sb.from("operacao_processos").update({
           documentos_exigidos: requisitos, checklist_fonte: "resumo", checklist_gerado_em: geradoEm || new Date().toISOString(),
         }).eq("id", processo.id).eq("empresa_id", empresa.id).eq("checklist_editado_manualmente", false)
           .eq("atualizado_em", processo.atualizado_em);
-        if (error) throw error;
+        // O processo já está gravado: checklist automático que falha não desfaz o acompanhamento.
+        if (error) console.warn("Checklist do resumo não foi copiado:", textoErroTecnico(error));
       }
     }
+    try { await sincronizarPrazoPropostas(sb, organizacaoId, processo.id, prazoPropostas); } catch (erro) {
+      // Mesmo motivo: o status já foi salvo; avisa que só o prazo ficou para trás.
+      console.warn("Prazo de propostas não foi copiado:", textoErroTecnico(erro));
+      return { id: processo.id, empresa: empresa.razao_social, pendencia: "O prazo de propostas não foi copiado para o processo. Confira em Processos." };
+    }
+    return { id: processo.id, empresa: empresa.razao_social };
+  }
+  async function sincronizarPrazoPropostas(sb, organizacaoId, processoId, prazoPropostas) {
     if (prazoPropostas) {
       const { data: prazos, error: erroPrazoBusca } = await sb.from("operacao_prazos_processo")
         .select("id,titulo,concluido_em").eq("organizacao_id", organizacaoId)
-        .eq("processo_id", processo.id).eq("categoria", "proposta");
+        .eq("processo_id", processoId).eq("categoria", "proposta");
       if (erroPrazoBusca) throw erroPrazoBusca;
       const automatico = (prazos || []).find(p => p.titulo === "Prazo de propostas (Boletim)" || p.titulo.startsWith("Prazo do Boletim: "));
       if (automatico && !automatico.concluido_em) {
@@ -4864,13 +4888,12 @@
         if (error) throw error;
       } else if (!automatico) {
         const { error } = await sb.from("operacao_prazos_processo").insert({
-          organizacao_id: organizacaoId, processo_id: processo.id, categoria: "proposta",
+          organizacao_id: organizacaoId, processo_id: processoId, categoria: "proposta",
           titulo: "Prazo de propostas (Boletim)", vencimento: prazoPropostas
         });
         if (error) throw error;
       }
     }
-    return { id: processo.id, empresa: empresa.razao_social };
   }
   function agendarSincronizacaoDossie(id, edital, status, silencioso = false, empresaId = empresaOperacionalId, etapa = null) {
     if (!id || !edital || !dadosStatusOperacional(status)) return Promise.resolve(null);
@@ -4881,8 +4904,8 @@
     void tarefa.then(resultado => {
       if (!silencioso) avisarSincronizacaoOperacional(`Dossiê atualizado para ${resultado.empresa || "a empresa ativa"}.`);
     }).catch(erro => {
-      console.warn("Não foi possível sincronizar o dossiê automaticamente:", erro);
-      avisarSincronizacaoOperacional("Não foi possível salvar o acompanhamento. Tente novamente.", true);
+      console.warn("Não foi possível sincronizar o dossiê automaticamente:", textoErroTecnico(erro), erro);
+      avisarSincronizacaoOperacional("Não foi possível salvar o acompanhamento: " + mensagemErroAcompanhamento(erro), true);
     }).finally(() => { if (sincronizacoesOperacionais.get(chave) === tarefa) sincronizacoesOperacionais.delete(chave); });
     return tarefa;
   }
@@ -4942,6 +4965,8 @@
   }
   async function carregarAcompanhamentosEmpresa(organizacaoId, empresaId) {
     const sb = window.__sbClient;
+    // Gravação em curso termina antes da leitura: senão o mapa lido do banco apaga o status recém-salvo.
+    await Promise.allSettled([...sincronizacoesOperacionais.values()]);
     const processos = [];
     for (let inicio = 0; ; inicio += 1000) {
       const { data, error } = await sb.from("operacao_processos").select("*")
@@ -5064,7 +5089,13 @@
     document.querySelectorAll(".empresa-acompanhamento > label, .empresa-acompanhamento > a, .empresa-acompanhamento > .empresa-ajuda")
       .forEach((el) => { el.style.display = umaEmpresa ? "none" : ""; });
   }
-  async function carregarEmpresasAcompanhamento() {
+  // Recarga das empresas em andamento (ao voltar para a aba, ao trocar de empresa). Quem grava espera por ela.
+  let carregamentoAcompanhamento = null;
+  function carregarEmpresasAcompanhamento() {
+    carregamentoAcompanhamento = carregarEmpresasAcompanhamentoAgora();
+    return carregamentoAcompanhamento;
+  }
+  async function carregarEmpresasAcompanhamentoAgora() {
     empresaAcompanhamentoPronta = false;
     contextoOperacionalPromise = null;
     try {
@@ -5098,8 +5129,12 @@
       avisarSincronizacaoOperacional("Não foi possível carregar as empresas e seus acompanhamentos: " + erro.message, true);
     }
   }
-  async function selecionarEmpresaAcompanhamento(id) {
+  function selecionarEmpresaAcompanhamento(id) {
     if (!id || id === empresaOperacionalId) return;
+    carregamentoAcompanhamento = selecionarEmpresaAcompanhamentoAgora(id);
+    return carregamentoAcompanhamento;
+  }
+  async function selecionarEmpresaAcompanhamentoAgora(id) {
     empresaAcompanhamentoPronta = false;
     empresaOperacionalId = id;
     atualizarCentralDefesa();
@@ -5119,12 +5154,16 @@
     }
   }
   async function salvarStatusAcompanhamento(id, edital, status, etapa = null) {
+    // A recarga (ex.: ao voltar para a aba) desliga empresaAcompanhamentoPronta por alguns instantes com o
+    // seletor ainda na tela: a primeira escolha falhava com "Escolha uma empresa". Espera a recarga terminar.
+    if (!empresaAcompanhamentoPronta && carregamentoAcompanhamento) await carregamentoAcompanhamento;
     if (!empresaAcompanhamentoPronta || !empresaOperacionalId) throw new Error(semEmpresaCadastrada ? "Cadastre sua empresa em Minhas empresas e documentos para acompanhar o edital." : "Escolha uma empresa antes de acompanhar o edital.");
     const empresaId = empresaOperacionalId;
-    let empresaNome = "a empresa selecionada";
+    let empresaNome = "a empresa selecionada", pendencia = null;
     if (status) {
       const resultado = await agendarSincronizacaoDossie(id, edital, status, true, empresaId, etapa);
       empresaNome = resultado?.empresa || empresaNome;
+      pendencia = resultado?.pendencia || null;
       definirNoMapa("status-licitacao", id, status, empresaId);
       salvarSnapshotKanban(id, edital && { ...edital, etapaId: etapa?.id || null, statusProcesso: etapa?.status_sistema || dadosStatusOperacional(status).estagio }, empresaId, resultado?.id);
     } else {
@@ -5136,7 +5175,7 @@
       definirNoMapa("kanban-editais", id, null, empresaId);
     }
     if (empresaOperacionalId === empresaId) atualizarStatusAcompanhamentoNaTela();
-    return empresaNome;
+    return { empresaNome, pendencia };
   }
   function classePrazoKanban(iso, agora = Date.now()) {
     const dias = diasParaPrazo(iso, agora);
@@ -5700,7 +5739,7 @@
     catch (erro) {
       const etapaMudou = ["23503", "23514"].includes(erro?.code) && /etapa/i.test(erro?.message || "");
       if (etapaMudou) await carregarEtapasFunil(organizacaoFunilId);
-      avisarSincronizacaoOperacional("Não foi possível mover o edital: " + (etapaMudou ? mensagemErroEtapa(erro) : erro.message), true);
+      avisarSincronizacaoOperacional("Não foi possível mover o edital: " + (etapaMudou ? mensagemErroEtapa(erro) : mensagemErroAcompanhamento(erro)), true);
       renderizarKanban();
     }
   }
@@ -6677,12 +6716,13 @@
           const idx = Number(card.dataset.idx);
           selectStatus.disabled = true;
           try {
-            const empresaNome = await salvarStatusAcompanhamento(id, resultados[idx], selectStatus.value);
-            avisarSincronizacaoOperacional(`Acompanhamento salvo para ${empresaNome}.`);
+            const { empresaNome, pendencia } = await salvarStatusAcompanhamento(id, resultados[idx], selectStatus.value);
+            avisarSincronizacaoOperacional(`Acompanhamento salvo para ${empresaNome}.${pendencia ? " " + pendencia : ""}`, Boolean(pendencia));
             if (btnAcompanhar) btnAcompanhar.textContent = rotuloBotaoAcompanhar(selectStatus.value);
           } catch (erro) {
             selectStatus.value = statusAnterior;
-            avisarSincronizacaoOperacional("Não foi possível salvar o acompanhamento: " + erro.message, true);
+            console.warn("Acompanhamento não salvo:", textoErroTecnico(erro));
+            avisarSincronizacaoOperacional("Não foi possível salvar o acompanhamento: " + mensagemErroAcompanhamento(erro), true);
           } finally {
             selectStatus.disabled = !empresaAcompanhamentoPronta;
           }
