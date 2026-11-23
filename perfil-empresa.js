@@ -46,6 +46,46 @@
     return [...new Uint8Array(await subtle.digest('SHA-256', bytes))].map(x => x.toString(16).padStart(2, '0')).join('');
   }
   const caminhoLogo = (org, empresa, hash, ext) => `${org}/${empresa}/perfil/logo-${hash}.${ext}`;
+  // O servidor e o banco só guardam PNG/JPEG de até 512 KB e 2000 px. A tela aceita mais (WEBP, SVG, arquivo grande)
+  // e converte no navegador para PNG/JPEG menor; o SVG nunca é guardado como SVG, só a imagem desenhada dele.
+  const LOGO_ORIGINAL_BYTES = 10 * 1024 * 1024, LOGO_LADO_REDUZIDO = 1200;
+  const MIME_LOGO = { png: 'image/png', jpg: 'image/jpeg', webp: 'image/webp', svg: 'image/svg+xml' };
+  const LOGO_FORMATOS = 'PNG, JPG, WEBP ou SVG, com até 10 MB';
+  // Formato pelo conteúdo do arquivo, não pelo nome.
+  function formatoDoArquivo(b) {
+    if (b.length >= 8 && [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].every((v, i) => b[i] === v)) return 'png';
+    if (b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'jpg';
+    if (b.length >= 12 && String.fromCharCode(...b.subarray(0, 4)) === 'RIFF' && String.fromCharCode(...b.subarray(8, 12)) === 'WEBP') return 'webp';
+    const inicio = String.fromCharCode(...b.subarray(0, 2048)).replace(/^﻿|^\xEF\xBB\xBF/, '').trimStart();
+    return inicio.startsWith('<') && /<svg[\s>]/i.test(inicio) ? 'svg' : null;
+  }
+  // { usar, ext } quando já cabe nas regras do servidor; { reduzir: formato } quando dá para converter; { erro } quando não.
+  function planoDaLogo(bytes) {
+    if (bytes.length > LOGO_ORIGINAL_BYTES) return { erro: `A imagem passa de 10 MB. Envie uma versão menor (${LOGO_FORMATOS}).` };
+    const formato = formatoDoArquivo(bytes);
+    if (!formato) return { erro: `Este arquivo não é uma imagem aceita. Envie a logo em ${LOGO_FORMATOS}. Se for grande, a gente reduz sozinho.` };
+    const img = validarLogo(bytes);
+    return img.erro ? { reduzir: formato } : { usar: bytes, ext: img.ext };
+  }
+  // Desenha a imagem num canvas e exporta PNG (mantém o fundo transparente); se passar de 512 KB, JPEG com fundo branco;
+  // se nem assim, diminui o tamanho e tenta de novo.
+  async function reduzirLogo(bytes, formato, doc, Imagem) {
+    const img = await new Promise((ok, falha) => { const i = new Imagem(); i.onload = () => ok(i); i.onerror = () => falha(new Error('ler')); i.src = dataUrlLogo(bytes, formato); });
+    const w = img.naturalWidth || img.width || 1000, h = img.naturalHeight || img.height || 1000;
+    let lado = formato === 'svg' ? LOGO_LADO_REDUZIDO : Math.min(LOGO_LADO_REDUZIDO, Math.max(w, h));
+    const exportar = (c, tipo) => new Promise(ok => c.toBlob(ok, tipo, 0.9));
+    for (let tentativa = 0; tentativa < 5; tentativa++, lado = Math.round(lado * 0.7)) {
+      const k = lado / Math.max(w, h), c = doc.createElement('canvas');
+      c.width = Math.max(1, Math.round(w * k)); c.height = Math.max(1, Math.round(h * k));
+      const g = c.getContext('2d'); g.drawImage(img, 0, 0, c.width, c.height);
+      const png = await exportar(c, 'image/png');
+      if (png && png.size <= LOGO.bytes) return { bytes: new Uint8Array(await png.arrayBuffer()), ext: 'png' };
+      g.globalCompositeOperation = 'destination-over'; g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
+      const jpg = await exportar(c, 'image/jpeg');
+      if (jpg && jpg.size <= LOGO.bytes) return { bytes: new Uint8Array(await jpg.arrayBuffer()), ext: 'jpg' };
+    }
+    throw new Error('grande');
+  }
 
   // ---------- Formulário <-> payload ----------
   const texto = v => v === null || v === undefined ? '' : typeof v === 'number' ? String(v).replace('.', ',') : String(v);
@@ -144,10 +184,18 @@
 
   // alvoCabeca: quadro único "Dados da empresa" (operacao.html). O título e a razão social/CNPJ já estão no quadro,
   // então aqui só entra a logo; sem ele, o perfil desenha o próprio cabeçalho como antes.
-  function montar({ alvo, alvoCabeca, obterSessao, requisitar = raiz.fetch?.bind(raiz), enviarLogo }) {
+  // Texto do aviso ao lado do botão único "Salvar dados da empresa" (identificação + perfil).
+  function resumoDoSalvamento(identificacao, perfilSalvo) {
+    if (!identificacao.ok) return { tipo: 'erro', texto: `Endereço, representante e cargo NÃO foram salvos. ${identificacao.erro}${perfilSalvo ? ' O restante foi salvo.' : ''} O que você digitou continua na tela.` };
+    if (identificacao.salvou || perfilSalvo) return { tipo: 'info', texto: 'Dados salvos. A proposta e as declarações já usam estes dados.' };
+    return { tipo: 'info', texto: 'Nada mudou desde o último salvamento.' };
+  }
+
+  // antesDeSalvar: salva a identificação (operacao.html) no mesmo clique; devolve { ok, salvou, erro }.
+  function montar({ alvo, alvoCabeca, obterSessao, requisitar = raiz.fetch?.bind(raiz), enviarLogo, antesDeSalvar }) {
     const doc = alvo.ownerDocument;
-    let vigente = null, sugerirUf = () => {};
-    function aviso(texto) { sugerirUf = () => {}; alvoCabeca?.replaceChildren(); alvo.replaceChildren(); const p = doc.createElement('p'); p.setAttribute('role', 'status'); p.textContent = texto; alvo.append(p); }
+    let vigente = null, sugerirUf = () => {}, pendente = () => false;
+    function aviso(texto) { sugerirUf = () => {}; pendente = () => false; alvoCabeca?.replaceChildren(); alvo.replaceChildren(); const p = doc.createElement('p'); p.setAttribute('role', 'status'); p.textContent = texto; alvo.append(p); }
     function abrir({ empresa, orgId }) {
       if (!empresa?.id) { vigente = null; aviso('Selecione ou adicione uma empresa para preencher o perfil.'); return; }
       const contexto = {}; vigente = contexto;
@@ -182,7 +230,7 @@
         const botaoCpf = k === 'cpf_representante' && gestor ? '<button type="button" class="link" id="perfil-mostrar-cpf">Mostrar CPF completo</button>' : '';
         return `<div><label for="${id}">${ROTULOS[k]}</label>${entrada}${botaoCpf}</div>`;
       };
-      const logo = '<div class="perfil-logo"><img id="perfil-logo-previa" alt="Logo da empresa" hidden><label for="perfil-logo" class="btn">Enviar logo</label><input id="perfil-logo" type="file" accept="image/png,image/jpeg" class="perfil-arquivo"><span class="nota">PNG ou JPEG, até 512 KB</span><div id="perfil-logo-aviso" class="aviso" role="status"></div></div>';
+      const logo = '<div class="perfil-logo"><img id="perfil-logo-previa" alt="Logo da empresa" hidden><label for="perfil-logo" class="btn">Enviar logo</label><input id="perfil-logo" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,.svg" class="perfil-arquivo"><span class="nota">' + LOGO_FORMATOS + '. Se for grande, a gente reduz.</span><div id="perfil-logo-aviso" class="aviso" role="status"></div></div>';
       if (alvoCabeca) alvoCabeca.innerHTML = logo;
       alvo.innerHTML = `
         ${alvoCabeca ? '' : `<div class="perfil-cabeca"><div><h2>Perfil da empresa</h2><p>Preencha uma vez. A proposta e as declarações usam estes dados.</p><p class="nota" id="perfil-identidade"></p></div>${logo}</div>`}
@@ -191,7 +239,7 @@
           <div class="tabela-wrap"><table class="tabela perfil-premissas"><thead><tr><th>Segmento</th><th>UF</th>${PERCENTUAIS.map(k => `<th>${ROTULOS[k]}</th>`).join('')}<th></th></tr></thead><tbody id="perfil-premissas"></tbody></table></div>
           <button type="button" class="btn" id="perfil-add-premissa">+ Linha</button></fieldset>
         <div id="perfil-aviso" class="aviso" role="status"></div>
-        <div class="perfil-rodape"><button type="button" class="btn primario" id="perfil-salvar">Salvar perfil</button></div>`;
+        <div class="perfil-rodape"><button type="button" class="btn primario" id="perfil-salvar">Salvar dados da empresa</button></div>`;
       const $ = id => doc.getElementById(id);
       // O aviso fica perto de quem agiu: logo no topo, salvar no rodapé.
       const avisoTela = (texto, tipo, onde = 'perfil-aviso') => { const el = $(onde); el.textContent = texto; el.className = texto ? `aviso ${tipo}` : 'aviso'; };
@@ -203,7 +251,10 @@
       const lerCampos = () => Object.fromEntries([...alvo.querySelectorAll('[data-campo]')].map(el => [el.dataset.campo, el.value]));
       preencher(sugestoes(inicial, empresa, resposta.ufSedeSugerida));
       // Endereço confirmado agora na identificação: a UF entra só se o campo ainda estiver vazio.
-      sugerirUf = endereco => { const el = $(idDoCampo('uf_sede')), uf = ufDoEndereco(endereco); if (ativo() && el && !el.value && uf) el.value = uf; };
+      sugerirUf = endereco => { const el = $(idDoCampo('uf_sede')), uf = ufDoEndereco(endereco); if (ativo() && el && !el.value && uf) { el.value = uf; base = JSON.stringify(lerCampos()); } };
+      // Base do aviso de alterações não salvas: o que a tela mostrou (com sugestões), não o que veio do banco.
+      let base = JSON.stringify(lerCampos());
+      pendente = () => ativo() && (JSON.stringify(lerCampos()) !== base || JSON.stringify(linhas) !== JSON.stringify(linhasIniciais));
       function desenharLinhas() {
         $('perfil-premissas').innerHTML = linhas.map((l, i) => `<tr id="perfil-premissas-${i}">
           ${i === 0 ? '<td colspan="2"><strong>Padrão (todos)</strong></td>' : `<td><input id="perfil-premissas-${i}-segmento" data-i="${i}" data-k="segmento" maxlength="80" aria-label="Segmento, linha ${i + 1}" placeholder="Ex.: limpeza"></td><td><input id="perfil-premissas-${i}-uf" data-i="${i}" data-k="uf" maxlength="2" aria-label="UF, linha ${i + 1}" placeholder="Todas" class="perfil-uf"></td>`}
@@ -230,41 +281,56 @@
         limparDestaque();
         const semChave = linhaSemChave(linhas);
         if (semChave >= 0) { avisoTela(`Premissas, linha ${semChave + 1}: Preencha segmento ou UF.`, 'erro'); destacar(`premissas[${semChave}].segmento`); return; }
-        const atual = lerCampos(), corpo = montarPayload(inicial, atual, linhasIniciais, linhas);
-        if (!corpo) { avisoTela('Nada mudou desde o último salvamento.', 'info'); return; }
         const botao = $('perfil-salvar'); botao.disabled = true; avisoTela('Salvando…', 'info');
-        const { status, corpo: r } = await solicitar({ acao: 'salvarPerfil', ...corpo });
-        if (!ativo()) return; botao.disabled = false;
-        if (status !== 200) { avisoTela(mensagemDoErro(status, r), 'erro'); if (status === 422) destacar(r.campo); return; }
-        inicial = valoresDoPerfil(r.perfil);
-        if (corpo.premissas) linhasIniciais = linhasDePremissas(r.premissas);
-        linhas = linhasIniciais.map(l => ({ ...l })); preencher(inicial); desenharLinhas();
-        avisoTela('Perfil salvo. A proposta e as declarações já usam estes dados.', 'info');
+        const identificacao = antesDeSalvar ? await antesDeSalvar() : { ok: true, salvou: false };
+        if (!ativo()) return;
+        const atual = lerCampos(), corpo = montarPayload(inicial, atual, linhasIniciais, linhas);
+        if (corpo) {
+          const { status, corpo: r } = await solicitar({ acao: 'salvarPerfil', ...corpo });
+          if (!ativo()) return;
+          if (status !== 200) {
+            botao.disabled = false;
+            const ident = identificacao.ok ? (identificacao.salvou ? ' A identificação foi salva.' : '') : ` Endereço, representante e cargo também NÃO foram salvos: ${identificacao.erro}`;
+            avisoTela(mensagemDoErro(status, r) + ident, 'erro'); if (status === 422) destacar(r.campo); return;
+          }
+          inicial = valoresDoPerfil(r.perfil);
+          if (corpo.premissas) linhasIniciais = linhasDePremissas(r.premissas);
+          linhas = linhasIniciais.map(l => ({ ...l })); preencher(inicial); desenharLinhas(); base = JSON.stringify(lerCampos());
+        }
+        botao.disabled = false;
+        const { texto: resumo, tipo } = resumoDoSalvamento(identificacao, Boolean(corpo)); avisoTela(resumo, tipo);
       };
       if (gestor) $('perfil-mostrar-cpf').onclick = async () => {
         const { status, corpo: r } = await solicitar({ acao: 'lerPerfil', mostrarCpf: true });
         if (!ativo()) return;
         if (status !== 200) { avisoTela(mensagemDoErro(status, r), 'erro'); return; }
-        const cpf = texto(r.perfil?.cpf_representante); inicial = { ...inicial, cpf_representante: cpf }; $(idDoCampo('cpf_representante')).value = cpf; $('perfil-mostrar-cpf').hidden = true;
+        const cpf = texto(r.perfil?.cpf_representante); inicial = { ...inicial, cpf_representante: cpf }; $(idDoCampo('cpf_representante')).value = cpf; $('perfil-mostrar-cpf').hidden = true; base = JSON.stringify(lerCampos());
       };
       $('perfil-logo').onchange = async e => {
         const arquivo = e.target.files?.[0]; e.target.value = ''; if (!arquivo) return;
         limparDestaque();
-        const bytes = new Uint8Array(await arquivo.arrayBuffer());
-        const img = validarLogo(bytes); if (img.erro) { avisoTela(img.erro, 'erro', 'perfil-logo-aviso'); destacar('logo'); return; }
+        const original = new Uint8Array(await arquivo.arrayBuffer()), plano = planoDaLogo(original);
+        if (plano.erro) { avisoTela(plano.erro, 'erro', 'perfil-logo-aviso'); destacar('logo'); return; }
+        let bytes = plano.usar, ext = plano.ext;
+        if (plano.reduzir) {
+          avisoTela('Ajustando o tamanho da logo…', 'info', 'perfil-logo-aviso');
+          try { ({ bytes, ext } = await reduzirLogo(original, plano.reduzir, doc, raiz.Image)); }
+          catch { if (ativo()) { avisoTela(`Não conseguimos abrir esta imagem. Envie a logo em ${LOGO_FORMATOS}.`, 'erro', 'perfil-logo-aviso'); destacar('logo'); } return; }
+          if (!ativo()) return;
+        }
         avisoTela('Enviando logo…', 'info', 'perfil-logo-aviso');
         let caminho, hash;
         // crypto.subtle só existe em HTTPS/localhost; sem ele, a falha aparece em vez de travar em "Enviando".
-        try { hash = await sha256Hex(bytes); caminho = caminhoLogo(orgId, empresa.id, hash, img.ext); await enviarLogo(caminho, arquivo, img.ext === 'png' ? 'image/png' : 'image/jpeg'); } catch (erro) { if (ativo()) avisoTela('Não foi possível enviar a logo. ' + (erro?.message || ''), 'erro', 'perfil-logo-aviso'); return; }
+        try { hash = await sha256Hex(bytes); caminho = caminhoLogo(orgId, empresa.id, hash, ext); await enviarLogo(caminho, new raiz.Blob([bytes], { type: MIME_LOGO[ext] }), MIME_LOGO[ext]); } catch (erro) { if (ativo()) avisoTela('Não foi possível enviar a logo. ' + (erro?.message || ''), 'erro', 'perfil-logo-aviso'); return; }
         const { status, corpo: r } = await solicitar({ acao: 'registrarLogo', caminho, hash });
         if (!ativo()) return;
         if (status !== 200) { avisoTela(mensagemDoErro(status, r), 'erro', 'perfil-logo-aviso'); destacar('logo'); return; }
-        const url = dataUrlLogo(bytes, img.ext); $('perfil-logo-previa').src = url; $('perfil-logo-previa').hidden = false; avisoTela('Logo salva.', 'info', 'perfil-logo-aviso');
+        const url = dataUrlLogo(bytes, ext); $('perfil-logo-previa').src = url; $('perfil-logo-previa').hidden = false; avisoTela('Logo salva.', 'info', 'perfil-logo-aviso');
         // Só avisa: a logo é da empresa. data: URL não "suja" o canvas, então dá para ler os pixels aqui.
         const teste = new raiz.Image(); teste.onload = () => { try { const c = doc.createElement('canvas'), k = Math.min(1, 200 / Math.max(teste.width, teste.height)); c.width = Math.max(1, Math.round(teste.width * k)); c.height = Math.max(1, Math.round(teste.height * k)); const g = c.getContext('2d'); g.drawImage(teste, 0, 0, c.width, c.height); if (ativo() && logoClara(g.getImageData(0, 0, c.width, c.height).data)) avisoTela('Logo salva. Atenção: sua logo é clara e pode sumir no papel. Prefira uma versão escura ou colorida.', 'erro', 'perfil-logo-aviso'); } catch { /* sem canvas: segue sem o alerta */ } }; teste.src = url;
       };
     }
-    return { abrir, limpar: texto => { vigente = null; aviso(texto); }, sugerirUf: endereco => sugerirUf(endereco) };
+    return { abrir, limpar: texto => { vigente = null; aviso(texto); }, sugerirUf: endereco => sugerirUf(endereco), temAlteracoesNaoSalvas: () => pendente() };
   }
 
   // Prévia em data: URL. A CSP do site (img-src 'self' data: https:) bloqueia blob:, e a prévia
@@ -272,7 +338,7 @@
   function dataUrlLogo(bytes, ext) {
     let s = '';
     for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-    return `data:image/${ext === 'png' ? 'png' : 'jpeg'};base64,${btoa(s)}`;
+    return `data:${MIME_LOGO[ext] || 'image/jpeg'};base64,${btoa(s)}`;
   }
 
   // RGBA: logo "clara" quando quase nenhum pixel é visível (opaco e mais escuro que quase-branco) no papel branco.
@@ -282,7 +348,7 @@
     return total > 0 && visiveis / total < 0.01;
   }
 
-  const api = { LOGO, logoClara, dimensoesLogo, validarLogo, sha256Hex, caminhoLogo, dataUrlLogo, valoresDoPerfil, sugestoes, ufDoEndereco, linhasDePremissas, montarPayload, linhaSemChave, idDoCampo, rotuloDoCampo, mensagemDoErro, montar };
+  const api = { LOGO, formatoDoArquivo, planoDaLogo, resumoDoSalvamento, logoClara, dimensoesLogo, validarLogo, sha256Hex, caminhoLogo, dataUrlLogo, valoresDoPerfil, sugestoes, ufDoEndereco, linhasDePremissas, montarPayload, linhaSemChave, idDoCampo, rotuloDoCampo, mensagemDoErro, montar };
   raiz.PerfilEmpresa = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(globalThis);

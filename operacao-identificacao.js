@@ -46,10 +46,10 @@
         return resultado;
       };
       alvo.replaceChildren();
-      const ui = global.EmpresaIdentificacaoUI.renderizar(alvo, { empresaId, ativo, solicitar, semMinuta: true, aberto: true, titulo, atualizado: aoAtualizar }); uiAtiva = ui;
+      const ui = global.EmpresaIdentificacaoUI.renderizar(alvo, { empresaId, ativo, solicitar, semMinuta: true, aberto: true, titulo, atualizado: aoAtualizar, salvarPorFora: true }); uiAtiva = ui;
       void ui.carregar();
     }
-    return { abrir, limpar, temAlteracoesNaoSalvas: () => uiAtiva?.temAlteracoesNaoSalvas?.() === true };
+    return { abrir, limpar, salvarPendente: () => uiAtiva ? uiAtiva.salvarPendente() : Promise.resolve({ ok: true, salvou: false }), temAlteracoesNaoSalvas: () => uiAtiva?.temAlteracoesNaoSalvas?.() === true };
   }
   const api = { montar, empresaDoLink, retornoAoProcesso };
   global.OperacaoIdentificacao = api;
