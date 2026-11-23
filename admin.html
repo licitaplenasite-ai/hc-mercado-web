@@ -246,6 +246,7 @@
   @media (max-width: 640px) { .pedido-cartao dl { grid-template-columns: 1fr; } .pedido-cartao .acoes button { flex: 1 1 100%; } }
   .aviso-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--borda); font-size: 14px; }
   .aviso-item:last-child { border-bottom: none; }
+  .alarme-saude { margin: 0 0 10px; padding: 10px 12px; border-left: 4px solid var(--vermelho); font-size: 14px; }
   @media (max-width: 600px) { .grade-plano { grid-template-columns: 1fr 1fr; } .filtros input[type="search"] { margin-left: 0; width: 100%; min-width: 0; } }
 
   /* Tablet (768px) */
@@ -489,6 +490,7 @@
           </div>
           <button type="button" class="btn-secundario" id="status-atualizar">Atualizar status</button>
         </div>
+        <div id="saude-alarmes" role="alert"></div>
         <div class="fontes-status" id="status-cartoes" aria-live="polite"><div class="carregando">Carregando...</div></div>
       </div>
     </div>
@@ -1545,6 +1547,8 @@
     if (error) { alvo.innerHTML = '<div class="vazio">Indisponível: ' + escapeHtml(error.message) + '</div>'; return; }
     const agora = Date.now(), uf = AdminPainel.coberturaEstados(Object.keys(data.cobertura_por_uf || {}).length ? data.ufs_com_falha : null);
     cobertura.textContent = uf.texto;
+    document.getElementById("saude-alarmes").innerHTML = AdminPainel.alarmesSaude(data, agora)
+      .map((t) => `<p class="alarme-saude">${escapeHtml(t)}</p>`).join("");
     alvo.innerHTML = AdminPainel.ROBOS.map((r) => {
       const st = AdminPainel.classificarRobo(data.robos?.[r.codigo], r.prazoHoras, agora);
       return `<div class="robo" data-robo="${r.codigo}" data-nivel="${st.nivel}"><h4>${escapeHtml(r.nome)}</h4><p class="estado">${escapeHtml(st.texto)}</p><p>${escapeHtml(r.faz)}</p></div>`;

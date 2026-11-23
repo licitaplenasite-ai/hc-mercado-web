@@ -52,3 +52,18 @@ test("motivo da falha do boletim em português", () => {
   assert.equal(A.motivoFalhaBoletim(""), "Erro sem detalhe.");
   assert.equal(A.motivoFalhaBoletim("algo estranho"), "Erro no envio: algo estranho");
 });
+
+// Incidente 23/11: fila de pedidos de cliente parada e coleta com alarme não apareciam em lugar nenhum.
+test("alarmes da Saúde: pedido de processo há mais de 1 h e coleta do PNCP atrasada", () => {
+  assert.deepEqual(A.alarmesSaude({}, AGORA), []);
+  assert.deepEqual(A.alarmesSaude({ dossies_interesse_atrasados: { esperando: 0, mais_antigo: null }, coleta_alarme: { oportunidades: [], contratos: [] } }, AGORA), []);
+  const um = A.alarmesSaude({ dossies_interesse_atrasados: { esperando: 1, mais_antigo: ha(5) } }, AGORA);
+  assert.equal(um.length, 1);
+  assert.match(um[0], /^1 processo de cliente espera .*há 5 horas/);
+  const varios = A.alarmesSaude({ dossies_interesse_atrasados: { esperando: 3, mais_antigo: ha(2) },
+    coleta_alarme: { oportunidades: ["cobertura de oportunidades há mais de 120 h: MG, PI"], contratos: ["contratos: scan nacional sem concluir desde 20261115"] } }, AGORA);
+  assert.equal(varios.length, 3);
+  assert.match(varios[0], /^3 processos de clientes esperam/);
+  assert.match(varios[1], /^Busca de editais atrasada: .*MG, PI/);
+  assert.match(varios[2], /^Contratos assinados atrasada: /);
+});

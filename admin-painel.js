@@ -67,7 +67,27 @@
     return `Erro no envio: ${t.slice(0, 160)}`;
   }
 
-  const api = { ROBOS, TOTAL_UFS, haQuanto, classificarRobo, coberturaEstados, motivoFalhaBoletim };
+  // Alarmes do incidente 23/11 (processo do cliente horas em "Na fila…"): pedido de processo sem dossiê há mais
+  // de 1 h e coleta do PNCP com cobertura atrasada (que antes derrubava o robô e travava a fila sem ninguém ver).
+  // dados = retorno de admin_saude_robos (dossies_interesse_atrasados, coleta_alarme); campos ausentes = banco antigo.
+  const FASES_COLETA = { oportunidades: 'Busca de editais', contratos: 'Contratos assinados' };
+  function alarmesSaude(dados, agora) {
+    const alarmes = [];
+    const fila = dados && dados.dossies_interesse_atrasados;
+    const n = Number(fila && fila.esperando) || 0;
+    if (n > 0) {
+      alarmes.push(`${n === 1 ? '1 processo de cliente espera' : `${n} processos de clientes esperam`} a leitura do edital há mais de 1 hora` +
+        `${fila.mais_antigo ? ` (o mais antigo chegou ${haQuanto(fila.mais_antigo, agora)})` : ''}. Veja o robô "Gerar dossiês" no GitHub (aba Actions).`);
+    }
+    const coleta = dados && dados.coleta_alarme;
+    for (const [fase, nome] of Object.entries(FASES_COLETA)) {
+      const lista = coleta && Array.isArray(coleta[fase]) ? coleta[fase] : [];
+      for (const item of lista) if (typeof item === 'string' && item) alarmes.push(`${nome} atrasada: ${item}. O robô continua rodando e tenta recuperar sozinho.`);
+    }
+    return alarmes;
+  }
+
+  const api = { ROBOS, TOTAL_UFS, haQuanto, classificarRobo, coberturaEstados, motivoFalhaBoletim, alarmesSaude };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof window !== 'undefined') window.AdminPainel = api;
 })();
