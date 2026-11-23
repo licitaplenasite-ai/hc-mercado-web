@@ -62,9 +62,10 @@ async function nasDuasLarguras(p, nome, antes) {
   }
   await p.setViewportSize({ width: 1280, height: 900 });
 }
-const mais = (dias) => { const d = new Date(); d.setDate(d.getDate() + dias); return d; };
-const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-const maisMeses = (m) => { const d = new Date(); d.setMonth(d.getMonth() + m); return iso(d); };
+// Datas em UTC, como o current_date do banco (Supabase roda em UTC): depois das 21h de Brasília já é o dia seguinte.
+const mais = (dias) => { const d = new Date(); d.setUTCDate(d.getUTCDate() + dias); return d; };
+const iso = (d) => d.toISOString().slice(0, 10);
+const maisMeses = (m) => { const d = new Date(); d.setUTCMonth(d.getUTCMonth() + m); return iso(d); };
 
 async function main() {
   fs.mkdirSync(PRINTS, { recursive: true });

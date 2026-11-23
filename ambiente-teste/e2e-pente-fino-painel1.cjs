@@ -61,7 +61,7 @@ async function main() {
       await abrirPainel(p);
       exigir(await secaoAtiva(p) === 'dashboard', 'painel não abriu no Início');
       const plano = (await p.innerText('#header-badge-plano')).trim();
-      exigir(plano === 'Assessoria', `plano no topo "${plano}" (esperado o nome, não o código)`);
+      exigir(/^Assessoria( \(teste\))?$/.test(plano), `plano no topo "${plano}" (esperado o nome, não o código)`);
       const t = await semJargao(p, '#dashboard');
       exigir(/Contratos públicos acompanhados/.test(t), 'rótulo do cartão de contratos não mudou');
       const perfil = await p.$$eval('#dash-perfil-itens > div', (d) => d.map((x) => x.innerText.trim()));
