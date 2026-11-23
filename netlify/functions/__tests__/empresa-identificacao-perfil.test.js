@@ -187,3 +187,13 @@ test('M3 (19/11): o token do usuário nunca pede cpf_representante; o CPF vem s�
  const s=await f.run({acao:'salvarPerfil',perfil:{nome_fantasia:'QA'}});assert.equal(s.statusCode,200);assert.equal(s.json.perfil.cpf_representante,'***.***.***-25');
  assert.ok(urls.filter(([u])=>u.includes('on_conflict=empresa_id')&&u.includes('operacao_perfil_empresa')).every(([u])=>u.includes('select=')&&!u.includes('cpf')),'upsert devolveu o CPF');
 });
+
+// Defeito 23/11: CNPJ corrigido invalida a identificação; a consulta devolve os dados anteriores só como sugestão.
+test('consultar com identificação invalidada não dá os dados como confirmados, mas devolve os anteriores',async t=>{
+ const f=fixture(t);const dados={endereco:'Rua QA, 1',representante:'Pessoa QA',cargo:'Sócia'};
+ f.state.identificacao=[{dados_confirmados:dados,proveniencia:[],invalidado_em:'2026-11-23T00:00:00Z',versao:2}];
+ const r=await f.run({acao:'consultar'});assert.equal(r.statusCode,200);
+ assert.equal(r.json.perfil.status,'invalidado');assert.equal(r.json.perfil.dados,null);assert.deepEqual(r.json.perfil.dadosAnteriores,dados);
+ f.state.identificacao[0].invalidado_em=null;
+ const c=await f.run({acao:'consultar'});assert.equal(c.json.perfil.status,'confirmado');assert.deepEqual(c.json.perfil.dados,dados);assert.equal(c.json.perfil.dadosAnteriores,null);
+});
