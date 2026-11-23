@@ -95,6 +95,30 @@ test("handler: com palavras consulta nome antes da especificação, marca so_esp
   } finally { global.fetch = anterior; }
 });
 
+test("handler: nível seguinte que estoura o tempo devolve o que já achou (parcial), primeiro nível falhando continua 503", async () => {
+  const anterior = global.fetch;
+  const rodar = async (falhaEm) => {
+    global.fetch = async (url, op = {}) => {
+      const u = new URL(url);
+      if (u.pathname === "/auth/v1/user") return Response.json({ id: "u1" });
+      if (u.pathname === "/rest/v1/clientes") return Response.json([{ status: "aprovado" }]);
+      if (u.pathname === "/rest/v1/dados_robo") return Response.json([]);
+      const { p_nivel: nivel } = JSON.parse(op.body);
+      if (nivel === falhaEm) return new Response("{}", { status: 500 });
+      return Response.json([{ id: `${nivel}1`, coletado_em: "2026-11-19" }]);
+    };
+    return handler({ httpMethod: "GET", headers: { authorization: "Bearer T" }, queryStringParameters: { tipo: "pca", palavras: "limpeza" } });
+  };
+  try {
+    const r = await rodar("nome");
+    assert.equal(r.statusCode, 200);
+    const corpo = JSON.parse(r.body);
+    assert.deepEqual(corpo.linhas.map((l) => l.id), ["inicio1"]);
+    assert.equal(corpo.truncado, true);
+    assert.equal((await rodar("inicio")).statusCode, 503);
+  } finally { global.fetch = anterior; }
+});
+
 test("busca: acento, plural/singular e palavras fora de ordem viram o mesmo filtro", () => {
   const frases = (t) => validar({ tipo: "pca", palavras: t }).frases;
   assert.deepEqual(frases("construção"), [["construc"]]);

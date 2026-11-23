@@ -115,9 +115,12 @@ exports.handler = async (event) => {
     };
     // Sem palavras é uma consulta só. Com palavras, nome primeiro e especificação por último (no máximo 3 subrequisições).
     const linhas = [];
+    let parcial = false;
     for (const nivel of filtro.frases.length ? NIVEIS : [null]) {
       if (linhas.length > LIMITE) break;
-      linhas.push(...(await consultar(nivel, LIMITE + 1 - linhas.length)));
+      // Nível seguinte que estoura o tempo não apaga o que já foi achado: devolve parcial (23/11, busca com muitas palavras).
+      try { linhas.push(...(await consultar(nivel, LIMITE + 1 - linhas.length))); }
+      catch (e) { if (!linhas.length || nivel === NIVEIS[0]) throw e; parcial = true; break; }
     }
     const coletadoEm = linhas.reduce((m, l) => (l.coletado_em > m ? l.coletado_em : m), "") || null;
     // Sem a cobertura a tela ainda funciona (só não explica o vazio por UF): falha aqui não derruba a busca.
@@ -125,7 +128,7 @@ exports.handler = async (event) => {
       headers: { apikey: ANON, Authorization: event.headers?.authorization || event.headers?.Authorization, Accept: "application/json" },
       signal: globalThis.AbortSignal.timeout(5000),
     }).then((r) => (r.ok ? r.json() : null)).then((b) => (Array.isArray(b) ? coberturaDoTipo(b, filtro.tipo) : null)).catch(() => null);
-    return resposta(200, { tipo: filtro.tipo, linhas: linhas.slice(0, LIMITE), limite: LIMITE, truncado: linhas.length > LIMITE, coletadoEm, cobertura });
+    return resposta(200, { tipo: filtro.tipo, linhas: linhas.slice(0, LIMITE), limite: LIMITE, truncado: linhas.length > LIMITE || parcial, coletadoEm, cobertura });
   } catch (e) {
     console.warn("prospeccao:", e.message);
     return resposta(503, { erro: "Não foi possível consultar a prospecção agora. Tente de novo em instantes." });

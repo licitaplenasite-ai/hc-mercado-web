@@ -126,6 +126,9 @@ grant select on public.dados_robo to authenticated;
 create extension if not exists pg_trgm;
 create index if not exists prospeccao_itens_busca_trgm_idx on public.prospeccao_itens using gin (busca gin_trgm_ops);
 create index if not exists prospeccao_itens_busca_nome_trgm_idx on public.prospeccao_itens using gin (busca_nome gin_trgm_ops);
+-- v6: prefixo do nome ('palavra%' com LIKE) para o nível "inicio" da busca, com as colunas do filtro/ordem incluídas
+-- (busca só no índice). Em produção, também com "concurrently" ou por job do pg_cron com statement_timeout = 0.
+create index if not exists prospeccao_itens_busca_nome_cobre_idx on public.prospeccao_itens (busca_nome text_pattern_ops) include (tipo, data_ref, valor_total, id);
 
 -- Mesmos três níveis e mesma regra de netlify/functions/prospeccao.js (frase = todas as palavras; frases somam):
 --   inicio  busca_nome começa pela 1a palavra e tem as demais
@@ -157,7 +160,8 @@ begin
       if w !~ '^[a-z0-9]+$' or length(w) not between 2 and 300 then raise exception 'buscar_prospeccao: palavra inválida' using errcode = '22023'; end if;
       b := b || ' and busca ilike ' || quote_literal('%' || w || '%');
       n := n || ' and busca_nome ilike ' || quote_literal('%' || w || '%');
-      i := i || ' and busca_nome ilike ' || quote_literal(case when k = 1 then '' else '%' end || w || '%');
+      -- 1a palavra do "inicio" com LIKE (busca_nome já é minúsculo e sem acento): usa o índice de prefixo (v6).
+      i := i || case when k = 1 then ' and busca_nome like ' || quote_literal(w || '%') else ' and busca_nome ilike ' || quote_literal('%' || w || '%') end;
     end loop;
     ob := ob || ' or (' || substr(b, 6) || ')';
     o_n := o_n || ' or (' || substr(n, 6) || ')';
@@ -168,13 +172,15 @@ begin
   if p_uf is not null then filtro := filtro || ' and uf = ' || quote_literal(p_uf); end if;
   if p_catmat is not null then filtro := filtro || ' and catmat = ' || quote_literal(p_catmat); end if;
   if p_ate is not null then filtro := filtro || ' and data_ref <= ' || quote_literal(p_ate) || '::date'; end if;
-  -- v6 (23/11/2026): o nível "inicio" ('palavra%') levava ~40 s com 8 frases e UF "Todas" (o planejador ia pelo
-  -- trigram com prefixo e rechecava ~360 mil linhas). Filtrar antes pelo "nome" (o_n, que contém o inicio) numa
-  -- subconsulta com "offset 0" (barreira de otimização) e só depois aplicar o prefixo caiu para ~3 s (medido em produção).
-  if p_nivel = 'inicio' then
-    return query execute 'select s.* from (select * from public.prospeccao_itens where tipo = ' || quote_literal(p_tipo)
-      || ' and data_ref >= ' || quote_literal(p_de) || '::date' || filtro || ' and ' || o_n || ' offset 0) s where ' || oi
-      || ' order by data_ref asc, valor_total desc nulls last limit ' || p_limite;
+  -- v6 (23/11/2026): o nível "inicio" ('palavra%' com ILIKE) levava ~40 s com 8 frases e UF "Todas" (o planejador ia
+  -- pelo trigram e rechecava ~360 mil linhas). Com LIKE na 1a palavra o índice de prefixo resolve cada frase; ele inclui
+  -- tipo/data_ref/valor_total/id, então a escolha dos ids sai só do índice (tabela de 1,2 GB não cabe no cache do banco)
+  -- e a tabela só é lida para as linhas devolvidas.
+  if p_nivel = 'inicio' and p_uf is null and p_catmat is null then
+    return query execute 'select p.* from public.prospeccao_itens p join (select id, data_ref, valor_total from public.prospeccao_itens where tipo = '
+      || quote_literal(p_tipo) || ' and data_ref >= ' || quote_literal(p_de) || '::date' || filtro || ' and ' || oi
+      || ' order by data_ref asc, valor_total desc nulls last limit ' || p_limite || ') s on s.id = p.id'
+      || ' order by s.data_ref asc, s.valor_total desc nulls last';
     return;
   end if;
   return query execute 'select * from public.prospeccao_itens where tipo = ' || quote_literal(p_tipo)
