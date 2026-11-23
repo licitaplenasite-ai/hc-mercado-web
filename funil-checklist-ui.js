@@ -7,7 +7,7 @@
 (function (global) {
   'use strict';
   const LIMITE_TAREFAS = 30; // mesmo teto do check em operacao_funil_checklist.sql
-  const LINKS = { defesa: 'Abrir a Central de Defesa', juridico: 'Ir ao Jurídico' };
+  const LINKS = { defesa: 'Abrir a Central de Defesa', juridico: 'Preparar recurso ou contrarrazão' };
   const ETAPAS_ESTEIRA = ['itens', 'exigencias', 'cruzamento', 'historico', 'resultado', 'contrato'];
 
   // As 5 etapas do Siga Pregão. "esteira" = etapa do robô que, pronta, conclui a tarefa.

@@ -25,3 +25,12 @@ test("selo do Funil e links oficiais", () => {
   assert.equal(M.linkQuadro("17908505901022025"), "https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/public/landing?destino=quadro-informativo&compra=17908505901022025");
   assert.equal(M.linkQuadro("1\"><x"), null);
 });
+
+test("link do Jurídico só quando saiu resultado, chat ou recurso, e só com processo válido", () => {
+  const id = "11111111-2222-3333-4444-555555555555";
+  assert.equal(M.linkRecurso(id, [{ tipo: "resultado", resumo: "Resultado publicado" }]), `painel.html?juridico=recurso&processo=${id}#juridico`);
+  assert.equal(M.linkRecurso(id, [{ tipo: "outro", resumo: "Recurso interposto pela empresa X" }]), `painel.html?juridico=recurso&processo=${id}#juridico`);
+  assert.equal(M.linkRecurso(id, [{ tipo: "arquivo_novo", resumo: "Anexo do edital" }]), null);
+  assert.equal(M.linkRecurso("nao-e-uuid", [{ tipo: "resultado" }]), null);
+  assert.equal(M.linkRecurso(id, null), null);
+});

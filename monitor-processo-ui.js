@@ -36,6 +36,12 @@
   }
   // Página oficial do Compras.gov: a pessoa abre (o portal pode pedir verificação); o robô nunca abre.
   const linkQuadro = (id) => (/^\d{17}$/.test(id || '') ? `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/public/landing?destino=quadro-informativo&compra=${id}` : null);
+  // Saiu resultado, mensagem no chat ou recurso: oferece o modelo do Jurídico já com os dados do processo (juridico-ui.js).
+  function linkRecurso(processoId, mudancas) {
+    if (!UUID.test(processoId || '')) return null;
+    const pede = (mudancas || []).some((m) => m.tipo === 'resultado' || m.tipo === 'chat' || /recurs|contrarraz|inabilit|desclassific/i.test(m.resumo || ''));
+    return pede ? `painel.html?juridico=recurso&processo=${processoId}#juridico` : null;
+  }
   // Selo do Funil: N mudanças recentes > monitorado > nada.
   function seloFunil(monitorado, recentes) {
     if (recentes > 0) return { classe: 'perto', texto: `Mudou o edital (${recentes})` };
@@ -56,7 +62,7 @@
     return a;
   }
 
-  function desenhar(alvo, { monitor, mudancas, agora = Date.now() }) {
+  function desenhar(alvo, { monitor, mudancas, processoId, agora = Date.now() }) {
     const doc = alvo.ownerDocument;
     const raiz = el(doc, 'div', 'mp');
     raiz.append(el(doc, 'h2', 'app-subtitulo', 'Mudou algo no edital?'));
@@ -103,6 +109,8 @@
     const pncp = linkPncp(monitor.numero_controle_pncp), quadro = linkQuadro(monitor.id_compra);
     if (pncp) links.append(link(doc, pncp, 'Ver no PNCP'));
     if (quadro) links.append(link(doc, quadro, 'Avisos e esclarecimentos no Compras.gov (abre no portal)'));
+    const recurso = linkRecurso(processoId, mudancas);
+    if (recurso) { const a = el(doc, 'a', 'mp-link', 'Preparar recurso ou contrarrazão'); a.href = recurso; links.append(a); }
     raiz.append(links, el(doc, 'p', 'mp-fonte', 'Fontes: PNCP (situação, datas, arquivos, itens e resultado) e, no dia da sessão, '
       + 'mensagens do chat gravadas pela extensão "Acompanhar chat" com "Gravar no LicitaPlena" ligado.'));
     alvo.replaceChildren(raiz);
@@ -121,7 +129,7 @@
       if (semTabela(m.error) || semTabela(ms.error)) { alvo.replaceChildren(); return { fechar() {} }; }
       if (m.error || ms.error) { alvo.replaceChildren(el(alvo.ownerDocument, 'p', 'mp-erro', 'Não foi possível carregar o monitor agora. Tente de novo em instantes.')); }
       // Mais recente primeiro pela data do fato (o PNCP às vezes registra fora de ordem).
-      else desenhar(alvo, { monitor: m.data, mudancas: (ms.data || []).sort((a, b) => String(b.ocorrido_em || b.detectado_em).localeCompare(String(a.ocorrido_em || a.detectado_em))) });
+      else desenhar(alvo, { processoId, monitor: m.data, mudancas: (ms.data || []).sort((a, b) => String(b.ocorrido_em || b.detectado_em).localeCompare(String(a.ocorrido_em || a.detectado_em))) });
     } catch { if (vivo) alvo.replaceChildren(); }
     return { fechar() { vivo = false; alvo.replaceChildren(); } };
   }
@@ -210,7 +218,7 @@
     return { parar() { obs.disconnect(); clearTimeout(timer); } };
   }
 
-  const api = { contar, recente, seloFunil, linkPncp, linkQuadro, desenhar, montar, montarHoje, marcarFunil, REGRA };
+  const api = { contar, recente, seloFunil, linkRecurso, linkPncp, linkQuadro, desenhar, montar, montarHoje, marcarFunil, REGRA };
   if (typeof module === 'object' && module.exports) module.exports = api;
   global.LicitaMonitorProcesso = api;
 
