@@ -1,25 +1,23 @@
 name: Prospecção (PCA, IRP, atas para adesão, contratos vencendo)
 
-# Robô diário da tela Prospecção (scripts/coletar_prospeccao.js): lê PNCP e Compras.gov dados abertos (grátis,
-# sem login, sem captcha) e grava a tabela enxuta prospeccao_itens. Rodadas de 10 minutos de hora em hora, das
-# 09:00 às 14:00 UTC (6h às 11h de Brasília): cada rodada retoma de onde a anterior parou (progresso do dia em
-# dados_robo/prospeccao_estado) e, com o dia completo, só confere e sai. Rodar de novo é seguro (upsert + limpeza
-# só quando a etapa fecha). Um AM inteiro leva 11 a 17 minutos seguidos; em rodadas cabe com folga e as adesões
-# já usadas das atas (uma consulta por item) avançam por rodízio.
-# Não escreve no repositório: só no Supabase. Precisa de supabase/prospeccao.sql aplicado antes.
-concurrency:
-  group: prospeccao
-  cancel-in-progress: false
-
+# Robô da tela Prospecção (scripts/coletar_prospeccao.js): lê PNCP e Compras.gov dados abertos (grátis, sem login,
+# sem captcha) e grava a tabela enxuta prospeccao_itens. As 27 UFs ficam em 3 grupos (um job da matriz cada, com
+# progresso próprio em dados_robo/prospeccao_estado_<grupo>). Cada rodada pega a etapa (UF:contrato, UF:ata, UF:pca)
+# pela metade ou a mais antiga e retoma de onde a anterior parou; etapa fechada há menos de 36 h fica de fora, então
+# com tudo em dia a rodada só confere e sai. A IRP (nacional) roda só no grupo 1.
+# Até 22/11 era só o AM, com progresso "do dia": o tempo acabava nas atas e o PCA nunca era coletado.
+# Rodadas de até 150 min a cada 3 h: o primeiro ciclo do Brasil todo leva alguns dias (ver
+# _historico/prospeccao-conserto-20261122.md); depois cada UF volta a cada ~36-48 h.
+# Não escreve no repositório: só no Supabase. Precisa de supabase/prospeccao.sql (v3) aplicado antes.
 on:
   schedule:
-    - cron: "0 9-14 * * *"
+    - cron: "20 */3 * * *"
   workflow_dispatch:
     inputs:
       ufs:
-        description: "UFs separadas por vírgula"
+        description: "UFs separadas por vírgula (opcional; roda só o grupo 1 com essas UFs)"
         required: false
-        default: "AM"
+        default: ""
 
 permissions:
   contents: read
@@ -27,7 +25,24 @@ permissions:
 jobs:
   coletar:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 170
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Grupos equilibrados pelo volume de atas e contratos (SP, MG e RJ/RS em grupos diferentes).
+          - grupo: g1
+            ufs: SP,BA,PA,ES,AM,PB,AL,RO,AP
+            irp: "1"
+          - grupo: g2
+            ufs: MG,PR,PE,DF,MT,MA,RN,SE,AC
+            irp: "0"
+          - grupo: g3
+            ufs: RJ,RS,SC,GO,CE,MS,PI,TO,RR
+            irp: "0"
+    concurrency:
+      group: prospeccao-${{ matrix.grupo }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
@@ -35,12 +50,18 @@ jobs:
           node-version: "20"
       - run: npm ci
       - name: Coletar prospecção
+        # Disparo manual com UFs: só o grupo 1 roda (com o progresso dele); os outros saem sem coletar.
+        if: ${{ !inputs.ufs || matrix.grupo == 'g1' }}
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          PROSPECCAO_UFS: ${{ github.event.inputs.ufs || 'AM' }}
+          PROSPECCAO_GRUPO: ${{ matrix.grupo }}
+          PROSPECCAO_UFS: ${{ inputs.ufs || matrix.ufs }}
+          PROSPECCAO_IRP: ${{ matrix.irp }}
           DIAS_HORIZONTE: "400"
-          PAUSA_MS: "250"
-          LIMITE_MINUTOS: "10"
+          PAUSA_MS: "300"
+          LIMITE_MINUTOS: "150"
+          FRESCOR_HORAS: "36"
+          LIMITE_HORAS_SEM_COBERTURA: "48"
           ADESOES_POR_RODADA: "1500"
         run: node scripts/coletar_prospeccao.js
 

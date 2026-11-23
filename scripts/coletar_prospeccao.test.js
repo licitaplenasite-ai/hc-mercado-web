@@ -166,16 +166,74 @@ test("unidades: pula o que já foi feito, para no prazo da rodada e grava o prog
   assert.deepEqual([...est2.feitos], ["1", "2"]);
 });
 
-test("carregarEstado: retoma o do mesmo dia (mesmo corte de limpeza); outro dia recomeça", async () => {
-  const salvo = { dia: "2026-11-19", coletadoEm: "2026-11-19T09:00:00.000Z", feitos: ["irp", "AM:contrato"], orgaos: { AM: { 1: {} } }, comItens: { AM: ["a"] } };
-  const mesmo = await P.carregarEstado("2026-11-19", Date.now(), async () => salvo);
-  assert.deepEqual([...mesmo.feitos], ["irp", "AM:contrato"]);
-  assert.equal(mesmo.coletadoEm, "2026-11-19T09:00:00.000Z");
-  const novo = await P.carregarEstado("2026-11-20", Date.parse("2026-11-20T09:00:00Z"), async () => salvo);
-  assert.equal(novo.feitos.size, 0);
-  assert.equal(novo.coletadoEm, "2026-11-20T09:00:00.000Z");
-  assert.equal((await P.carregarEstado("2026-11-19", 0, async () => { throw new Error("sem tabela"); })).feitos.size, 0);
-  assert.deepEqual(P.estadoSerializavel(mesmo).feitos, ["irp", "AM:contrato"]);
+test("carregarEstado: retoma o progresso salvo de outros dias; estado antigo 'do dia' (sem versao) recomeça", async () => {
+  const salvo = { versao: 2, desde: "2026-11-20T09:00:00.000Z", feitos: ["ata:AM:cg:154039"], orgaos: { AM: { 1: {} } }, comItens: { AM: ["a"] },
+    etapas: { "AM:ata": { inicio: "2026-11-21T09:00:00.000Z" }, "AM:contrato": { concluidaEm: "2026-11-21T10:00:00.000Z" } } };
+  const lidas = [];
+  const est = await P.carregarEstado(Date.parse("2026-11-23T09:00:00Z"), async (k) => { lidas.push(k); return salvo; });
+  assert.deepEqual(lidas, ["prospeccao_estado_todas"]);
+  assert.deepEqual([...est.feitos], ["ata:AM:cg:154039"]);
+  assert.equal(est.etapas["AM:ata"].inicio, "2026-11-21T09:00:00.000Z");
+  const antigo = await P.carregarEstado(Date.parse("2026-11-23T09:00:00Z"), async () => ({ dia: "2026-11-22", feitos: ["irp", "AM:contrato"] }));
+  assert.equal(antigo.feitos.size, 0);
+  assert.deepEqual(antigo.etapas, {});
+  assert.equal(antigo.desde, "2026-11-23T09:00:00.000Z");
+  assert.equal((await P.carregarEstado(0, async () => { throw new Error("sem tabela"); })).feitos.size, 0);
+  assert.deepEqual(P.estadoSerializavel(est).feitos, ["ata:AM:cg:154039"]);
+});
+
+test("filaEtapas: pela metade primeiro, depois a mais antiga (nunca feita = mais antiga); fresca fica fora", () => {
+  const agora = Date.parse("2026-11-23T12:00:00Z");
+  const etapas = {
+    "AM:contrato": { concluidaEm: "2026-11-23T06:00:00Z" }, // 6 h: fresca
+    "AM:ata": { concluidaEm: "2026-11-20T12:00:00Z" }, // 3 dias
+    "SP:ata": { concluidaEm: "2026-11-21T12:00:00Z", inicio: "2026-11-23T09:00:00Z" }, // pela metade
+    "AM:pca": { concluidaEm: "2026-11-22T00:00:00Z" }, // 36 h: vence o frescor
+  };
+  const chaves = ["irp", "AM:contrato", "AM:ata", "AM:pca", "SP:contrato", "SP:ata", "SP:pca"];
+  assert.deepEqual(P.filaEtapas(chaves, etapas, agora, 36), ["SP:ata", "irp", "SP:contrato", "SP:pca", "AM:ata", "AM:pca"]);
+  // Sem nada salvo: ordem original (UF, contrato, ata, pca), para o PCA vir depois da lista de órgãos da mesma UF.
+  assert.deepEqual(P.filaEtapas(chaves, {}, agora, 36), chaves);
+});
+
+test("fecharEtapa: grava fechamento e linhas, esquece só as unidades daquela UF e tipo", () => {
+  const est = { feitos: new Set(["ata:AM:cg:1", "ata:AM:pncp:x", "ata:SP:cg:2", "pca:AM:123:2026"]), comItens: { AM: ["a"], SP: ["b"] },
+    etapas: { "AM:ata": { inicio: "2026-11-22T09:00:00Z", linhasAndamento: 15867 } } };
+  P.fecharEtapa(est, "AM:ata", Date.parse("2026-11-23T10:00:00Z"));
+  assert.deepEqual(est.etapas["AM:ata"], { concluidaEm: "2026-11-23T10:00:00.000Z", linhas: 15867 });
+  assert.deepEqual([...est.feitos], ["ata:SP:cg:2", "pca:AM:123:2026"]);
+  assert.deepEqual(est.comItens, { SP: ["b"] });
+});
+
+test("etapasAtrasadas: erro só depois de 48 h sem fechar; nunca fechada conta do início do estado", () => {
+  const agora = Date.parse("2026-11-25T12:00:00Z");
+  const est = { desde: "2026-11-23T00:00:00Z", etapas: { "AM:ata": { concluidaEm: "2026-11-23T13:00:00Z" }, "AM:pca": { concluidaEm: "2026-11-23T11:00:00Z" } } };
+  assert.deepEqual(P.etapasAtrasadas(["AM:ata", "AM:pca", "SP:ata"], est, 48, agora), ["AM:pca", "SP:ata"]);
+  assert.deepEqual(P.etapasAtrasadas(["SP:ata"], { ...est, desde: "2026-11-24T00:00:00Z" }, 48, agora), []);
+});
+
+test("resumoCobertura: por etapa, fechamento, linhas e se está em andamento (o que a tela lê)", () => {
+  const est = { etapas: { "AM:ata": { concluidaEm: "2026-11-23T10:00:00Z", linhas: 10 }, "SP:pca": { inicio: "2026-11-23T11:00:00Z" } } };
+  const r = P.resumoCobertura(est, ["AM:ata", "SP:pca", "RR:contrato"], Date.parse("2026-11-23T12:00:00Z"));
+  assert.deepEqual(r.etapas, {
+    "AM:ata": { concluidaEm: "2026-11-23T10:00:00Z", linhas: 10, emAndamento: false },
+    "SP:pca": { concluidaEm: null, linhas: null, emAndamento: true },
+    "RR:contrato": { concluidaEm: null, linhas: null, emAndamento: false },
+  });
+  assert.equal(r.atualizadoEm, "2026-11-23T12:00:00.000Z");
+});
+
+test("obter: 429 espera o Retry-After e tenta de novo; sem Retry-After, backoff exponencial com teto de 60 s", async () => {
+  let n = 0;
+  const f = async () => (++n === 1 ? { status: 429, ok: false, headers: { get: () => "0.01" }, json: async () => ({}) } : { status: 200, ok: true, json: async () => ({ ok: 1 }) });
+  assert.deepEqual(await P.obter("https://x/a", { fetch: f, pausaMs: 0 }), { ok: 1 });
+  assert.equal(n, 2);
+  assert.equal(P.esperaAposLimite("7", 1), 7000);
+  for (let t = 1; t <= 8; t++) {
+    const ms = P.esperaAposLimite(null, t);
+    const teto = Math.min(60000, 5000 * 2 ** (t - 1));
+    assert.ok(ms >= teto / 2 && ms <= teto, `${t}: ${ms}`);
+  }
 });
 
 test("consultarAdesoes: pergunta por ata + UASG + item, soma as páginas; 429 sobe como erro (a etapa para sem marcar o item)", async () => {
