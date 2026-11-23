@@ -54,6 +54,10 @@ test("comCache: além do prazo de guarda não usa o guardado; erro sem guardado 
   await comCache("k6", async () => { n += 1; return null; }, { agora: r.agora });
   await comCache("k6", async () => { n += 1; return null; }, { agora: r.agora });
   assert.equal(n, 2);
+  // Resposta parcial volta para a tela, mas não fica guardada.
+  const parcial = await comCache("k7", async () => "metade", { agora: r.agora, guardar: () => false });
+  assert.equal(parcial.valor, "metade");
+  assert.equal((await comCache("k7", async () => "inteira", { agora: r.agora })).valor, "inteira");
 });
 
 test("comCache: usa caches.default do Cloudflare quando existe (compartilhado entre isolates)", async () => {

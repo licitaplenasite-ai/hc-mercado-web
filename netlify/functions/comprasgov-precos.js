@@ -7,6 +7,7 @@
 const CATALOGO = "https://cnbs.estaleiro.serpro.gov.br/cnbs-api/material/v1";
 const PESQUISA = "https://pesqpreco.estaleiro.serpro.gov.br/pesquisa-precos-backend-semlogin/api/itens-compra/buscar";
 const { origemPermitida, exigirAprovadoComLimite } = require("./_auth");
+const { comCache, cabecalhosDoCache } = require("./_cache_publico");
 // A tela chama na mesma origem; CORS fica só no domínio canônico (teste de ataque 19/11, M5).
 const CABECALHOS = { "Content-Type": "application/json", "Access-Control-Allow-Origin": origemPermitida({}) };
 
@@ -19,8 +20,14 @@ function numeroInteiro(valor) {
   return Number.isInteger(numero) && numero > 0 ? numero : null;
 }
 
-function resposta(statusCode, corpo) {
-  return { statusCode, headers: CABECALHOS, body: JSON.stringify(corpo) };
+function resposta(statusCode, corpo, extras = {}) {
+  return { statusCode, headers: { ...CABECALHOS, ...extras }, body: JSON.stringify(corpo) };
+}
+
+// Catálogo e preços públicos mudam no máximo 1 vez por dia: guardados por URL da fonte (cache compartilhado entre
+// clientes, _cache_publico.js); com a fonte fora do ar, a tela recebe o último resultado e a data dele.
+async function obterJsonGuardado(url, signal) {
+  return comCache(`comprasgov-precos|${url}`, () => obterJson(url, signal), { frescoS: 6 * 3600 });
 }
 
 async function obterJson(url, signal) {
@@ -41,18 +48,18 @@ exports.handler = async (event) => {
     if (acao === "categorias") {
       const termo = texto(parametros.termo, 100);
       if (termo.length < 2) return resposta(400, { ok: false, erro: "Informe ao menos 2 caracteres." });
-      const itens = await obterJson(`${CATALOGO}/palavra?${new URLSearchParams({ palavra: termo })}`, controlador.signal);
-      return resposta(200, { ok: true, itens: Array.isArray(itens) ? itens.slice(0, 120) : [] });
+      const r = await obterJsonGuardado(`${CATALOGO}/palavra?${new URLSearchParams({ palavra: termo })}`, controlador.signal);
+      return resposta(200, { ok: true, itens: Array.isArray(r.valor) ? r.valor.slice(0, 120) : [] }, cabecalhosDoCache(r));
     }
 
     if (acao === "itens") {
       const codigoPdm = numeroInteiro(parametros.codigoPdm);
       if (!codigoPdm) return resposta(400, { ok: false, erro: "Categoria inválida." });
       const [itens, unidades] = await Promise.all([
-        obterJson(`${CATALOGO}/materialCaracteristcaValorporPDM?${new URLSearchParams({ codigo_pdm: String(codigoPdm) })}`, controlador.signal),
-        obterJson(`${CATALOGO}/unidadeFornecimentoPorCodigoPdm?${new URLSearchParams({ codigo_pdm: String(codigoPdm) })}`, controlador.signal).catch(() => []),
+        obterJsonGuardado(`${CATALOGO}/materialCaracteristcaValorporPDM?${new URLSearchParams({ codigo_pdm: String(codigoPdm) })}`, controlador.signal),
+        obterJsonGuardado(`${CATALOGO}/unidadeFornecimentoPorCodigoPdm?${new URLSearchParams({ codigo_pdm: String(codigoPdm) })}`, controlador.signal).catch(() => ({ valor: [] })),
       ]);
-      return resposta(200, { ok: true, itens: Array.isArray(itens) ? itens.slice(0, 500) : [], unidades: Array.isArray(unidades) ? unidades : [] });
+      return resposta(200, { ok: true, itens: Array.isArray(itens.valor) ? itens.valor.slice(0, 500) : [], unidades: Array.isArray(unidades.valor) ? unidades.valor : [] }, cabecalhosDoCache(itens));
     }
 
     if (acao === "precos") {
@@ -68,8 +75,8 @@ exports.handler = async (event) => {
       if (Number.isFinite(capacidade) && capacidade > 0) consulta.set("capacidadeUnidadeFornecimento", String(capacidade));
       const siglaMedida = texto(parametros.siglaUnidadeMedida, 20).toUpperCase();
       if (siglaMedida) consulta.set("siglaUnidadeMedida", siglaMedida);
-      const dados = await obterJson(`${PESQUISA}?${consulta}`, controlador.signal);
-      return resposta(200, { ok: true, dados });
+      const r = await obterJsonGuardado(`${PESQUISA}?${consulta}`, controlador.signal);
+      return resposta(200, { ok: true, dados: r.valor }, cabecalhosDoCache(r));
     }
 
     return resposta(400, { ok: false, erro: "Ação inválida." });

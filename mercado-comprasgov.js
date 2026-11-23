@@ -165,8 +165,13 @@
   }
 
   // Zero compras com consulta que falhou não é "nenhuma compra": a fonte não respondeu (visto no E2E de 19/11/2026).
-  function mensagemBusca(total, comMarca, falhas) {
-    if (total) return `${total} compra(s) encontradas, ${comMarca} com marca declarada.${falhas ? ' Parte da fonte não respondeu: resultado parcial.' : ''}`;
+  // guardadoEm: a fonte caiu ou demorou e o servidor devolveu a última consulta guardada (_cache_publico.js).
+  function avisoGuardado(guardadoEm) {
+    const d = guardadoEm ? new Date(guardadoEm) : null;
+    return d && !Number.isNaN(d.getTime()) ? ` O Compras.gov não respondeu agora: mostrando dados guardados de ${d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}.` : '';
+  }
+  function mensagemBusca(total, comMarca, falhas, guardadoEm = null) {
+    if (total) return `${total} compra(s) encontradas, ${comMarca} com marca declarada.${falhas ? ' Parte da fonte não respondeu: resultado parcial.' : ''}${avisoGuardado(guardadoEm)}`;
     return falhas ? 'A fonte pública não respondeu agora. Tente de novo em instantes.' : 'Nenhuma compra para este termo. Tente um nome mais curto (ex.: "detergente").';
   }
 
@@ -342,37 +347,43 @@
     }
 
     // 200 compras de um produto por chamada (1 subrequisição na fonte). geracao: uma busca nova descarta respostas antigas.
-    async function carregarPagina(codigo, geracao) {
+    // As páginas pedidas saem juntas (antes, uma depois da outra: 3 esperas somadas) e entram na ordem.
+    async function carregarPaginas(codigo, geracao, quantas) {
       const grupo = estado.porPdm.get(codigo); const pdm = estado.catalogos.find((c) => String(c.codigo) === codigo);
-      if (!grupo || grupo.carregando || (grupo.paginas && grupo.carregadas >= grupo.paginas)) return false;
+      if (!grupo || grupo.carregando || (grupo.paginas && grupo.carregadas >= grupo.paginas)) return;
       grupo.carregando = true;
-      try {
-        const q = new URLSearchParams({ termo: estado.termo, codigoPdm: codigo, pagina: String(grupo.carregadas + 1), produto: pdm?.descricao || '' });
+      const primeira = grupo.carregadas + 1;
+      const numeros = Array.from({ length: grupo.paginas ? Math.min(quantas, grupo.paginas - grupo.carregadas) : quantas }, (_, k) => primeira + k);
+      const pedir = async (pagina) => {
+        const q = new URLSearchParams({ termo: estado.termo, codigoPdm: codigo, pagina: String(pagina), produto: pdm?.descricao || '' });
         if (estado.uf) q.set('uf', estado.uf);
         const r = await requisitar(`/api/comprasgov-marcas-produto?${q}`, { method: 'GET' });
         const j = await r.json().catch(() => null);
-        if (geracao !== estado.geracao) return false;
         if (!r.ok || !j?.ok) throw new Error(j?.erro || 'A fonte pública não respondeu agora.');
-        const novos = (Array.isArray(j.itens) ? j.itens.filter(Boolean) : []).map(marcaModelo);
-        // A 1ª página troca a amostra da busca inicial (as mesmas compras mais recentes, agora 200).
-        grupo.itens = grupo.carregadas ? [...grupo.itens, ...novos] : novos;
-        grupo.carregadas += 1; grupo.paginas = j.paginas || grupo.carregadas;
-        return novos.length > 0;
-      } catch {
-        if (geracao === estado.geracao) estado.falhas += 1;
-        return false;
+        if (r.headers?.get?.('X-Dados-Origem') === 'guardado') estado.guardadoEm = r.headers.get('X-Dados-Guardados-Em');
+        return j;
+      };
+      try {
+        const respostas = await Promise.all(numeros.map((n) => pedir(n).catch(() => null)));
+        if (geracao !== estado.geracao) return;
+        for (const j of respostas) {
+          if (!j) { estado.falhas += 1; break; }
+          const novos = (Array.isArray(j.itens) ? j.itens.filter(Boolean) : []).map(marcaModelo);
+          // A 1ª página troca a amostra da busca inicial (as mesmas compras mais recentes, agora 200).
+          grupo.itens = grupo.carregadas ? [...grupo.itens, ...novos] : novos;
+          grupo.carregadas += 1; grupo.paginas = j.paginas || grupo.carregadas;
+          if (!novos.length) break;
+        }
       } finally { grupo.carregando = false; }
     }
     async function carregarProduto(codigo, paginas = PAGINAS_INICIAIS) {
       const geracao = estado.geracao;
-      for (let k = 0; k < paginas; k += 1) {
-        status.textContent = `Carregando compras de ${pdmAtual()?.descricao || 'produto'}… ${milhar(estado.itens.length)} até agora.`;
-        desenhar();
-        if (!(await carregarPagina(codigo, geracao)) || geracao !== estado.geracao || codigo !== estado.pdm) break;
-      }
+      status.textContent = `Carregando compras de ${pdmAtual()?.descricao || 'produto'}… ${milhar(estado.itens.length)} até agora.`;
+      desenhar();
+      await carregarPaginas(codigo, geracao, paginas);
       if (geracao !== estado.geracao || codigo !== estado.pdm) return;
       if (!estado.filtro.unidade) estado.filtro.unidade = unidadePrincipal();
-      status.textContent = mensagemBusca(estado.itens.length, estado.itens.filter((i) => i.marca).length, estado.falhas);
+      status.textContent = mensagemBusca(estado.itens.length, estado.itens.filter((i) => i.marca).length, estado.falhas, estado.guardadoEm);
       desenhar();
     }
     function escolherProduto(codigo) {
@@ -397,6 +408,7 @@
         const catalogos = Array.isArray(j.catalogos) && j.catalogos.length ? j.catalogos
           : contar(itens, 'codigoPdm').map(([c, n]) => ({ codigo: c, descricao: itens.find((i) => i.codigoPdm === c).produtoCatalogo, total: n }));
         estado.termo = termoBusca; estado.catalogos = catalogos; estado.falhas = j.consultasComFalha || 0;
+        estado.guardadoEm = r.headers?.get?.('X-Dados-Origem') === 'guardado' ? r.headers.get('X-Dados-Guardados-Em') : null;
         estado.atributos = Array.isArray(j.atributos) ? j.atributos.map(String) : [];
         estado.porPdm = new Map(catalogos.map((c) => [String(c.codigo), { itens: itens.filter((i) => String(i.codigoPdm) === String(c.codigo)), carregadas: 0, paginas: null }]));
         if (!catalogos.length) { estado.pdm = ''; status.textContent = mensagemBusca(0, 0, estado.falhas); desenhar(); return; }

@@ -61,9 +61,10 @@ function comPrazo(promessa, prazoMs) {
   return Promise.race([promessa, limite]).finally(() => clearTimeout(relogio));
 }
 
-// buscar() -> valor serializável em JSON, ou lança. Valor `null`/`undefined` não é guardado (resposta ruim do portal).
+// buscar() -> valor serializável em JSON, ou lança. Valor `null`/`undefined` não é guardado (resposta ruim do portal),
+// nem o que `guardar(valor)` recusar (resposta parcial: volta para a tela, mas a próxima busca tenta de novo).
 // Devolve { valor, origem: "ao-vivo" | "cache" | "guardado", guardadoEm (ISO) }.
-async function comCache(chave, buscar, { frescoS = 600, guardaS = 7 * 86400, prazoMs = 4000, agora = Date.now } = {}) {
+async function comCache(chave, buscar, { frescoS = 600, guardaS = 7 * 86400, prazoMs = 4000, agora = Date.now, guardar = () => true } = {}) {
   let item = lerMemoria(chave);
   if (!item) {
     item = await lerCloudflare(chave);
@@ -74,7 +75,7 @@ async function comCache(chave, buscar, { frescoS = 600, guardaS = 7 * 86400, pra
   const guardadoValido = item && idadeMs <= guardaS * 1000 ? item : null;
 
   const aoVivo = Promise.resolve().then(buscar).then(async (valor) => {
-    if (valor === null || valor === undefined) return valor;
+    if (valor === null || valor === undefined || !guardar(valor)) return valor;
     const novo = { em: agora(), valor };
     gravarMemoria(chave, novo);
     await gravarCloudflare(chave, novo, guardaS);
