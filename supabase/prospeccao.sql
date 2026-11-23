@@ -123,19 +123,126 @@ grant select on public.dados_robo to authenticated;
 -- security definer (sem RLS por dentro, então o trigram vale) e /api/prospeccao a chama via /rpc. A leitura direta da
 -- tabela pelo PostgREST continua igual, com as policies de sempre. Em produção, criar os dois índices antes, cada um
 -- sozinho com "create index concurrently" (fora de transação), para não travar a gravação do robô.
-create extension if not exists pg_trgm;
-create index if not exists prospeccao_itens_busca_trgm_idx on public.prospeccao_itens using gin (busca gin_trgm_ops);
-create index if not exists prospeccao_itens_busca_nome_trgm_idx on public.prospeccao_itens using gin (busca_nome gin_trgm_ops);
--- v6: prefixo do nome ('palavra%' com LIKE) para o nível "inicio" da busca, com as colunas do filtro/ordem incluídas
--- (busca só no índice). Em produção, também com "concurrently" ou por job do pg_cron com statement_timeout = 0.
-create index if not exists prospeccao_itens_busca_nome_cobre_idx on public.prospeccao_itens (busca_nome text_pattern_ops) include (tipo, data_ref, valor_total, id);
+-- v7 (23/11/2026): os índices trigram/prefixo da v5/v6 em prospeccao_itens saíram deste arquivo (a busca agora usa
+-- prospeccao_busca, abaixo). Em produção eles são apagados por prospeccao_busca_producao.sql, passo 5, depois da carga.
+
+-- v7 (23/11/2026): o nível "inicio" com 8 frases e UF "Todas" levava 6–18 s em produção (statement_timeout de 8 s, tela
+-- "Não foi possível consultar"). Causa: cada linha candidata custava uma leitura aleatória do heap de 1,2 GB, que não cabe
+-- no cache (shared_buffers 224 MB); o índice cobrindo da v6 não salvava porque o robô regrava toda linha por dia
+-- (coletado_em) e o visibility map nunca fica "all-visible" (index-only vira heap fetch).
+-- Saída: cópia estreita só com o que a busca filtra/ordena, mantida por trigger (nada muda no robô). As linhas dela só mudam
+-- quando muda um campo da busca, então o VM fica "all-visible" e a busca é index-only: anda no índice já na ordem da tela
+-- (data_ref, valor_total) e para nas 201; no pior caso lê a janela inteira do índice em sequência, nunca linha a linha.
+-- Medido em 1,3 M linhas sintéticas, frio (supabase/prospeccao_busca_producao.sql tem a tabela de tempos).
+--   nome   = lower(busca_nome) (o "inicio" é 'palavra%' no começo dele)
+--   texto  = palavras distintas de busca (só [a-z0-9], 2+ letras). Mesmo resultado do '%palavra%' em busca: a palavra da
+--            busca é [a-z0-9]+, então só pode casar dentro de uma palavra do texto. Sem repetição o texto fica ~30% menor.
+create table if not exists public.prospeccao_busca (
+  id text primary key,
+  tipo text not null,
+  uf text,
+  catmat text,
+  data_ref date,
+  valor_total numeric,
+  nome text not null default '',
+  texto text not null default ''
+);
+-- autovacuum cedo (1% de linhas mudadas) para o VM voltar a "all-visible" logo depois da coleta do dia.
+alter table public.prospeccao_busca set (autovacuum_vacuum_scale_factor = 0.01, autovacuum_vacuum_insert_scale_factor = 0.01, autovacuum_analyze_scale_factor = 0.02);
+alter table public.prospeccao_busca enable row level security;
+-- Só a função buscar_prospeccao (security definer) lê; ninguém grava direto (só o trigger, como dono). A policy existe pela
+-- regra do diretório, mas sem grant nenhum papel do PostgREST chega à tabela.
+revoke all on public.prospeccao_busca from public, anon, authenticated, service_role;
+drop policy if exists prospeccao_busca_select_aprovado on public.prospeccao_busca;
+create policy prospeccao_busca_select_aprovado on public.prospeccao_busca for select to authenticated using ((select public.cliente_aprovado()));
+-- Mesma ordem do order by da busca, com tudo que o filtro lê incluído (index-only). Um com UF na frente para a busca por UF.
+-- Numa tabela vazia o create é instantâneo; em produção a carga vem depois (prospeccao_busca_producao.sql).
+create index if not exists prospeccao_busca_tipo_data_idx on public.prospeccao_busca (tipo, data_ref, valor_total desc nulls last) include (uf, catmat, id, nome, texto);
+create index if not exists prospeccao_busca_tipo_uf_data_idx on public.prospeccao_busca (tipo, uf, data_ref, valor_total desc nulls last) include (catmat, id, nome, texto);
+
+create or replace function public.prospeccao_palavras(t text) returns text
+language sql immutable parallel safe set search_path = '' as $$
+  select coalesce(string_agg(w, ' ' order by w), '')
+    from (select distinct w from regexp_split_to_table(lower(coalesce(t, '')), '[^a-z0-9]+') w where length(w) >= 2) s
+$$;
+
+-- Trigger por comando (transition tables): um insert/delete em lote na cópia por lote do robô (500 linhas), não um por linha.
+-- No upsert diário só entram as linhas em que um campo da busca mudou; coletado_em sozinho não toca a cópia.
+create or replace function public.prospeccao_busca_sincronizar() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if tg_op = 'DELETE' then
+    delete from public.prospeccao_busca b using velhas o where b.id = o.id;
+  elsif tg_op = 'UPDATE' then
+    delete from public.prospeccao_busca b using velhas o where b.id = o.id and not exists (select 1 from novas n where n.id = o.id);
+    insert into public.prospeccao_busca (id, tipo, uf, catmat, data_ref, valor_total, nome, texto)
+    select n.id, n.tipo, n.uf, n.catmat, n.data_ref, n.valor_total, lower(n.busca_nome), public.prospeccao_palavras(n.busca)
+      from novas n left join velhas o on o.id = n.id
+     where o.id is null or (o.tipo, o.uf, o.catmat, o.data_ref, o.valor_total, o.busca_nome, o.busca)
+                           is distinct from (n.tipo, n.uf, n.catmat, n.data_ref, n.valor_total, n.busca_nome, n.busca)
+    on conflict (id) do update set tipo = excluded.tipo, uf = excluded.uf, catmat = excluded.catmat, data_ref = excluded.data_ref,
+      valor_total = excluded.valor_total, nome = excluded.nome, texto = excluded.texto;
+  else
+    insert into public.prospeccao_busca (id, tipo, uf, catmat, data_ref, valor_total, nome, texto)
+    select n.id, n.tipo, n.uf, n.catmat, n.data_ref, n.valor_total, lower(n.busca_nome), public.prospeccao_palavras(n.busca) from novas n
+    on conflict (id) do update set tipo = excluded.tipo, uf = excluded.uf, catmat = excluded.catmat, data_ref = excluded.data_ref,
+      valor_total = excluded.valor_total, nome = excluded.nome, texto = excluded.texto;
+  end if;
+  return null;
+end;
+$$;
+revoke all on function public.prospeccao_busca_sincronizar() from public, anon, authenticated, service_role;
+drop trigger if exists prospeccao_busca_ins on public.prospeccao_itens;
+drop trigger if exists prospeccao_busca_upd on public.prospeccao_itens;
+drop trigger if exists prospeccao_busca_del on public.prospeccao_itens;
+create trigger prospeccao_busca_ins after insert on public.prospeccao_itens referencing new table as novas
+  for each statement execute function public.prospeccao_busca_sincronizar();
+create trigger prospeccao_busca_upd after update on public.prospeccao_itens referencing old table as velhas new table as novas
+  for each statement execute function public.prospeccao_busca_sincronizar();
+create trigger prospeccao_busca_del after delete on public.prospeccao_itens referencing old table as velhas
+  for each statement execute function public.prospeccao_busca_sincronizar();
+
+-- Carga inicial em lotes (produção: prospeccao_busca_producao.sql). Copia o que ainda não está na cópia; "do nothing"
+-- porque a linha que o trigger já gravou é mais nova. Lote 0 linhas = acabou: apaga sobra (linha que o robô apagou durante
+-- a carga) e, se os dois índices da busca existem e estão válidos, marca a cópia como pronta (dados_robo
+-- prospeccao_busca_pronta). Até lá a busca usa prospeccao_itens. Em produção a carga roda sem os índices (inserir num
+-- índice de 600 MB fora de ordem é 5x mais lento) e eles vêm depois com "create index concurrently".
+create or replace function public.prospeccao_busca_carregar(p_lote int default 100000) returns int
+language plpgsql security definer set search_path = '' as $$
+declare n int;
+begin
+  insert into public.prospeccao_busca (id, tipo, uf, catmat, data_ref, valor_total, nome, texto)
+  select p.id, p.tipo, p.uf, p.catmat, p.data_ref, p.valor_total, lower(p.busca_nome), public.prospeccao_palavras(p.busca)
+    from public.prospeccao_itens p
+   where not exists (select 1 from public.prospeccao_busca b where b.id = p.id)
+   limit greatest(1, least(p_lote, 500000))
+  on conflict (id) do nothing;
+  get diagnostics n = row_count;
+  if n = 0 then
+    delete from public.prospeccao_busca b where not exists (select 1 from public.prospeccao_itens p where p.id = b.id);
+    if (select count(*) from pg_catalog.pg_index x where x.indisvalid and x.indexrelid in
+         (pg_catalog.to_regclass('public.prospeccao_busca_tipo_data_idx'), pg_catalog.to_regclass('public.prospeccao_busca_tipo_uf_data_idx'))) = 2 then
+      insert into public.dados_robo (chave, dado) values ('prospeccao_busca_pronta', jsonb_build_object('em', now()))
+        on conflict (chave) do update set dado = excluded.dado, atualizado_em = now();
+    end if;
+  end if;
+  return n;
+end;
+$$;
+revoke all on function public.prospeccao_busca_carregar(int) from public, anon, authenticated, service_role;
+-- Banco novo (tabela vazia, como o ambiente de teste): nada a copiar, a cópia já nasce pronta.
+insert into public.dados_robo (chave, dado)
+select 'prospeccao_busca_pronta', jsonb_build_object('em', now())
+ where not exists (select 1 from public.prospeccao_itens) on conflict (chave) do nothing;
 
 -- Mesmos três níveis e mesma regra de netlify/functions/prospeccao.js (frase = todas as palavras; frases somam):
 --   inicio  busca_nome começa pela 1a palavra e tem as demais
 --   nome    casa em busca_nome, mas não no início
 --   espec   casa só em busca (fora de busca_nome)
--- SQL montado com quote_literal sobre palavras validadas aqui ([a-z0-9]): o planejador vê constantes e usa o trigram.
+-- SQL montado com quote_literal sobre palavras validadas aqui ([a-z0-9], sem curinga do LIKE): o planejador vê constantes.
 -- Por dentro roda como dono (sem RLS), então a função repete a barreira das policies: cliente aprovado e plano com o recurso.
+-- v7: filtra e ordena na cópia estreita prospeccao_busca (index-only, ver acima) e só lê de prospeccao_itens as <= 201
+-- linhas devolvidas, pelo id. Enquanto a carga inicial não termina (sem prospeccao_busca_pronta), usa prospeccao_itens.
 create or replace function public.buscar_prospeccao(p_tipo text, p_uf text, p_catmat text, p_de date, p_ate date,
   p_frases jsonb, p_nivel text, p_limite int)
 returns setof public.prospeccao_itens
@@ -143,6 +250,10 @@ language plpgsql stable security definer set search_path = '' as $$
 declare
   f jsonb; w text; k bigint;
   b text; n text; i text; ob text := ''; o_n text := ''; oi text := ''; cond text; filtro text := '';
+  pronta boolean := exists (select 1 from public.dados_robo where chave = 'prospeccao_busca_pronta');
+  tabela text := case when pronta then 'public.prospeccao_busca' else 'public.prospeccao_itens' end;
+  c_nome text := case when pronta then 'nome' else 'busca_nome' end;
+  c_texto text := case when pronta then 'texto' else 'busca' end;
 begin
   if not (public.cliente_aprovado() and public.eu_posso('prospeccao')) then return; end if;
   if p_tipo is null or p_tipo not in ('pca', 'irp', 'ata', 'contrato') or p_nivel is null or p_nivel not in ('inicio', 'nome', 'espec')
@@ -158,10 +269,10 @@ begin
     b := ''; n := ''; i := '';
     for w, k in select value, ordinality from jsonb_array_elements_text(f) with ordinality loop
       if w !~ '^[a-z0-9]+$' or length(w) not between 2 and 300 then raise exception 'buscar_prospeccao: palavra inválida' using errcode = '22023'; end if;
-      b := b || ' and busca ilike ' || quote_literal('%' || w || '%');
-      n := n || ' and busca_nome ilike ' || quote_literal('%' || w || '%');
-      -- 1a palavra do "inicio" com LIKE (busca_nome já é minúsculo e sem acento): usa o índice de prefixo (v6).
-      i := i || case when k = 1 then ' and busca_nome like ' || quote_literal(w || '%') else ' and busca_nome ilike ' || quote_literal('%' || w || '%') end;
+      -- LIKE e não ILIKE: nome/texto (e busca/busca_nome, gravados pelo robô) já são minúsculos; LIKE é mais barato.
+      b := b || ' and ' || c_texto || ' like ' || quote_literal('%' || w || '%');
+      n := n || ' and ' || c_nome || ' like ' || quote_literal('%' || w || '%');
+      i := i || ' and ' || c_nome || ' like ' || quote_literal(case when k = 1 then w || '%' else '%' || w || '%' end);
     end loop;
     ob := ob || ' or (' || substr(b, 6) || ')';
     o_n := o_n || ' or (' || substr(n, 6) || ')';
@@ -172,20 +283,10 @@ begin
   if p_uf is not null then filtro := filtro || ' and uf = ' || quote_literal(p_uf); end if;
   if p_catmat is not null then filtro := filtro || ' and catmat = ' || quote_literal(p_catmat); end if;
   if p_ate is not null then filtro := filtro || ' and data_ref <= ' || quote_literal(p_ate) || '::date'; end if;
-  -- v6 (23/11/2026): o nível "inicio" ('palavra%' com ILIKE) levava ~40 s com 8 frases e UF "Todas" (o planejador ia
-  -- pelo trigram e rechecava ~360 mil linhas). Com LIKE na 1a palavra o índice de prefixo resolve cada frase; ele inclui
-  -- tipo/data_ref/valor_total/id, então a escolha dos ids sai só do índice (tabela de 1,2 GB não cabe no cache do banco)
-  -- e a tabela só é lida para as linhas devolvidas.
-  if p_nivel = 'inicio' and p_uf is null and p_catmat is null then
-    return query execute 'select p.* from public.prospeccao_itens p join (select id, data_ref, valor_total from public.prospeccao_itens where tipo = '
-      || quote_literal(p_tipo) || ' and data_ref >= ' || quote_literal(p_de) || '::date' || filtro || ' and ' || oi
-      || ' order by data_ref asc, valor_total desc nulls last limit ' || p_limite || ') s on s.id = p.id'
-      || ' order by s.data_ref asc, s.valor_total desc nulls last';
-    return;
-  end if;
-  return query execute 'select * from public.prospeccao_itens where tipo = ' || quote_literal(p_tipo)
-    || ' and data_ref >= ' || quote_literal(p_de) || '::date' || filtro || ' and ' || cond
-    || ' order by data_ref asc, valor_total desc nulls last limit ' || p_limite;
+  return query execute 'select p.* from public.prospeccao_itens p join (select id, data_ref, valor_total from ' || tabela
+    || ' where tipo = ' || quote_literal(p_tipo) || ' and data_ref >= ' || quote_literal(p_de) || '::date' || filtro || ' and ' || cond
+    || ' order by data_ref asc, valor_total desc nulls last limit ' || p_limite || ') s on s.id = p.id'
+    || ' order by s.data_ref asc, s.valor_total desc nulls last';
 end;
 $$;
 revoke all on function public.buscar_prospeccao(text, text, text, date, date, jsonb, text, int) from public, anon;

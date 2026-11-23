@@ -69,8 +69,8 @@ function montarConsulta(f, agora = Date.now(), limite = LIMITE + 1) {
 //   nome    o termo aparece em outro ponto do nome
 //   espec   o termo só aparece no resto do texto (especificação): a tela recolhe esse grupo ("papel a4" dentro da ficha da impressora)
 // Uma frase casa quando TODAS as palavras dela aparecem (and); frases diferentes somam (or). "inicio" = o nome começa
-// pela primeira palavra e tem as demais. Quem monta o ILIKE é a função buscar_prospeccao (supabase/prospeccao.sql, v5):
-// pela tabela, a RLS impede o índice trigram e a UF "Todas" estourava o statement_timeout (503).
+// pela primeira palavra e tem as demais. Quem monta o LIKE é a função buscar_prospeccao (supabase/prospeccao.sql): v5 por
+// causa da RLS (sem índice, UF "Todas" dava 503); v7 filtra na cópia estreita prospeccao_busca (index-only, < 0,5 s frio).
 const NIVEIS = ["inicio", "nome", "espec"];
 function montarBusca(f, agora = Date.now(), nivel = "inicio", limite = LIMITE + 1) {
   const { de, ate } = janela(f, agora);
