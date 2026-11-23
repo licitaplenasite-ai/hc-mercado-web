@@ -26,7 +26,7 @@ async function main() {
       tributos_percentual: 8, margem_percentual: 20, margem_minima_percentual: 8 }))[0];
     await servico('POST', '/rest/v1/operacao_itens_resultado', [['1', 'Cadeira giratória', 20, 60, 40], ['2', 'Mesa de escritório', 5, 15, 10]].map(([n, d, q, v, c]) => ({
       organizacao_id: ids.orgA, processo_id: proc.id, identificador: n, tipo: 'item', situacao: 'pendente', descricao: d, quantidade: q, valor_unitario_proposta: v, custo_unitario: c })));
-    const url = `${SITE}/sistema?empresa=${ids.empA1}&processo=${proc.id}`;
+    const url = `${SITE}/sistema?empresa=${ids.empA1}&processo=${proc.id}#aba=disputa`;
     const p = await novaPagina(navegador);
     await entrar(p, U.gestor);
 

@@ -25,9 +25,10 @@ const fim = (p) => p.waitForFunction((sel) => /compra\(s\) encontradas|Nenhuma c
   await p.setViewportSize({ width: 1280, height: 900 });
   try {
     await passo('CRM: Ver mercado deste item pelo CATMAT, 4 abas e Usar preço', p, async () => {
-      await p.goto(`${SITE}/sistema?empresa=${ids.empA1}&processo=${ids.procA}`);
+      await p.goto(`${SITE}/sistema?empresa=${ids.empA1}&processo=${ids.procA}#aba=itens`);
       const li = p.locator('#itens-processo [data-item-lista] li', { hasText: ID_TESTE });
       await li.waitFor({ timeout: 30000 });
+      await li.locator('details.itens-mais > summary').click(); // ferramentas de preço ficam fechadas por item
       await li.getByRole('button', { name: 'Ver mercado deste item' }).click();
       await fim(p);
       const status = await li.locator('.itens-mercado [role="status"]').last().innerText();

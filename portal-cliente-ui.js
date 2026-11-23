@@ -132,7 +132,7 @@
         </div>
         <section class="portal-bloco" aria-labelledby="portal-respostas-titulo">
           <h3 id="portal-respostas-titulo">Respostas do cliente por item</h3>
-          <ul data-portal-respostas class="portal-respostas"></ul>
+          <ul data-portal-respostas class="portal-respostas"></ul><div data-portal-paginas></div>
         </section>
         <section class="portal-bloco" aria-labelledby="portal-links-titulo">
           <h3 id="portal-links-titulo">Links gerados</h3>
@@ -142,6 +142,7 @@
         <details class="portal-bloco portal-historico"><summary>Histórico</summary><ol data-portal-eventos></ol></details>
       </div>
       <div class="itens-acoes"><button type="button" data-portal-atualizar>Atualizar</button></div>`;
+    let pagina = 1, tamanho = 10; // respostas por item: 10 por vez (paginacao-ui.js)
     const el = (s) => alvo.querySelector(s);
     const form = el('[data-portal-form]');
     function h(tag, classe, texto) { const e = doc.createElement(tag); if (classe) e.className = classe; if (texto !== undefined) e.textContent = texto; return e; }
@@ -165,7 +166,11 @@
       const linhas = respostasPorItem(itens, dados.aceites);
       const rotulos = new Map(dados.links.map((l) => [l.id, l.rotulo]));
       el('[data-portal-resumo]').textContent = linhas.length ? resumoAceites(linhas).texto : 'Nenhum item cadastrado ainda.';
-      el('[data-portal-respostas]').replaceChildren(...linhas.map((l) => {
+      const PG = global.LicitaPaginacao, f = PG ? PG.fatiar(linhas, pagina, tamanho) : null;
+      if (f) pagina = f.pagina;
+      const caixaPaginas = el('[data-portal-paginas]');
+      if (caixaPaginas) caixaPaginas.replaceChildren(...(f && f.total > PG.TAMANHOS[0] ? [PG.barra(doc, { fatia: f, rotulo: 'itens', id: 'portal-paginas', mudar: (n) => { pagina = n.pagina; tamanho = n.tamanho; render(); } })] : []));
+      el('[data-portal-respostas]').replaceChildren(...(f ? f.itens : linhas).map((l) => {
         const li = h('li');
         const nome = l.item ? `Item ${l.item.identificador || ''} · ${l.item.descricao || ''}` : `Item ${l.aceite.visto?.identificador || ''} · ${l.aceite.visto?.descricao || ''}`;
         const dec = l.aceite?.decisao;

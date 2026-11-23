@@ -86,3 +86,17 @@
 .la-google { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; min-height: 24px; padding: 0 6px; border: 1px solid var(--borda, #c9ced6); border-radius: 4px; font-weight: 700; text-decoration: none; }
 .la-zap { font-size: .85rem; }
 .la-lances, .la-fab { color: var(--texto-suave, var(--texto-secundario, #5b6472)); }
+
+/* Quadro-resumo "O que aconteceu em cada item" (paginado): a tabela rola dentro do próprio quadro, nunca a página. */
+.la-resumo { display: grid; gap: 8px; min-width: 0; }
+.la-resumo .tabela-rolagem { overflow-x: auto; max-width: 100%; border: 1px solid var(--borda, #d9dee7); border-radius: 8px; }
+.la-tabela { width: 100%; min-width: 760px; border-collapse: collapse; font-size: .9rem; }
+.la-tabela th { text-align: left; font-size: .78rem; font-weight: 600; padding: 8px; background: var(--card2, var(--surface-sunken, #f1f4fa)); color: var(--texto-suave, var(--text-secondary, #58657a)); }
+.la-tabela td { padding: 8px; border-top: 1px solid var(--borda, #d9dee7); vertical-align: top; overflow-wrap: normal; }
+.la-tabela td:nth-child(1) { min-width: 170px; }
+.la-tabela td:nth-child(2) { min-width: 220px; }
+.la-tabela td:nth-child(7) { min-width: 160px; }
+.la-tabela td strong { display: block; }
+.la-tabela .la-desc { display: block; font-size: .82rem; color: var(--texto-suave, var(--text-secondary, #58657a)); }
+.la-tabela .la-num { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.la-linha-ruim td:first-child { border-left: 3px solid var(--erro, #c0392b); }

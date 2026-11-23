@@ -85,7 +85,7 @@ async function main() {
     const itens = [['1', 'Cimento', 100, 50], ['2', 'Areia', 10, 30], ['3', 'Tijolo', 1000, 0.8], ['4', 'Prego', 5, 2]];
     await servico('POST', '/rest/v1/operacao_itens_resultado', itens.map(([n, d, q, v]) => ({ organizacao_id: ids.orgA, processo_id: ctx.proc.id, identificador: n,
       tipo: 'item', situacao: 'pendente', descricao: d, quantidade: q, valor_unitario_proposta: v })));
-    const urlProcesso = `${SITE}/sistema?empresa=${ids.empA1}&processo=${ctx.proc.id}`;
+    const urlProcesso = `${SITE}/sistema?empresa=${ids.empA1}&processo=${ctx.proc.id}#aba=itens`;
 
     await passo('SINAPI: preço chega ao formulário do item (Usar no valor unitário)', p, async () => {
       await p.goto(urlProcesso);
@@ -96,6 +96,8 @@ async function main() {
       await p.click('#itens-processo [data-sinapi-usar]');
       const valor = await p.locator('#itens-processo form [name=valorUnitario]').first().inputValue();
       exigir(valor === ctx.sinapi.preco, `valor unitário "${valor}", esperado ${ctx.sinapi.preco}`);
+      // Fecha a janela do item: o goto seguinte para a mesma URL (#aba=itens) não recarrega a página.
+      await p.click('#itens-processo [data-item-cancelar]');
       return `"${rotulo}" → campo valor unitário = ${valor} (não salvo)`;
     });
 

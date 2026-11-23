@@ -17,10 +17,12 @@
 <link rel="stylesheet" href="menu-lateral.css">
 <link rel="stylesheet" href="checklist-esteira.css">
 <link rel="stylesheet" href="licitacao-anterior.css">
+<link rel="stylesheet" href="paginacao.css">
 <link rel="stylesheet" href="mercado-comprasgov.css">
 <link rel="stylesheet" href="robo-lances.css">
 <link rel="stylesheet" href="monitor-processo.css">
 <link rel="stylesheet" href="processo-documentos.css">
+<link rel="stylesheet" href="processo-abas.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" crossorigin="anonymous"></script>
 <script src="supabase-config.js"></script><script src="plano-trava.js" defer></script>
 <script src="fetch-sessao.js"></script>
@@ -100,21 +102,58 @@
   <section id="area" hidden aria-labelledby="area-titulo">
     <button id="voltar-hoje" type="button">Voltar para Hoje</button>
     <h1 id="area-titulo" class="app-titulo" tabindex="-1">Documentos e propostas</h1>
-    <p id="contexto-atual" class="app-apoio"></p>
-    <div id="contexto-portal" hidden></div>
-    <div id="identificacao" tabindex="-1"></div>
-    <section id="checklist-esteira" class="app-cartao" aria-label="Checklist do edital" hidden></section>
-    <section id="monitor-processo" class="app-cartao" aria-label="Mudou algo no edital?" hidden></section>
-    <section id="processo-documentos" class="app-cartao" aria-label="Documentos do processo" hidden></section>
-    <section id="licitacao-anterior" class="app-cartao" aria-label="Licitação anterior" hidden></section>
-    <section id="itens-processo" class="app-cartao itens-processo" aria-label="Itens do processo" hidden></section>
-    <section id="robo-lances" class="app-cartao" aria-labelledby="robo-titulo" hidden></section>
-    <section id="portal-cliente" class="app-cartao portal-cliente" aria-labelledby="portal-titulo" hidden></section>
-    <div id="kit"></div>
+    <!-- Tela do processo em abas (processo-abas.js): cabeçalho fixo + uma seção por vez, aba na URL (#aba=itens). -->
+    <div id="processo-topo" class="proc-topo">
+      <div id="processo-cabecalho" class="proc-cab" role="region" aria-label="Resumo do processo" aria-live="polite"></div>
+      <nav class="proc-abas" aria-label="Seções do processo">
+        <div id="processo-abas-lista" role="tablist" aria-label="Seções do processo">
+          <button type="button" role="tab" id="aba-resumo" data-aba="resumo" aria-controls="painel-resumo" aria-selected="true">Resumo</button>
+          <button type="button" role="tab" id="aba-itens" data-aba="itens" aria-controls="painel-itens" aria-selected="false" tabindex="-1">Itens</button>
+          <button type="button" role="tab" id="aba-proposta" data-aba="proposta" aria-controls="painel-proposta" aria-selected="false" tabindex="-1">Proposta e documentos</button>
+          <button type="button" role="tab" id="aba-anterior" data-aba="anterior" aria-controls="painel-anterior" aria-selected="false" tabindex="-1">Licitação anterior</button>
+          <button type="button" role="tab" id="aba-disputa" data-aba="disputa" aria-controls="painel-disputa" aria-selected="false" tabindex="-1">Disputa</button>
+          <button type="button" role="tab" id="aba-cliente" data-aba="cliente" aria-controls="painel-cliente" aria-selected="false" tabindex="-1">Cliente</button>
+          <button type="button" role="tab" id="aba-agenda" data-aba="agenda" aria-controls="painel-agenda" aria-selected="false" tabindex="-1">Agenda</button>
+        </div>
+      </nav>
+    </div>
+    <div id="painel-resumo" class="proc-painel" role="tabpanel" aria-labelledby="aba-resumo" data-aba-painel="resumo" data-ativa>
+      <p id="contexto-atual" class="app-apoio"></p>
+      <div id="contexto-portal" hidden></div>
+      <section id="processo-situacao" class="app-cartao proc-situacao" aria-label="Situação do processo"></section>
+      <section id="checklist-esteira" class="app-cartao" aria-label="Checklist do edital" hidden></section>
+      <section id="monitor-processo" class="app-cartao" aria-label="Mudou algo no edital?" hidden></section>
+    </div>
+    <div id="painel-itens" class="proc-painel" role="tabpanel" aria-labelledby="aba-itens" data-aba-painel="itens">
+      <section id="itens-processo" class="app-cartao itens-processo" aria-label="Itens do processo" hidden></section>
+      <p class="proc-vazio">Os itens aparecem aqui quando o processo for aberto.</p>
+    </div>
+    <div id="painel-proposta" class="proc-painel" role="tabpanel" aria-labelledby="aba-proposta" data-aba-painel="proposta">
+      <div id="identificacao" tabindex="-1"></div>
+      <div id="kit"></div>
+      <section id="processo-documentos" class="app-cartao" aria-label="Documentos do processo" hidden></section>
+    </div>
+    <div id="painel-anterior" class="proc-painel" role="tabpanel" aria-labelledby="aba-anterior" data-aba-painel="anterior">
+      <section id="licitacao-anterior" class="app-cartao" aria-label="Licitação anterior" hidden></section>
+      <p class="proc-vazio">Ainda não há licitação anterior deste órgão com estes produtos. O sistema procura sozinho quando os itens do edital são importados; a pesquisa avulsa fica em <a href="painel.html#licitacao-anterior">Licitação anterior</a>.</p>
+    </div>
+    <div id="painel-disputa" class="proc-painel" role="tabpanel" aria-labelledby="aba-disputa" data-aba-painel="disputa">
+      <section id="robo-lances" class="app-cartao" aria-labelledby="robo-titulo" hidden></section>
+      <p class="proc-vazio">A disputa fica disponível quando o processo for aberto.</p>
+    </div>
+    <div id="painel-cliente" class="proc-painel" role="tabpanel" aria-labelledby="aba-cliente" data-aba-painel="cliente">
+      <section id="portal-cliente" class="app-cartao portal-cliente" aria-labelledby="portal-titulo" hidden></section>
+      <p class="proc-vazio">O link para o seu cliente conferir a proposta aparece aqui.</p>
+    </div>
+    <div id="painel-agenda" class="proc-painel" role="tabpanel" aria-labelledby="aba-agenda" data-aba-painel="agenda">
+      <section id="processo-agenda" class="app-cartao" aria-label="Agenda do processo"></section>
+    </div>
   </section>
   <p id="app-aviso" class="app-aviso" role="status" aria-live="polite"></p>
 </main>
 </div>
+<script src="paginacao-ui.js"></script>
+<script src="processo-abas.js"></script>
 <script src="kit-documentos-ui.js"></script>
 <script src="empresa-documento-leitura.js"></script>
 <script src="empresa-identificacao-ui.js"></script>

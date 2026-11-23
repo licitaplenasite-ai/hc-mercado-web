@@ -1,6 +1,13 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { montarVisao, vencedorDe, variacao, linkOficial } = require("./licitacao-anterior-ui.js");
+const { montarVisao, vencedorDe, variacao, linkOficial, textoDesconto } = require("./licitacao-anterior-ui.js");
+
+test("textoDesconto: abaixo, acima, igual e sem dado", () => {
+  assert.equal(textoDesconto(-18), "18,0% abaixo");
+  assert.equal(textoDesconto(5.25), "5,3% acima");
+  assert.equal(textoDesconto(0), "igual ao estimado");
+  assert.equal(textoDesconto(null), "—");
+});
 
 const compra = (id, data) => ({ id_compra: id, numero: id.slice(8, 13), data_publicacao: data, plataforma: "Compras.gov.br" });
 const item = (id, n, situacao, estimado) => ({ id_compra: id, numero_item: n, situacao_item: situacao, valor_estimado: estimado, descricao: "Café" });

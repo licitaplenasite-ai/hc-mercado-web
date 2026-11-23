@@ -332,12 +332,15 @@
   // buscarMercado: fetch da busca pública "Buscar no mercado" (sem sessão; padrão fetch global).
   function montar({ alvo, contexto, requisitar = global.fetch.bind(global), aoSalvar = null, carregarCatalogo = null, buscarMercado = null }) {
     if (!alvo || !contexto || !UUID.test(contexto.empresaId || '') || !UUID.test(contexto.processoId || '')) throw new Error('Contexto de itens inválido');
-    let vivo = true, ocupado = false, edicao = null, tentativa = null, itens = [], cursor = null, maisItens = false, geracao = 0;
+    let vivo = true, ocupado = false, edicao = null, tentativa = null, itens = [], cursor = null, maisItens = false, geracao = 0, pagina = 1, tamanho = 10;
+    const PG = global.LicitaPaginacao;
     let precoDisponivel = null, premissas = null, previa = null, numeroProcesso = '', filaPremissas = Promise.resolve(), filaRef = Promise.resolve();
     const nos = new Map(), lances = new Map(), margensProprias = new Map(), refEstado = new Map(), refTentada = new Set();
     let catalogoProdutos = [];
     // Contador por item: quadros abertos (fechados a cada nova lista) e resumos salvos, lidos uma vez por processo.
     const contadores = new Map();
+    // Cartões com "Mais ferramentas de preço" aberto: continuam abertos ao redesenhar a lista.
+    const maisAbertos = new Set();
     let resumosContador = null;
     // Opção CBS/IBS só na tela (não grava): começa desligada, ano corrente dentro da transição.
     const ANOS_REFORMA = modulo('LicitaReformaTributaria', './reforma-tributaria.js')?.ANOS || [];
@@ -364,19 +367,7 @@
           <p class="itens-apoio" data-reforma-estado role="status" aria-live="polite"></p>
         </fieldset>
       </section>
-      <form data-item-form novalidate>
-        <label>Identificador do item <input name="identificador" maxlength="180" autocomplete="off"></label>
-        <label>Descrição <textarea name="descricao" maxlength="10000"></textarea></label>
-        <label>Marca <input name="marca" maxlength="500" autocomplete="off"></label>
-        <label>Modelo <input name="modelo" maxlength="500" autocomplete="off"></label>
-        <label>Quantidade <input name="quantidade" inputmode="decimal" autocomplete="off" placeholder="Ex.: 2,5"></label>
-        <label>Valor unitário (R$) <input name="valorUnitario" inputmode="decimal" autocomplete="off" placeholder="Ex.: 52,00"></label>
-        <p data-item-total></p>
-        <p data-item-erros role="alert"></p>
-        <div class="itens-acoes" data-sinapi hidden><span class="itens-apoio" data-sinapi-texto></span><button type="button" data-sinapi-usar>Usar no valor unitário</button></div>
-        <div class="itens-acoes"><button type="submit" class="app-primario" data-item-salvar>Salvar item</button><button type="button" data-item-cancelar hidden>Cancelar edição</button></div>
-      </form>
-      <div class="itens-acoes"><button type="button" data-item-atualizar>Atualizar itens</button><button type="button" data-item-importar-abrir aria-expanded="false" aria-controls="itens-importar">Importar itens do edital (PNCP)</button>
+      <div class="itens-acoes"><button type="button" class="app-primario" data-item-adicionar>Adicionar item</button><button type="button" data-item-atualizar>Atualizar itens</button><button type="button" data-item-importar-abrir aria-expanded="false" aria-controls="itens-importar">Importar itens do edital (PNCP)</button>
         <button type="button" data-planilha-baixar>Baixar planilha</button><button type="button" data-portal-baixar>Baixar arquivo para importar no portal</button><button type="button" data-planilha-importar hidden>Importar planilha</button>
         <input type="file" accept=".csv,text/csv" data-planilha-arquivo aria-label="Arquivo da planilha de itens (CSV)" hidden></div>
       <p data-planilha-estado class="itens-planilha-estado" role="status" aria-live="polite"></p>
@@ -396,13 +387,30 @@
       </form>
       <section data-item-escolha></section>
       <div data-item-lista></div>
+      <div data-item-paginas></div>
       <button type="button" data-item-mais hidden>Carregar mais itens</button>
       <section data-curva class="itens-curva" aria-labelledby="itens-curva-titulo" hidden>
         <h3 id="itens-curva-titulo">Curva ABC</h3>
         <p class="itens-apoio">Itens do maior para o menor valor total (quantidade × valor unitário). A: até 80% do valor acumulado; B: até 95%; C: o resto. Concentre a negociação e a conferência de preço nos itens A.</p>
         <p class="itens-apoio" data-curva-resumo></p>
         <div class="tabela-rolagem" tabindex="0" role="region" aria-label="Curva ABC dos itens"><table><thead><tr><th scope="col">Classe</th><th scope="col">Item</th><th scope="col">Total</th><th scope="col">Participação</th><th scope="col">Acumulado</th></tr></thead><tbody data-curva-linhas></tbody></table></div>
-      </section>`;
+      </section>
+      <dialog data-item-dialogo class="itens-dialogo" aria-labelledby="itens-dialogo-titulo">
+        <form data-item-form novalidate>
+        <div class="itens-dialogo-topo"><h3 id="itens-dialogo-titulo" data-item-dialogo-titulo>Adicionar item</h3><button type="button" data-item-fechar aria-label="Fechar a janela do item">Fechar</button></div>
+        <label>Identificador do item <input name="identificador" maxlength="180" autocomplete="off"></label>
+        <label>Descrição <textarea name="descricao" maxlength="10000"></textarea></label>
+        <label>Marca <input name="marca" maxlength="500" autocomplete="off"></label>
+        <label>Modelo <input name="modelo" maxlength="500" autocomplete="off"></label>
+        <label>Quantidade <input name="quantidade" inputmode="decimal" autocomplete="off" placeholder="Ex.: 2,5"></label>
+        <label>Valor unitário (R$) <input name="valorUnitario" inputmode="decimal" autocomplete="off" placeholder="Ex.: 52,00"></label>
+        <p data-item-total></p>
+        <p data-item-erros role="alert"></p>
+        <div class="itens-acoes" data-sinapi hidden><span class="itens-apoio" data-sinapi-texto></span><button type="button" data-sinapi-usar>Usar no valor unitário</button></div>
+        <div class="itens-acoes"><button type="submit" class="app-primario" data-item-salvar>Salvar item</button><button type="button" data-item-cancelar hidden>Cancelar edição</button></div>
+        </form>
+      </dialog>
+`;
     const el = (s) => alvo.querySelector(s);
     const doc = alvo.ownerDocument || global.document;
     // Elemento com texto sempre por textContent/nó de texto: dado do banco nunca vira HTML.
@@ -539,18 +547,22 @@
       n.custo.value = virgula(i.custoUnitario);
       n.lance.value = lances.get(i.id) || '';
       nos.set(i.id, n);
+      // O essencial fica à vista (custo e preços); o resto abre por item, para a página não virar um rolo de 200 cartões.
+      const mais = h('details', { classe: 'itens-mais', 'data-item-mais-ferramentas': i.id, open: maisAbertos.has(i.id) },
+        h('summary', { texto: 'Mais ferramentas de preço: referência, lance, margem e Contador' }), n.referencia,
+        h('div', { classe: 'itens-campo' }, h('label', { for: id('lance'), texto: 'Simular lance (R$)' }), n.lance), n.simulacao,
+        h('strong', { texto: 'Cenários de margem' }),
+        h('div', { classe: 'itens-campo' }, h('label', { for: id('margem-propria'), texto: 'Margem própria (%)' }), n.margemPropria), n.cenarios,
+        h('div', { classe: 'itens-acoes' }, n.usar, n.usarEstado),
+        fontesDoItem(i, n), caixaContador(i));
+      mais.addEventListener('toggle', () => { if (mais.open) maisAbertos.add(i.id); else maisAbertos.delete(i.id); });
       return h('div', { classe: 'itens-preco' },
         h('div', { classe: 'itens-campo' }, h('label', { for: id('custo'), texto: 'Custo unitário (R$)' }), n.custo, n.custoEstado),
         h('dl', { classe: 'itens-precos' },
           h('div', {}, h('dt', { texto: 'Preço-alvo' }), n.alvo),
           h('div', {}, h('dt', { texto: 'Preço-limite' }), n.limite),
           h('div', {}, h('dt', { texto: 'Preço mínimo gravado' }), n.minimo)),
-        n.aviso, n.reforma, n.referencia,
-        h('div', { classe: 'itens-campo' }, h('label', { for: id('lance'), texto: 'Simular lance (R$)' }), n.lance), n.simulacao,
-        h('strong', { texto: 'Cenários de margem' }),
-        h('div', { classe: 'itens-campo' }, h('label', { for: id('margem-propria'), texto: 'Margem própria (%)' }), n.margemPropria), n.cenarios,
-        h('div', { classe: 'itens-acoes' }, n.usar, n.usarEstado),
-        fontesDoItem(i, n), caixaContador(i));
+        n.aviso, n.reforma, mais);
     }
     // Agente Contador (contador-ui.js): quadro por item, aberto pelo botão. data-recurso: o plano-trava.js mostra o aviso
     // fixo no Essencial; a rota /api/contador barra de verdade. Sem o módulo carregado, nada aparece.
@@ -601,7 +613,7 @@
     }
     // "Usar preço": a mediana entra no valor unitário pelo formulário do item (mesmo caminho do "Usar no valor unitário"); a pessoa confere e salva.
     function usarPrecoMercado(i, centavos) {
-      usarNoValorUnitario(i, MC.reais(centavos), `Mediana do mercado (${MC.brl(centavos)}) no valor unitário do formulário do item, no topo: confira e clique em Salvar item. É referência do que o governo pagou, não o seu custo.`);
+      usarNoValorUnitario(i, MC.reais(centavos), `Mediana do mercado (${MC.brl(centavos)}) no valor unitário, na janela do item: confira e clique em Salvar item. É referência do que o governo pagou, não o seu custo.`);
     }
     // Preço entra pelo formulário do item: a pessoa confere e clica em Salvar item (mesma regra de preço mínimo do salvar).
     function usarNoValorUnitario(i, valor, mensagem) {
@@ -611,7 +623,7 @@
       form.elements.valorUnitario.value = valor;
       atualizarTotal();
       marcar(n?.fonteEstado, mensagem, 'ok');
-      el('#itens-titulo')?.focus?.();
+      form.elements.valorUnitario.focus?.();
     }
     // Marca e modelo entram pelo formulário do item (mesmo caminho de "Editar" + "Salvar item"): a pessoa confere antes de gravar.
     // Fabricante não tem campo no formulário; vai pela planilha de itens (coluna fabricante).
@@ -624,11 +636,11 @@
         editar(i.id);
         if (origem.marca) form.elements.marca.value = String(origem.marca).slice(0, 500);
         if (origem.modelo) form.elements.modelo.value = String(origem.modelo).slice(0, 500);
-        partes.push(`Marca ${origem.marca || i.marca || '—'}${origem.modelo ? ` / modelo ${origem.modelo}` : ''} no formulário do item, no topo: confira e clique em Salvar item.`);
+        partes.push(`Marca ${origem.marca || i.marca || '—'}${origem.modelo ? ` / modelo ${origem.modelo}` : ''} na janela do item: confira e clique em Salvar item.`);
       }
       if (origem.fabricante && origem.fabricante !== i.fabricante) partes.push(`Fabricante ${origem.fabricante}: grave pela planilha de itens (coluna fabricante).`);
       marcar(n?.fonteEstado, partes.filter(Boolean).join(' '), tipo);
-      if (mudaMarca) el('#itens-titulo')?.focus?.();
+      if (mudaMarca) form.elements.marca.focus?.();
     }
     async function usarDoCatalogo(i, campos) {
       const n = nos.get(i.id); if (!n) return;
@@ -660,7 +672,12 @@
       for (const c of contadores.values()) c?.fechar?.();
       contadores.clear();
       const lista = el('[data-item-lista]');
-      lista.replaceChildren(itens.length ? h('ul', {}, ...itens.map(cartaoItem)) : h('p', { texto: 'Nenhum item cadastrado neste processo.' }));
+      // Só a página atual vira cartão (preço, Contador e referência são pesados); a curva e a planilha usam todos.
+      const f = PG ? PG.fatiar(itens, pagina, tamanho) : null, daPagina = f ? f.itens : itens;
+      if (f) pagina = f.pagina;
+      lista.replaceChildren(daPagina.length ? h('ul', {}, ...daPagina.map(cartaoItem)) : h('p', { texto: 'Nenhum item cadastrado neste processo.' }));
+      el('[data-item-paginas]').replaceChildren(...(f && f.total > PG.TAMANHOS[0] ? [PG.barra(doc, { fatia: f, rotulo: 'itens', id: 'itens-lista-paginas',
+        mudar: (n) => { pagina = n.pagina; tamanho = n.tamanho; renderLista(); lista.scrollIntoView?.({ block: 'start' }); } })] : []));
       el('[data-item-mais]').hidden = !maisItens;
       renderCurva();
       const r = recursosPreco(precoDisponivel);
@@ -668,7 +685,7 @@
       el('[data-planilha-importar]').hidden = !r.importarPlanilha;
       if (!r.importarPlanilha) { previa = null; el('[data-planilha-previa]').hidden = true; }
       atualizarPrecos();
-      if (r.precos) for (const i of itens) if (!i.precoReferencia && !refTentada.has(i.id) && i.codigoCatalogo && unidadeCompras(i.unidade)) { refTentada.add(i.id); filaRef = filaRef.then(() => buscarReferencia(i)); }
+      if (r.precos) for (const i of daPagina) if (!i.precoReferencia && !refTentada.has(i.id) && i.codigoCatalogo && unidadeCompras(i.unidade)) { refTentada.add(i.id); filaRef = filaRef.then(() => buscarReferencia(i)); }
     }
     // shortcut: a curva usa só os itens carregados na tela; com "Carregar mais itens" visível, ela avisa que está parcial.
     function renderCurva() {
@@ -798,15 +815,22 @@
     async function carregar({ reiniciar, mensagemFinal = '' }) {
       const g = ++geracao; bloquear(true); estado(MSG.carregando, 'carregando');
       try {
-        const corpo = { acao: 'listarItens', empresaId: contexto.empresaId, processoId: contexto.processoId, ...(!reiniciar && cursor ? { afterId: cursor } : {}) };
-        const r = await requisitar('/api/kit-documentos', { method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify(corpo) });
-        const j = await r.json().catch(() => null);
-        if (!vivo || g !== geracao) return;
-        if (!r.ok || !j) throw new Error(j?.erro || MSG.erroCarregar);
-        if (j.empresa?.id !== contexto.empresaId || j.processo?.id !== contexto.processoId) throw new Error(MSG.divergente);
+        // Lê as páginas do servidor em sequência (até 1000 itens = 10 chamadas) e a tela pagina de 10 em 10.
+        let lidos = reiniciar ? [] : itens, j = null;
+        if (reiniciar) cursor = null;
+        for (let n = 0; n < 10; n++) {
+          const corpo = { acao: 'listarItens', empresaId: contexto.empresaId, processoId: contexto.processoId, ...(cursor ? { afterId: cursor } : {}) };
+          const r = await requisitar('/api/kit-documentos', { method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify(corpo) });
+          j = await r.json().catch(() => null);
+          if (!vivo || g !== geracao) return;
+          if (!r.ok || !j) throw new Error(j?.erro || MSG.erroCarregar);
+          if (j.empresa?.id !== contexto.empresaId || j.processo?.id !== contexto.processoId) throw new Error(MSG.divergente);
+          lidos = lidos.concat(j.itens || []);
+          cursor = j.paginacaoItens?.nextCursor || null; maisItens = j.paginacaoItens?.hasMore === true;
+          if (!maisItens || !cursor) break;
+        }
         // Cada página já vem ordenada pelo número do item; a lista acumulada é reordenada pela mesma regra do servidor.
-        itens = (reiniciar ? (j.itens || []) : itens.concat(j.itens || [])).sort(ordemItem);
-        cursor = j.paginacaoItens?.nextCursor || null; maisItens = j.paginacaoItens?.hasMore === true;
+        itens = lidos.sort(ordemItem);
         numeroProcesso = typeof j.processo?.numero === 'string' ? j.processo.numero : '';
         const primeiraVez = precoDisponivel === null;
         precoDisponivel = j.precoDisponivel === true;
@@ -922,14 +946,15 @@
       if (!vivo || g !== geracao) return;
       bloquear(false);
       if (r && (r.status === 201 || r.status === 200) && j?.item) {
-        tentativa = null; edicao = null; form.reset(); el('[data-item-cancelar]').hidden = true; atualizarTotal();
+        tentativa = null; edicao = null; form.reset(); el('[data-item-cancelar]').hidden = true; atualizarTotal(); fecharDialogo();
         // Gancho opcional, ANTES da consulta: o kit invalida revisao/exportacao ja com a gravacao confirmada. Falha ali nao afeta o item.
         if (vivo && typeof aoSalvar === 'function') { try { aoSalvar(); } catch { /* sem efeito no cadastro */ } }
         await carregar({ reiniciar: true, mensagemFinal: typeof aoSalvar === 'function' ? 'Item salvo. Catálogo da proposta será atualizado; confira a nova prévia.' : MSG.salvo });
         return;
       }
-      if (!r) { estado(MSG.conexao, 'erro'); return; }
-      estado(j?.erro || 'Não foi possível salvar o item.', 'erro');
+      // Erro também dentro da janela: com ela aberta, o aviso do cartão fica atrás.
+      const erro = !r ? MSG.conexao : j?.erro || 'Não foi possível salvar o item.';
+      estado(erro, 'erro'); el('[data-item-erros]').textContent = erro;
     }
 
     function editar(id) {
@@ -940,7 +965,7 @@
       form.elements.quantidade.value = String(i.quantidade ?? '').replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '').replace('.', ',');
       form.elements.valorUnitario.value = escolhaMod() ? escolhaMod().campoReais(i.valorUnitario) : virgula(i.valorUnitario);
       el('[data-item-cancelar]').hidden = false; mostrarSinapi(); atualizarTotal(); estado(MSG.editando, 'vazio');
-      el('#itens-titulo')?.focus?.();
+      abrirDialogo();
     }
     // Importação PNCP: mesmo endpoint e regra de processos.html; o servidor confere empresa, processo e vínculo.
     const formImportar = el('[data-item-importar]');
@@ -990,11 +1015,21 @@
         if (vivo && resultado.soma.importados && escolha) avisoImportar(`${resultado.texto} Os itens novos chegam desmarcados: escolha abaixo em quais você vai participar.`, 'ok');
       }
     }
-    function cancelarEdicao() { edicao = null; tentativa = null; form.reset(); el('[data-item-cancelar]').hidden = true; atualizarTotal(); estado('', ''); }
+    function cancelarEdicao() { edicao = null; tentativa = null; form.reset(); el('[data-item-cancelar]').hidden = true; atualizarTotal(); estado('', ''); fecharDialogo(); }
+    // Formulário do item numa janela: abre em "Adicionar item", "Editar" e nos "Usar …" que preenchem o valor; fechar não apaga o que foi digitado.
+    function abrirDialogo() {
+      const dialogo = el('[data-item-dialogo]');
+      el('[data-item-dialogo-titulo]').textContent = edicao ? `Editar item ${itens.find((x) => x.id === edicao)?.identificador || ''}`.trim() : 'Adicionar item';
+      if (!dialogo.open) { if (typeof dialogo.showModal === 'function') dialogo.showModal(); else dialogo.setAttribute('open', ''); }
+      (edicao ? form.elements.valorUnitario : form.elements.identificador).focus?.();
+    }
+    function fecharDialogo() { const dialogo = el('[data-item-dialogo]'); if (dialogo?.open) { if (typeof dialogo.close === 'function') dialogo.close(); else dialogo.removeAttribute('open'); } }
 
     form.addEventListener('submit', salvar);
     form.addEventListener('input', atualizarTotal);
     el('[data-item-cancelar]').addEventListener('click', cancelarEdicao);
+    el('[data-item-adicionar]').addEventListener('click', abrirDialogo);
+    el('[data-item-fechar]').addEventListener('click', fecharDialogo);
     el('[data-sinapi-usar]').addEventListener('click', () => { const p = mostrarSinapi(); if (p) { form.elements.valorUnitario.value = p.preco; atualizarTotal(); } });
     el('[data-item-atualizar]').addEventListener('click', () => { void carregar({ reiniciar: true }); });
     el('[data-item-mais]').addEventListener('click', () => { void carregar({ reiniciar: false }); });
@@ -1019,7 +1054,7 @@
       else if (b.dataset.usarLimite && itemDe(b.dataset.usarLimite)) void usarLimite(itemDe(b.dataset.usarLimite));
       else if (b.dataset.usarPreco && itemDe(b.dataset.usarPreco) && /^[0-9]+$/.test(b.dataset.centavos || '')) {
         const c = BigInt(b.dataset.centavos);
-        usarNoValorUnitario(itemDe(b.dataset.usarPreco), canonico(c, 2), `Preço do cenário (${P().formatarReais(c)}) no valor unitário do formulário do item, no topo: confira e clique em Salvar item.`);
+        usarNoValorUnitario(itemDe(b.dataset.usarPreco), canonico(c, 2), `Preço do cenário (${P().formatarReais(c)}) no valor unitário, na janela do item: confira e clique em Salvar item.`);
       }
       else if (b.dataset.buscarReferencia && itemDe(b.dataset.buscarReferencia)) { const i = itemDe(b.dataset.buscarReferencia); filaRef = filaRef.then(() => buscarReferencia(i)); }
     });

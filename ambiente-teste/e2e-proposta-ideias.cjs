@@ -29,13 +29,14 @@ async function main() {
     ctx.itens = await servico('POST', '/rest/v1/operacao_itens_resultado', [
       { organizacao_id: ids.orgA, processo_id: ctx.proc.id, identificador: '1', tipo: 'item', situacao: 'pendente', descricao: 'Caneta esferográfica azul; ponta média', quantidade: 10, unidade: 'UN', marca: 'Bic', modelo: 'Cristal', custo_unitario: 100, valor_unitario_proposta: 140 },
       { organizacao_id: ids.orgA, processo_id: ctx.proc.id, identificador: '2', tipo: 'item', situacao: 'pendente', descricao: 'Papel A4', quantidade: 2.5, unidade: 'CX', marca: null, modelo: null, custo_unitario: null, valor_unitario_proposta: 0.33 }]);
-    const urlSistema = `${SITE}/sistema?empresa=${ids.empA1}&processo=${ctx.proc.id}`;
+    const urlSistema = `${SITE}/sistema?empresa=${ids.empA1}&processo=${ctx.proc.id}#aba=itens`;
 
     await passo('cenários de margem 10/15/30% + margem própria e "Usar este preço"', p, async () => {
       await p.goto(urlSistema);
       await p.waitForSelector('#itens-processo [data-premissas]:not([hidden])', { timeout: 30000 });
       for (const [id, v] of [['tributos', '10'], ['garantia', '0']]) { await p.fill('#itens-premissa-' + id, v); await p.press('#itens-premissa-' + id, 'Tab'); await p.waitForTimeout(800); }
       const item1 = ctx.itens.find((i) => i.identificador === '1').id;
+      await p.locator(`[data-item-mais-ferramentas="${item1}"] > summary`).click(); // ferramentas de preço fechadas por item
       const caixa = p.locator(`[data-cenarios="${item1}"]`);
       await caixa.locator('li').nth(2).waitFor({ timeout: 15000 });
       await p.fill(`[data-margem-propria="${item1}"]`, '12,5');
@@ -113,6 +114,7 @@ async function main() {
       const largura = await p.evaluate(() => document.documentElement.scrollWidth);
       await p.screenshot({ path: path.join(PRINTS, '375-andamento.png') });
       await p.goto(urlSistema);
+      await p.locator(`[data-item-mais-ferramentas="${item1}"] > summary`).click();
       await p.locator(`[data-cenarios="${item1}"] li`).nth(2).waitFor({ timeout: 30000 });
       await p.locator(`[data-cenarios="${item1}"]`).scrollIntoViewIfNeeded();
       await p.screenshot({ path: path.join(PRINTS, '375-cenarios.png') });

@@ -17,7 +17,7 @@ function condicoesDoEdital(estrutura){
 // Campos que um modelo de proposta costuma pedir; a ordem em que aparecem no anexo vira a ordem das condições.
 const CAMPOS=[['validade',/validade/i],['prazoEntrega',/prazo\s+(?:de|para)\s+(?:a\s+)?entrega/i],['pagamento',/pagamento/i],['localEntrega',/(?:local|endere[cç]o)\s+de\s+entrega/i],
  ['banco',/banc[aá]ri|\bbanco\b|ag[eê]ncia|conta\s+corrente/i],['garantia',/prazo\s+de\s+garantia|\bgarantia\b/i],['marca',/\bmarca\b/i],['fabricante',/fabricante/i],
- ['telefone',/\bfone\b|telefone/i],['email',/e-?mail/i],['representante',/representante|respons[aá]vel/i],['cpf',/\bcpf\b/i]];
+ ['telefone',/\bfone\b|telefone/i],['simples',/optante\s+(?:pelo\s+)?simples|simples\s+nacional/i],['email',/e-?mail/i],['representante',/representante|respons[aá]vel/i],['cpf',/\bcpf\b/i]];
 const TITULO=/^[ \t]*(?:ANEXO\b[^\n]{0,60})?["“]?\s*MODELO\s*(?:[-–—]\s*)?(?:D[EA]\s+)?(?:CARTA\s+)?PROPOSTA\b[^\n]{0,60}$/gim;
 const FIM=/^[ \t]*ANEXO(?:[ \t]*[-–—]?[ \t]*(?:[IVXLC]+|\d+)\b)/gm;
 const DECLARA=/\bdeclar|\bcomprometo|\bcomprometemo|os\s+pre[cç]os\s+propostos|est[aá]\s+de\s+acordo|sob\s+as\s+penas/i;

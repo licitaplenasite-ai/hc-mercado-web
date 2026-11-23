@@ -165,7 +165,7 @@ const pesquisa = (id, orgao, numero, objeto, data, itens) => ({
     try {
       for (const [pagina, largura, nome] of [[p, 1280, 'processo-1280.png'], [movel, 375, 'processo-375.png']]) {
         await pagina.setViewportSize({ width: largura, height: 900 });
-        await pagina.goto(`${SITE}/sistema?empresa=${proc.empresa_id}&processo=${proc.id}`);
+        await pagina.goto(`${SITE}/sistema?empresa=${proc.empresa_id}&processo=${proc.id}#aba=anterior`);
         await pagina.waitForSelector('#licitacao-anterior:not([hidden]) .la-compra', { timeout: 30000 });
         await pagina.waitForTimeout(2500);
         for (const d of await pagina.locator('#licitacao-anterior details').all()) await d.evaluate((e) => { e.open = true; });

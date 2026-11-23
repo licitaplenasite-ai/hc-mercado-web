@@ -39,7 +39,7 @@ const PRECOS = ['52,00', '1.500,00', '0,75', '10', '2.345,67'];
   const linha = (n) => quadro.locator(`tbody tr:has(td:nth-child(2) strong:text-is("${n}"))`);
   try {
     await passo('Importar os 200 itens do edital fictício pelo botão', p, async () => {
-      await p.goto(`${SITE}/sistema?empresa=${ids.empA1}&processo=${PROC}`);
+      await p.goto(`${SITE}/sistema?empresa=${ids.empA1}&processo=${PROC}#aba=itens`);
       await p.getByRole('button', { name: 'Importar itens do edital (PNCP)' }).click();
       await p.getByRole('button', { name: 'Importar todos os itens do edital' }).click();
       await p.waitForFunction(() => /chegam desmarcados/.test(document.querySelector('[data-item-importar-estado]')?.textContent || ''), null, { timeout: 300000, polling: 1000 });
@@ -72,6 +72,7 @@ const PRECOS = ['52,00', '1.500,00', '0,75', '10', '2.345,67'];
       await quadro.waitFor();
       exigir(/Empresa ME: pode entrar/.test(await quadro.locator('[data-escolha-porte]').innerText()), 'selo ME ausente');
       await quadro.locator('[data-escolha-filtro]').selectOption('exclusivo');
+      await quadro.locator('[data-pagina-tamanho]').selectOption('50'); // 40 exclusivos cabem numa página de 50
       const linhas = await quadro.locator('tbody tr').count();
       exigir(linhas === 40, `exclusivos na tela: ${linhas}`);
       const numeros = [5, 10, 15, 20, 25];
@@ -107,6 +108,28 @@ const PRECOS = ['52,00', '1.500,00', '0,75', '10', '2.345,67'];
       exigir(/Fora da proposta/.test(fora), 'item 1 sem selo Fora da proposta');
       return banco;
     });
+    await passo('Paginação de 10 em 10 (como o Compras.gov): ir para a página, 10/25/50, contador e total no cabeçalho fixo', p, async () => {
+      await quadro.locator('[data-escolha-filtro]').selectOption('todos');
+      const resumo = () => quadro.locator('[data-escolha-paginas] .paginacao-resumo').innerText();
+      exigir(await resumo() === '1–10 de 200 itens · página 1 de 20', `página 1: ${await resumo()}`);
+      exigir(await quadro.locator('tbody tr').count() === 10, 'página 1 sem 10 linhas');
+      await quadro.locator('[data-escolha-paginas] [data-pagina-ir]').fill('20');
+      await quadro.locator('[data-escolha-paginas] [data-pagina-ir]').press('Enter');
+      exigir(await resumo() === '191–200 de 200 itens · página 20 de 20', `ir para 20: ${await resumo()}`);
+      exigir(await quadro.locator('[data-escolha-paginas] [data-pagina-proxima]').isDisabled(), 'Próxima ativa na última página');
+      await quadro.locator('[data-escolha-paginas] [data-pagina-anterior]').click();
+      exigir(/^181–190 /.test(await resumo()), `anterior: ${await resumo()}`);
+      await quadro.locator('[data-escolha-paginas] [data-pagina-tamanho]').selectOption('25');
+      exigir(await resumo() === '1–25 de 200 itens · página 1 de 8', `25 por página: ${await resumo()}`);
+      await quadro.locator('[data-escolha-paginas] [data-pagina-tamanho]').selectOption('10');
+      const cab = await p.locator('[data-cab-total]').innerText();
+      exigir(cab === 'Total da proposta: R$ 781.684,00 · 5 de 200 itens selecionados', `cabeçalho: ${cab}`);
+      exigir(await p.locator('[data-cab-total]').isVisible(), 'total do cabeçalho fora da tela');
+      const lista = await p.locator('#itens-processo [data-item-lista] li').count();
+      exigir(lista === 10, `cartões de preço na página: ${lista}`);
+      exigir(new URL(p.url()).hash === '#aba=itens', `aba na URL: ${p.url()}`);
+      return `${await resumo()} | ${cab}`;
+    });
     await passo('Formulário do item aceita "52,00" e mostra total com milhar', p, async () => {
       await p.locator('#itens-processo [data-item-lista] li', { hasText: 'Item fictício 10:' }).first().getByRole('button', { name: /^Editar/ }).click();
       const campo = p.locator('[data-item-form] [name="valorUnitario"]');
@@ -114,6 +137,7 @@ const PRECOS = ['52,00', '1.500,00', '0,75', '10', '2.345,67'];
       await campo.fill('52,00');
       const t = await p.locator('[data-item-total]').innerText();
       exigir(t === 'Total do item: R$ 10.400,00', `total: ${t}`);
+      exigir(await p.locator('[data-item-dialogo]').evaluate((d) => d.open), 'Editar não abriu a janela do item');
       await p.getByRole('button', { name: 'Cancelar edição' }).click();
       return t;
     });

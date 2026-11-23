@@ -121,7 +121,7 @@ function limpar() {
     });
 
     await passo('Processo: escolher documento salvo, conferir no banco e baixar o .zip', p, async () => {
-      await p.goto(`${SITE}/sistema?empresa=${ids.empA1}&processo=${ids.procA}`);
+      await p.goto(`${SITE}/sistema?empresa=${ids.empA1}&processo=${ids.procA}#aba=proposta`);
       await p.waitForSelector('#processo-documentos h2', { timeout: 30000 });
       await p.click('#processo-documentos summary');
       await p.check(`#processo-documentos input[value="${docId}"]`);
@@ -157,7 +157,7 @@ function limpar() {
     await passo('Celular 375: processo e resumo sem rolagem horizontal', p, async () => {
       await p.setViewportSize({ width: 375, height: 812 });
       const larguras = [];
-      for (const url of [`${SITE}/sistema?empresa=${ids.empA1}&processo=${ids.procA}`, `${SITE}/resumo-processo.html?empresa=${ids.empA1}&processo=${ids.procA}`]) {
+      for (const url of [`${SITE}/sistema?empresa=${ids.empA1}&processo=${ids.procA}#aba=proposta`, `${SITE}/resumo-processo.html?empresa=${ids.empA1}&processo=${ids.procA}`]) {
         await p.goto(url);
         await p.waitForSelector(url.includes('resumo') ? '#resumo h1' : '#processo-documentos h2', { timeout: 30000 });
         const { largura, janela } = await p.evaluate(() => ({ largura: document.documentElement.scrollWidth, janela: window.innerWidth }));

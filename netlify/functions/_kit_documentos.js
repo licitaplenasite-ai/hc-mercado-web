@@ -61,6 +61,13 @@ const BANCO_PREVIA='[Banco, agência, conta e Pix do Perfil da empresa: entram s
 const SEM_CPF_PROPOSTA='______________________';
 const cnpjFormatado=c=>{const d=String(c||'');return /^\d{14}$/.test(d)?`${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8,12)}-${d.slice(12)}`:d;};
 const PORTE_TEXTO={mei:'Microempreendedor individual (MEI)',me:'Microempresa (ME)',epp:'Empresa de pequeno porte (EPP)',demais:'Não enquadrada como ME/EPP'};
+// "Optante pelo Simples Nacional: (X) Sim ( ) Não" pelo regime tributário do Perfil da empresa (MEI é do Simples). Sem regime,
+// o porte decide só quando não deixa dúvida (MEI sim; acima de EPP não); ME/EPP sem regime ficam em branco para marcar à mão.
+function optanteSimples(pe){
+ const sim=['simples','mei'].includes(pe.regime_tributario)||(!pe.regime_tributario&&pe.porte==='mei');
+ const nao=['presumido','real'].includes(pe.regime_tributario)||(!pe.regime_tributario&&pe.porte==='demais');
+ return `(${sim?'X':' '}) Sim   (${nao?'X':' '}) Não`;
+}
 // Registro de preços só quando o edital diz: "Pregão para Registro de Preços" num pregão comum é erro de cópia que vira recurso.
 function certame(processo,edital){
  const numero=doc.numeroEdital(processo.numero),modalidade=doc.modalidadeTexto(processo.modalidade);
@@ -116,10 +123,10 @@ function blocosProposta({empresa,dados,processo,c,extra,r},sens){
  const pe=extra.perfilEmpresa||{},ed=extra.edital||{},modelo=ed.modelo||null;
  let n=0;const secao=t=>({t:'secao',texto:`${++n}. ${t}`});
  const proponente=[['Razão social',empresa.razao_social],['Nome fantasia',pe.nome_fantasia],['CNPJ',cnpjFormatado(empresa.cnpj)],['Inscrição estadual',pe.inscricao_estadual],['Inscrição municipal',pe.inscricao_municipal],
-  ['Porte',PORTE_TEXTO[pe.porte]],['Endereço',dados.endereco],['Telefone',pe.telefone],['E-mail',pe.email],['Representante legal',`${dados.representante} – ${dados.cargo}`]].filter(([,v])=>v);
+  ['Porte',PORTE_TEXTO[pe.porte]],...(modelo?.campos?.includes('simples')?[]:[['Optante pelo Simples Nacional',optanteSimples(pe)]]),['Endereço',dados.endereco],['Telefone',pe.telefone],['E-mail',pe.email],['Representante legal',`${dados.representante} – ${dados.cargo}`]].filter(([,v])=>v);
  // Garantia: um valor só para o documento inteiro (o do edital); sem garantia no edital nem no modelo, a linha não sai.
  const cond={validade:['Validade da proposta',r.campos.validade],prazoEntrega:['Prazo de entrega',r.campos.prazoEntrega],localEntrega:ed.localEntrega?['Local de entrega',ed.localEntrega]:null,
-  pagamento:['Condições de pagamento',r.campos.pagamento],garantia:ed.garantia?['Garantia',ed.garantia]:modelo?.campos?.includes('garantia')?['Garantia','Conforme o Termo de Referência, contada do recebimento definitivo']:null};
+  pagamento:['Condições de pagamento',r.campos.pagamento],simples:modelo?.campos?.includes('simples')?['Optante pelo Simples Nacional',optanteSimples(pe)]:null,garantia:ed.garantia?['Garantia',ed.garantia]:modelo?.campos?.includes('garantia')?['Garantia','Conforme o Termo de Referência, contada do recebimento definitivo']:null};
  const ordem=[...(modelo?.campos||[]),'validade','prazoEntrega','localEntrega','pagamento','garantia'].filter((k,i,a)=>cond[k]&&a.indexOf(k)===i);
  const banco=sens?.banco||{};
  const linhasBanco=[['Banco',banco.banco],['Agência',banco.agencia],['Conta',banco.conta],['Chave Pix',banco.pix],['Favorecido',banco.favorecido||(banco.conta?empresa.razao_social:'')]].filter(([,v])=>v);
@@ -199,4 +206,4 @@ function docx(resultado,{formato=1,logo=null,sens,qual}={}){
  if(resultado.tipo==='proposta'&&formato!==2&&qual!=='ficha')return montarDocx({},{},{texto:textoDosBlocos(d.blocos),preservarLinhas:true,tituloNegrito:true},d.titulo,{logo});
  return docxDosBlocos(d,logo);
 }
-module.exports={quantidade,valorPorExtenso,uuid,decimal,totalItem,dinheiro,preparar,docx,pendente,textoFinal,CPF_PREVIA,DATA_PREVIA,BANCO_PREVIA,exigenciasDoItem};
+module.exports={quantidade,valorPorExtenso,uuid,decimal,totalItem,dinheiro,preparar,docx,pendente,textoFinal,CPF_PREVIA,DATA_PREVIA,BANCO_PREVIA,exigenciasDoItem,optanteSimples};

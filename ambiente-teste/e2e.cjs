@@ -179,7 +179,9 @@ async function main() {
     return `${linhas.length} exigência(s) gravadas (${linhas.filter(l => l.incomum).length} marcadas "fora do comum"); ${t.map(x => x.etapa + ':' + x.estado).join(', ')}; ${ex.detalhe?.mensagem || ''}`;
   });
 
-  const urlProcesso = () => `${SITE}/sistema?empresa=${contexto.proc.empresa_id}&processo=${contexto.proc.id}`;
+  // Tela do processo em abas: cada passo abre direto a aba que usa (#aba=...).
+  // t= muda a URL a cada passo: só o #aba mudando, o navegador não recarrega a página (e uma janela aberta ficaria na frente).
+  const urlProcesso = (aba = 'itens') => `${SITE}/sistema?empresa=${contexto.proc.empresa_id}&processo=${contexto.proc.id}&t=${Date.now()}#aba=${aba}`;
   await passo('sistema: abrir o processo (checklist e itens)', p, async () => {
     await p.goto(urlProcesso());
     await p.waitForSelector('#area:not([hidden])', { timeout: 20000 });
@@ -199,6 +201,7 @@ async function main() {
   });
 
   await passo('identificação da empresa (endereço, representante, cargo)', p, async () => {
+    await p.click('#aba-proposta');
     await p.fill('#empresa-identificacao-endereco', 'Rua Fictícia de Teste, 100 — Manaus/AM');
     await p.fill('#empresa-identificacao-representante', 'Pessoa Representante Fictícia');
     await p.fill('#empresa-identificacao-cargo', 'Sócia administradora');
@@ -246,6 +249,7 @@ async function main() {
     const li = p.locator('#itens-processo [data-item-lista] li', { has: p.locator('#itens-custo-' + itemId) });
     const precos = (await li.locator('.itens-precos').innerText()).replace(/\s+/g, ' ');
     exigir(/Preço-alvo R\$ ?\d/.test(precos), 'preço-alvo não calculado: ' + precos);
+    await li.locator('details.itens-mais > summary').click(); // lance e "Usar limite" ficam em "Mais ferramentas de preço"
     await p.fill('#itens-lance-' + itemId, '33,50'); await p.waitForTimeout(800);
     const sim = (await p.innerText('#itens-simulacao-' + itemId).catch(() => li.locator('.itens-simulacao').innerText())).replace(/\s+/g, ' ');
     await li.getByRole('button', { name: 'Usar limite como preço mínimo' }).click(); await p.waitForTimeout(1500);
@@ -258,7 +262,7 @@ async function main() {
   await passo('item: valor ofertado, marca e modelo (Editar)', p, async () => {
     const li = p.locator('#itens-processo [data-item-lista] li', { has: p.locator('#itens-custo-' + contexto.itemId) });
     await li.getByRole('button', { name: /^Editar/ }).click();
-    const form = p.locator('#itens-processo form').first();
+    const form = p.locator('#itens-processo [data-item-form]');
     await form.locator('[name=marca]').fill('Marca Fictícia'); await form.locator('[name=modelo]').fill('Modelo X');
     await form.locator('[name=valorUnitario]').fill('37.90');
     await form.getByRole('button', { name: /Salvar item/ }).click(); await p.waitForTimeout(2000);
@@ -282,7 +286,7 @@ async function main() {
   };
 
   await passo('declaração: gerar, revisar e exportar DOCX (zip conferido)', p, async () => {
-    await p.goto(urlProcesso()); await p.waitForSelector('#kit form', { timeout: 20000 });
+    await p.goto(urlProcesso('proposta')); await p.waitForSelector('#kit form', { timeout: 20000 });
     const kit = p.locator('#kit');
     await kit.getByRole('button', { name: 'Nova declaração' }).click();
     await kit.locator('[name=tipo]').selectOption({ label: 'Declaração com texto informado' }).catch(() => {});
@@ -297,7 +301,7 @@ async function main() {
   });
 
   await passo('proposta: exportar DOCX com itens e valores', p, async () => {
-    await p.goto(urlProcesso()); await p.waitForSelector('#kit form', { timeout: 20000 });
+    await p.goto(urlProcesso('proposta')); await p.waitForSelector('#kit form', { timeout: 20000 });
     const kit = p.locator('#kit');
     await kit.getByRole('button', { name: 'Nova proposta' }).click(); await p.waitForTimeout(1000);
     const caixa = kit.locator('[data-item]:not(:disabled)').first();
@@ -320,7 +324,7 @@ async function main() {
   });
 
   await passo('checklist: gerar declarações exigidas pelo edital', p, async () => {
-    await p.goto(urlProcesso()); await p.waitForSelector('#checklist-esteira:not([hidden])', { timeout: 20000 }); await p.waitForTimeout(1500);
+    await p.goto(urlProcesso('resumo')); await p.waitForSelector('#checklist-esteira:not([hidden])', { timeout: 20000 }); await p.waitForTimeout(1500);
     const ck = p.locator('#checklist-esteira');
     const txt = (await ck.innerText()).replace(/\s+/g, ' ');
     const botao = ck.getByRole('button', { name: 'Gerar declarações' });
@@ -336,7 +340,7 @@ async function main() {
   });
 
   await passo('portal do cliente: gerar link', p, async () => {
-    await p.goto(urlProcesso()); await p.waitForSelector('[data-portal-abrir]', { timeout: 20000 });
+    await p.goto(urlProcesso('cliente')); await p.waitForSelector('[data-portal-abrir]', { timeout: 20000 });
     await p.click('[data-portal-abrir]');
     await p.fill('#portal-contato', 'Compras do Cliente Fictício');
     await p.click('[data-portal-gerar]');
@@ -359,7 +363,7 @@ async function main() {
   });
 
   await passo('histórico: resposta do cliente aparece no sistema', p, async () => {
-    await p.goto(urlProcesso()); await p.waitForSelector('#portal-cliente [data-portal-resumo]', { timeout: 20000 }); await p.waitForTimeout(2500);
+    await p.goto(urlProcesso('cliente')); await p.waitForSelector('#portal-cliente [data-portal-resumo]', { timeout: 20000 }); await p.waitForTimeout(2500);
     const t = (await p.innerText('#portal-cliente')).replace(/\s+/g, ' ');
     exigir(/1 aprovado/.test(t), 'resumo sem 1 aprovado: ' + t.slice(0, 300));
     exigir(/Histórico \([1-9]/.test(t), 'histórico vazio: ' + t.slice(0, 300));

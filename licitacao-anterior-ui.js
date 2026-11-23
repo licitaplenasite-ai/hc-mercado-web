@@ -528,6 +528,61 @@
     return barra;
   }
 
+  // Desconto do vencedor sobre o estimado daquela compra: "18,0% abaixo", "5,0% acima" (variacao já vem em %).
+  function textoDesconto(v) {
+    if (v === null || v === undefined) return '—';
+    if (v === 0) return 'igual ao estimado';
+    return `${String(Math.abs(v).toFixed(1)).replace('.', ',')}% ${v < 0 ? 'abaixo' : 'acima'}`;
+  }
+  // Quadro-resumo: uma linha por item das compras anteriores, só o que importa (vencedor, preço, marca, desconto, data,
+  // fonte), paginado de 10 em 10. O detalhe completo (participantes, motivos, selos) continua nos pregões abaixo.
+  function quadroResumo(visao, filtro, extras, estadoPagina) {
+    const linhas = [];
+    for (const { compra, itens } of visao.compras) {
+      for (const v of itens) {
+        if ((filtro.classificacao || filtro.poucos) && !itemPassa(v, participantesDoItem(v, extras && extras.gravado, compra.id_compra), filtro)) continue;
+        linhas.push({ compra, v });
+      }
+    }
+    const caixa = el('section', 'la-resumo');
+    caixa.setAttribute('aria-label', 'Resumo dos itens das compras anteriores');
+    caixa.append(el('h3', 'la-subtitulo', 'O que aconteceu em cada item'));
+    if (!linhas.length) { caixa.append(el('p', 'la-apoio', 'Nenhum item com esses filtros.')); return caixa; }
+    const PG = global.LicitaPaginacao;
+    const f = PG ? PG.fatiar(linhas, estadoPagina.pagina, estadoPagina.tamanho) : null;
+    const rolagem = el('div', 'tabela-rolagem');
+    rolagem.tabIndex = 0; rolagem.setAttribute('role', 'region'); rolagem.setAttribute('aria-label', 'Itens das compras anteriores (role para o lado no celular)');
+    const tabela = el('table', 'la-tabela');
+    const cab = el('tr');
+    for (const t of ['Item', 'Vencedor', 'Marca', 'Preço homologado', 'Desconto sobre o estimado', 'Data', 'Fonte']) { const th = el('th', null, t); th.scope = 'col'; cab.append(th); }
+    const thead = el('thead'); thead.append(cab);
+    const tbody = el('tbody');
+    for (const { compra, v } of f ? f.itens : linhas) {
+      const tr = el('tr', v.ruim ? 'la-linha-ruim' : null);
+      const item = el('td'); item.append(el('strong', null, `Item ${v.item.numero_item}`), el('span', 'la-desc', String(v.item.descricao || '').slice(0, 90)));
+      const venc = el('td');
+      if (v.vencedor) venc.append(fornecedorTexto(v.vencedor));
+      else venc.append(el('span', v.ruim ? 'la-situacao la-ruim' : 'la-apoio', v.ruim ? (v.item.situacao_item || 'Sem vencedor') : 'Sem resultado publicado'));
+      const data_ = data(v.vencedor?.data_resultado) || data(compra.data_publicacao) || '—';
+      const fonte = el('td');
+      const href = linkOficial(compra.link_origem) || linkOficial(compra.link_pncp);
+      const rotuloFonte = `${compra.modalidade || 'Compra'} ${compra.numero || ''}`.trim() + (compra.plataforma ? ` · ${compra.plataforma}` : '');
+      if (href) fonte.append(link(href, rotuloFonte)); else fonte.append(rotuloFonte);
+      tr.append(item, venc, el('td', v.marca ? null : 'la-apoio', v.marca || 'não informada'), el('td', 'la-num', v.vencedor ? moeda(v.homologado) : '—'),
+        el('td', 'la-num', textoDesconto(v.sobreEstimado)), el('td', 'la-num', data_), fonte);
+      tbody.append(tr);
+    }
+    tabela.append(thead, tbody); rolagem.append(tabela); caixa.append(rolagem);
+    if (f && f.total > PG.TAMANHOS[0]) {
+      caixa.append(PG.barra(document, { fatia: f, rotulo: 'itens', id: 'la-resumo-paginas', mudar: (n) => {
+        estadoPagina.pagina = n.pagina; estadoPagina.tamanho = n.tamanho;
+        caixa.replaceWith(quadroResumo(visao, filtro, extras, estadoPagina));
+      } }));
+    }
+    caixa.append(el('p', 'la-fonte', 'Desconto = quanto o preço homologado ficou abaixo (ou acima) do valor estimado daquela compra. Detalhe de cada pregão (participantes, motivos de recusa) logo abaixo.'));
+    return caixa;
+  }
+
   function desenhar(alvo, visao, opcoes = {}) {
     const { comEdital = false, rodape = '', extras = null, atualizar = null, atualizado = false, filtro = {} } = opcoes;
     const raiz = el('div', 'la');
@@ -540,6 +595,7 @@
     const resumo = el('p', 'la-apoio', `${visao.compras.length} contratação(ões) anterior(es)` + (visao.ruins ? ` · ${visao.ruins} item(ns) fracassado(s), deserto(s) ou cancelado(s)` : ''));
     raiz.append(resumo);
     raiz.append(barraFiltros(filtro, (novo) => desenhar(alvo, visao, { ...opcoes, atualizado: false, filtro: novo })));
+    raiz.append(quadroResumo(visao, filtro, extras, { pagina: 1, tamanho: 10 }));
     const marcas = el('div', 'la-marcas');
     marcas.append(el('h3', 'la-subtitulo', 'Marcas aceitas por este órgão'));
     const chipsDe = (g) => {
@@ -567,7 +623,8 @@
     // Edital grande casa dezenas de itens por compra: cada compra abre e fecha; a mais recente vem aberta.
     const filtrando = Boolean(filtro.classificacao || filtro.poucos);
     let mostrados = 0;
-    visao.compras.forEach(({ compra, itens: todos }, posicao) => {
+    raiz.append(el('h3', 'la-subtitulo', 'Detalhe por pregão'));
+    visao.compras.forEach(({ compra, itens: todos }) => {
       const itens = filtrando ? todos.filter((v) => itemPassa(v, participantesDoItem(v, extras && extras.gravado, compra.id_compra), filtro)) : todos;
       if (!itens.length) return;
       mostrados += itens.length;
@@ -601,7 +658,7 @@
         art.append(el('p', 'la-fonte', 'Marca, situação e vencedor lidos das páginas públicas do ComprasNet antigo (sem captcha)' + (compra.fonte_lida_em ? ` em ${data(compra.fonte_lida_em)}` : '') + '.'));
       }
       const lista = el('details', 'la-itens');
-      lista.open = posicao === 0 || filtrando;
+      lista.open = filtrando; // o quadro-resumo acima já mostra o principal; o detalhe abre ao clicar
       const ruins = itens.filter((v) => v.ruim).length;
       lista.append(el('summary', null, `${itens.length} item(ns) deste produto` + (ruins ? ` · ${ruins} fracassado(s)/deserto(s)/cancelado(s)` : '')));
       for (const v of itens) lista.append(desenharItem(v, comEdital, extras, compra.id_compra, compra, filtro));
@@ -740,7 +797,7 @@
     try { global.document?.dispatchEvent(new global.CustomEvent('licitaplena:vencedores', { detail: detalhe })); } catch { /* sem DOM (testes) */ }
   }
 
-  const api = { vencedoresDoProcesso, resultadoDe, itemPassa, linkGoogle, linkWhatsApp, textoCompartilhar, montarVisao, vencedorDe, variacao, chaveMarca, montar, montarPesquisa, desenhar, linkOficial, urlsVerTudo, PASSOS_VER_TUDO, indexarGravado, participantesDoItem, cnpjsDaVisao,
+  const api = { textoDesconto, vencedoresDoProcesso, resultadoDe, itemPassa, linkGoogle, linkWhatsApp, textoCompartilhar, montarVisao, vencedorDe, variacao, chaveMarca, montar, montarPesquisa, desenhar, linkOficial, urlsVerTudo, PASSOS_VER_TUDO, indexarGravado, participantesDoItem, cnpjsDaVisao,
     textoSelo, seloGravado, sancoesEmLote, lerGravados, carregarExtras, camadasDoPregao, completudeDoPregao, assinaturaGravado, recarregarSeMudou };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else global.LicitaLicitacaoAnterior = api;

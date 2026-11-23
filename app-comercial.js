@@ -50,6 +50,8 @@
     documentos: cliente && globalThis.LicitaProcessoDocumentos ? { montar: (o) => globalThis.LicitaProcessoDocumentos.montar({ ...o, cliente }) } : null,
     // Robô de lances (modo assistido): configuração e registro no localStorage deste navegador.
     robo: globalThis.LicitaRoboLancesUI ? { montar: (o) => globalThis.LicitaRoboLancesUI.montar({ ...o, storage }) } : null,
+    // Tela do processo em abas com cabeçalho fixo (processo-abas.js); a página do harness QA não tem as abas.
+    abas: globalThis.LicitaProcessoAbas || null,
     confirmar: (mensagem) => globalThis.confirm(mensagem),
     busca: globalThis.location.search,
   });

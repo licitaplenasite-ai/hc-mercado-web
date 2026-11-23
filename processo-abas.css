@@ -1,0 +1,86 @@
+/* Tela do processo em abas (processo-abas.js). Só tokens do DS (ds-tokens.css): tema claro e escuro seguem data-theme. */
+.proc-topo, .proc-vazio { display: none; }
+#area[data-visao="processo"] .proc-topo { display: block; position: sticky; top: var(--topo-altura, 0px); z-index: 4; margin: 0 calc(-1 * var(--space-16));
+  padding: var(--space-8) var(--space-16) 0; background: var(--surface-page); border-bottom: 1px solid var(--border-default); }
+#area[data-visao="processo"] .proc-painel:not([data-ativa]) { display: none; }
+#area[data-visao="processo"] .proc-painel { display: grid; gap: var(--space-16); align-content: start; }
+#area[data-visao="processo"] .proc-painel > .app-cartao, #area[data-visao="processo"] .proc-painel > #kit,
+#area[data-visao="processo"] .proc-painel > #identificacao { max-width: none; margin: 0; }
+/* Aviso de painel vazio: só quando nenhum cartão do painel está visível (módulo vazio ou ausente). */
+#area[data-visao="processo"] .proc-painel:not(:has(> :not(.proc-vazio):not([hidden]):not(:empty))) > .proc-vazio {
+  display: block; margin: 0; padding: var(--space-24); background: var(--surface-default); border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-card); color: var(--text-secondary); }
+#area[data-visao="processo"] #area-titulo { margin-bottom: 0; }
+#area[data-visao="processo"] #contexto-atual { margin: 0; }
+
+/* Cabeçalho curto: órgão e número, selos (prazo, situação, total) e o que falta. */
+.proc-cab { display: grid; gap: var(--space-4); min-width: 0; }
+.proc-cab p { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.proc-cab-titulo { font: var(--text-body-lg); color: var(--text-primary); }
+.proc-cab-selos, .proc-cab-falta { display: flex; flex-wrap: wrap; gap: var(--space-8); align-items: center; }
+.proc-selo { display: inline-block; padding: 2px var(--space-8); border: 1px solid var(--border-default); border-radius: 999px; background: var(--surface-default);
+  font: var(--text-label); color: var(--text-primary); }
+.proc-selo[data-situacao="em-dia"] { background: var(--success-bg); border-color: var(--success-border); color: var(--success-text); }
+.proc-selo[data-situacao="atencao"] { background: var(--attention-bg); border-color: var(--attention-border); color: var(--attention-text); }
+.proc-selo[data-situacao="atrasado"] { background: var(--error-bg); border-color: var(--error-border); color: var(--error-text); }
+.proc-total { font-weight: 700; background: var(--info-bg); border-color: var(--info-border); color: var(--info-text); }
+.proc-falta-rotulo { font: var(--text-label); font-weight: 700; color: var(--attention-text); }
+button.proc-passo { min-height: 32px; padding: 2px var(--space-12); font: var(--text-label); font-weight: 600; border-color: var(--attention-border);
+  background: var(--attention-bg); color: var(--attention-text); }
+.proc-passos button.proc-passo { min-height: 44px; font: var(--text-body); font-weight: 600; }
+
+/* Abas: uma linha que rola para o lado dentro da própria barra (nunca a página). */
+.proc-abas { margin-top: var(--space-8); overflow-x: auto; scrollbar-width: thin; }
+.proc-abas [role="tablist"] { display: flex; gap: var(--space-4); min-width: max-content; }
+.proc-abas [role="tab"] { min-height: 44px; border: 0; border-bottom: 3px solid transparent; border-radius: var(--radius-control) var(--radius-control) 0 0;
+  background: transparent; color: var(--text-secondary); white-space: nowrap; padding: var(--space-8) var(--space-12); }
+.proc-abas [role="tab"]:hover { color: var(--action-text); background: var(--surface-sunken); }
+.proc-abas [role="tab"][aria-selected="true"] { color: var(--action-text); border-bottom-color: var(--action-strong); background: var(--action-tint); }
+
+/* Resumo: dados do edital e próximos passos. */
+.proc-situacao h3 { font: var(--text-section); margin: var(--space-16) 0 var(--space-8); }
+.proc-dados { display: grid; grid-template-columns: max-content 1fr; gap: var(--space-4) var(--space-16); margin: var(--space-8) 0 0; }
+.proc-dados dt { font: var(--text-label); color: var(--text-secondary); padding-top: 3px; }
+.proc-dados dd { margin: 0; overflow-wrap: anywhere; }
+.proc-passos { margin: 0; padding-left: var(--space-24); display: grid; gap: var(--space-8); }
+
+/* Agenda do processo. */
+.proc-agenda { list-style: none; margin: var(--space-8) 0 var(--space-16); padding: 0; display: grid; gap: var(--space-12); }
+#processo-agenda .proc-agenda li { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); padding: var(--space-12); border: 1px solid var(--border-default); border-left-width: 4px; border-radius: var(--radius-control); }
+.proc-agenda li[data-situacao="em-dia"] { border-left-color: var(--success-border); }
+.proc-agenda li[data-situacao="atencao"] { border-left-color: var(--attention-border); }
+.proc-agenda li[data-situacao="atrasado"] { border-left-color: var(--error-border); }
+
+/* "Adicionar item" numa janela (itens-processo-ui.js). */
+.itens-dialogo { width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; padding: var(--space-24); border: 1px solid var(--border-default);
+  border-radius: var(--radius-modal); background: var(--surface-raised); color: var(--text-primary); box-shadow: var(--shadow-overlay); }
+.itens-dialogo::backdrop { background: rgba(11, 16, 32, .45); }
+.itens-dialogo form { display: grid; gap: var(--space-12); }
+.itens-dialogo label { display: grid; gap: var(--space-4); font: var(--text-label); color: var(--text-secondary); }
+.itens-dialogo input, .itens-dialogo textarea { min-height: 44px; padding: var(--space-8) var(--space-12); border: 1px solid var(--border-strong); border-radius: var(--radius-control);
+  background: var(--surface-default); color: var(--text-primary); font: var(--text-body); width: 100%; }
+.itens-dialogo-topo { display: flex; gap: var(--space-12); align-items: center; justify-content: space-between; }
+.itens-dialogo-topo h3 { margin: 0; font: var(--text-section); }
+.itens-dialogo [data-item-erros]:empty { display: none; }
+.itens-dialogo [data-item-erros] { color: var(--error-text); margin: 0; }
+
+@media (max-width: 640px) {
+  /* Celular: o topo do site (empresa, processo, sair) rola junto; fica grudado só o cabeçalho do processo, em linhas
+     que rolam para o lado, para sobrar tela para o trabalho. */
+  .app-topo { position: static; }
+  #area[data-visao="processo"] .proc-topo { top: 0; padding-top: var(--space-4); }
+  .proc-cab-titulo { font: var(--text-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .proc-cab-selos, .proc-cab-falta { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .proc-cab-selos > *, .proc-cab-falta > * { flex: 0 0 auto; white-space: nowrap; }
+  .proc-abas { margin-top: var(--space-4); }
+  .proc-dados { grid-template-columns: 1fr; }
+  .proc-dados dt { padding-top: var(--space-8); }
+}
+
+/* Ferramentas de preço por item (itens-processo-ui.js): fechadas por padrão. */
+.itens-mais { margin-top: var(--space-8); border-top: 1px dashed var(--border-default); padding-top: var(--space-8); }
+.itens-mais > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 600; color: var(--action-text); }
+.itens-mais[open] { display: grid; gap: var(--space-8); }
+
+/* Preparação da empresa (sem processo): os cartões próprios do processo não aparecem. */
+#area:not([data-visao="processo"]) #processo-situacao, #area:not([data-visao="processo"]) #processo-agenda { display: none; }

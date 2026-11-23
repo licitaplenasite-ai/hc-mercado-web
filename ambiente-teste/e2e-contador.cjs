@@ -47,10 +47,11 @@ const CNPJ_BRASILAPI = { cnpj: '11222333000181', uf: 'AM', codigo_municipio_ibge
   const quadro = () => li().locator('.contador-corpo');
   try {
     await passo('Contador abre no item com aviso fixo, regime lido do CNPJ e tabela oficial', p, async () => {
-      await p.goto(`${SITE}/sistema?empresa=${ids.empA1}&processo=${ids.procA}`);
+      await p.goto(`${SITE}/sistema?empresa=${ids.empA1}&processo=${ids.procA}#aba=itens`);
       await p.evaluate(() => { for (const k of Object.keys(window.localStorage)) if (k.startsWith('licitaplena_contador_')) window.localStorage.removeItem(k); });
       await p.reload();
       await li().waitFor({ timeout: 30000 });
+      await li().locator('details.itens-mais > summary').click(); // ferramentas de preço ficam fechadas por item
       await li().getByRole('button', { name: 'Contador: preço com impostos' }).click();
       await quadro().locator('.rotulo-agente', { hasText: 'Contador' }).waitFor();
       const aviso = await quadro().locator('.contador-aviso').first().innerText();

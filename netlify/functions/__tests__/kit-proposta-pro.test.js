@@ -183,3 +183,26 @@ test('declarações prontas: enquadramento pelo porte, data do download, um arqu
  const pdf=await f.run({acao:'exportarDeclaracoes',saida:'pdf'});assert.equal(pdf.json.mime,'application/pdf');assert.equal(pdf.json.documento.blocos.filter(b=>b.t==='quebra').length,1);
  const um=await f.run({acao:'exportarDeclaracoes',documentoIds:[f.state.kit[0].id]});assert.match(um.json.nome,/^Declaração de cumprimento dos requisitos de habilitação - HCM LTDA - Pregão 012-2026/);
 });
+test('Optante pelo Simples Nacional: pelo regime do Perfil; sem regime, só o porte que não deixa dúvida; senão em branco',()=>{
+ const {optanteSimples}=require('../_kit_documentos');
+ const SIM='(X) Sim   ( ) Não',NAO='( ) Sim   (X) Não',BRANCO='( ) Sim   ( ) Não';
+ assert.equal(optanteSimples({regime_tributario:'simples',porte:'epp'}),SIM);
+ assert.equal(optanteSimples({regime_tributario:'mei'}),SIM);
+ assert.equal(optanteSimples({regime_tributario:'presumido',porte:'me'}),NAO);
+ assert.equal(optanteSimples({regime_tributario:'real'}),NAO);
+ assert.equal(optanteSimples({porte:'mei'}),SIM);
+ assert.equal(optanteSimples({porte:'demais'}),NAO);
+ assert.equal(optanteSimples({porte:'me'}),BRANCO);
+ assert.equal(optanteSimples({}),BRANCO);
+});
+test('Simples Nacional na proposta: sem modelo vai nos dados da proponente; com modelo que pergunta, na posição do modelo',async t=>{
+ const sem=fixture(t,{dossie:false});const a=(await propostaRevisada(sem)).p.json.previa.texto;
+ assert.match(a,/Porte: Não enquadrada como ME\/EPP\nOptante pelo Simples Nacional: \( \) Sim {3}\(X\) Não/);
+ const m=detectarModeloProposta('ANEXO II – MODELO DE PROPOSTA\n\nRazão social, CNPJ.\n\nValidade da proposta: 60 dias.\n\nOptante pelo Simples Nacional: ( ) Sim ( ) Não\n\nDados bancários: banco, agência e conta.\n\nPrazo de entrega: 10 dias.\n');
+ assert.deepEqual(m.campos,['validade','simples','banco','prazoEntrega']);
+ const f=fixture(t);f.state.dossie.texto=f.state.dossie.texto.replace(/(Validade da proposta[^\n]*\n)/,'$1\nOptante pelo Simples Nacional: ( ) Sim ( ) Não\n');
+ f.state.perfilEmpresa.regime_tributario='simples';
+ const b=(await propostaRevisada(f)).p.json.previa.texto;
+ assert.doesNotMatch(b.slice(0,b.indexOf('Itens e preços')),/Optante/,'com o modelo, a pergunta sai dos dados da proponente');
+ assert.match(b,/Validade da proposta: 60 \(sessenta\) dias\nOptante pelo Simples Nacional: \(X\) Sim {3}\( \) Não/);
+});

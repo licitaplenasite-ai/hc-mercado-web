@@ -130,11 +130,12 @@ async function passosNovos({ navegador, p, contexto, urlProcesso }) {
       await p.goto(urlProcesso());
       const li = p.locator('#itens-processo [data-item-lista] li', { has: p.locator('#itens-custo-' + item1.id) });
       await li.waitFor({ timeout: 20000 });
+      await li.locator('details.itens-mais > summary').click(); // catálogo e mercado ficam em "Mais ferramentas de preço"
       await li.getByRole('button', { name: 'Usar do catálogo' }).click();
       const opcao = li.locator('.catalogo-usar-opcao', { hasText: termoItem.slice(0, 20) }).first();
       await opcao.waitFor({ timeout: 10000 }).catch(async () => { throw new Error('sem sugestão do catálogo: ' + (await li.locator('.catalogo-usar').innerText())); });
       await opcao.getByRole('button', { name: 'Usar' }).click(); await p.waitForTimeout(2000);
-      const form = p.locator('#itens-processo form').first();
+      const form = p.locator('#itens-processo [data-item-form]');
       const marca = await form.locator('[name=marca]').inputValue();
       exigir(marca === 'Marca do Catálogo', `marca do catálogo não foi para o formulário: "${marca}"`);
       const [it] = await banco(`operacao_itens_resultado?id=eq.${item1.id}&select=custo_unitario`);
@@ -185,7 +186,7 @@ async function passosNovos({ navegador, p, contexto, urlProcesso }) {
         robo('esteira_processos.js', { LIMITE_MINUTOS_ESTEIRA: '5', LOTE_ANALISE_CNPJ: '0' });
         [t] = await banco(`operacao_esteira_tarefas?processo_id=eq.${contexto.proc.id}&etapa=eq.historico&select=estado,erro,detalhe,tentativas`);
       }
-      await p.goto(urlProcesso());
+      await p.goto(urlProcesso('anterior'));
       await p.waitForSelector('#area:not([hidden])', { timeout: 20000 }); await p.waitForTimeout(4000);
       const card = p.locator('#licitacao-anterior');
       const visivel = await card.isVisible();
