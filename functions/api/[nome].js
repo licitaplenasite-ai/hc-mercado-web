@@ -72,6 +72,8 @@ import * as pagometro from "../../netlify/functions/pagometro.js";
 import * as chatIa from "../../netlify/functions/chat-ia.js";
 // Situação no SICAF (Minhas empresas e documentos): logado e aprovado; 1 chamada aos dados abertos do Compras.gov.
 import * as situacaoSicaf from "../../netlify/functions/situacao-sicaf.js";
+// Planilha do concorrente em foto (Orçamento de obra): logado e aprovado, 40 páginas/dia, 1 chamada ao Gemini por página.
+import * as planilhaIa from "../../netlify/functions/planilha-ia.js";
 
 const ROTAS = {
   "vinculo-compra-portal": vinculoCompraPortal,
@@ -90,6 +92,7 @@ const ROTAS = {
   prospeccao: m26,
   "analise-cnpj": analiseCnpj,
   "monte-busca-ia": monteBuscaIa,
+  "planilha-ia": planilhaIa,
   "fornecedor-ia": fornecedorIa,
   "avisos-celular": avisosCelular,
   pagometro: pagometro,

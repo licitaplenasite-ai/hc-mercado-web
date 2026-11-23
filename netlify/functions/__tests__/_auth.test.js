@@ -77,13 +77,14 @@ test('auth diferencia sessão inválida de indisponibilidade sem liberar acesso'
   } finally { global.fetch = anterior; }
 });
 
-test('monte-busca-ia falha fechado como ia-edital (sem chave, RPC fora, contagem inválida)', async () => {
+test('monte-busca-ia e planilha-ia falham fechado como ia-edital (sem chave, RPC fora, contagem inválida)', async () => {
   const fetchAnterior = global.fetch, chaveAnterior = process.env.SUPABASE_SERVICE_ROLE_KEY;
   try {
     process.env.SUPABASE_SERVICE_ROLE_KEY = 'teste-local';
     for (const resp of [async () => new Response('{}', { status: 503 }), async () => { throw new Error('x'); }, async () => new Response('"1"')]) {
       global.fetch = resp;
       assert.equal((await verificarLimiteDiario('usuario', 'monte-busca-ia', 30)).status, 503);
+      assert.equal((await verificarLimiteDiario('usuario', 'planilha-ia', 40)).status, 503);
     }
     delete process.env.SUPABASE_SERVICE_ROLE_KEY;
     assert.equal((await verificarLimiteDiario('usuario', 'monte-busca-ia', 30)).status, 503);
