@@ -783,69 +783,100 @@ def _processado(cab):
     return (data_por_extenso(agora) + ", " + agora.strftime("%H:%M")) if agora else ""
 
 
+# Layout de 23/11 (dono: no Gmail do computador estava "bagunçado" e no Gmail escuro do iPhone a faixa e o botão
+# viravam lilás). Coluna única de 600px em tabelas com estilo inline (Gmail/Outlook) e fontes do sistema. As áreas de
+# cor da marca levam também background-image de cor única: o Gmail escuro troca background-color, mas não a imagem
+# de fundo, então a faixa e o botão continuam azul-marinho com texto branco. Mesmo arranjo do ConLicitação: faixa
+# "Edição nº / Data do processamento", identificação do cliente em 2 colunas, "Aos cuidados de" e o botão.
+FONTE_EMAIL = "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;"
+COR_TEXTO, COR_ROTULO, COR_LINHA, COR_FAIXA = "#202124", "#5f6368", "#e3e7ed", "#33404d"
+
+
+def _fundo_fixo(cor):
+    # Cor que o modo escuro do Gmail (iOS/Android) não inverte: a imagem de fundo é preservada.
+    return "background-color:" + cor + ";background-image:linear-gradient(" + cor + "," + cor + ");"
+
+
+def _botao(link, rotulo, cheio=True):
+    fundo = _fundo_fixo(COR_MARCA) if cheio else "background-color:#ffffff;"
+    return ('<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>'
+            '<td align="center" bgcolor="' + (COR_MARCA if cheio else "#ffffff") + '" style="' + fundo + 'border-radius:6px;border:2px solid ' + COR_MARCA + ';">'
+            '<a href="' + html.escape(link, quote=True) + '" class="lp-fixo" style="display:inline-block;' + FONTE_EMAIL
+            + 'font-size:16px;font-weight:bold;line-height:20px;color:' + ("#ffffff" if cheio else COR_MARCA)
+            + ';text-decoration:none;padding:13px 30px;border-radius:6px;">' + rotulo + '</a></td></tr></table>')
+
+
 def montar_email_html(nome_empresa, filtro, edicao, quantidade, link, resumo=None, cab=None):
     esc = html.escape
     cab = cab or {}
-    fonte = "font-family:Arial,Helvetica,sans-serif;"
-    partes_topo = []
-    if cab.get("numero"):
-        partes_topo.append('Edição nº <b>' + esc(str(cab["numero"])) + '</b>')
-    if cab.get("processado_em"):
-        partes_topo.append('Data do processamento: <b>' + esc(_processado(cab)) + '</b>')
-    topo = ""
-    if partes_topo:
-        topo = ('<tr><td bgcolor="#eef3f9" style="' + fonte + 'font-size:13px;line-height:1.6;color:#3c4043;padding:10px 20px;'
-                'background:#eef3f9;border-bottom:1px solid #dbe3ee;">' + '<br>'.join(partes_topo) + '</td></tr>')
-    linhas = "".join(
-        '<tr><td style="' + fonte + 'font-size:13px;color:#5f6368;padding:3px 12px 3px 0;vertical-align:top;">' + esc(r) + ':</td>'
-        '<td style="' + fonte + 'font-size:13px;color:#202124;font-weight:bold;padding:3px 0;">' + esc(str(v)) + '</td></tr>'
-        for r, v in _linhas_cabecalho(nome_empresa, filtro, cab))
-    cliente = ('<tr><td style="padding:0 0 18px 0;border-bottom:1px solid #e8eaed;"><table role="presentation" cellpadding="0" cellspacing="0" border="0">'
-               + linhas + '</table></td></tr>')
+    f = FONTE_EMAIL
+    faixa = ""
+    if cab.get("numero") or cab.get("processado_em"):
+        celula = '<td valign="top" style="' + f + 'font-size:13px;line-height:19px;color:#ffffff;padding:10px 28px;">'
+        faixa = ('<tr><td bgcolor="' + COR_FAIXA + '" style="' + _fundo_fixo(COR_FAIXA) + '">'
+                 '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>'
+                 + (celula.replace('valign="top"', 'valign="top" width="1%"').replace('padding:10px 28px', 'white-space:nowrap;padding:10px 28px')
+                    + '<span class="lp-fixo" style="color:#c9d3df;">Edição nº</span><br><b class="lp-fixo" style="color:#ffffff;font-size:15px;">'
+                    + esc(str(cab["numero"])) + '</b></td>' if cab.get("numero") else "")
+                 + (celula.replace('padding:10px 28px', 'padding:10px 28px 10px 0') + '<span class="lp-fixo" style="color:#c9d3df;">Data do processamento</span><br>'
+                    '<b class="lp-fixo" style="color:#ffffff;font-size:15px;">' + esc(_processado(cab)) + '</b></td>' if cab.get("processado_em") else "")
+                 + '</tr></table></td></tr>')
+    linhas = _linhas_cabecalho(nome_empresa, filtro, cab)
+    borda = 'border-bottom:1px solid ' + COR_LINHA + ';'
+    identificacao = "".join(
+        '<tr><td width="38%" valign="top" style="' + f + 'font-size:13px;line-height:20px;color:' + COR_ROTULO + ';padding:8px 12px 8px 0;'
+        + (borda if i < len(linhas) - 1 else '') + '">' + esc(r) + '</td>'
+        '<td valign="top" style="' + f + 'font-size:14px;line-height:20px;font-weight:bold;color:' + COR_TEXTO + ';padding:8px 0;'
+        + (borda if i < len(linhas) - 1 else '') + '">' + esc(str(v)) + '</td></tr>'
+        for i, (r, v) in enumerate(linhas))
+    bloco_id = ('<tr><td style="padding:18px 28px 6px 28px;">'
+                '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">' + identificacao + '</table></td></tr>')
     if cab.get("responsavel"):
-        cliente += ('<tr><td style="' + fonte + 'font-size:15px;color:#202124;padding:18px 0 18px 0;">Aos cuidados de <b>'
-                    + esc(cab["responsavel"]) + '</b>,</td></tr>')
-    else:
-        cliente += '<tr><td style="padding:0 0 22px 0;"></td></tr>'
+        bloco_id += ('<tr><td style="' + f + 'font-size:15px;line-height:22px;color:' + COR_TEXTO + ';padding:14px 28px 0 28px;">'
+                     'Aos cuidados de <b>' + esc(cab["responsavel"]) + '</b>,</td></tr>')
+    separador = '<tr><td style="padding:18px 28px 0 28px;"><div style="border-top:1px solid ' + COR_LINHA + ';font-size:0;line-height:0;">&nbsp;</div></td></tr>'
     if quantidade:
         resumo_html = ""
         if resumo:
-            resumo_html = ('<tr><td align="center" style="' + fonte + 'font-size:14px;color:#3c4043;line-height:1.5;'
-                           'padding:0 0 20px 0;">' + esc(" · ".join(resumo)) + '</td></tr>')
+            resumo_html = ('<div style="' + f + 'font-size:14px;line-height:20px;color:#3c4043;padding:0 0 18px 0;">'
+                           + esc(" · ".join(resumo)) + '</div>')
         corpo = (
-            '<tr><td align="center" style="' + fonte + 'font-size:26px;line-height:32px;font-weight:bold;color:#202124;padding:0 0 8px 0;">'
-            + _titulo_quantidade(quantidade) + '</td></tr>'
-            '<tr><td align="center" style="' + fonte + 'font-size:15px;color:#3c4043;line-height:1.5;padding:0 0 18px 0;">no filtro <b>'
-            + esc(filtro) + '</b> da empresa <b>' + esc(nome_empresa) + '</b><br>Edição de '
-            + edicao.strftime("%d/%m/%Y") + '</td></tr>' + resumo_html +
-            '<tr><td align="center" style="padding:0 0 14px 0;"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>'
-            '<td align="center" bgcolor="' + COR_MARCA + '" style="border-radius:8px;"><a href="' + esc(link, quote=True)
-            + '" style="display:inline-block;' + fonte + 'background:' + COR_MARCA
-            + ';color:#ffffff;padding:16px 36px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:18px;">'
-            'Acessar o boletim</a></td></tr></table></td></tr>'
-            '<tr><td align="center" style="' + fonte + 'font-size:12px;color:#5f6368;">Você entra com seu login e vê a lista completa.</td></tr>'
+            '<tr><td style="padding:22px 28px 28px 28px;">'
+            '<div style="' + f + 'font-size:24px;line-height:30px;font-weight:bold;color:' + COR_TEXTO + ';padding:0 0 6px 0;">'
+            + _titulo_quantidade(quantidade) + '</div>'
+            '<div style="' + f + 'font-size:15px;line-height:22px;color:#3c4043;padding:0 0 12px 0;">no filtro <b>' + esc(filtro)
+            + '</b> da empresa <b>' + esc(nome_empresa) + '</b> · edição de ' + edicao.strftime("%d/%m/%Y") + '</div>'
+            + resumo_html + _botao(link, "Acessar o boletim") +
+            '<div style="' + f + 'font-size:12px;line-height:18px;color:' + COR_ROTULO + ';padding:10px 0 0 0;">'
+            'Você entra com seu login e vê a lista completa.</div></td></tr>'
         )
     else:
         corpo = (
-            '<tr><td align="center" style="' + fonte + 'font-size:20px;color:#202124;padding:0 0 8px 0;">Nenhuma licitação nova desde o último aviso</td></tr>'
-            '<tr><td align="center" style="' + fonte + 'font-size:14px;color:#5f6368;padding:0 0 18px 0;">no filtro <b>' + esc(filtro)
-            + '</b> da empresa <b>' + esc(nome_empresa) + '</b>.</td></tr>'
-            '<tr><td align="center"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>'
-            '<td align="center" style="border:2px solid ' + COR_MARCA + ';border-radius:8px;"><a href="' + esc(URL_AJUSTAR_FILTROS, quote=True)
-            + '" style="display:inline-block;' + fonte + 'color:' + COR_MARCA
-            + ';padding:12px 28px;text-decoration:none;font-weight:bold;font-size:16px;">Abrir o painel</a></td></tr></table></td></tr>'
+            '<tr><td style="padding:22px 28px 28px 28px;">'
+            '<div style="' + f + 'font-size:20px;line-height:26px;font-weight:bold;color:' + COR_TEXTO + ';padding:0 0 6px 0;">'
+            'Nenhuma licitação nova desde o último aviso</div>'
+            '<div style="' + f + 'font-size:15px;line-height:22px;color:#3c4043;padding:0 0 16px 0;">no filtro <b>' + esc(filtro)
+            + '</b> da empresa <b>' + esc(nome_empresa) + '</b>.</div>' + _botao(URL_AJUSTAR_FILTROS, "Abrir o painel", cheio=False)
+            + '</td></tr>'
         )
-    estilo_link = 'color:#5f6368;text-decoration:underline;'
+    estilo_link = 'color:' + COR_ROTULO + ';text-decoration:underline;'
     link_privacidade = '<a href="' + URL_PRIVACIDADE + '" style="' + estilo_link + '">Política de Privacidade</a>'
+    itens = "".join(
+        '<tr><td width="20" valign="top" style="' + f + 'font-size:12px;line-height:19px;font-weight:bold;color:' + COR_ROTULO + ';padding:0 0 10px 0;">'
+        + str(i) + '.</td><td valign="top" style="' + f + 'font-size:12px;line-height:19px;color:' + COR_ROTULO + ';padding:0 0 10px 0;">'
+        + esc(t).replace("Política de Privacidade", link_privacidade) + '</td></tr>'
+        for i, t in enumerate(POLITICA_USO, 1))
     politica = (
-        '<tr><td style="' + fonte + 'font-size:12px;line-height:1.6;color:#5f6368;padding:26px 0 0 0;">'
-        '<div style="font-weight:bold;color:#3c4043;letter-spacing:.3px;padding-bottom:6px;">POLÍTICA DE USO E RESPONSABILIDADE</div>'
-        + "".join('<div style="padding:0 0 6px 0;">' + str(i) + '. ' + esc(t).replace("Política de Privacidade", link_privacidade) + '</div>'
-                  for i, t in enumerate(POLITICA_USO, 1))
-        + 'Apoio: <a href="mailto:' + EMAIL_SUPORTE + '" style="' + estilo_link + '">' + EMAIL_SUPORTE + '</a></td></tr>'
+        '<tr><td style="padding:0 28px 28px 28px;">'
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f6f7f9" '
+        'style="background-color:#f6f7f9;border:1px solid ' + COR_LINHA + ';border-radius:6px;"><tr><td style="padding:16px 18px 8px 18px;">'
+        '<div style="' + f + 'font-size:11px;font-weight:bold;letter-spacing:1px;color:#3c4043;padding:0 0 10px 0;">POLÍTICA DE USO E RESPONSABILIDADE</div>'
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">' + itens + '</table>'
+        '<div style="' + f + 'font-size:12px;line-height:19px;color:' + COR_ROTULO + ';padding:0 0 8px 0;">Apoio: <a href="mailto:'
+        + EMAIL_SUPORTE + '" style="' + estilo_link + '">' + EMAIL_SUPORTE + '</a></div></td></tr></table></td></tr>'
     )
     rodape = (
-        '<tr><td align="center" style="' + fonte + 'font-size:12px;line-height:1.6;color:#80868b;padding:20px 8px 0 8px;">'
+        '<tr><td align="center" style="' + f + 'font-size:12px;line-height:19px;color:#80868b;padding:20px 16px 0 16px;">'
         'Você recebe este aviso porque cadastrou o filtro <b>' + esc(filtro) + '</b> no LicitaPlena.<br>'
         '<a href="' + esc(URL_AJUSTAR_FILTROS, quote=True) + '" style="' + estilo_link + '">Ajustar meus filtros</a>'
         ' &nbsp;|&nbsp; '
@@ -856,19 +887,26 @@ def montar_email_html(nome_empresa, filtro, edicao, quantidade, link, resumo=Non
     )
     return (
         '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">'
-        '<meta name="viewport" content="width=device-width,initial-scale=1"><title>LicitaPlena</title></head>'
-        '<body style="margin:0;padding:0;background:#f4f4f4;">'
-        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f4f4f4"><tr>'
-        '<td align="center" style="padding:24px 12px;">'
-        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;width:100%;">'
-        '<tr><td bgcolor="' + COR_MARCA + '" style="background:' + COR_MARCA + ';padding:14px 20px;border-radius:8px 8px 0 0;">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        '<meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark">'
+        '<title>LicitaPlena</title>'
+        # Apple Mail/Outlook escuros respeitam isto; [data-ogsc] é o Outlook.com escuro. Texto da faixa e do botão fica branco.
+        '<style>:root{color-scheme:light dark;supported-color-schemes:light dark;}'
+        '@media (prefers-color-scheme: dark){.lp-fixo{color:#ffffff !important;}}'
+        '[data-ogsc] .lp-fixo{color:#ffffff !important;}</style></head>'
+        '<body style="margin:0;padding:0;background-color:#f1f3f6;">'
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f1f3f6"><tr>'
+        '<td align="center" style="padding:24px 10px;">'
+        '<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;">'
+        '<tr><td bgcolor="' + COR_MARCA + '" style="' + _fundo_fixo(COR_MARCA) + 'padding:16px 28px;border-radius:8px 8px 0 0;">'
         '<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>'
-        '<td valign="middle" style="padding-right:10px;"><img src="' + URL_LOGO + '" width="36" height="36" alt="LicitaPlena" '
-        'style="display:block;border:0;width:36px;height:36px;"></td>'
-        '<td valign="middle" style="' + fonte + 'color:#ffffff;font-size:22px;font-weight:bold;">LicitaPlena</td>'
-        '</tr></table></td></tr>' + topo +
-        '<tr><td bgcolor="#ffffff" style="background:#ffffff;padding:22px 20px 28px 20px;border-radius:0 0 8px 8px;">'
-        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">' + cliente + corpo + politica + '</table></td></tr>'
+        '<td valign="middle" style="padding-right:10px;"><img src="' + URL_LOGO + '" width="32" height="32" alt="LicitaPlena" '
+        'style="display:block;border:0;width:32px;height:32px;"></td>'
+        '<td valign="middle" class="lp-fixo" style="' + f + 'color:#ffffff;font-size:20px;font-weight:bold;">LicitaPlena</td>'
+        '</tr></table></td></tr>' + faixa +
+        '<tr><td bgcolor="#ffffff" style="background-color:#ffffff;border-radius:0 0 8px 8px;">'
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">'
+        + bloco_id + separador + corpo + politica + '</table></td></tr>'
         + rodape + '</table></td></tr></table></body></html>'
     )
 

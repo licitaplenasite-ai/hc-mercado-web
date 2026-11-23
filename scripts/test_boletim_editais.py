@@ -308,7 +308,7 @@ def test_cabecalho_e_politica_no_html_e_no_texto():
 def test_cabecalho_sem_dados_some_sem_deixar_rotulo_vazio():
     html = b.montar_email_html("HCM", "papel", EDICAO, 2, LINK)
     assert "Edição nº" not in html and "Identificação do cliente" not in html and "Aos cuidados" not in html
-    assert "Empresa:" in html and "POLÍTICA DE USO" in html
+    assert ">Empresa</td>" in html and "POLÍTICA DE USO" in html
     html = b.montar_email_html("HCM", "papel", EDICAO, 2, LINK, None, {"responsavel": "<b>x</b>"})
     assert "<b>x</b>" not in html
 
@@ -435,3 +435,16 @@ def test_cabecalho_usa_chave_explicita_de_planos(monkeypatch):
     assert any("planos!assinaturas_plano_fkey(nome)" in p for p in pedidos)
     assert cab["c1"]["codigo"] == "LP-0001"
     assert "Empresa" in cab["c1"]["vigencia"]
+
+
+def test_layout_resiste_ao_gmail_escuro_e_tem_cabecalho_em_tabela():
+    # 23/11: no Gmail escuro do iPhone a faixa e o botão viravam lilás; no computador o cabeçalho ficava desalinhado.
+    html = b.montar_email_html("HCM LTDA", "papel", EDICAO, 3, LINK, ["2 em AM"], CAB)
+    fixo = "background-image:linear-gradient(" + b.COR_MARCA + "," + b.COR_MARCA + ")"
+    assert html.count(fixo) == 2  # faixa do topo e botão "Acessar o boletim"
+    assert '<meta name="color-scheme" content="light dark">' in html and 'width="600"' in html
+    assert "Arial" in html and "font-family:-apple-system" in html
+    # identificação em 2 colunas (rótulo | valor), Edição e Data na mesma faixa, nessa ordem
+    rotulos = re.findall(r'<td width="38%"[^>]*>([^<]+)</td>', html)
+    assert rotulos == ["Identificação do cliente", "Empresa", "Filtro", "Vigência da assinatura"]
+    assert html.index("Edição nº") < html.index("Data do processamento") < html.index("Identificação do cliente") < html.index("Aos cuidados de") < html.index("Acessar o boletim")
