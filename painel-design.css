@@ -536,16 +536,9 @@
   .pp-mercado .nota { margin: 6px 0; font-size: 13px; line-height: 20px; color: var(--text-secondary); }
   .pp-mercado .mercado-linha input { min-height: 40px; }
   .pp-mercado .mercado-marcas th, .pp-mercado .mercado-marcas td { background: transparent; }
-  #status-cartoes .cartao .valor { white-space: normal; overflow: visible; text-overflow: clip; }
 
-  /* ---- 16. Acabamento de Status, Funil, calendário e Minha conta (E6, aguarda aprovação) ---- */
-  /* Status: grade de cartões do mesmo tamanho (antes o último esticava na linha toda) e a cor da
-     situação numa faixa fina no topo, igual às colunas do Funil. */
-  #status-cartoes { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--space-16); margin-bottom: 0; }
-  #status-cartoes .cartao { border-top-width: 4px; min-width: 0; }
-  #status-cartoes .cartao h3 { display: flex; align-items: center; gap: var(--space-8); margin-bottom: var(--space-8); color: var(--text-primary); font-weight: 600; }
-  #status-cartoes .cartao h3 .icone-ph { flex-shrink: 0; width: 16px; height: 16px; color: var(--text-secondary); }
-  #status-cartoes .cartao .valor { font: 600 14px/20px var(--font-sans); }
+  /* ---- 16. Acabamento de Funil, calendário e Minha conta (E6, aguarda aprovação) ---- */
+  /* O Status das Ferramentas saiu do painel em 23/11 e foi para o admin (status-ferramentas.js). */
 
   /* Funil: ações do cartão com ícone e texto na mesma linha; o sino (só ícone) fica estreito. */
   .kanban-card-acoes { flex-wrap: wrap; gap: var(--space-4); }

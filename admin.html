@@ -17,6 +17,7 @@
 <script src="supabase-config.js"></script>
 <script src="senha-captcha-ui.js"></script>
 <script src="admin-painel.js"></script>
+<script src="status-ferramentas.js"></script>
 <style>
   /* Design System (ds-tokens.css): os nomes antigos viram apelidos dos tokens, que trocam com o tema. Aguarda aprovação. */
   :root {
@@ -69,6 +70,13 @@
   .robo h4 { margin: 0 0 4px; font-size: 15px; }
   .robo p { margin: 4px 0 0; font-size: 13px; color: var(--texto-fraco); }
   .robo .estado { color: var(--texto); font-weight: 600; }
+  /* Status das Ferramentas (status-ferramentas.js): o mesmo quadro que ficava no painel do cliente até 23/11. */
+  .fontes-status { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+  .cartao-fonte { background: var(--cartao); border: 1px solid var(--borda); border-top: 4px solid var(--border-default); border-radius: var(--raio); padding: 14px 16px; min-width: 0; }
+  .cartao-fonte h4 { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 15px; font-weight: 600; color: var(--texto); }
+  .cartao-fonte .icone-ph { flex-shrink: 0; width: 16px; height: 16px; fill: var(--texto-fraco); }
+  .cartao-fonte .valor { font-size: 14px; line-height: 20px; font-weight: 600; }
+  .cartao-fonte p { margin: 8px 0 0; font-size: 12px; color: var(--texto-fraco); }
   .robo[data-nivel="ok"] { border-top-color: var(--verde); } .robo[data-nivel="atencao"] { border-top-color: var(--laranja); } .robo[data-nivel="parado"] { border-top-color: var(--vermelho); }
   .busca-linha { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
   .busca-linha input { flex: 1 1 220px; min-width: 0; padding: 9px 12px; background: var(--campo); border: 1px solid var(--border-strong); border-radius: 8px; color: var(--texto); font-size: 14px; }
@@ -472,7 +480,16 @@
         <div class="linha-titulo"><h3 style="margin:0;">Robôs</h3><button type="button" class="btn-secundario" id="btn-saude-atualizar">Verificar de novo</button></div>
         <p id="saude-cobertura"></p>
         <div class="robos" id="conteudo-saude"><div class="carregando">Carregando...</div></div>
-        <p class="sub" style="margin-top:14px;">O cliente vê o mesmo retrato, nas palavras dele, no <a href="painel.html#status">Status das Ferramentas</a> do painel.</p>
+      </div>
+      <div class="cartao-lista" style="padding:20px 24px;margin-top:20px;">
+        <div class="linha-titulo">
+          <div>
+            <h3 style="margin:0;">Status das Ferramentas</h3>
+            <p class="sub" style="margin:4px 0 0;">Quando cada fonte de dados foi atualizada e quanto ela cobre. Controle interno: o cliente não vê este quadro.</p>
+          </div>
+          <button type="button" class="btn-secundario" id="status-atualizar">Atualizar status</button>
+        </div>
+        <div class="fontes-status" id="status-cartoes" aria-live="polite"><div class="carregando">Carregando...</div></div>
       </div>
     </div>
     <div id="secao-boletim" style="display:none;">
@@ -1523,6 +1540,7 @@
 
   async function carregarSaude() {
     const alvo = document.getElementById("conteudo-saude"), cobertura = document.getElementById("saude-cobertura");
+    void StatusFerramentas.carregar(sb, document.getElementById("status-cartoes"));
     const { data, error } = await sb.rpc("admin_saude_robos");
     if (error) { alvo.innerHTML = '<div class="vazio">Indisponível: ' + escapeHtml(error.message) + '</div>'; return; }
     const agora = Date.now(), uf = AdminPainel.coberturaEstados(Object.keys(data.cobertura_por_uf || {}).length ? data.ufs_com_falha : null);
@@ -1532,6 +1550,7 @@
       return `<div class="robo" data-robo="${r.codigo}" data-nivel="${st.nivel}"><h4>${escapeHtml(r.nome)}</h4><p class="estado">${escapeHtml(st.texto)}</p><p>${escapeHtml(r.faz)}</p></div>`;
     }).join("");
   }
+  document.getElementById("status-atualizar").addEventListener("click", () => { void StatusFerramentas.carregar(sb, document.getElementById("status-cartoes")); });
   document.getElementById("btn-saude-atualizar").addEventListener("click", () => { void carregarSaude(); void carregarHoje(); });
 
   function nomePermissao(p) {

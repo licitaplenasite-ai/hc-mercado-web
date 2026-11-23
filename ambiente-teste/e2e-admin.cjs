@@ -214,6 +214,13 @@ async function main() {
       exigir(/estados/i.test(await pD.innerText('#saude-cobertura')), 'cobertura dos estados');
       const saude = await pD.innerText('#conteudo-saude');
       exigir(!/\bUF\b|PNCP\/base|null|undefined|NaN/.test(saude), 'jargão na Saúde: ' + saude.slice(0, 200));
+      // Status das Ferramentas (saiu do painel do cliente em 23/11): os 6 cartões das fontes, com o "Afeta:" e o Atualizar.
+      const statusPronto = () => pD.waitForFunction(() => document.querySelectorAll('#status-cartoes .cartao-fonte').length === 6 && !/Verificando/.test(document.getElementById('status-cartoes').innerText), null, { timeout: 30000 });
+      await statusPronto();
+      await pD.click('#status-atualizar');
+      await statusPronto();
+      const fontes = await pD.innerText('#status-cartoes');
+      exigir(/Editais e licitações \(PNCP\)/.test(fontes) && /Prospecção/.test(fontes) && (fontes.match(/Afeta:/g) || []).length === 6 && !/null|undefined|NaN/.test(fontes), 'status das ferramentas: ' + fontes.slice(0, 200));
       await pD.click('.tabs button[data-status="visao"]');
       await pD.waitForSelector('#lista-avisos [data-ir-aba="boletim"]', { timeout: 20000 });
       await pD.click('#lista-avisos [data-ir-aba="boletim"]');

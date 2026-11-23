@@ -1630,7 +1630,6 @@
   <a href="extensao.html" title="Extensão"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-puzzle-piece'></use></svg></span><span class="nav-label">Extensão</span></a>
   <button data-alvo="juridico" title="Jurídico &amp; Dúvidas"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-scales'></use></svg></span><span class="nav-label">Jurídico &amp; Dúvidas</span></button>
   <a href="hc.html" target="_blank" rel="noopener" data-hc-site title="Consultoria"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-handshake'></use></svg></span><span class="nav-label">Consultoria</span></a>
-  <button data-alvo="status" title="Status das Ferramentas"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-info'></use></svg></span><span class="nav-label">Status das Ferramentas</span></button>
 </nav>
 
 <script>
@@ -2372,25 +2371,12 @@
     <h2>O que o LicitaPlena faz hoje e o que ainda não faz</h2>
     <div class="secao-conteudo-principal">
     <div class="caixa-interna limites-sistema">
-      <p><strong>Faz hoje:</strong> reúne editais publicados no PNCP (e do Sistema S no Amazonas) no seu Boletim e em Encontrar Licitações, resume o edital a partir dos documentos públicos, guarda o acompanhamento no Funil e mostra preços, contratos e concorrentes com os dados públicos que já reunimos. Os dados são atualizados todos os dias; veja em Status das Ferramentas quando cada fonte foi atualizada. Com a Extensão, preenche a proposta no Compras.gov, avisa quando o pregoeiro escreve no chat e sugere o próximo lance.</p>
+      <p><strong>Faz hoje:</strong> reúne editais publicados no PNCP (e do Sistema S no Amazonas) no seu Boletim e em Encontrar Licitações, resume o edital a partir dos documentos públicos, guarda o acompanhamento no Funil e mostra preços, contratos e concorrentes com os dados públicos que já reunimos. Os dados são atualizados todos os dias. Com a Extensão, preenche a proposta no Compras.gov, avisa quando o pregoeiro escreve no chat e sugere o próximo lance.</p>
       <p><strong>Ainda não faz:</strong> não dá lance sozinho (cada lance só sai com o seu clique em "Sim, dar lance" na Extensão), não envia a proposta por você e não responde ao pregoeiro. A disputa, o envio e as mensagens da sessão continuam com você, no portal da licitação.</p>
       <p>O LicitaPlena ajuda a encontrar e organizar oportunidades; não garante vitória em nenhuma licitação.</p>
     </div>
     </div>
 
-  </section>
-
-  <section id="status">
-    <div class="boletim-cabecalho">
-      <div>
-        <h2 style="margin:0;"><svg class='icone-ph'><use href='#ph-info'></use></svg> Status das Ferramentas</h2>
-        <p class="dica-clique" style="margin:4px 0 0;">Acompanhe a atualização das fontes. Se algo aparecer há mais de dois dias, <a href="#juridico">avise o suporte</a>.</p>
-      </div>
-      <button type="button" class="btn-imprimir" id="status-atualizar"><svg class='icone-ph'><use href='#ph-arrows-clockwise'></use></svg> Atualizar status</button>
-    </div>
-    <div class="secao-conteudo-principal">
-    <div id="status-cartoes" class="cartoes"><p class="dica-clique">Abra esta tela para verificar as fontes.</p></div>
-    </div>
   </section>
 
 </main>
@@ -2579,7 +2565,7 @@
     // Volta o endereço para a seção: clicar de novo no mesmo atalho dispara outro hashchange.
     history.replaceState(null, "", "#" + id);
   }
-  // DOMContentLoaded: os outros scripts já ligaram os seus cliques no menu (ex.: Boletim, Status).
+  // DOMContentLoaded: os outros scripts já ligaram os seus cliques no menu (ex.: Boletim).
   document.addEventListener("DOMContentLoaded", abrirSecaoDoHash);
   window.addEventListener("hashchange", abrirSecaoDoHash);
 
@@ -2693,153 +2679,6 @@
     });
   }
 
-  // ---- Status das Ferramentas: mostra atualização E cobertura de cada fonte ----
-  const FONTES_STATUS = [
-    { supabase: "oportunidades_meta", nome: "Editais e licitações (PNCP)", afeta: "Boletim, Encontrar Licitações, Dashboard", icone: "<svg class='icone-ph'><use href='#ph-clipboard-text'></use></svg>" },
-    // Contratos e atas agora moram no Supabase. Consultar o último registro direto
-    // dali impede que este painel acuse um metadado estático antigo como se a coleta
-    // inteira estivesse parada.
-    { tabelaSupabase: "contratos", nome: "Contratos assinados (PNCP)", afeta: "Inteligência de Mercado, Analisar concorrente", icone: "<svg class='icone-ph'><use href='#ph-file-text'></use></svg>" },
-    { tabelaSupabase: "mercado_atas", nome: "Inteligência de Mercado", afeta: "Inteligência de Mercado (atas e empresas do segmento)", icone: "<svg class='icone-ph'><use href='#ph-chart-bar'></use></svg>" },
-    // "Licitações federais (Portal da Transparência)" existiu até 05/08/2026, quando o
-    // commit f5b6299 ("Redesenha Portal da Transparência...") aposentou de propósito
-    // scripts/coletar_transparencia.js (e seu workflow) em favor do radar de convênios/
-    // repasses abaixo — mais útil como sinal de demanda futura do que a lista bruta de
-    // licitações federais que esse coletor trazia. O index.html foi atualizado nesse
-    // commit, mas essa lista aqui no painel.html não, então o card ficou órfão apontando
-    // pra um arquivo (data/transparencia_licitacoes.json) que nada mais escreve — por
-    // isso "atualizado há 14 dia(s)" nunca mudava, mesmo com o robô do PNCP rodando OK.
-    { supabase: "convenios", nome: "Convênios e Emendas Federais", afeta: "Convênios e Emendas Federais", icone: "<svg class='icone-ph'><use href='#ph-handshake'></use></svg>" },
-    { supabase: "sistema_s_am", nome: "Sistema S/AM (SENAC/SESC)", afeta: "Boletim (editais do Sistema S no AM)", icone: "<svg class='icone-ph'><use href='#ph-graduation-cap'></use></svg>" },
-    // Prospecção: o robô coleta UF por UF em rodízio e grava um resumo por grupo (prospeccao_cobertura_<grupo>).
-    { prospeccao: true, nome: "Prospecção (PCA, IRP, atas, contratos)", afeta: "Prospecção", icone: "<svg class='icone-ph'><use href='#ph-chart-bar'></use></svg>" },
-  ];
-
-  // Cobertura real da Prospecção: quantas das 27 UFs têm coleta completa nos últimos 3 dias, por tipo.
-  function resumoProspeccao(blobs, agora = Date.now()) {
-    const ufs = "AC AL AM AP BA CE DF ES GO MA MG MS MT PA PB PE PI PR RJ RN RO RR RS SC SE SP TO".split(" ");
-    const etapas = Object.assign({}, ...blobs.map((b) => (b && b.dado && b.dado.etapas) || {}));
-    const recente = (k) => { const t = Date.parse(etapas[k] && etapas[k].concluidaEm); return Number.isFinite(t) && agora - t <= 72 * 36e5; };
-    const tipos = [["pca", "planos de compras"], ["ata", "atas"], ["contrato", "contratos"]];
-    const contagem = tipos.map(([t, nome]) => [nome, ufs.filter((uf) => recente(`${uf}:${t}`)).length]);
-    const pendentes = ufs.filter((uf) => tipos.some(([t]) => !recente(`${uf}:${t}`)));
-    const atualizadoEm = blobs.map((b) => b && b.dado && b.dado.atualizadoEm).filter(Boolean).sort().pop() || null;
-    const detalhe = `Coleta completa nos últimos 3 dias: ${contagem.map(([nome, n]) => `${nome} em ${n} de 27 UFs`).join(", ")}; IRP ${recente("irp") ? "em dia" : "pendente"}.`;
-    return { atualizadoEm, pendentes, detalhe };
-  }
-
-  function formatarHaQuanto(iso) {
-    if (!iso) return null;
-    const diffMs = Date.now() - new Date(iso).getTime();
-    if (Number.isNaN(diffMs)) return null;
-    const horas = diffMs / (1000 * 60 * 60);
-    if (horas < 1) return "há menos de 1 hora";
-    if (horas < 24) return `há ${Math.round(horas)} hora(s)`;
-    const dias = Math.round(horas / 24);
-    return `há ${dias} dia(s)`;
-  }
-
-  let statusJaCarregado = false;
-  async function carregarStatusFerramentas(forcar = false) {
-    if (statusJaCarregado && !forcar) return;
-    statusJaCarregado = true;
-    const alvo = document.getElementById("status-cartoes");
-    // Estado inicial cinza: "verificando" não é bom nem ruim, então não usa verde nem vermelho.
-    alvo.innerHTML = FONTES_STATUS.map((f) => `<div class="cartao" style="border-top-color:var(--border-default);">
-        <h3>${f.icone} ${escapeHtml(f.nome)}</h3>
-        <div class="valor" style="font-size:14px;color:var(--texto-fraco);">○ Verificando…</div>
-        <p class="dica-clique" style="margin:8px 0 0;font-size:12px;">Afeta: ${escapeHtml(f.afeta)}</p>
-      </div>`).join("");
-
-    const resultados = await Promise.all(FONTES_STATUS.map(async (fonte) => {
-      try {
-        if (fonte.supabase) {
-          const dados = await carregarBlobSupabase(fonte.supabase);
-          if (!dados) return { ...fonte, ok: false };
-          return {
-            ...fonte,
-            ok: true,
-            atualizadoEm: dados.atualizadoEm || null,
-            // O metadado de oportunidades registra UFs com falha. Sem esta leitura, uma
-            // coleta que só preservou cache antigo parecia saudável apenas por ter um horário
-            // recente — exatamente o comportamento que não pode chegar ao cliente. Os outros
-            // blobs (convenios, sistema_s_am) não têm esses campos e caem no vazio abaixo.
-            ufsComFalha: Array.isArray(dados.ufsComFalha) ? dados.ufsComFalha : [],
-            saudeFonte: dados.saudeFonte || null,
-          };
-        }
-        if (fonte.prospeccao) {
-          await aguardarSupabaseAutenticado();
-          const { data, error } = await window.__sbClient.from("dados_robo").select("dado").like("chave", "prospeccao_cobertura_%");
-          if (error || !data || !data.length) return { ...fonte, ok: false };
-          const r = resumoProspeccao(data);
-          return { ...fonte, ok: true, atualizadoEm: r.atualizadoEm, ufsPendentesProspeccao: r.pendentes, detalheProspeccao: r.detalhe };
-        }
-        if (fonte.tabelaSupabase) {
-          await aguardarSupabaseAutenticado();
-          const { data, error } = await window.__sbClient
-            .from(fonte.tabelaSupabase)
-            .select("atualizado_em")
-            .order("atualizado_em", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          if (error || !data) return { ...fonte, ok: false };
-          return { ...fonte, ok: true, atualizadoEm: data.atualizado_em || null };
-        }
-        // Nenhuma fonte desta lista vem mais de arquivo estático — todas moram no Supabase.
-        console.warn("[status] fonte sem \"supabase\" nem \"tabelaSupabase\" em FONTES_STATUS:", fonte);
-        return { ...fonte, ok: false };
-      } catch (e) {
-        return { ...fonte, ok: false };
-      }
-    }));
-
-    alvo.innerHTML = resultados.map((r) => {
-      const haQuanto = r.ok ? formatarHaQuanto(r.atualizadoEm) : null;
-      const horas = r.atualizadoEm ? (Date.now() - new Date(r.atualizadoEm).getTime()) / (1000 * 60 * 60) : Infinity;
-      // Sem leitura não dá para afirmar que a fonte parou: fica cinza, não vermelho.
-      let cor = "var(--texto-fraco)", texto = "Não foi possível verificar agora", detalhe = "", marca = "○";
-      if (r.ok && haQuanto) {
-        marca = "●";
-        if (horas <= 30) { cor = "var(--verde)"; texto = `Em dia — atualizado ${haQuanto}`; }
-        else if (horas <= 72) { cor = "var(--laranja)"; texto = `Atenção — atualizado ${haQuanto}`; }
-        else { cor = "var(--vermelho)"; texto = `Atrasado — atualizado ${haQuanto}, pode estar parado`; }
-      }
-      if (r.ufsComFalha && r.ufsComFalha.length > 0) {
-        marca = "●";
-        const totalUfs = 27;
-        if (r.saudeFonte === "indisponivel") {
-          cor = "var(--laranja)";
-          texto = "Portal do governo (PNCP) instável — mostramos os editais da última atualização";
-          detalhe = "O portal não respondeu na última atualização. Tentamos de novo sozinhos, sem apagar os editais que você já vê.";
-        } else {
-          cor = r.ufsComFalha.length >= totalUfs ? "var(--vermelho)" : "var(--laranja)";
-          texto = r.ufsComFalha.length >= totalUfs
-            ? "Sem editais novos de nenhum estado"
-            : `Atualização parcial — ${r.ufsComFalha.length} estado(s) pendente(s)`;
-          detalhe = r.ufsComFalha.length >= totalUfs
-            ? "A última atualização não trouxe editais novos; mostramos os da atualização anterior."
-            : `Estados pendentes: ${r.ufsComFalha.join(", ")}.`;
-        }
-      }
-      if (r.ok && r.ufsPendentesProspeccao) {
-        // A data da última gravação diz só que o robô está rodando; o que importa ao cliente é quantas UFs já têm dado.
-        const n = r.ufsPendentesProspeccao.length;
-        if (n === 0) { cor = "var(--verde)"; texto = "Em dia — as 27 UFs coletadas nos últimos 3 dias"; }
-        else if (n === 27) { cor = "var(--laranja)"; texto = "Primeira coleta em andamento"; }
-        else { cor = "var(--laranja)"; texto = `Cobertura parcial — ${27 - n} de 27 UFs completas`; }
-        detalhe = r.detalheProspeccao + (n && n < 27 ? ` Ainda faltam: ${r.ufsPendentesProspeccao.join(", ")}.` : "");
-      }
-      return `<div class="cartao" style="border-top-color:${cor};">
-        <h3>${r.icone} ${escapeHtml(r.nome)}</h3>
-        <div class="valor" style="font-size:14px;color:${cor};">${marca} ${escapeHtml(texto)}</div>
-        ${detalhe ? `<p class="dica-clique" style="margin:8px 0 0;font-size:12px;">${escapeHtml(detalhe)}</p>` : ""}
-        <p class="dica-clique" style="margin:8px 0 0;font-size:12px;">Afeta: ${escapeHtml(r.afeta)}</p>
-      </div>`;
-    }).join("");
-  }
-
-  document.querySelector('nav button[data-alvo="status"]').addEventListener("click", carregarStatusFerramentas);
   document.querySelector('nav button[data-alvo="kanban"]').addEventListener("click", renderizarKanban);
   document.querySelectorAll("#kanban-filtros-rapidos .btn-filtro-rapido").forEach((btn, _i, todos) => {
     btn.addEventListener("click", () => {
@@ -2847,7 +2686,6 @@
       renderizarKanban();
     });
   });
-  document.getElementById("status-atualizar").addEventListener("click", () => carregarStatusFerramentas(true));
   document.getElementById("kanban-ir-boletim").addEventListener("click", () => {
     document.querySelector('nav button[data-alvo="boletim"]').click();
   });

@@ -124,7 +124,7 @@ async function main() {
         'Inteligência de Mercado': '#diagnostico', 'Prospecção': '/prospeccao.html', 'Licitação anterior': '#diagnostico', 'Analisar concorrente': '#empresa',
         'Convênios e Emendas Federais': '#transparencia', 'Pesquisa de Preços': '#precos', 'Calculadora de BDI': '/bdi.html', 'Preços SINAPI': '/sinapi.html', 'Orçamento de obra': '/orcamento-obra.html',
         'Mão de obra': '/mao-de-obra.html', Funil: '#kanban', Quadros: '/quadros.html', Processos: '/processos.html', 'Minhas empresas e documentos': '/operacao.html',
-        'Extensão': '/extensao.html', 'Jurídico & Dúvidas': '#juridico', 'Status das Ferramentas': '#status' };
+        'Extensão': '/extensao.html', 'Jurídico & Dúvidas': '#juridico' };
       const itens = await p.$$eval('#menu-principal > a, #menu-principal > button', (e) => e.map((x) => ({ txt: x.querySelector('.nav-label')?.innerText.trim(), target: x.target })));
       const ok = [];
       for (const [i, it] of itens.entries()) {
@@ -275,7 +275,7 @@ async function main() {
         exigir(!/PNCP|módulo|PCA\/PGC com/.test(corpo), `aba ${aba} com texto técnico: ${corpo.slice(0, 120)}`);
         abas.push(`${aba}: ${corpo.split('\n')[0].slice(0, 50)}`);
       }
-      exigir(/Status das Ferramentas/.test(await p.innerText('#menu-principal')), 'menu da Prospecção com nome diferente do painel');
+      exigir(!/Status/.test(await p.innerText('#menu-principal')), 'menu da Prospecção ainda mostra o Status das Ferramentas (é só do admin)');
       await p.setViewportSize({ width: 375, height: 812 }); await p.waitForTimeout(500);
       exigir(await rolagemLateral(p) <= 0, 'Prospecção com rolagem lateral');
       return `UF ${uf} · ${abas.join(' | ')} · origem: ${await p.innerText('#origem-filtro')}`;

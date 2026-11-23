@@ -1,5 +1,6 @@
 /* global document, window -- usado só dentro de p.evaluate/waitForFunction (roda no navegador) */
-// Pente fino: Minhas empresas e documentos, Jurídico & Dúvidas, Status das Ferramentas, admin (só administrador) e páginas legais.
+// Pente fino: Minhas empresas e documentos, Jurídico & Dúvidas, admin (só administrador) e páginas legais.
+// O Status das Ferramentas saiu do painel do cliente em 23/11: está na Saúde do sistema do admin (ver e2e-admin.cjs).
 //   PORTA_TESTE=8814 node ambiente-teste/servidor.cjs   (outro terminal; subir.cjs antes)
 //   PORTA_TESTE=8814 PRINTS=<pasta> node ambiente-teste/e2e-pente-fino-empresas.cjs
 const { chromium } = require(process.env.PLAYWRIGHT_CORE || 'C:/Users/harre/AppData/Local/npm-cache/_npx/e41f203b7505f1fb/node_modules/playwright-core');
@@ -170,22 +171,22 @@ async function main() {
       exigir(!await po.locator('#btn-nova-empresa').isVisible(), 'operador vê + Empresa');
     });
 
-    await passo('painel: Jurídico & Dúvidas e Status das Ferramentas sem texto técnico', p, async () => {
+    await passo('painel: Jurídico & Dúvidas sem texto técnico; endereço antigo #status cai no Dashboard', p, async () => {
       await p.goto(SITE + '/painel.html#juridico'); await p.waitForTimeout(3000);
       await p.evaluate(() => document.querySelector('nav button[data-alvo="juridico"]')?.click()); await p.waitForTimeout(1500);
       const j = await p.innerText('#juridico');
       exigir(/Jurídico: modelos, prazos e artigos/.test(j) && !JARGAO.test(j) && !/não há robô de lances|revisão jurídica pendente/.test(j), 'jurídico: ' + (j.match(JARGAO) || [j.slice(0, 120)])[0]);
       await p.screenshot({ path: path.join(PRINTS, 'juridico-1280.png'), fullPage: false });
-      await p.evaluate(() => document.querySelector('nav button[data-alvo="status"]')?.click());
-      await p.waitForFunction(() => !/Verificando/.test(document.querySelector('#status-cartoes').innerText), null, { timeout: 30000 });
-      const s = await p.innerText('#status');
-      exigir(!JARGAO.test(s) && !/base válida|robô|UF\(s\)|Sem leitura/.test(s), 'status: ' + s.slice(0, 300));
-      await p.click('#status-atualizar'); await p.waitForTimeout(2000);
-      await p.screenshot({ path: path.join(PRINTS, 'status-1280.png'), fullPage: false });
-      await p.setViewportSize({ width: 375, height: 812 }); await p.waitForTimeout(400);
-      exigir(await semRolagem(p), 'rolagem lateral no status 375');
-      await p.screenshot({ path: path.join(PRINTS, 'status-375.png'), fullPage: false });
-      await p.setViewportSize({ width: 1366, height: 900 });
+      exigir(!/Status das Ferramentas/.test(await p.innerText('#menu-principal') + j), 'cliente ainda vê o Status das Ferramentas');
+      // Endereço antigo (painel.html#status) de favorito ou e-mail: abre o Dashboard, sem erro na página.
+      const erros = [], anotar = (e) => erros.push(e.message);
+      p.on('pageerror', anotar);
+      await p.goto('about:blank'); // senão o goto só troca o hash da página aberta (#juridico) e ela fica onde está
+      await p.goto(SITE + '/painel.html#status'); await p.waitForTimeout(3000);
+      p.off('pageerror', anotar);
+      const ativo = await p.evaluate(() => document.querySelector('nav button.ativo')?.dataset.alvo);
+      exigir(ativo === 'dashboard', 'painel.html#status abriu: ' + ativo);
+      exigir(!erros.length, 'erro na página com #status: ' + erros.join(' | '));
     });
 
     await passo('admin: conta de cliente comum não entra no painel do dono', null, async () => {

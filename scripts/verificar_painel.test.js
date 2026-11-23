@@ -30,9 +30,11 @@ test("resumo dos filtros não depende de helper declarado em script posterior", 
 test("status usa a atualização real das tabelas que migraram para o Supabase", () => {
   const fs = require("node:fs");
   const path = require("node:path");
+  // O Status das Ferramentas saiu do painel em 23/11 e mora em status-ferramentas.js (admin.html).
+  const js = fs.readFileSync(path.join(__dirname, "..", "status-ferramentas.js"), "utf8");
+  assert.match(js, /tabelaSupabase: 'contratos'/);
+  assert.match(js, /tabelaSupabase: 'mercado_atas'/);
   const html = fs.readFileSync(path.join(__dirname, "..", "painel.html"), "utf8");
-  assert.match(html, /tabelaSupabase: "contratos"/);
-  assert.match(html, /tabelaSupabase: "mercado_atas"/);
   assert.match(html, /await aguardarSupabaseAutenticado\(\);/);
 });
 

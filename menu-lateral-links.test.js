@@ -40,7 +40,9 @@ test('todas as páginas têm o mesmo conjunto e ordem de itens no menu (o painel
   const referencia = rotulos('sistema');
   for (const item of ['Hoje', 'Calendário', 'Licitação anterior', 'Processos', 'Extensão', 'Mão de obra', 'Consultoria']) assert.ok(referencia.includes(item), item);
   for (const p of paginas) {
-    const lista = rotulos(p).filter((r) => r !== 'Dashboard').map((r) => (r === 'Status das Ferramentas' ? 'Status' : r));
+    const lista = rotulos(p).filter((r) => r !== 'Dashboard');
+    // Status das Ferramentas é controle interno desde 23/11: fica só na aba Saúde do sistema do admin.
+    assert.ok(!lista.some((r) => /^Status/.test(r)), `${p}: menu do cliente sem Status`);
     assert.deepEqual(lista, referencia, p);
   }
 });
