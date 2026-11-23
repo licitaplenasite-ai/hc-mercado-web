@@ -582,6 +582,24 @@ async function gravar(linhas, filtroLimpeza, ctx, rotulo) {
 }
 const limpar = (filtro, ctx) => restFetch(`${TABELA}?${filtro}&coletado_em=lt.${encodeURIComponent(ctx.coletadoEm)}`, { method: "DELETE" });
 
+// Apaga data_ref < hoje um dia de cada vez (o mais antigo primeiro): cada DELETE é uma faixa curta do índice de data_ref.
+// comNulo: também as linhas sem UF (só um grupo da matriz, o da IRP, para não repetir).
+async function limparVencidos(hoje, ufs, comNulo, maxDias = 400) {
+  const filtros = [...(ufs.length ? [`uf=in.(${ufs.join(",")})`] : []), ...(comNulo ? ["uf=is.null"] : [])];
+  let faixas = 0;
+  for (const filtro of filtros) {
+    for (let i = 0; i < maxDias; i++) {
+      const r = await restFetch(`${TABELA}?select=data_ref&${filtro}&data_ref=lt.${hoje}&order=data_ref.asc&limit=1`);
+      const [maisAntigo] = await r.json();
+      if (!maisAntigo?.data_ref) break;
+      const corte = new Date(Date.parse(`${maisAntigo.data_ref}T00:00:00Z`) + 864e5).toISOString().slice(0, 10);
+      await restFetch(`${TABELA}?${filtro}&data_ref=lt.${corte < hoje ? corte : hoje}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
+      faixas++;
+    }
+  }
+  return faixas;
+}
+
 async function main({ seco = false } = {}) {
   const inicio = Date.now();
   const hoje = hojeBrasilia(inicio);
@@ -637,8 +655,12 @@ async function main({ seco = false } = {}) {
       if (!fechou(`${uf}:ata`) || venceu(ctx)) continue;
       try { if (!(await etapaAdesoes(uf, ctx))) pendentes.push(`${uf}:adesoes`); } catch (e) { falhas++; console.warn(`${uf} adesões falhou:`, e.message); }
     }
-    // O que já passou da data (prazo de IRP, fim de vigência, data desejada) sai da tabela.
-    await restFetch(`${TABELA}?data_ref=lt.${hoje}`, { method: "DELETE" });
+    // O que já passou da data (prazo de IRP, fim de vigência, data desejada) sai da tabela. Só as UFs do grupo (os 3
+    // jobs da matriz terminam juntos e brigavam pelas mesmas linhas) e um dia vencido por vez (DELETE único estourava
+    // o statement timeout, 57014, em 22-23/11). Falhar aqui não perde dado: a tela já filtra data_ref >= hoje.
+    try { await limparVencidos(hoje, ufs, process.env.PROSPECCAO_IRP !== "0"); } catch (e) {
+      console.warn(`::warning::Limpeza dos vencidos ficou para a próxima rodada: ${e.message}`);
+    }
   }
   await salvarCobertura().catch(() => {});
   const resumo = Object.entries(ctx.gravadas).map(([k, v]) => `${k}=${v}`).join("; ");
@@ -682,5 +704,5 @@ if (require.main === module) (process.env.MODO_SECO === "1" ? modoSeco() : main(
 module.exports = {
   hojeBrasilia, normalizar, desfazerMojibake, nomeBusca, contratoInteressa, linhaContrato, linhaAta, linhaItemAta, linhaItemAtaPncp, somarAdesoes, linhaIrp, linhaPcaPncp, linhaPgc,
   semRepetir, obter, unidades, carregarEstado, estadoSerializavel, itensAtaPncp, consultarAdesoes,
-  filaEtapas, fecharEtapa, etapasAtrasadas, resumoCobertura, esperaAposLimite, UFS_BRASIL, buscarPncp, lotesDaUf, etapaAta, banco,
+  filaEtapas, fecharEtapa, etapasAtrasadas, limparVencidos, resumoCobertura, esperaAposLimite, UFS_BRASIL, buscarPncp, lotesDaUf, etapaAta, banco,
 };

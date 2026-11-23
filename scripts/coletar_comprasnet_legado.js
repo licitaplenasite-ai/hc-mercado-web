@@ -24,6 +24,14 @@
 //   ATRASO_MS=250 - pausa entre páginas (educado com a API pública; mesmo
 //     valor já usado em scripts/coletar_fornecedores_sicaf.js pra essa mesma
 //     API dadosabertos.compras.gov.br)
+//   CURSOR_PENDENTE (opcional) - arquivo onde o robô deixa o cursor novo em vez
+//     de gravá-lo no Supabase. O workflow usa: o cursor só vai pro Supabase
+//     (node scripts/coletar_comprasnet_legado.js --confirmar-cursor <arquivo>)
+//     DEPOIS do push dos dados dar certo. Sem ela (rodada local), grava direto.
+//
+// Por que (23/11/2026): o push falhou por token vencido em 3 de 4 rodadas, mas o
+// cursor já tinha avançado no Supabase — a rodada seguinte pulava as páginas
+// coletadas e nunca enviadas (buraco no histórico). Push falhou = cursor parado.
 
 const fs = require("fs");
 const path = require("path");
@@ -321,7 +329,7 @@ async function main() {
       paginaAtual = 1;
     }
   } finally {
-    await salvarBlob("dados_robo", "comprasnet_progresso", { anoAtual, paginaAtual, anosCompletos });
+    await salvarCursor({ anoAtual, paginaAtual, anosCompletos });
   }
 
   console.log(
@@ -335,15 +343,41 @@ async function main() {
   }
 }
 
+const CHAVE_CURSOR = "comprasnet_progresso";
+
+// Com CURSOR_PENDENTE o cursor fica num arquivo até o push confirmar (ver cabeçalho).
+async function salvarCursor(cursor, arquivo = process.env.CURSOR_PENDENTE, salvar = salvarBlob) {
+  if (arquivo) {
+    fs.writeFileSync(arquivo, JSON.stringify(cursor));
+    console.log(`[comprasnet-legado] Cursor pendente em ${arquivo} (vai pro Supabase só depois do push).`);
+    return;
+  }
+  await salvar("dados_robo", CHAVE_CURSOR, cursor);
+}
+
+async function confirmarCursor(arquivo, salvar = salvarBlob) {
+  if (!arquivo || !fs.existsSync(arquivo)) {
+    console.log("[comprasnet-legado] Nenhum cursor pendente: nada a confirmar.");
+    return null;
+  }
+  const cursor = JSON.parse(fs.readFileSync(arquivo, "utf8"));
+  if (!Number.isInteger(cursor.anoAtual) || !Number.isInteger(cursor.paginaAtual) || !Array.isArray(cursor.anosCompletos)) {
+    throw new Error(`Cursor pendente inválido em ${arquivo}: ${JSON.stringify(cursor).slice(0, 200)}`);
+  }
+  await salvar("dados_robo", CHAVE_CURSOR, cursor);
+  console.log(`[comprasnet-legado] Cursor confirmado no Supabase: ano ${cursor.anoAtual}, página ${cursor.paginaAtual}.`);
+  return cursor;
+}
+
 // require.main === module: só roda main() quando o script é executado
 // diretamente (node scripts/coletar_comprasnet_legado.js ou via workflow) —
 // não quando é importado como módulo (Task 4, Step 3, teste isolado da
 // guarda de escopo), senão o teste dispararia uma coleta real sem querer.
 if (require.main === module) {
-  main().catch((e) => {
+  (process.argv[2] === "--confirmar-cursor" ? confirmarCursor(process.argv[3]) : main()).catch((e) => {
     console.error("Erro fatal no robô de coleta do ComprasNet Legado:", e);
     process.exit(1);
   });
 }
 
-module.exports = { validarCamposPermitidos, CAMPOS_PERMITIDOS_LICITACAO };
+module.exports = { validarCamposPermitidos, CAMPOS_PERMITIDOS_LICITACAO, salvarCursor, confirmarCursor };

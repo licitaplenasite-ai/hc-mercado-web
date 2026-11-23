@@ -25,6 +25,7 @@
 //   PAUSA_TENTATIVA_MS         20000
 //   TAMANHO_LOTE_BANCO         500
 //   FRACAO_MINIMA              0.5 — se o arquivo novo tiver menos que isso das sanções ativas, não marca sumiço
+const fs = require("node:fs");
 const zlib = require("node:zlib");
 const AdmZip = require("adm-zip");
 const { restFetch, upsertEmLotes } = require("./supabase_dados");
@@ -208,7 +209,7 @@ async function coletarCadastro(cadastro, dias, deps) {
   const { rest, upsert, fracaoMinima, tamanhoLote } = deps;
   let dia = null, zip = null;
   for (const d of dias) { zip = await baixarZip(cadastro, d, deps); if (zip) { dia = d; break; } }
-  if (!zip) throw new Error(`${cadastro}: nenhum arquivo disponível (${dias.join(", ")})`);
+  if (!zip) throw Object.assign(new Error(`${cadastro}: nenhum arquivo disponível (${dias.join(", ")})`), { indisponivel: true });
   const dataCarga = `${dia.slice(0, 4)}-${dia.slice(4, 6)}-${dia.slice(6)}`;
   const antes = await estadoAtual(cadastro, rest);
   if (antes.ultima && antes.ultima >= dataCarga) return `${cadastro} ${dataCarga}: já carregado (última carga ${antes.ultima}), nada a fazer`;
@@ -240,13 +241,23 @@ async function main(env = process.env, deps = {}) {
     tamanhoLote: num(env.TAMANHO_LOTE_BANCO, 500), fracaoMinima: num(env.FRACAO_MINIMA, 0.5), ...deps,
   };
   const erros = [];
+  const indisponiveis = [];
   for (const cadastro of CADASTROS) {
-    try { console.log(await coletarCadastro(cadastro, dias, opcoes)); } catch (e) { erros.push(e.message); console.error(e.message); }
+    try { console.log(await coletarCadastro(cadastro, dias, opcoes)); } catch (e) {
+      if (e.indisponivel) indisponiveis.push(e.message); else { erros.push(e.message); console.error(e.message); }
+    }
   }
   // Prazo de guarda: fora da lista há mais de 5 anos sai (a função no banco decide o corte).
   try { console.log(`sanções expurgadas (fora da lista > 5 anos): ${await (await opcoes.rest("rpc/sancoes_empresas_expurgar", { method: "POST", body: "{}" })).json()}`); }
   catch (e) { erros.push(e.message); console.error(e.message); }
   if (erros.length) throw new Error(`${erros.length} etapa(s) com falha`);
+  // CGU ainda não publicou o arquivo (403/404 em todos os dias da janela): esperado, a base anterior continua valendo.
+  // Sai com sucesso e avisa; indisponivel=1 faz o workflow pular o batimento (o admin mostra atraso se durar).
+  if (indisponiveis.length) {
+    console.log(`::warning::${indisponiveis.join("; ")}. A CGU ainda não publicou; a base anterior continua valendo.`);
+    if (env.GITHUB_OUTPUT) fs.appendFileSync(env.GITHUB_OUTPUT, "indisponivel=1\n");
+  }
+  return { indisponiveis };
 }
 
 if (require.main === module) main().catch((e) => { console.error("coletar_sancoes_cgu:", e.message); process.exit(1); });

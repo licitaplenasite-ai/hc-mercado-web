@@ -222,3 +222,28 @@ test("ZIP zerado de um mês já gravado com preço: alarme, sem marcar o mês co
   await assert.rejects(S.coletarMes(ref, UFS27, { vigente: true, lote: 1000 }), (e) => e.zerada === true);
   assert.ok(!pedidos.some((p) => p.metodo !== "GET"), "nenhuma escrita");
 });
+
+// Agendados de 11/2026 vermelhos só porque a CAIXA não publicou o mês ou o WAF barrou o runner.
+test("falhar: mês não publicado ou bloqueio da CAIXA = aviso e saída 0 (sem batimento); erro de verdade = saída 1", async () => {
+  const bp = require("./bases_preco");
+  const original = bp.registrarSaude;
+  const saude = [];
+  bp.registrarSaude = async (_f, s) => { saude.push(s.saudeFonte); };
+  const saida = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "sinapi-")), "out");
+  const antes = process.env.GITHUB_OUTPUT;
+  process.env.GITHUB_OUTPUT = saida;
+  try {
+    const bloqueio = await S.existe("https://x/a.zip", async () => ({ status: 403, headers: new Headers() }), 0).catch((e) => e);
+    assert.equal(await S.falhar(bloqueio, (c) => c), 0);
+    assert.equal(await S.falhar(Object.assign(new Error("SINAPI 2026-10 não encontrado na CAIXA."), { indisponivel: true }), (c) => c), 0);
+    assert.equal(fs.readFileSync(saida, "utf8"), "indisponivel=1\nindisponivel=1\n");
+    const erroSite = await S.existe("https://x/a.zip", async () => ({ status: 500, headers: new Headers() }), 0).catch((e) => e);
+    assert.equal(await S.falhar(erroSite, (c) => c), 1);
+    assert.equal(await S.falhar(Object.assign(new Error("Aba x sem linhas"), { formato: true }), (c) => c), 1);
+    assert.deepEqual(saude, ["indisponivel", "indisponivel", "indisponivel", "formato_mudou"]);
+    assert.equal(fs.readFileSync(saida, "utf8"), "indisponivel=1\nindisponivel=1\n");
+  } finally {
+    bp.registrarSaude = original;
+    if (antes === undefined) delete process.env.GITHUB_OUTPUT; else process.env.GITHUB_OUTPUT = antes;
+  }
+});

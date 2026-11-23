@@ -67,7 +67,10 @@ jobs:
           [ "${#arquivos[@]}" = 1 ] || { echo "::error::O Release $TAG precisa ter exatamente 1 ZIP SINAPI-AAAA-MM-formato-xlsx*.zip (achei ${#arquivos[@]})."; exit 1; }
           ls -l "${arquivos[0]}"
           echo "SINAPI_ARQUIVO=${arquivos[0]}" >> "$GITHUB_ENV"
+      # Mês ainda não publicado ou WAF da CAIXA barrando o runner: o robô sai 0 com ::warning:: e indisponivel=1
+      # (a referência gravada continua valendo); aí o batimento abaixo não é gravado. Erro de verdade continua vermelho.
       - name: Coletar SINAPI
+        id: coletar
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SINAPI_UFS: ${{ github.event.inputs.ufs || '' }}
@@ -77,7 +80,7 @@ jobs:
         run: node scripts/coletar_sinapi.js
 
       - name: Registrar sucesso na Saúde do sistema (admin)
-        if: success()
+        if: success() && steps.coletar.outputs.indisponivel != '1'
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: node scripts/registrar_robo.js bases_obra

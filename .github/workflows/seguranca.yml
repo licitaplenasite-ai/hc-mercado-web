@@ -9,21 +9,25 @@ on:
   push:
   pull_request:
   schedule:
-    - cron: "17 9 * * 1" # segunda 06:17 (Brasília): avisos novos aparecem mesmo sem commit
+    - cron: "17 9 * * *" # todo dia 06:17 (Brasília): roda inteira ao menos 1x/dia, mesmo sem commit
   workflow_dispatch: {}
 
 permissions:
   contents: read
 
+# Grupo por evento: push seguido cancela o push anterior, mas nunca a rodada diária do cron.
 concurrency:
-  group: seguranca-${{ github.ref }}
+  group: seguranca-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
   segredos:
     name: Segredos no histórico (gitleaks)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # 23/11/2026: 48 de 48 rodadas canceladas por este timeout (10 min), não por concurrency: o histórico tem
+    # dezenas de versões de data/*.json de 15-22 MB (antes de irem para o Supabase) e o gitleaks travava nelas.
+    # Com --max-target-megabytes 2 o histórico inteiro (964 commits) leva ~3 min.
+    timeout-minutes: 20
     continue-on-error: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -31,10 +35,12 @@ jobs:
           fetch-depth: 0 # histórico inteiro: chave apagada do arquivo continua nos commits antigos
           persist-credentials: false
       # Imagem oficial com versão fixa; --redact nunca imprime o valor do segredo no log.
+      # shortcut: pula arquivo > 2 MB (os JSON antigos de dados públicos do PNCP); se um dia entrar arquivo grande com
+      # segredo possível, varrer ele à parte.
       - name: gitleaks
         run: >-
           docker run --rm -v "$PWD:/repo:ro" ghcr.io/gitleaks/gitleaks:v8.30.1
-          git /repo --config /repo/.gitleaks.toml --redact --no-banner --verbose
+          git /repo --config /repo/.gitleaks.toml --redact --no-banner --verbose --max-target-megabytes 2
 
   codigo:
     name: Código (Semgrep)

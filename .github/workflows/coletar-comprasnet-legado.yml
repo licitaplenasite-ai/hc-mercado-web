@@ -53,14 +53,29 @@ jobs:
             exit 1
           fi
           rm -rf /tmp/dados-historicos-comprasnet
-          git clone --depth 1 "https://harresoncoelho-lang:${DADOS_HISTORICOS_TOKEN}@github.com/harresoncoelho-lang/hc-licitacoes-dados-historicos.git" /tmp/dados-historicos-comprasnet || {
-            echo "::error::DADOS_HISTORICOS_TOKEN recusado pelo GitHub (vencido ou revogado). Gere um token novo na conta harresoncoelho-lang com acesso de escrita a hc-licitacoes-dados-historicos e atualize o secret do repositório."
+          REMOTE="https://harresoncoelho-lang:${DADOS_HISTORICOS_TOKEN}@github.com/harresoncoelho-lang/hc-licitacoes-dados-historicos.git"
+          AJUDA="Gere um token novo (fine-grained) na conta harresoncoelho-lang, só no repositório hc-licitacoes-dados-historicos, com Contents: Read and write, e cole em Settings > Secrets and variables > Actions > DADOS_HISTORICOS_TOKEN deste repositório."
+          # Falha cedo, antes de gastar 12 min coletando: leitura (ls-remote) e escrita (push --dry-run, que
+          # autentica no git-receive-pack sem enviar nada). 23/11/2026: token sem acesso derrubava só o push final.
+          git ls-remote "$REMOTE" HEAD > /dev/null || {
+            echo "::error::DADOS_HISTORICOS_TOKEN sem acesso de leitura a hc-licitacoes-dados-historicos (vencido, revogado ou sem o repositório). $AJUDA"
             exit 1
           }
+          git clone --depth 1 "$REMOTE" /tmp/dados-historicos-comprasnet
+          cd /tmp/dados-historicos-comprasnet
+          if git rev-parse -q --verify HEAD > /dev/null; then
+            git push --dry-run "$REMOTE" HEAD:main > /dev/null || {
+              echo "::error::DADOS_HISTORICOS_TOKEN lê mas não consegue gravar em hc-licitacoes-dados-historicos. $AJUDA"
+              exit 1
+            }
+          fi
 
+      # CURSOR_PENDENTE: o robô deixa o cursor novo neste arquivo (fora do clone, para não ir no commit) em vez de
+      # gravar no Supabase; o último passo só o confirma se o push deu certo.
       - name: Rodar robô de coleta ComprasNet Legado
         env:
           DADOS_HISTORICOS_DIR: /tmp/dados-historicos-comprasnet
+          CURSOR_PENDENTE: /tmp/comprasnet_cursor_pendente.json
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: node scripts/coletar_comprasnet_legado.js
 
@@ -70,16 +85,13 @@ jobs:
       # senão abre um buraco no histórico. Reenviar registro repetido é
       # inofensivo (dedup por idCompra na leitura/merge).
       #
-      # O push tem retry com fetch+rebase: o cursor de progresso no Supabase
-      # já foi salvo pelo robô ANTES deste passo rodar (ver
-      # scripts/coletar_comprasnet_legado.js, try/finally em main()) — se o
-      # push falhar de vez (rede instável, conflito) sem nenhuma tentativa
-      # de recuperação, os dados coletados nesta execução nunca chegam ao
-      # repositório, mas a próxima execução já parte do cursor avançado e
-      # nunca revisita essas páginas: buraco silencioso no histórico. Falhar
-      # o job (exit 1) depois de esgotar as tentativas ainda é a saída certa
-      # — só depois de tentar mesmo se recuperar sozinho primeiro.
+      # O push tem retry com fetch+rebase. O cursor de progresso só vai pro
+      # Supabase no passo seguinte, e só se este passo terminar com sucesso:
+      # push que falha de vez deixa o cursor onde estava, e a próxima execução
+      # coleta de novo as mesmas páginas (reenviar registro repetido é
+      # inofensivo, dedup por idCompra) em vez de pular dados nunca enviados.
       - name: Commitar e enviar dados históricos
+        id: enviar
         if: always()
         env:
           DADOS_HISTORICOS_TOKEN: ${{ secrets.DADOS_HISTORICOS_TOKEN }}
@@ -120,6 +132,12 @@ jobs:
             fi
           done
           if [ "$sucesso" -ne 1 ]; then
-            echo "ERRO: falha ao enviar dados históricos após 5 tentativas. O cursor de progresso no Supabase já avançou — a próxima execução vai pular as páginas coletadas nesta rodada sem re-tentar. Investigar manualmente (o clone falho fica em /tmp, perdido ao fim do job) e considerar resetar dados_robo/comprasnet_progresso se for o caso."
+            echo "::error::Falha ao enviar dados históricos após 5 tentativas. O cursor de progresso NÃO avançou: a próxima execução coleta de novo estas páginas. Se o erro for de autenticação, renove o DADOS_HISTORICOS_TOKEN (Contents: Read and write em hc-licitacoes-dados-historicos)."
             exit 1
           fi
+
+      - name: Confirmar cursor de progresso no Supabase
+        if: always() && steps.enviar.outcome == 'success'
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/coletar_comprasnet_legado.js --confirmar-cursor /tmp/comprasnet_cursor_pendente.json
