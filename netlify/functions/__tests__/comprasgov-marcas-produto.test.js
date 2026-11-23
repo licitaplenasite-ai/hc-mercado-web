@@ -262,3 +262,75 @@ test("busca por termo: produto lento vira pendente (resposta parcial sem esperar
     global.fetch = original;
   }
 });
+
+test("termoParaContagem: minúsculo sem acento; CPF/CNPJ ou só números não entram na contagem", () => {
+  const { termoParaContagem } = require("../comprasgov-marcas-produto");
+  assert.equal(termoParaContagem("  Papel   A4 (Sulfite)  "), "papel a4 sulfite");
+  assert.equal(termoParaContagem("Água sanitária"), "agua sanitaria");
+  assert.equal(termoParaContagem("123.456.789-01 caneta"), null);
+  assert.equal(termoParaContagem("12345678000190"), null);
+  assert.equal(termoParaContagem("622254"), null);
+  assert.equal(termoParaContagem("toner 85a"), "toner 85a");
+});
+
+test("pré-consulta do robô: responde da tabela sem ir à fonte, com a data; vencida (> 26 h) é ignorada; busca contada sem usuário", async () => {
+  require("../_cache_publico")._limparMemoria();
+  const { chaveDaConsulta, handler: semLogin } = require("../comprasgov-marcas-produto");
+  const { logado } = require("./fixtures/login-aprovado");
+  const handler = (evento) => semLogin(logado(evento));
+  const original = global.fetch, chaveAnterior = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const chamadas = [], contadas = [];
+  let atualizado = new Date(Date.now() - 3600 * 1000).toISOString();
+  const corpoGuardado = JSON.stringify({ ok: true, itens: [{ marca: "CHAMEX" }], catalogos: [] });
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "srv";
+  global.fetch = async (url, op = {}) => {
+    const u = String(url);
+    if (u.includes("/auth/v1/user")) return Response.json({ id: "00000000-0000-4000-8000-000000000001" });
+    if (u.includes("/rest/v1/clientes?")) return Response.json([{ status: "aprovado" }]);
+    if (u.includes("/rest/v1/cache_consultas_publicas?")) {
+      chamadas.push("tabela");
+      assert.equal(op.headers.Authorization, "Bearer teste", "lê com a sessão do usuário (RLS), não com a chave de serviço");
+      assert.ok(u.includes(encodeURIComponent(chaveDaConsulta({ termo: "papel a4", uf: "", codigoPdm: null, codigoItem: null, pagina: 1, produto: "" }))));
+      return Response.json([{ corpo: corpoGuardado, atualizado_em: atualizado }]);
+    }
+    if (u.includes("/rpc/registrar_busca_termo")) { contadas.push(JSON.parse(op.body)); return new Response("", { status: 204 }); }
+    if (u.includes("/rpc/")) return Response.json(1);
+    chamadas.push("fonte");
+    if (u.includes("cnbs")) return Response.json([{ codigoPdm: 1, descricaoPDM: "Papel para impressão formatado" }]);
+    return Response.json({ totalRegistros: 1, resultado: [{ marca: "REPORT", descricaoItem: "PAPEL A4", precoUnitario: 20, idCompraItem: "153038059004520250000100001" }] });
+  };
+  try {
+    const r = await handler({ queryStringParameters: { termo: "Papel A4" } });
+    assert.deepEqual([r.statusCode, r.body, r.headers["X-Dados-Origem"], r.headers["X-Dados-Guardados-Em"]], [200, corpoGuardado, "pre-consulta", atualizado]);
+    assert.deepEqual(chamadas, ["tabela"]);
+    assert.deepEqual(contadas, [{ p_fonte: "precos", p_termo: "papel a4" }]);
+    assert.ok(!JSON.stringify(contadas).includes("teste"), "a contagem não leva token nem usuário");
+    // Página de um produto não conta como busca nova.
+    await handler({ queryStringParameters: { termo: "papel a4", codigoPdm: "1", pagina: "2", produto: "Papel" } });
+    assert.equal(contadas.length, 1);
+    atualizado = new Date(Date.now() - 27 * 3600 * 1000).toISOString();
+    chamadas.length = 0;
+    const vencida = await handler({ queryStringParameters: { termo: "papel a4" } });
+    assert.equal(vencida.headers["X-Dados-Origem"], "ao-vivo");
+    assert.ok(chamadas.includes("fonte"));
+  } finally {
+    global.fetch = original;
+    if (chaveAnterior === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY; else process.env.SUPABASE_SERVICE_ROLE_KEY = chaveAnterior;
+  }
+});
+
+test("montarCorpo (robô): 429 da fonte devolve o tempo de espera pedido (Retry-After) e marca parcial", async () => {
+  const { montarCorpo } = require("../comprasgov-marcas-produto");
+  const original = global.fetch;
+  global.fetch = async (url) => {
+    if (String(url).includes("cnbs")) return Response.json([{ codigoPdm: 1, descricaoPDM: "Detergente" }, { codigoPdm: 2, descricaoPDM: "Detergente líquido" }]);
+    if (new URL(String(url)).searchParams.get("codigo") === "2") return new Response("{}", { status: 429, headers: { "Retry-After": "30" } });
+    return Response.json({ totalRegistros: 1, resultado: [{ marca: "YPE", descricaoItem: "DETERGENTE", precoUnitario: 2 }] });
+  };
+  try {
+    const r = await montarCorpo({ termo: "detergente", uf: "", codigoPdm: null, codigoItem: null, pagina: 1, produto: "" }, { prazoParcialMs: 30000 });
+    assert.deepEqual([r.parcial, r.esperarS], [true, 30]);
+  } finally {
+    global.fetch = original;
+  }
+});

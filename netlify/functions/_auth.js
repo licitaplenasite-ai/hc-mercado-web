@@ -269,4 +269,4 @@ async function limitarFilaDossies(userId) {
 }
 
 
-module.exports = { cabecalhosPadrao, exigirUsuarioLogado, exigirClienteAprovado, exigirUsuarioAprovado, verificarLimiteDiario, origemPermitida, limitarPorIp, limitarContaPorMinuto, exigirAprovadoComLimite, limitarFilaDossies };
+module.exports = { SUPABASE_URL, SUPABASE_ANON_KEY, cabecalhosPadrao, exigirUsuarioLogado, exigirClienteAprovado, exigirUsuarioAprovado, verificarLimiteDiario, origemPermitida, limitarPorIp, limitarContaPorMinuto, exigirAprovadoComLimite, limitarFilaDossies };

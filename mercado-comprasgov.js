@@ -165,13 +165,22 @@
   }
 
   // Zero compras com consulta que falhou não é "nenhuma compra": a fonte não respondeu (visto no E2E de 19/11/2026).
-  // guardadoEm: a fonte caiu ou demorou e o servidor devolveu a última consulta guardada (_cache_publico.js).
-  function avisoGuardado(guardadoEm) {
+  // origem 'guardado': a fonte caiu ou demorou e o servidor devolveu a última consulta guardada (_cache_publico.js).
+  // origem 'pre-consulta': resposta preparada de madrugada pelo robô (cache_consultas_publicas); mostra de quando é.
+  function avisoGuardado(guardadoEm, origem = 'guardado') {
     const d = guardadoEm ? new Date(guardadoEm) : null;
-    return d && !Number.isNaN(d.getTime()) ? ` O Compras.gov não respondeu agora: mostrando dados guardados de ${d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}.` : '';
+    if (!d || Number.isNaN(d.getTime())) return '';
+    const dia = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    if (origem === 'pre-consulta') return ` Atualizado em ${dia} às ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.`;
+    return ` O Compras.gov não respondeu agora: mostrando dados guardados de ${dia}.`;
   }
-  function mensagemBusca(total, comMarca, falhas, guardadoEm = null) {
-    if (total) return `${total} compra(s) encontradas, ${comMarca} com marca declarada.${falhas ? ' Parte da fonte não respondeu: resultado parcial.' : ''}${avisoGuardado(guardadoEm)}`;
+  // Origem da resposta lida dos cabeçalhos do servidor: só 'guardado' e 'pre-consulta' viram aviso na tela.
+  function dadosDaResposta(r) {
+    const origem = r.headers?.get?.('X-Dados-Origem');
+    return origem === 'guardado' || origem === 'pre-consulta' ? { origem, em: r.headers.get('X-Dados-Guardados-Em') } : null;
+  }
+  function mensagemBusca(total, comMarca, falhas, guardadoEm = null, origem = 'guardado') {
+    if (total) return `${total} compra(s) encontradas, ${comMarca} com marca declarada.${falhas ? ' Parte da fonte não respondeu: resultado parcial.' : ''}${avisoGuardado(guardadoEm, origem)}`;
     return falhas ? 'A fonte pública não respondeu agora. Tente de novo em instantes.' : 'Nenhuma compra para este termo. Tente um nome mais curto (ex.: "detergente").';
   }
 
@@ -360,7 +369,9 @@
         const r = await requisitar(`/api/comprasgov-marcas-produto?${q}`, { method: 'GET' });
         const j = await r.json().catch(() => null);
         if (!r.ok || !j?.ok) throw new Error(j?.erro || 'A fonte pública não respondeu agora.');
-        if (r.headers?.get?.('X-Dados-Origem') === 'guardado') estado.guardadoEm = r.headers.get('X-Dados-Guardados-Em');
+        // Fonte fora do ar numa página vale mais que "atualizado em": o aviso de dado guardado prevalece.
+        const dados = dadosDaResposta(r);
+        if (dados && (dados.origem === 'guardado' || !estado.dados)) estado.dados = dados;
         return j;
       };
       try {
@@ -383,7 +394,7 @@
       await carregarPaginas(codigo, geracao, paginas);
       if (geracao !== estado.geracao || codigo !== estado.pdm) return;
       if (!estado.filtro.unidade) estado.filtro.unidade = unidadePrincipal();
-      status.textContent = mensagemBusca(estado.itens.length, estado.itens.filter((i) => i.marca).length, estado.falhas, estado.guardadoEm);
+      status.textContent = mensagemBusca(estado.itens.length, estado.itens.filter((i) => i.marca).length, estado.falhas, estado.dados?.em, estado.dados?.origem);
       desenhar();
     }
     function escolherProduto(codigo) {
@@ -408,7 +419,7 @@
         const catalogos = Array.isArray(j.catalogos) && j.catalogos.length ? j.catalogos
           : contar(itens, 'codigoPdm').map(([c, n]) => ({ codigo: c, descricao: itens.find((i) => i.codigoPdm === c).produtoCatalogo, total: n }));
         estado.termo = termoBusca; estado.catalogos = catalogos; estado.falhas = j.consultasComFalha || 0;
-        estado.guardadoEm = r.headers?.get?.('X-Dados-Origem') === 'guardado' ? r.headers.get('X-Dados-Guardados-Em') : null;
+        estado.dados = dadosDaResposta(r);
         estado.atributos = Array.isArray(j.atributos) ? j.atributos.map(String) : [];
         estado.porPdm = new Map(catalogos.map((c) => [String(c.codigo), { itens: itens.filter((i) => String(i.codigoPdm) === String(c.codigo)), carregadas: 0, paginas: null }]));
         if (!catalogos.length) { estado.pdm = ''; status.textContent = mensagemBusca(0, 0, estado.falhas); desenhar(); return; }
