@@ -122,7 +122,7 @@ const limpar = () => psql(`delete from public.historico_consultas where chave li
     try {
       for (const [pagina, largura, nome] of [[p, 1280, 'processo-1280.png'], [movel, 375, 'processo-375.png']]) {
         await pagina.setViewportSize({ width: largura, height: 900 });
-        await pagina.goto(`${SITE}/sistema?empresa=${proc.empresa_id}&processo=${proc.id}`);
+        await pagina.goto(`${SITE}/sistema?empresa=${proc.empresa_id}&processo=${proc.id}#aba=anterior`);
         await pagina.waitForSelector('#licitacao-anterior:not([hidden]) .la-camadas', { timeout: 30000 });
         await pagina.waitForTimeout(1500);
         const t = await texto(pagina.locator('#licitacao-anterior .la-camadas').first());

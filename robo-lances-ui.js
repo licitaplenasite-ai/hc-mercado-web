@@ -52,6 +52,7 @@
     config.rodada = Number.isInteger(config.rodada) ? config.rodada : 0;
     config.estrategia = R().ESTRATEGIAS[config.estrategia] ? config.estrategia : 'dentro10';
     let aba = null; // aba escolhida; sem escolha, a primeira com itens
+    let pagina = 1, tamanho = 10; // edital de 200 itens: 10 cartões por vez (paginacao-ui.js)
     let registro = Array.isArray(ler(chaveRegistro, null)) ? ler(chaveRegistro, null) : [];
     const salvarConfig = () => gravar(chave, config);
 
@@ -84,6 +85,7 @@
       <p data-robo-estado role="status" aria-live="polite"></p>
       <div class="robo-abas" role="tablist" aria-label="Itens por situação no portal" data-robo-abas></div>
       <div data-robo-itens class="robo-itens" role="tabpanel"></div>
+      <div data-robo-paginas></div>
       <div class="itens-acoes"><button type="button" class="app-primario" data-robo-simular>Simular disputa</button><button type="button" data-robo-atualizar>Atualizar itens</button></div>
       <section data-robo-resultado class="robo-resultado" aria-labelledby="robo-resultado-titulo" hidden>
         <h3 id="robo-resultado-titulo" tabindex="-1">Resultado da simulação</h3>
@@ -130,7 +132,11 @@
       const caixaItens = el('[data-robo-itens]');
       if (!itens.length) { el('[data-robo-abas]').replaceChildren(); caixaItens.replaceChildren(h('p', { classe: 'itens-apoio', texto: 'Nenhum item no processo. Cadastre os itens em Itens do processo.' })); return; }
       renderAbas();
-      const daAba = itens.filter((i) => situacaoDe(i.id) === aba);
+      const todosDaAba = itens.filter((i) => situacaoDe(i.id) === aba), PG = global.LicitaPaginacao, f = PG ? PG.fatiar(todosDaAba, pagina, tamanho) : null;
+      const daAba = f ? f.itens : todosDaAba;
+      if (f) pagina = f.pagina;
+      el('[data-robo-paginas]').replaceChildren(...(f && f.total > PG.TAMANHOS[0] ? [PG.barra(alvo.ownerDocument || global.document, { fatia: f, rotulo: 'itens', id: 'robo-paginas',
+        mudar: (n) => { pagina = n.pagina; tamanho = n.tamanho; renderItens(); caixaItens.scrollIntoView?.({ block: 'start' }); } })] : []));
       if (!daAba.length) { caixaItens.replaceChildren(h('p', { classe: 'itens-apoio', texto: `Nenhum item em "${ABAS[aba]}". Mude a situação do item no próprio cartão.` })); return; }
       caixaItens.replaceChildren(...daAba.map((i) => {
         const cfg = cfgItem(i.id), d = dadosItem(i), p = `robo-${i.id}`, casas = cfg.casas4 ? 4 : 2, dif = diferencaMinima(casas), situacao = situacaoDe(i.id);
@@ -257,7 +263,7 @@
     alvo.addEventListener('click', (ev) => {
       const b = ev.target.closest?.('button');
       if (!b) return;
-      if (b.dataset.roboAba) { aba = b.dataset.roboAba; renderItens(); el(`#robo-aba-${aba}`)?.focus?.(); }
+      if (b.dataset.roboAba) { aba = b.dataset.roboAba; pagina = 1; renderItens(); el(`#robo-aba-${aba}`)?.focus?.(); }
       else if (b.dataset.roboSimular !== undefined) simular();
       else if (b.dataset.roboAtualizar !== undefined) void carregar();
       else if (b.dataset.roboLimpar !== undefined) { registro = []; gravar(chaveRegistro, registro); renderRegistro(); }

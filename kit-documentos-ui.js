@@ -199,6 +199,8 @@
       const foco = doc.activeElement?.dataset?.abrir;
       el('[data-lista]').innerHTML = listaEstado === 'carregando' ? '<p>Carregando documentos…</p>' : listaEstado === 'erro' ? `<p role="alert">Não foi possível carregar a lista. ${esc(listaErro)} Use Atualizar lista para tentar novamente.</p>` : !documentos.length ? '<p>Nenhum documento salvo neste processo.</p>' : `<ul>${documentos.map(d => `<li><div><strong>${esc(d.titulo || (d.tipo === 'proposta' ? 'Proposta de materiais' : 'Declaração'))}</strong><p>${d.tipo === 'proposta' ? 'Proposta' : 'Declaração'} · versão ${esc(d.versao)} · ${d.revisadoEm ? 'Revisão histórica registrada' : 'Pendente de revisão'}${d.id === peca?.id ? ' · Em edição' : ''}</p></div><button type="button" class="btn" data-abrir="${esc(d.id)}" aria-label="Abrir ${esc(d.titulo || d.tipo)}, versão ${esc(d.versao)}">Abrir</button></li>`).join('')}</ul>`;
       if (foco) [...alvo.querySelectorAll('[data-abrir]')].find(b => b.dataset.abrir === foco)?.focus();
+      // Cabeçalho do processo (processo-abas.js): "Falta: conferir a proposta" some quando há proposta com revisão registrada.
+      if (listaEstado === 'pronta' && typeof global.CustomEvent === 'function') alvo.dispatchEvent(new global.CustomEvent('licita:documentos', { bubbles: true, detail: { propostas: documentos.filter(d => d.tipo === 'proposta').length, propostaConferida: documentos.some(d => d.tipo === 'proposta' && d.revisadoEm) } }));
     }
     function atualizarLista(d) {
       const recarregar = listaEstado === 'carregando';

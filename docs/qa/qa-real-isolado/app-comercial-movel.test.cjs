@@ -357,8 +357,9 @@ for (const c of cenarios) {
     await page.click('#login-entrar');
     await page.waitForSelector('button[data-processo]');
     await page.click(`button[data-processo="${PROC_A}"]`);
-    await page.waitForSelector('#itens-processo form');
+    await page.waitForSelector('#itens-processo [data-item-adicionar]');
     await page.waitForFunction(() => document.querySelector('#itens-processo [data-item-lista] li'), null, { timeout: 15000 });
+    await page.click('#itens-processo [data-item-adicionar]'); // formulário do item fica numa janela
     assert.match(await page.textContent('#itens-processo [data-item-lista]'), /Item fictício/, 'lista inicial de itens (mock)');
     await registrar('1lista');
     const form = '#itens-processo form';
@@ -410,9 +411,11 @@ test('/app teclado 390-claro: formulário de itens sem mouse (foco, digitação,
   await page.waitForSelector('button[data-processo]');
   await page.focus(`button[data-processo="${PROC_A}"]`);
   await page.keyboard.press('Enter');
-  await page.waitForSelector('#itens-processo form');
+  await page.waitForSelector('#itens-processo [data-item-adicionar]');
   await page.waitForFunction(() => document.querySelector('#itens-processo [data-item-lista] li'), null, { timeout: 15000 });
-  await page.focus('#itens-processo input[name="identificador"]');
+  await page.focus('#itens-processo [data-item-adicionar]');
+  await page.keyboard.press('Enter'); // abre a janela "Adicionar item" e o foco vai para o primeiro campo
+  assert.equal(await page.evaluate(() => document.activeElement?.name), 'identificador', 'janela abre com foco no identificador');
   await page.keyboard.type('3');
   await page.keyboard.press('Tab'); // descrição
   await page.keyboard.type('Item via teclado');
@@ -445,6 +448,7 @@ async function abrirComKit(page, base) {
 
 async function salvarItemNovo(page, descricao) {
   const f = '#itens-processo form';
+  await page.click('#itens-processo [data-item-adicionar]');
   await page.fill(`${f} input[name="identificador"]`, '2');
   await page.fill(`${f} textarea[name="descricao"]`, descricao);
   await page.fill(`${f} input[name="quantidade"]`, '1');

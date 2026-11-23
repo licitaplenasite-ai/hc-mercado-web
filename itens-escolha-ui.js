@@ -80,7 +80,8 @@
   // chamar(corpo) -> { r, j } (nunca lança). total(quantidade, valor) -> centavos BigInt ou null; reais(centavos) -> texto.
   // aoMudar(item): oferta salva (a casca atualiza o cartão). aoSalvar(): avisa o kit que a proposta mudou.
   function montar({ alvo, doc, chamar, total, reais, aoMudar = () => {}, aoSalvar = () => {}, confirmar = (t) => global.confirm(t) }) {
-    let itens = [], porte = null, vivo = true, ocupado = false, filtro = 'todos', busca = '';
+    let itens = [], porte = null, vivo = true, ocupado = false, filtro = 'todos', busca = '', pagina = 1, tamanho = 10;
+    const PG = global.LicitaPaginacao;
     const h = (tag, attrs = {}, ...filhos) => {
       const e = doc.createElement(tag);
       for (const [k, v] of Object.entries(attrs)) {
@@ -111,7 +112,8 @@
       <p class="itens-escolha-estado" data-escolha-estado role="status" aria-live="polite"></p>
       <div class="tabela-rolagem" tabindex="0" role="region" aria-label="Itens do edital para escolher"><table class="itens-escolha-tabela"><thead><tr>
         <th scope="col">Vou participar</th><th scope="col">Item</th><th scope="col">Descrição</th><th scope="col">Tipo</th><th scope="col">Quantidade</th>
-        <th scope="col">Preço unitário (R$)</th><th scope="col">Marca</th><th scope="col">Modelo</th><th scope="col">Total</th></tr></thead><tbody data-escolha-linhas></tbody></table></div>`;
+        <th scope="col">Preço unitário (R$)</th><th scope="col">Marca</th><th scope="col">Modelo</th><th scope="col">Total</th></tr></thead><tbody data-escolha-linhas></tbody></table></div>
+      <div data-escolha-paginas></div>`;
     const el = (s) => alvo.querySelector(s);
     el('[data-escolha-filtro]').replaceChildren(...FILTROS.map(([v, t]) => h('option', { value: v, texto: t })));
     const estado = (t, situacao) => { const p = el('[data-escolha-estado]'); p.textContent = t || ''; p.dataset.situacao = situacao || ''; };
@@ -122,6 +124,8 @@
       el('[data-escolha-contador]').textContent = `${marcados.length} de ${itens.length} ${itens.length === 1 ? 'item selecionado' : 'itens selecionados'}`;
       let soma = 0n, semPreco = 0;
       for (const i of marcados) { const t = total(i.quantidade, i.valorUnitario); if (t === null) semPreco++; else soma += t; }
+      // A casca (processo-abas.js) mostra contador e total no cabeçalho fixo do processo.
+      if (typeof global.CustomEvent === 'function') alvo.dispatchEvent(new global.CustomEvent('licita:itens-resumo', { bubbles: true, detail: { marcados: marcados.length, total: itens.length, soma: reais(soma), semPreco } }));
       el('[data-escolha-total]').textContent = marcados.length ? `Total da proposta: ${reais(soma)}${semPreco ? ` (${semPreco} ${semPreco === 1 ? 'item marcado ainda sem preço' : 'itens marcados ainda sem preço'})` : ''}.` : 'Nenhum item marcado: a proposta fica vazia.';
       const v = visiveis(), marcar = v.filter((i) => !i.participar).length, tirar = v.filter((i) => i.participar).length;
       const bm = el('[data-escolha-marcar]'), bd = el('[data-escolha-desmarcar]');
@@ -149,9 +153,13 @@
         h('td', {}, h('input', { id: id('modelo'), 'data-escolha-campo': 'modelo', 'data-item': i.id, maxlength: 500, autocomplete: 'off', value: i.modelo || '', 'aria-label': `Modelo do item ${i.identificador}` })),
         h('td', {}, h('span', { 'data-escolha-total-item': i.id, texto: t === null ? '—' : reais(t) }), h('span', { id: id('estado'), classe: 'itens-campo-estado', 'data-escolha-linha-estado': i.id })));
     }
+    // Só a página atual vira linha (edital de 200 itens = 20 páginas de 10); sem paginacao-ui.js, todas as linhas.
     function render() {
-      const v = visiveis();
+      const todos = visiveis(), f = PG ? PG.fatiar(todos, pagina, tamanho) : null, v = f ? f.itens : todos;
+      if (f) pagina = f.pagina;
       el('[data-escolha-linhas]').replaceChildren(...(v.length ? v.map(linha) : [h('tr', {}, h('td', { colspan: 9, texto: 'Nenhum item neste filtro.' }))]));
+      el('[data-escolha-paginas]').replaceChildren(...(f && f.total > PG.TAMANHOS[0] ? [PG.barra(doc, { fatia: f, rotulo: 'itens', id: 'itens-escolha-paginas',
+        mudar: (n) => { pagina = n.pagina; tamanho = n.tamanho; render(); el('[data-escolha-linhas]').closest('.tabela-rolagem')?.scrollIntoView?.({ block: 'nearest' }); } })] : []));
       const p = textoPorte(porte), selo = el('[data-escolha-porte]');
       selo.textContent = p.texto; selo.dataset.situacao = p.situacao;
       resumo();
@@ -169,7 +177,7 @@
       if (!r || !r.ok || !Array.isArray(j?.itens)) { itens = []; alvo.hidden = true; return; }
       itens = j.itens; porte = ['mei', 'me', 'epp', 'demais'].includes(j.porte) ? j.porte : null;
       alvo.hidden = itens.length === 0;
-      render();
+      render(); // render -> resumo avisa o cabeçalho, inclusive "0 itens" (falta importar)
     }
     // Marca/desmarca no servidor; só muda a tela com a confirmação. Retorna true se gravou.
     async function gravarEscolha(lista, participar) {
@@ -225,7 +233,7 @@
       travar(true); estado('Salvando a escolha…', 'carregando');
       const ok = (await gravarEscolha(marcar, true)) && (await gravarEscolha(tirar, false));
       if (!vivo) return;
-      travar(false); filtro = 'selecionados'; el('[data-escolha-filtro]').value = filtro; render();
+      travar(false); filtro = 'selecionados'; pagina = 1; el('[data-escolha-filtro]').value = filtro; render();
       if (ok) estado(`Pronto: ${quero.length} ${quero.length === 1 ? 'item ficou' : 'itens ficaram'} na proposta; os outros ${itens.length - quero.length} ficaram fora.${faltam.length ? ` Não existem no edital: ${faltam.slice(0, 10).join(', ')}${faltam.length > 10 ? '…' : ''}.` : ''}`, 'ok');
     }
     async function salvarOferta(campo) {
@@ -261,8 +269,8 @@
       if (atual) { atual.textContent = j?.erro || 'Não foi possível salvar agora. Saia do campo de novo para tentar.'; atual.dataset.situacao = 'erro'; }
     }
 
-    el('[data-escolha-busca]').addEventListener('input', (ev) => { busca = ev.target.value; render(); });
-    el('[data-escolha-filtro]').addEventListener('change', (ev) => { filtro = ev.target.value; render(); });
+    el('[data-escolha-busca]').addEventListener('input', (ev) => { busca = ev.target.value; pagina = 1; render(); });
+    el('[data-escolha-filtro]').addEventListener('change', (ev) => { filtro = ev.target.value; pagina = 1; render(); });
     el('[data-escolha-marcar]').addEventListener('click', () => { void marcarFiltro(true); });
     el('[data-escolha-desmarcar]').addEventListener('click', () => { void marcarFiltro(false); });
     el('[data-escolha-atalho]').addEventListener('submit', (ev) => { void ficarSo(ev); });

@@ -105,7 +105,7 @@
 
   // pedirLogin(mensagem): produção não tem formulário próprio; quando a casca cai no login, quem chama redireciona
   // para o login.html. Sem ele (QA), o formulário da própria página continua sendo usado.
-  function criarControlador({ doc, fetch, storage, kit, identificacao, itens = null, portal = globalThis.LicitaPortalCliente || null, esteira = null, anterior = null, monitor = null, documentos = null, robo = null, confirmar = null, autenticacao = null, pedirLogin = null, busca = '' }) {
+  function criarControlador({ doc, fetch, storage, kit, identificacao, itens = null, portal = globalThis.LicitaPortalCliente || null, esteira = null, anterior = null, monitor = null, documentos = null, robo = null, abas = null, confirmar = null, autenticacao = null, pedirLogin = null, busca = '' }) {
     const auth = autenticacao || autenticacaoQA(fetch);
     const el = (id) => doc.getElementById(id);
     let epoca = 0;
@@ -122,6 +122,8 @@
     let monitorComp = null;
     let documentosComp = null;
     let roboComp = null;
+    // Abas da tela do processo (processo-abas.js): montadas uma vez; abrir/fechar a cada processo. Sem o módulo, tudo empilhado como antes.
+    const abasComp = abas?.montar ? abas.montar({ doc, area: el('area') }) : null;
     let tela = 'carregando';
     // 'hoje' lista empresas/processos autorizados; 'processo' mostra identificação e kit do contexto atual.
     let visao = 'hoje';
@@ -171,6 +173,9 @@
       const preparar = tela === 'area' && visao === 'preparar';
       const hoje = tela === 'area' ? visao === 'hoje' : ['carregando', 'sem-contexto'].includes(tela);
       el('area').hidden = !(processo || preparar);
+      // Só a visão do processo usa abas (CSS: #area[data-visao="processo"]); a preparação mostra só a identificação.
+      el('area').dataset.visao = processo ? 'processo' : preparar ? 'preparar' : '';
+      if (el('area-titulo')) el('area-titulo').textContent = processo && atual ? atual.processoRotulo || 'Processo' : 'Documentos e propostas';
       // Kit só existe com processo: em preparação ele fica oculto e sem montagem.
       el('kit').hidden = !processo;
       // Itens do processo só existem com processo: somem na preparação e no Hoje.
@@ -399,6 +404,7 @@
       el('kit').replaceChildren();
       el('identificacao').replaceChildren();
       el('contexto-atual').textContent = '';
+      abasComp?.fechar();
       mostrarPortal(null);
     }
 
@@ -572,6 +578,10 @@
       visao = 'processo';
       el('contexto-atual').textContent = contexto.rotulo;
       mostrarPortal(consulta?.processo);
+      // Antes de montar os módulos: o cabeçalho zera e recebe o resumo dos itens/documentos deste processo.
+      const pc = consulta?.processo || {};
+      abasComp?.abrir({ empresaId: contexto.empresaId, processoId: contexto.processoId, empresa: contexto.empresaRotulo, orgao: pc.orgao, numero: pc.numero,
+        objeto: contexto.objeto, status: contexto.status, prazo: contexto.prazo }, (sessao?.prazos || []).filter((p) => p.processoId === contexto.processoId));
       el('empresa-ativa').value = contexto.empresaId;
       preencherProcessos(contexto.empresaId);
       el('processo-ativo').value = contexto.processoId;
@@ -601,6 +611,7 @@
         contexto: { empresaId: contexto.empresaId, processoId: contexto.processoId },
         obterSessao,
         aoConferirIdentificacao: () => {
+          abasComp?.ativar('proposta');
           const alvo = el('identificacao');
           alvo.focus?.();
           alvo.scrollIntoView?.({ block: 'start' });
