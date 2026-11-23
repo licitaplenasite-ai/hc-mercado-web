@@ -82,6 +82,21 @@
         "Você continua recebendo o boletim por e-mail. Para voltar a usar as outras telas, renove a assinatura. O que você salvou continua guardado.", "Renovar");
       return;
     }
+    // Carência da cobrança (vencida há poucos dias): tudo continua, com um aviso fixo no topo, sem pop-up.
+    if (plano.em_carencia === true && plano.vence_em && plano.carencia_ate && !document.getElementById("aviso-carencia")) {
+      const main = document.querySelector("main");
+      if (main) {
+        const dm = (iso) => String(iso).slice(8, 10) + "/" + String(iso).slice(5, 7);
+        const aviso = document.createElement("div");
+        aviso.id = "aviso-carencia";
+        aviso.setAttribute("role", "status");
+        aviso.style.cssText = "margin:0 0 16px;padding:12px 16px;border-radius:8px;border:1px solid #f79009;background:#fffaeb;color:#7a2e0e;line-height:1.5";
+        aviso.append(`Sua assinatura venceu em ${dm(plano.vence_em)}. Renove até ${dm(plano.carencia_ate)} para não perder o acesso. `);
+        const a = document.createElement("a"); a.href = PLANOS; a.textContent = "Renovar"; a.style.cssText = "font-weight:600;color:inherit";
+        aviso.append(a);
+        main.prepend(aviso);
+      }
+    }
     document.querySelectorAll("[data-recurso]").forEach((el) => {
       const r = recursos[el.getAttribute("data-recurso")];
       if (r && r.permitido === false) {
