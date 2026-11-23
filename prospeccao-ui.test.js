@@ -67,6 +67,8 @@ test("cobertura: data da última coleta por UF e resumo de 'Todas'", () => {
   assert.equal(UI.textoCobertura("pca", "RJ", cob), "RJ ainda não tem coleta completa (em andamento).");
   assert.equal(UI.textoCobertura("pca", "", cob), "2 de 27 UFs já coletadas (a mais antiga em 21/11/2026); as outras estão em andamento.");
   assert.equal(UI.textoCobertura("pca", "", null), "");
+  // Coleta às 22h30 de Brasília (01h30 UTC do dia seguinte) é do dia 22, não 23.
+  assert.equal(UI.textoCobertura("pca", "AM", { AM: { concluidaEm: "2026-11-23T01:30:00Z" } }), "Última coleta completa de AM: 22/11/2026.");
   const html = UI.coberturaHtml("pca", cob);
   assert.match(html, /<b>AM<\/b> 23\/11\/2026/); assert.match(html, /<b>RJ<\/b> em andamento/); assert.match(html, /<b>TO<\/b> aguardando/);
   assert.equal((html.match(/<li>/g) || []).length, 27);

@@ -14,6 +14,8 @@
   const moeda = (v) => (v === null || v === undefined || v === '' ? '—' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
   const qtd = (v) => (v === null || v === undefined || v === '' ? '—' : Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 2 }));
   const dataBr = (d) => (/^\d{4}-\d{2}-\d{2}/.test(String(d || '')) ? String(d).slice(0, 10).split('-').reverse().join('/') : '—');
+  // Instante (ISO em UTC) visto como dia de Brasília: coleta às 22h de 22/11 não pode aparecer como 23/11.
+  const diaBr = (iso) => (Number.isFinite(Date.parse(iso)) ? dataBr(new Date(Date.parse(iso) - 3 * 36e5).toISOString()) : '—');
   // Dias corridos de hoje (Brasília) até a data; negativo = já passou.
   function diasAte(d, agora = Date.now()) {
     if (!/^\d{4}-\d{2}-\d{2}/.test(String(d || ''))) return null;
@@ -89,16 +91,16 @@
   // Uma linha sobre a coleta, sempre visível: com UF, a data dela; com "Todas", quantas UFs já entraram.
   function textoCobertura(tipo, uf, cob) {
     if (!cob) return '';
-    if (tipo === 'irp') return cob.BR && cob.BR.concluidaEm ? `IRP do Brasil todo coletada em ${dataBr(cob.BR.concluidaEm)}.` : 'IRP: primeira coleta em andamento.';
+    if (tipo === 'irp') return cob.BR && cob.BR.concluidaEm ? `IRP do Brasil todo coletada em ${diaBr(cob.BR.concluidaEm)}.` : 'IRP: primeira coleta em andamento.';
     if (uf) {
       const c = cob[uf];
-      if (c && c.concluidaEm) return `Última coleta completa de ${uf}: ${dataBr(c.concluidaEm)}${c.emAndamento ? ' (atualização em andamento)' : ''}.`;
+      if (c && c.concluidaEm) return `Última coleta completa de ${uf}: ${diaBr(c.concluidaEm)}${c.emAndamento ? ' (atualização em andamento)' : ''}.`;
       return `${uf} ainda não tem coleta completa${c && c.emAndamento ? ' (em andamento)' : ''}.`;
     }
     const ok = coletadas(cob);
     if (!ok.length) return 'Primeira coleta em andamento: ainda nenhuma UF completa.';
     const maisAntiga = ok.map((u) => cob[u].concluidaEm).sort()[0];
-    return ok.length === UFS.length ? `Todas as 27 UFs coletadas; a mais antiga em ${dataBr(maisAntiga)}.` : `${ok.length} de 27 UFs já coletadas (a mais antiga em ${dataBr(maisAntiga)}); as outras estão em andamento.`;
+    return ok.length === UFS.length ? `Todas as 27 UFs coletadas; a mais antiga em ${diaBr(maisAntiga)}.` : `${ok.length} de 27 UFs já coletadas (a mais antiga em ${diaBr(maisAntiga)}); as outras estão em andamento.`;
   }
 
   // Lista "UF: data" da aba, recolhida num <details> abaixo do contador.
@@ -106,7 +108,7 @@
     if (!cob || tipo === 'irp') return '';
     const itens = UFS.map((uf) => {
       const c = cob[uf];
-      const quando = c && c.concluidaEm ? dataBr(c.concluidaEm) : (c && c.emAndamento ? 'em andamento' : 'aguardando');
+      const quando = c && c.concluidaEm ? diaBr(c.concluidaEm) : (c && c.emAndamento ? 'em andamento' : 'aguardando');
       return `<li><b>${uf}</b> ${esc(quando)}</li>`;
     }).join('');
     return `<summary>Data da última coleta por UF</summary><ul class="cobertura-lista">${itens}</ul>`;
@@ -181,7 +183,7 @@
       $('tabela-corpo').innerHTML = linhas.length ? corpoHtml(linhas) : `<tr><td colspan="6" class="vazio">${esc(mensagemVazio(tipo, f, dados.cobertura))}</td></tr>`;
       const soEspec = linhas.filter((l) => l.so_especificacao).length;
       $('contador').textContent = linhas.length
-        ? `${linhas.length}${dados.truncado ? '+ (mostrando os primeiros ' + dados.limite + '; refine o filtro)' : ''} resultado${linhas.length === 1 ? '' : 's'}${soEspec ? ` (${soEspec} só na especificação, recolhido${soEspec === 1 ? '' : 's'})` : ''} · coletado em ${dataBr(dados.coletadoEm)}`
+        ? `${linhas.length}${dados.truncado ? '+ (mostrando os primeiros ' + dados.limite + '; refine o filtro)' : ''} resultado${linhas.length === 1 ? '' : 's'}${soEspec ? ` (${soEspec} só na especificação, recolhido${soEspec === 1 ? '' : 's'})` : ''} · coletado em ${diaBr(dados.coletadoEm)}`
         : '';
       $('cobertura-texto').textContent = textoCobertura(tipo, f.uf, dados.cobertura);
       $('cobertura').innerHTML = coberturaHtml(tipo, dados.cobertura);
