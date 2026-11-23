@@ -12,12 +12,12 @@
     "verify": "npm test && npm run lint"
   },
   "dependencies": {
-    "@netlify/aws-lambda-compat": "^2.0.0",
+    "@netlify/aws-lambda-compat": "^2.0.4",
     "@netlify/blobs": "^10.7.13",
     "adm-zip": "^0.6.1",
     "js-tiktoken": "1.0.21",
-    "mammoth": "^1.12.1",
-    "openai": "^7.15.0",
+    "mammoth": "^1.13.0",
+    "openai": "^7.62.0",
     "pdf-parse": "^1.1.1"
   },
   "devDependencies": {
