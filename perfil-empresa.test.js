@@ -36,6 +36,30 @@ test('logo: recusa acima de 512 KB, acima de 2000 px, formato desconhecido e JPE
   assert.match(P.validarLogo(new Uint8Array([0xff, 0xd8, 0xff, 0xda, 0, 2])).erro, /PNG ou JPEG/);
 });
 
+// Regressão 23/11: logo grande era recusada; agora a tela reduz e só recusa o que não é imagem aceita.
+test('logo: plano usa direto o que o servidor aceita, reduz o resto e recusa formato desconhecido', () => {
+  const u8 = b => new Uint8Array(b);
+  assert.deepEqual(P.planoDaLogo(u8(png(2000, 2000))).ext, 'png');
+  assert.equal(P.planoDaLogo(u8(jpeg(800, 300))).ext, 'jpg');
+  assert.deepEqual(P.planoDaLogo(u8(png(10, 10, 600 * 1024))), { reduzir: 'png' });
+  assert.deepEqual(P.planoDaLogo(u8(png(4000, 3000))), { reduzir: 'png' });
+  assert.deepEqual(P.planoDaLogo(u8(Buffer.concat([Buffer.from('RIFF\0\0\0\0WEBPVP8 '), Buffer.alloc(20)]))), { reduzir: 'webp' });
+  assert.deepEqual(P.planoDaLogo(u8(Buffer.from('﻿<?xml version="1.0"?>\n<svg xmlns="http://www.w3.org/2000/svg"></svg>'))), { reduzir: 'svg' });
+  assert.match(P.planoDaLogo(u8(Buffer.from('GIF89a......'))).erro, /PNG, JPG, WEBP ou SVG/);
+  assert.match(P.planoDaLogo(u8(Buffer.from('<html><body>svg</body></html>'))).erro, /não é uma imagem aceita/);
+  assert.match(P.planoDaLogo(u8(png(10, 10, 10 * 1024 * 1024))).erro, /10 MB/);
+});
+
+test('salvar dados da empresa: aviso diz o que foi e o que não foi salvo', () => {
+  const falhou = { ok: false, erro: 'Marque “Conferi os dados e os poderes do representante”.' };
+  assert.deepEqual(P.resumoDoSalvamento(falhou, true).tipo, 'erro');
+  assert.match(P.resumoDoSalvamento(falhou, true).texto, /NÃO foram salvos.*Conferi.*O restante foi salvo/);
+  assert.doesNotMatch(P.resumoDoSalvamento(falhou, false).texto, /restante/);
+  assert.match(P.resumoDoSalvamento({ ok: true, salvou: true }, false).texto, /Dados salvos/);
+  assert.match(P.resumoDoSalvamento({ ok: true, salvou: false }, true).texto, /Dados salvos/);
+  assert.match(P.resumoDoSalvamento({ ok: true, salvou: false }, false).texto, /Nada mudou/);
+});
+
 test('logo: hash do navegador e caminho batem com a conferência do servidor', async () => {
   const b = png(300, 100), hash = await P.sha256Hex(new Uint8Array(b));
   assert.equal(hash, createHash('sha256').update(b).digest('hex'));

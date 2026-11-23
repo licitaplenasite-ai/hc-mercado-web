@@ -99,8 +99,31 @@ test('quadro único: seção nomeada e endereço confirmado chega ao perfil na c
   assert.deepEqual(recebidos, ['Rua Fictícia, 1 — Manaus/AM']);
   const endereco = a.buscar(e => e.id === 'empresa-identificacao-endereco'); endereco.value = 'Av. Fictícia, 2, Belém - PA'; endereco.oninput();
   const revisao = a.buscar(e => e.id === 'empresa-identificacao-revisao'); revisao.checked = true; revisao.onchange();
-  await a.buscar(e => e.textContent === 'Salvar identificação confirmada').onclick(); await concluir();
+  // operacao.html não tem o botão próprio: o botão único "Salvar dados da empresa" chama salvarPendente.
+  assert.equal(a.buscar(e => e.textContent === 'Salvar identificação confirmada'), undefined);
+  assert.equal(controlador.temAlteracoesNaoSalvas(), true);
+  assert.deepEqual(await controlador.salvarPendente(), { ok: true, salvou: true }); await concluir();
   assert.equal(recebidos.at(-1), 'Av. Fictícia, 2, Belém - PA');
+  assert.equal(controlador.temAlteracoesNaoSalvas(), false);
+  assert.deepEqual(await controlador.salvarPendente(), { ok: true, salvou: false });
+});
+
+// Regressão 23/11: endereço/representante/cargo digitados e "Salvar perfil" clicado sem a conferência marcada sumiam calados.
+test('botão único sem a conferência marcada não grava, diz o motivo e mantém o que foi digitado', async () => {
+  const a = ambiente(), pedidos = [];
+  const empresa = { id: 'empresaA', razao_social: 'Empresa fictícia', cnpj: '00000000000100' };
+  const controlador = montar({ alvo: a.host, obterSessao: async () => ({ userId: 'u1', accessToken: 'token-ficticio' }),
+    requisitar: async (_url, op) => { const p = JSON.parse(op.body); pedidos.push(p.acao); return { ok: true, json: async () => ({ empresa, documentos: [], perfil: null }) }; } });
+  controlador.abrir('empresaA', 'u1'); await concluir(); await concluir();
+  for (const [campo, valor] of [['endereco', 'Rua Fictícia, 1'], ['representante', 'Pessoa Fictícia'], ['cargo', 'Sócia']]) { const i = a.buscar(e => e.id === `empresa-identificacao-${campo}`); i.value = valor; i.oninput(); }
+  const r = await controlador.salvarPendente();
+  assert.equal(r.ok, false); assert.match(r.erro, /Conferi os dados/);
+  assert.equal(pedidos.includes('confirmar'), false);
+  assert.equal(a.buscar(e => e.id === 'empresa-identificacao-endereco').value, 'Rua Fictícia, 1');
+  assert.equal(controlador.temAlteracoesNaoSalvas(), true);
+  const cargo = a.buscar(e => e.id === 'empresa-identificacao-cargo'); cargo.value = ' '; cargo.oninput();
+  const revisao = a.buscar(e => e.id === 'empresa-identificacao-revisao'); revisao.checked = true; revisao.onchange();
+  assert.match((await controlador.salvarPendente()).erro, /os três/);
 });
 
 test('sem título a identificação mantém o nome antigo (painel e processos usam o mesmo componente)', () => {

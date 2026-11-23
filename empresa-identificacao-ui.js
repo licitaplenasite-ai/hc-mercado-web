@@ -30,7 +30,9 @@
     const revisao = criar('input'); revisao.type = 'checkbox'; revisao.id = 'empresa-identificacao-revisao';
     const labelRevisao = criar('label','Conferi os dados e os poderes do representante.'); labelRevisao.htmlFor = revisao.id;
     const salvar = botao('Salvar identificação confirmada'), aplicar = botao('Aplicar identificação confirmada à minuta');
-    secao.append(recarregar,labelDocumento,documentos,tipo,arquivo,anexar,extrair,sugestoes,revisao,labelRevisao,salvar);
+    // salvarPorFora (operacao.html): um único botão no fim do quadro salva identificação e perfil juntos (salvarPendente).
+    secao.append(recarregar,labelDocumento,documentos,tipo,arquivo,anexar,extrair,sugestoes,revisao,labelRevisao);
+    if (!contexto.salvarPorFora) secao.append(salvar);
     if (!contexto.semMinuta) secao.append(aplicar);
     host.append(secao);
     function atualizar() {
@@ -63,8 +65,10 @@
     const carregar = () => executar(async () => { const r = await consultar(); if (r) preencher(r); });
     recarregar.onclick = carregar; secao.ontoggle = () => { if (secao.open && !cadastro) carregar(); };
     revisao.onchange = atualizar;
-    salvar.onclick = () => executar(async () => {
-      if (!revisao.checked || !cadastro || ['endereco','representante','cargo'].some(k => !campos[k].value.trim())) throw new Error('Preencha e confira os três campos antes de confirmar.');
+    async function confirmar() {
+      if (!cadastro) throw new Error('A identificação ainda não carregou. Use Carregar identificação salva.');
+      if (['endereco','representante','cargo'].some(k => !campos[k].value.trim())) throw new Error('Preencha endereço, representante legal e cargo (os três) para salvar a identificação.');
+      if (!revisao.checked) throw new Error('Marque “Conferi os dados e os poderes do representante” para salvar endereço, representante e cargo.');
       const dados = Object.fromEntries(['endereco','representante','cargo'].map(k => [k,campos[k].value.trim()]));
       const agrupadas = new Map();
       for (const prova of provas.values()) {
@@ -77,7 +81,17 @@
       const r = await contexto.solicitar({acao:'confirmar',revisado:true,razaoSocial:cadastro.empresa.razao_social,cnpj:cadastro.empresa.cnpj,dados,proveniencia});
       if (!ativo()) return; if (r?.empresa?.id !== contexto.empresaId) throw new Error('A empresa ativa mudou.');
       cadastro = {...cadastro,...r}; alterado = false; revisao.checked = false; contexto.atualizado?.(cadastro); aviso.textContent = contexto.semMinuta ? 'Identificação confirmada. Nenhum documento foi aprovado; prepare uma nova prévia no processo.' : 'Identificação confirmada. A minuta permanece como você a editou.';
-    });
+    }
+    salvar.onclick = () => executar(confirmar);
+    // Chamado pelo botão único: sem alteração não faz nada; com alteração, salva ou devolve o motivo (o que digitou fica na tela).
+    async function salvarPendente() {
+      if (!alterado || !ativo()) return { ok: true, salvou: false };
+      if (ocupado) return { ok: false, erro: 'Aguarde a identificação terminar de carregar e salve de novo.' };
+      ocupado = true; atualizar();
+      try { await confirmar(); return { ok: true, salvou: true }; }
+      catch (e) { const erro = e.message || 'Não foi possível salvar a identificação.'; if (ativo()) { aviso.textContent = erro; if (!revisao.checked) revisao.focus?.(); } return { ok: false, erro }; }
+      finally { if (ativo()) { ocupado = false; atualizar(); } }
+    }
     aplicar.onclick = () => executar(async () => { const r = await consultar(); if (!r) return; preencher(r); if (r.perfil?.status !== 'confirmado' || !r.perfil.dados) throw new Error('Confirme a identificação antes de aplicar.'); contexto.aplicar?.(r); aviso.textContent = 'Identificação aplicada. Revise novamente a minuta.'; });
     extrair.onclick = () => executar(async () => {
       if (!documentos.value) throw new Error('Selecione um documento.');
@@ -104,7 +118,7 @@
       const anexo = await contexto.solicitar({acao:'anexar',tipo:tipo.value,nome:f.name,conteudoBase64:raiz.btoa(binario)}); if (!ativo()) return;
       const r = await consultar(); if (r) { cadastro = {...cadastro,documentos:r.documentos}; documentos.replaceChildren(); for (const d of r.documentos || []) { const o=criar('option',d.arquivo_nome || d.titulo); o.value=d.id; documentos.append(o); } documentos.value = r.documentos?.some(d => d.id === anexo?.documento?.id) ? anexo.documento.id : ''; sugestoes.replaceChildren(); aviso.textContent='PDF anexado. Confira as sugestões ou preencha manualmente.'; }
     });
-    atualizar(); return {carregar,consultar,temAlteracoesNaoSalvas: () => alterado};
+    atualizar(); return {carregar,consultar,salvarPendente,temAlteracoesNaoSalvas: () => alterado};
   }
   const api = {renderizar}; if (typeof module !== 'undefined' && module.exports) module.exports = api; raiz.EmpresaIdentificacaoUI = api;
 })(globalThis);
