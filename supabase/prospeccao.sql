@@ -48,8 +48,17 @@ create table if not exists public.prospeccao_itens (
 -- A tela filtra sempre por tipo e quase sempre por UF e janela de data.
 create index if not exists prospeccao_itens_tipo_uf_data_idx on public.prospeccao_itens (tipo, uf, data_ref);
 create index if not exists prospeccao_itens_catmat_idx on public.prospeccao_itens (catmat) where catmat is not null;
--- shortcut: o ILIKE em busca faz varredura dentro de (tipo, uf); com dezenas de milhares de linhas por UF é rápido.
--- Se a tabela passar de algumas centenas de milhares, criar índice gin_trgm_ops em busca (extensão pg_trgm).
+-- v4 (23/11/2026): UF "Todas" estourava o statement_timeout de 8 s do papel authenticated (503 na tela). Sem UF o índice
+-- acima não entrega a ordem da tela (uf fica no meio), então o banco lia o tipo inteiro na janela e ordenava. Este índice
+-- tem a mesma ordem do order= da função (data_ref.asc,valor_total.desc.nullslast): sem palavra o banco para nas 201 linhas.
+-- Em produção, criar antes com "create index concurrently" (fora de transação) para não travar a gravação do robô.
+create index if not exists prospeccao_itens_tipo_data_valor_idx on public.prospeccao_itens (tipo, data_ref, valor_total desc nulls last);
+-- admin_saude_robos() (admin_painel.sql) faz max(coletado_em) na tabela toda: sem índice era varredura completa e
+-- statement timeout no painel admin. Com o índice o max lê uma entrada só. Em produção, também com "concurrently".
+create index if not exists prospeccao_itens_coletado_em_idx on public.prospeccao_itens (coletado_em desc);
+-- shortcut: o ILIKE em busca faz varredura das linhas do tipo na janela de datas (medido: ~0,6 s em 900 mil linhas).
+-- Índice gin_trgm_ops NÃO ajuda aqui: sob RLS o Postgres só usa no índice operador leakproof, e o ILIKE não é (o plano
+-- ignora o índice). Se a varredura voltar a estourar, o caminho é uma função security definer de busca, não o trigram.
 
 -- LGPD: razão social de MEI vem com o CPF do titular ("FULANA DE TAL 97048143215"). Limpeza única e idempotente
 -- do que já foi gravado (só toca linha que ainda tem CPF), depois o CHECK recusa CPF daqui para frente. Mesma forma
@@ -92,8 +101,10 @@ revoke all on function public.cliente_aprovado() from public, anon;
 grant execute on function public.cliente_aprovado() to authenticated, service_role;
 
 drop policy if exists prospeccao_itens_select_autenticado on public.prospeccao_itens;
+-- (select ...) vira InitPlan: a função roda uma vez por consulta, não uma vez por linha lida (era o maior custo do 503
+-- com UF "Todas": centenas de milhares de chamadas security definer por busca).
 create policy prospeccao_itens_select_autenticado on public.prospeccao_itens
-  for select to authenticated using (public.cliente_aprovado());
+  for select to authenticated using ((select public.cliente_aprovado()));
 -- Sem policy de escrita: só service_role (bypassrls) grava.
 
 -- v3 (22/11/2026): resumo da cobertura da coleta (quando cada UF e tipo fechou a última coleta completa), gravado pelo
@@ -101,7 +112,7 @@ create policy prospeccao_itens_select_autenticado on public.prospeccao_itens
 -- ("ainda não temos o plano de compras desse estado"). Só essas chaves; o progresso do robô (prospeccao_estado_*) não.
 drop policy if exists dados_robo_select_prospeccao_cobertura on public.dados_robo;
 create policy dados_robo_select_prospeccao_cobertura on public.dados_robo for select to authenticated
-  using (public.cliente_aprovado() and chave like 'prospeccao\_cobertura\_%');
+  using ((select public.cliente_aprovado()) and chave like 'prospeccao\_cobertura\_%');
 grant select on public.dados_robo to authenticated;
 
 commit;
