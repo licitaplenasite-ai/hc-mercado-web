@@ -180,7 +180,8 @@ async function main() {
   });
 
   // Tela do processo em abas: cada passo abre direto a aba que usa (#aba=...).
-  const urlProcesso = (aba = 'itens') => `${SITE}/sistema?empresa=${contexto.proc.empresa_id}&processo=${contexto.proc.id}#aba=${aba}`;
+  // t= muda a URL a cada passo: só o #aba mudando, o navegador não recarrega a página (e uma janela aberta ficaria na frente).
+  const urlProcesso = (aba = 'itens') => `${SITE}/sistema?empresa=${contexto.proc.empresa_id}&processo=${contexto.proc.id}&t=${Date.now()}#aba=${aba}`;
   await passo('sistema: abrir o processo (checklist e itens)', p, async () => {
     await p.goto(urlProcesso());
     await p.waitForSelector('#area:not([hidden])', { timeout: 20000 });
@@ -261,7 +262,7 @@ async function main() {
   await passo('item: valor ofertado, marca e modelo (Editar)', p, async () => {
     const li = p.locator('#itens-processo [data-item-lista] li', { has: p.locator('#itens-custo-' + contexto.itemId) });
     await li.getByRole('button', { name: /^Editar/ }).click();
-    const form = p.locator('#itens-processo form').first();
+    const form = p.locator('#itens-processo [data-item-form]');
     await form.locator('[name=marca]').fill('Marca Fictícia'); await form.locator('[name=modelo]').fill('Modelo X');
     await form.locator('[name=valorUnitario]').fill('37.90');
     await form.getByRole('button', { name: /Salvar item/ }).click(); await p.waitForTimeout(2000);

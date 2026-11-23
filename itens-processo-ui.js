@@ -549,7 +549,7 @@
       nos.set(i.id, n);
       // O essencial fica à vista (custo e preços); o resto abre por item, para a página não virar um rolo de 200 cartões.
       const mais = h('details', { classe: 'itens-mais', 'data-item-mais-ferramentas': i.id, open: maisAbertos.has(i.id) },
-        h('summary', { texto: 'Mais ferramentas de preço: referência, lance, margem e Contador' }), n.reforma, n.referencia,
+        h('summary', { texto: 'Mais ferramentas de preço: referência, lance, margem e Contador' }), n.referencia,
         h('div', { classe: 'itens-campo' }, h('label', { for: id('lance'), texto: 'Simular lance (R$)' }), n.lance), n.simulacao,
         h('strong', { texto: 'Cenários de margem' }),
         h('div', { classe: 'itens-campo' }, h('label', { for: id('margem-propria'), texto: 'Margem própria (%)' }), n.margemPropria), n.cenarios,
@@ -562,7 +562,7 @@
           h('div', {}, h('dt', { texto: 'Preço-alvo' }), n.alvo),
           h('div', {}, h('dt', { texto: 'Preço-limite' }), n.limite),
           h('div', {}, h('dt', { texto: 'Preço mínimo gravado' }), n.minimo)),
-        n.aviso, mais);
+        n.aviso, n.reforma, mais);
     }
     // Agente Contador (contador-ui.js): quadro por item, aberto pelo botão. data-recurso: o plano-trava.js mostra o aviso
     // fixo no Essencial; a rota /api/contador barra de verdade. Sem o módulo carregado, nada aparece.
