@@ -85,10 +85,11 @@
   // ---- Rascunho no navegador (fase 1: recarregar perdia o trabalho) ----
   const CHAVE_RASCUNHO = 'licitaplena_orcamento_obra_rascunho';
   const VERSAO_RASCUNHO = 1;
-  // Só o necessário para voltar ao ponto: planilha lida, CPU, cronograma, preços digitados, cotações e os campos.
+  // Só o necessário para voltar ao ponto: a aba lida (a única que o "Baixar no formato do edital" usa), CPU,
+  // cronograma, preços digitados, cotações, os campos e se já tinha sido montado (ao abrir, as contas são refeitas).
   function montarRascunho(estado, campos, agora = new Date()) {
-    return JSON.stringify({ versao: VERSAO_RASCUNHO, salvoEm: agora.toISOString(), nomeArquivo: estado.nomeArquivo, abas: estado.abas, leitura: estado.leitura,
-      cpu: estado.cpu, crono: estado.crono, manuais: estado.manuais, cotacoes: estado.cotacoes, campos });
+    return JSON.stringify({ versao: VERSAO_RASCUNHO, salvoEm: agora.toISOString(), nomeArquivo: estado.nomeArquivo, abas: (estado.abas || []).filter((a) => a.nome === estado.leitura?.aba),
+      leitura: estado.leitura, cpu: estado.cpu, crono: estado.crono, manuais: estado.manuais, cotacoes: estado.cotacoes, montado: Boolean(estado.montado), campos });
   }
   function lerRascunho(texto) {
     try {
@@ -114,9 +115,9 @@
     if (!session) { location.replace('login.html?voltar=/orcamento-obra'); return null; }
     const { data: cliente } = await sb.from('clientes').select('status').eq('id', session.user.id).maybeSingle();
     if (!cliente || cliente.status !== 'aprovado') { await sb.auth.signOut(); location.replace('login.html?voltar=/orcamento-obra'); return null; }
-    void carregarVersoes();
+    const versoes = carregarVersoes();
     void oferecerAjuda(session.user.id);
-    oferecerRascunho();
+    oferecerRascunho(versoes);
     return cliente;
   }
 
@@ -162,26 +163,34 @@
 
   // ---- Rascunho (fica só neste navegador) ----
   const CAMPOS = ['l-uf', 'l-data', 'l-regime', 'b-tipo', 'b-ac', 'b-s', 'b-g', 'b-r', 'b-df', 'b-l', 'b-iss', 'b-pis', 'b-cofins', 'b-cprb', 'm-desconto', 'm-lance', 'm-modo', 'm-meses', 'm-lei', 'm-simples'];
+  // Devolve false quando não coube no navegador: quem chama avisa, em vez de perder calado (23/11: o dono recarregou e sumiu tudo).
   function salvarRascunho() {
-    if (!estado.leitura) return;
+    if (!estado.leitura) return true;
     const campos = Object.fromEntries(CAMPOS.map((id) => [id, $(id).type === 'checkbox' ? $(id).checked : $(id).value]));
-    try { window.localStorage.setItem(CHAVE_RASCUNHO, montarRascunho(estado, campos)); } catch { /* planilha grande demais ou navegador sem espaço: segue sem rascunho */ }
+    try { window.localStorage.setItem(CHAVE_RASCUNHO, montarRascunho(estado, campos)); return true; } catch {
+      try { window.localStorage.removeItem(CHAVE_RASCUNHO); } catch { /* nada a apagar */ } // rascunho velho não volta no lugar do novo
+      aviso('Esta planilha é grande demais para ficar guardada neste navegador. Se recarregar ou fechar a página, vai precisar enviar a planilha de novo. Baixe as planilhas antes de sair.', 'erro');
+      return false;
+    }
   }
-  function oferecerRascunho() {
+  // Ao abrir a página, o trabalho volta sozinho (sem clique) e, se já tinha sido montado, as contas são refeitas.
+  function oferecerRascunho(versoes) {
     let r = null;
     try { r = lerRascunho(window.localStorage.getItem(CHAVE_RASCUNHO)); } catch { r = null; }
     if (!r) return;
+    Object.assign(estado, { abas: r.abas, leitura: r.leitura, cpu: r.cpu, crono: r.crono, manuais: r.manuais || {}, cotacoes: r.cotacoes || {}, nomeArquivo: r.nomeArquivo, orc: null, similares: {}, montado: r.montado === true });
+    mostrarLeitura();
+    for (const id of CAMPOS) if (id in r.campos) { if ($(id).type === 'checkbox') $(id).checked = r.campos[id] === true; else $(id).value = String(r.campos[id] ?? ''); }
+    mostrarBases();
     $('rascunho').hidden = false;
-    $('rascunho-texto').textContent = `Você tem um orçamento em andamento: ${r.nomeArquivo || 'planilha'}, salvo em ${new Date(r.salvoEm).toLocaleString('pt-BR')}.`;
-    $('btn-rascunho-continuar').onclick = () => {
-      Object.assign(estado, { abas: r.abas, leitura: r.leitura, cpu: r.cpu, crono: r.crono, manuais: r.manuais || {}, cotacoes: r.cotacoes || {}, nomeArquivo: r.nomeArquivo, orc: null, similares: {} });
-      mostrarLeitura();
-      for (const id of CAMPOS) if (id in r.campos) { if ($(id).type === 'checkbox') $(id).checked = r.campos[id] === true; else $(id).value = String(r.campos[id] ?? ''); }
-      mostrarBases();
-      $('rascunho').hidden = true;
-      aviso('Orçamento recuperado. Clique em "Montar orçamento" para refazer as contas.', 'info');
-    };
-    $('btn-rascunho-apagar').onclick = () => { try { window.localStorage.removeItem(CHAVE_RASCUNHO); } catch { /* nada a apagar */ } $('rascunho').hidden = true; };
+    $('rascunho-texto').textContent = `Orçamento em andamento recuperado: ${r.nomeArquivo || 'planilha'}, salvo neste navegador em ${new Date(r.salvoEm).toLocaleString('pt-BR')}.`;
+    $('btn-rascunho-apagar').onclick = () => { try { window.localStorage.removeItem(CHAVE_RASCUNHO); } catch { /* nada a apagar */ } location.reload(); };
+    if (!r.montado) return;
+    // Espera as versões do SINAPI (data-base antiga usa o histórico). Aba "Analisar concorrente" aberta (#concorrente):
+    // não mexe no aviso dela; refaz quando a pessoa voltar para cá.
+    const refazer = () => void Promise.resolve(versoes).catch(() => null).then(() => montar());
+    if (document.querySelector('main').classList.contains('modo-concorrente')) $('aba-orcamento').addEventListener('click', refazer, { once: true });
+    else refazer();
   }
 
   // ---- 1. Ler o arquivo (SheetJS) ----
@@ -214,10 +223,10 @@
       const cpuArq = $('f-cpu').files[0];
       estado.cpu = cpuArq ? O.leitor.lerCpu((await lerArquivo(cpuArq)).flatMap((a) => a.linhas)) : null;
       const abaCrono = abas.find((a) => /cronog/i.test(a.nome));
-      Object.assign(estado, { abas, leitura, crono: abaCrono ? O.leitor.lerCronograma(abaCrono.linhas) : null, orc: null, manuais: {}, cotacoes: {}, similares: {}, nomeArquivo: $('f-edital').files[0].name.replace(/\.[^.]+$/, '') });
+      Object.assign(estado, { abas, leitura, crono: abaCrono ? O.leitor.lerCronograma(abaCrono.linhas) : null, orc: null, montado: false, manuais: {}, cotacoes: {}, similares: {}, nomeArquivo: $('f-edital').files[0].name.replace(/\.[^.]+$/, '') });
       mostrarLeitura();
-      salvarRascunho();
-      aviso('');
+      $('rascunho').hidden = true;
+      if (salvarRascunho()) aviso('');
     } catch (e) { aviso(mensagemSimples(e, 'Não foi possível ler a planilha. Confira o arquivo e tente de novo.'), 'erro'); }
   }
 
@@ -330,8 +339,8 @@
       } else estado.orc = O.montador.montarOrcamento(leitura, op);
       estado.lances = estado.orc.globalReferencia ? O.montador.tabelaDeLances(leitura, op) : null;
       mostrarResultado();
-      salvarRascunho();
-      aviso('');
+      estado.montado = true;
+      if (salvarRascunho()) aviso('');
     } catch (e) { aviso(mensagemSimples(e, 'Não foi possível montar o orçamento. Confira a planilha e tente de novo.'), 'erro'); } finally { $('btn-montar').disabled = false; }
   }
 
@@ -450,6 +459,9 @@
   $('l-regime').addEventListener('change', preencherBdi);
   $('l-uf').addEventListener('change', () => { mostrarBases(); if (estado.leitura) void mostrarEstudo(); });
   $('l-data').addEventListener('change', mostrarBases);
+  // Campo mudado (UF, BDI, ISS, preço digitado, cotação) já fica guardado (depois do preencherBdi, que troca o BDI ao mudar tipo/regime): recarregar antes de montar não perde nada.
+  for (const id of CAMPOS) $(id).addEventListener('change', () => salvarRascunho());
+  $('p-corpo').addEventListener('change', () => { if (estado.orc) { guardarPendentes(); salvarRascunho(); } });
   $('btn-baixar-completa').addEventListener('click', () => estado.orc && baixarXlsx(O.montador.montarAbas(estado.orc), `orcamento-${estado.nomeArquivo || 'obra'}.xlsx`));
   $('btn-baixar-edital').addEventListener('click', () => {
     if (!estado.orc) return;

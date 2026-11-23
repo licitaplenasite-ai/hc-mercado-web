@@ -92,3 +92,11 @@ test('rascunho: volta o que foi salvo; texto estragado ou de outra versão é ig
   assert.equal(UI.lerRascunho(JSON.stringify({ versao: 99, leitura: {}, abas: [], campos: {} })), null);
   assert.equal(UI.lerRascunho(null), null);
 });
+
+test('rascunho guarda só a aba lida e se já foi montado (planilha+CPU grandes cabem no navegador)', () => {
+  const estado = { nomeArquivo: 'e', abas: [{ nome: 'Orç', linhas: [['1']] }, { nome: 'Cronograma', linhas: [['x']] }], leitura: { aba: 'Orç', itens: [] }, montado: true, manuais: {}, cotacoes: {} };
+  const r = UI.lerRascunho(UI.montarRascunho(estado, {}));
+  assert.deepEqual(r.abas, [{ nome: 'Orç', linhas: [['1']] }]);
+  assert.equal(r.montado, true);
+  assert.equal(UI.lerRascunho(UI.montarRascunho({ ...estado, montado: undefined }, {})).montado, false);
+});

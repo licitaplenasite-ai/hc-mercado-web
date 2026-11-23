@@ -172,13 +172,11 @@ fs.writeFileSync(EDITAL, gravarXlsx([{ nome: 'Planilha Orçamentária Sintética
     });
     await passo('recarregar a página não perde o trabalho (rascunho no navegador)', p, async () => {
       await p.reload();
+      // Volta sozinho, sem clique, e as contas são refeitas (23/11: o dono recarregou e achou que tinha perdido tudo).
       await p.waitForSelector('#rascunho:not([hidden])');
       const t = await p.innerText('#rascunho-texto');
-      await p.click('#btn-rascunho-continuar');
-      await p.waitForSelector('#passo-leitura:not([hidden])');
-      exigir(await p.inputValue('#m-desconto') === '10' && await p.inputValue('#b-iss') === '3', 'campos não voltaram');
-      await p.click('#btn-montar');
       await p.waitForSelector('#passo-resultado:not([hidden])');
+      exigir(await p.inputValue('#m-desconto') === '10' && await p.inputValue('#b-iss') === '3', 'campos não voltaram');
       exigir(/Digitado 1 · Cotações 1/.test(await p.innerText('#r-totais')), 'preço digitado e cotações não voltaram');
       return t;
     });
