@@ -1,3 +1,4 @@
+import pytest
 # -*- coding: utf-8 -*-
 from boletim_editais import filtrar_por_palavra_chave
 
@@ -118,7 +119,7 @@ def test_prospecta_manda_lista_ordenada_so_da_empresa_ligada(monkeypatch):
     assert chamadas == [("e1", ["000002", "000001"])]
 
 
-# ---- Envio: ZeptoMail primeiro, Gmail de reserva, mesmo conteudo nos dois ----
+# ---- Envio: só ZeptoMail (2 tentativas); Gmail apenas com BOLETIM_GMAIL_RESERVA=1 ----
 def _capturar_envios(monkeypatch, zepto_falha=False):
     envios = []
 
@@ -141,16 +142,98 @@ def test_enviar_email_usa_zeptomail_quando_ha_token(monkeypatch):
     assert envios[0][2] == "[1768] Boletim LicitaPlena de 23 de novembro de 2026, 09:30"
 
 
-def test_enviar_email_cai_no_gmail_sem_token_ou_com_falha_e_mantem_o_conteudo(monkeypatch):
+def test_falha_do_zeptomail_tenta_de_novo_e_nunca_cai_no_gmail(monkeypatch):
+    # Regressão 23/11: o 400 do ZeptoMail mandou o boletim pelo Gmail pessoal do dono.
     envios = _capturar_envios(monkeypatch, zepto_falha=True)
-    monkeypatch.delenv("ZEPTOMAIL_TOKEN", raising=False)
-    be.enviar_email("a@b.com", "Ana", [])
-    assert [e[0] for e in envios] == ["gmail"]
+    esperas = []
+    monkeypatch.setattr(be.time, "sleep", esperas.append)
+    monkeypatch.delenv("BOLETIM_GMAIL_RESERVA", raising=False)
+    monkeypatch.setenv("ZEPTOMAIL_TOKEN", "token-falso")
+    with pytest.raises(be.urllib.error.HTTPError):
+        be.enviar_email("a@b.com", "Ana", [])
+    assert [e[0] for e in envios] == ["zepto", "zepto"] and esperas == [be.ESPERA_ZEPTO_SEGUNDOS]
+    # sem token: erro claro, nada pelo Gmail
+    monkeypatch.delenv("ZEPTOMAIL_TOKEN")
+    with pytest.raises(RuntimeError, match="ZEPTOMAIL_TOKEN"):
+        be.enviar_email("a@b.com", "Ana", [])
+    assert [e[0] for e in envios] == ["zepto", "zepto"]
+
+
+def test_segunda_tentativa_do_zeptomail_resolve(monkeypatch):
+    tentativas = []
+
+    def zepto(*a):
+        tentativas.append(1)
+        if len(tentativas) == 1:
+            raise be.urllib.error.HTTPError(be.ZEPTOMAIL_URL, 500, "erro", None, None)
+    monkeypatch.setattr(be, "enviar_zeptomail", zepto)
+    monkeypatch.setattr(be, "enviar_gmail", lambda *a: pytest.fail("nao pode usar o Gmail"))
+    monkeypatch.setattr(be.time, "sleep", lambda s: None)
     monkeypatch.setenv("ZEPTOMAIL_TOKEN", "token-falso")
     be.enviar_email("a@b.com", "Ana", [])
-    assert [e[0] for e in envios] == ["gmail", "zepto", "gmail"]
+    assert len(tentativas) == 2
+
+
+def test_gmail_so_com_reserva_ligada_e_mesmo_conteudo(monkeypatch):
+    envios = _capturar_envios(monkeypatch, zepto_falha=True)
+    monkeypatch.setattr(be.time, "sleep", lambda s: None)
+    monkeypatch.setenv("ZEPTOMAIL_TOKEN", "token-falso")
+    monkeypatch.setenv("BOLETIM_GMAIL_RESERVA", "1")
+    be.enviar_email("a@b.com", "Ana", [])
+    assert [e[0] for e in envios] == ["zepto", "zepto", "gmail"]
     # Mesmo assunto, texto e HTML nos dois caminhos: o formato aprovado nao muda.
-    assert envios[1][2:] == envios[2][2:] == envios[0][2:]
+    assert envios[0][2:] == envios[2][2:]
+
+
+def test_payload_do_zeptomail_respeita_limites_e_omite_nome_vazio(monkeypatch):
+    import json as _json
+    enviados = []
+
+    class _Resp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+    monkeypatch.setattr(be.urllib.request, "urlopen", lambda req, timeout=None: enviados.append((req, _json.loads(req.data))) or _Resp())
+    be.enviar_zeptomail("Zoho-enczapikey abc", " a@b.c ", "", "A" * 600, "t", "<p>x</p>")
+    be.enviar_zeptomail("abc", "a@b.c", "N" * 300, "Assunto", "t", "<p>x</p>")
+    assert enviados[0][1]["to"] == [{"email_address": {"address": "a@b.c"}}] and len(enviados[0][1]["subject"]) == 500
+    assert len(enviados[1][1]["to"][0]["email_address"]["name"]) == 250
+    assert enviados[0][0].get_header("Authorization") == "Zoho-enczapikey abc"
+    assert set(enviados[0][1]) == {"from", "reply_to", "to", "subject", "textbody", "htmlbody"}
+
+
+def test_erro_do_zeptomail_mostra_codigo_sem_email(monkeypatch):
+    import io
+
+    def recusa(req, timeout=None):
+        corpo = b'{"error":{"code":"TM_4001","details":[{"code":"SM_128","message":"account not reviewed","target":"cliente@x.com"}]}}'
+        raise be.urllib.error.HTTPError(be.ZEPTOMAIL_URL, 400, "Bad Request", None, io.BytesIO(corpo))
+    monkeypatch.setattr(be.urllib.request, "urlopen", recusa)
+    with pytest.raises(be.urllib.error.HTTPError) as erro:
+        be.enviar_zeptomail("abc", "cliente@x.com", "A", "S", "t", "<p>x</p>")
+    assert "SM_128" in str(erro.value) and "em análise" in str(erro.value) and "cliente@x.com" not in str(erro.value)
+
+
+def test_modo_somente_email_manda_so_para_ele_e_nao_grava_nada(monkeypatch):
+    monkeypatch.setattr(be, "montar_lista_destinatarios", lambda: [
+        {"id": "c1", "nome": "HCM", "email": "Dono@Example.invalid", "ufs": ["AM"], "palavras_chave": ["papel"], "whatsapp": {"telefone": "1", "apikey": "2"}},
+        {"id": "c2", "nome": "Outro", "email": "cliente@example.invalid", "ufs": ["AM"], "palavras_chave": ["papel"], "whatsapp": None}])
+    monkeypatch.setattr(be, "hoje_e_feriado_nacional", lambda: None)
+    monkeypatch.setattr(be, "carregar_historico", lambda: {})
+    monkeypatch.setattr(be, "salvar_historico", lambda h: pytest.fail("teste nao marca vistos"))
+    monkeypatch.setattr(be, "_chave_servico", lambda: pytest.fail("teste nao grava no Supabase"))
+    monkeypatch.setattr(be, "enviar_whatsapp", lambda *a: pytest.fail("teste nao manda WhatsApp"))
+    monkeypatch.setattr(be, "carregar_prospecta", lambda: {})
+    monkeypatch.setattr(be, "carregar_cabecalhos", lambda ids, hoje=None: {})
+    monkeypatch.setattr(be, "e_rodada_dos_jornais", lambda agora=None: False)
+    monkeypatch.setattr(be, "buscar_pool_por_uf", lambda ufs: {"AM": [_edital(1, "Papel sulfite A4")]})
+    monkeypatch.setenv("BOLETIM_SOMENTE_EMAIL", " dono@example.invalid ")
+    enviados = []
+    monkeypatch.setattr(be, "enviar_email", lambda email, nome, eds, filtro="", filtro_id="", cab=None: enviados.append((email, len(eds), cab)))
+    be.main()
+    assert enviados == [("Dono@Example.invalid", 1, {"numero": None})]
 
 
 import re
@@ -225,7 +308,7 @@ def test_cabecalho_e_politica_no_html_e_no_texto():
 def test_cabecalho_sem_dados_some_sem_deixar_rotulo_vazio():
     html = b.montar_email_html("HCM", "papel", EDICAO, 2, LINK)
     assert "Edição nº" not in html and "Identificação do cliente" not in html and "Aos cuidados" not in html
-    assert "Empresa:" in html and "POLÍTICA DE USO" in html
+    assert ">Empresa</td>" in html and "POLÍTICA DE USO" in html
     html = b.montar_email_html("HCM", "papel", EDICAO, 2, LINK, None, {"responsavel": "<b>x</b>"})
     assert "<b>x</b>" not in html
 
@@ -352,3 +435,16 @@ def test_cabecalho_usa_chave_explicita_de_planos(monkeypatch):
     assert any("planos!assinaturas_plano_fkey(nome)" in p for p in pedidos)
     assert cab["c1"]["codigo"] == "LP-0001"
     assert "Empresa" in cab["c1"]["vigencia"]
+
+
+def test_layout_resiste_ao_gmail_escuro_e_tem_cabecalho_em_tabela():
+    # 23/11: no Gmail escuro do iPhone a faixa e o botão viravam lilás; no computador o cabeçalho ficava desalinhado.
+    html = b.montar_email_html("HCM LTDA", "papel", EDICAO, 3, LINK, ["2 em AM"], CAB)
+    fixo = "background-image:linear-gradient(" + b.COR_MARCA + "," + b.COR_MARCA + ")"
+    assert html.count(fixo) == 2  # faixa do topo e botão "Acessar o boletim"
+    assert '<meta name="color-scheme" content="light dark">' in html and 'width="600"' in html
+    assert "Arial" in html and "font-family:-apple-system" in html
+    # identificação em 2 colunas (rótulo | valor), Edição e Data na mesma faixa, nessa ordem
+    rotulos = re.findall(r'<td width="38%"[^>]*>([^<]+)</td>', html)
+    assert rotulos == ["Identificação do cliente", "Empresa", "Filtro", "Vigência da assinatura"]
+    assert html.index("Edição nº") < html.index("Data do processamento") < html.index("Identificação do cliente") < html.index("Aos cuidados de") < html.index("Acessar o boletim")

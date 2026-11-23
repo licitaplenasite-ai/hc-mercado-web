@@ -7485,7 +7485,9 @@
       try {
         const numeros = edicao.numeros || [];
         for (let i = 0; i < numeros.length; i += 80) {
-          const { data, error } = await window.__sbClient.from("oportunidades_abertas").select("dado").in("numero_controle_pncp", numeros.slice(i, i + 80));
+          // Pela chave (primária = numeroControlePNCP, ver chaveOportunidade em atualizar_dados.js): numero_controle_pncp não tem
+          // índice e a busca varria a tabela inteira, travando em "Carregando a edição..." até o limite de tempo (23/11).
+          const { data, error } = await window.__sbClient.from("oportunidades_abertas").select("dado").in("chave", numeros.slice(i, i + 80));
           if (error) throw error;
           (data || []).forEach((l) => registros.push({ ...l.dado, link: l.dado.link || linkPncp(l.dado.numeroControlePNCP) }));
         }

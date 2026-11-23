@@ -7,7 +7,12 @@ on:
     - cron: "7 10 * * 1-5"  # 06:00 Brasilia (antecipado para chegar por volta das 7h-8h, ja compensando o atraso normal de fila do GitHub Actions)
     - cron: "13 16 * * 1-5"  # 12:00 Brasilia
     - cron: "17 21 * * 1-5"  # 17:00 Brasilia
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      somente_email:
+        description: "Teste: manda o boletim so para este e-mail (precisa ser de uma conta aprovada). Nao marca editais como vistos, nao cria edicao nem numero, nao grava log. Vazio = rodada normal para todos os clientes."
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -29,8 +34,11 @@ jobs:
 
       - name: Rodar boletim de editais
         env:
-          # ZeptoMail (o mesmo token dos lembretes e do site); sem ele, ou se falhar, cai no Gmail SMTP abaixo.
+          # So ZeptoMail (boletim@licitaplena.com.br). O Gmail abaixo so entra se a variavel do repositorio
+          # BOLETIM_GMAIL_RESERVA for "1" (Settings > Secrets and variables > Actions > Variables); padrao: desligado.
           ZEPTOMAIL_TOKEN: ${{ secrets.ZEPTOMAIL_TOKEN }}
+          BOLETIM_GMAIL_RESERVA: ${{ vars.BOLETIM_GMAIL_RESERVA }}
+          BOLETIM_SOMENTE_EMAIL: ${{ inputs.somente_email }}
           EMAIL_REMETENTE: ${{ secrets.EMAIL_REMETENTE }}
           EMAIL_SENHA_APP: ${{ secrets.EMAIL_SENHA_APP }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -41,7 +49,7 @@ jobs:
         # (isso rodava 3x/dia, era a maior fatia dos disparos automaticos).
 
       - name: Registrar sucesso na Saúde do sistema (admin)
-        if: success()
+        if: success() && inputs.somente_email == ''
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: node scripts/registrar_robo.js boletim
