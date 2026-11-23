@@ -165,6 +165,15 @@ begin
   if p_uf is not null then filtro := filtro || ' and uf = ' || quote_literal(p_uf); end if;
   if p_catmat is not null then filtro := filtro || ' and catmat = ' || quote_literal(p_catmat); end if;
   if p_ate is not null then filtro := filtro || ' and data_ref <= ' || quote_literal(p_ate) || '::date'; end if;
+  -- v6 (23/11/2026): o nível "inicio" ('palavra%') levava ~40 s com 8 frases e UF "Todas" (o planejador ia pelo
+  -- trigram com prefixo e rechecava ~360 mil linhas). Filtrar antes pelo "nome" (o_n, que contém o inicio) numa
+  -- subconsulta com "offset 0" (barreira de otimização) e só depois aplicar o prefixo caiu para ~3 s (medido em produção).
+  if p_nivel = 'inicio' then
+    return query execute 'select s.* from (select * from public.prospeccao_itens where tipo = ' || quote_literal(p_tipo)
+      || ' and data_ref >= ' || quote_literal(p_de) || '::date' || filtro || ' and ' || o_n || ' offset 0) s where ' || oi
+      || ' order by data_ref asc, valor_total desc nulls last limit ' || p_limite;
+    return;
+  end if;
   return query execute 'select * from public.prospeccao_itens where tipo = ' || quote_literal(p_tipo)
     || ' and data_ref >= ' || quote_literal(p_de) || '::date' || filtro || ' and ' || cond
     || ' order by data_ref asc, valor_total desc nulls last limit ' || p_limite;
