@@ -380,7 +380,7 @@
         <button type="button" data-filtro="gratis">Grátis</button>
         <button type="button" data-filtro="suspenso">Suspensos</button>
         <button type="button" data-filtro="todos">Todos</button>
-        <input type="search" id="busca-clientes" placeholder="Buscar nome, e-mail ou CNPJ" aria-label="Buscar cliente">
+        <input type="search" id="busca-clientes" placeholder="Buscar nome, e-mail, CNPJ ou nº do cliente" aria-label="Buscar cliente">
       </div>
       <div class="cartao-lista">
         <div id="conteudo-lista" class="carregando">Carregando clientes...</div>
@@ -1147,7 +1147,7 @@
     const alvo = document.getElementById("conteudo-lista");
     const busca = document.getElementById("busca-clientes").value.trim().toLowerCase();
     const lista = todosClientes.filter((c) => (filtroAtual === "todos" || categoriaConta(c) === filtroAtual)
-      && (!busca || [c.nome, c.empresa, c.email, c.cnpj].some((v) => String(v || "").toLowerCase().includes(busca))));
+      && (!busca || [c.nome, c.empresa, c.email, c.cnpj, c.codigo].some((v) => String(v ?? "").toLowerCase().includes(busca))));
     if (lista.length === 0) {
       alvo.innerHTML = '<div class="vazio">Nenhum cliente nesta lista.</div>';
       return;
@@ -1160,7 +1160,7 @@
         : `${escapeHtml(e.nome || "-")}${e.plano !== e.plano_contratado && e.nome_contratado ? `<br><span class="sub">contratado: ${escapeHtml(e.nome_contratado)}</span>` : ""}${c.assinatura?.plano_solicitado ? `<br><span class="sub">pediu: ${escapeHtml(nomePlano(c.assinatura.plano_solicitado))}</span>` : ""}`;
       const situacao = `<span class="badge ${cat}">${NOMES_CATEGORIA[cat]}</span>${cat === "teste" && e.teste_ate ? `<br><span class="sub">até ${dataBr(e.teste_ate)}</span>` : ""}${c.assinatura?.vence_em ? `<br><span class="sub">vence ${dataBr(c.assinatura.vence_em)}</span>` : ""}`;
       html += `<tr>
-        <td><strong>${escapeHtml(c.nome)}</strong><br><span class="sub">${escapeHtml(c.empresa || "-")}${c.cnpj ? " · " + escapeHtml(c.cnpj) : ""}</span></td>
+        <td><strong>${escapeHtml(c.nome)}</strong><br><span class="sub">${escapeHtml(c.empresa || "-")}${c.cnpj ? " · " + escapeHtml(c.cnpj) : ""}</span>${c.codigo != null ? `<br><span class="sub">Identificação do cliente: ${escapeHtml(String(c.codigo))}</span>` : ""}</td>
         <td>${escapeHtml(c.email)}<br><span class="sub">${escapeHtml(c.telefone || "-")}</span></td>
         <td>${plano}</td>
         <td>${situacao}</td>

@@ -7451,7 +7451,7 @@
       await window.__clientePronto;
       if (!window.__clienteIdAtual) return;
       const { data, error } = await window.__sbClient.from("boletim_edicoes")
-        .select("id, edicao, filtro_id, filtro_nome, empresa, quantidade, numeros").order("edicao", { ascending: false }).limit(90);
+        .select("id, edicao, filtro_id, filtro_nome, empresa, quantidade, numeros").gt("quantidade", 0).order("edicao", { ascending: false }).limit(90);
       edicoesLista = error ? [] : (data || []);
       desenharEdicoes(null);
       if (!edicaoDoLink) return;
@@ -9423,7 +9423,14 @@ window.__preencherIdentidadeUsuario();
       if (acao === "conta") {
         // Só consulta — esses dados vêm do cadastro (cadastro.html) e da aprovação do
         // admin; quem precisar corrigir algo fala com a gente, não edita aqui.
+        // Nº do cliente (supabase/boletim_edicoes.sql), o mesmo do e-mail do boletim. Lido à parte: sem o SQL, só some.
+        let codigo = null;
+        try {
+          const { data } = await window.__sbClient.from("clientes").select("codigo").eq("id", window.__clienteIdAtual).maybeSingle();
+          codigo = data?.codigo ?? null;
+        } catch { /* sem a coluna: segue sem o número */ }
         const linhas = [
+          ["Identificação do cliente", codigo],
           ["Nome", c.nome],
           ["Empresa", c.empresa],
           ["CNPJ", c.cnpj],
