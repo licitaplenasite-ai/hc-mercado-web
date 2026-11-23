@@ -154,7 +154,15 @@
     if (!cabecalho.dataBase) avisos.push('Não achei a data-base do orçamento: informe o mês de referência.');
     if (!cabecalho.uf) avisos.push('Não achei a UF da obra: informe para buscar os preços certos.');
     if (cabecalho.desonerado === null) avisos.push('A planilha não diz se é desonerado ou não desonerado: confira no edital.');
-    return { cabecalho, colunas: k, linhaCabecalho: cab.linha, itens, resumo: rodape(matriz.slice(ultima + 1)), fontes, emBranco: comPreco < servicos.length / 2, avisos };
+    const resumo = rodape(matriz.slice(ultima + 1));
+    // Rodapé que não fecha (custo direto × (1 + BDI) longe do global): costuma ser proposta já com desconto, ou fórmula
+    // sem valor salvo. Sem este aviso o "% do orçamento" sai baixo e parece erro de conta. Folga de 0,1% para o BDI arredondado.
+    const fechado = resumo.custoDireto * (1 + resumo.bdi);
+    if (resumo.custoDireto > 0 && resumo.bdi > 0 && resumo.global > 0 && Math.abs(fechado - resumo.global) > resumo.global * 0.001) {
+      const brl = (v) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      avisos.push(`O rodapé não fecha: custo direto ${brl(resumo.custoDireto)} + BDI dá ${brl(Math.round(fechado * 100) / 100)}, mas o preço global diz ${brl(resumo.global)}. Confira se é a planilha original do edital (e não uma proposta já com desconto).`);
+    }
+    return { cabecalho, colunas: k, linhaCabecalho: cab.linha, itens, resumo, fontes, emBranco: comPreco < servicos.length / 2, avisos };
   }
 
   // CPU do edital (anexo de composições analíticas, no modelo mais comum: linha "Composição" seguida das linhas

@@ -75,6 +75,28 @@ test('planilha do edital preenchida: troca só preço, total e rodapé da propos
   assert.equal(abas[0].linhas[orc.linhas.find((l) => l.item === '1.1').linhaPlanilha][k.precoUnitario], 53.2, 'não altera a matriz original');
 });
 
+// Teste em produção (TRE-AM, 23/11): a planilha enviada era a NOSSA proposta com 17% (formatoEdital), não o edital.
+// Preço unitário × 0,83, custo direto trocado e o "estimado pelo contratante" mantido: deu 81% e pareceu erro de conta.
+test('proposta com desconto reenviada como edital: conta certa, leitor avisa, global ofertado não vira 0,17', () => {
+  const { abas, orc } = orcamentoDoEdital({ desconto: { linear: 0.17 } });
+  // Nota do TRE-AM na linha do global ofertado: tem a palavra "desconto".
+  const original = abas[0].linhas.map((l) => (/OFERTADO PELO LICITANTE/.test(String(l[0])) ? [...l, 'Inserir o preço global com o desconto ofertado'] : l));
+  const m = M.formatoEdital(original, orc), k = orc.leitura.colunas;
+  assert.equal(m.find((l) => /OFERTADO PELO LICITANTE/.test(String(l[0])))[k.total], orc.globalProposta, 'global ofertado, não o desconto');
+  assert.equal(m.find((l) => /^DESCONTO/.test(String(l[0])))[k.total], 0.17);
+  const lida = L.lerPlanilha(m);
+  assert.equal(lida.resumo.custoDireto, orc.total);
+  assert.equal(lida.resumo.global, 3943.05, 'estimado pelo contratante continua o do edital');
+  assert.ok(lida.avisos.some((a) => /rodapé não fecha/.test(a)), lida.avisos.join(' | '));
+  // Mesmo BDI do edital: global = custo direto com desconto × 1,2835, e a razão com o estimado é o próprio desconto.
+  const de = M.montarOrcamento(lida, { bdi: BDI, regime: { desonerado: true, ano: 2023 } });
+  const somaItens = lida.itens.filter((i) => i.tipo === 'servico').reduce((a, i) => a + Math.trunc(i.quantidade * i.precoUnitario * 100 + 1e-6) / 100, 0);
+  assert.equal(de.total, Math.round(somaItens * 100) / 100, 'custo direto = soma de quant. × preço, truncado item a item');
+  assert.equal(de.globalProposta, orc.globalProposta);
+  assert.ok(Math.abs(de.globalProposta / de.globalReferencia - 0.83) < 0.005, `${de.globalProposta / de.globalReferencia}`);
+  assert.deepEqual(orcamentoDoEdital().leitura.avisos, [], 'edital original fecha: sem aviso');
+});
+
 test('planilha em branco com várias bases: cada item diz qual base valeu e o que falta', () => {
   const leitura = L.lerPasta(pasta('edital-em-branco.xlsx'));
   const orc = M.montarOrcamento(leitura, {

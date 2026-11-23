@@ -304,8 +304,10 @@
       const t = norm((m[i] || []).filter((c) => typeof c === 'string').join(' '));
       if (/CUSTO DIRETO/.test(t)) por(k.total, i, orc.total);
       else if (/^\s*BDI/.test(t) && !orc.bdiNoUnitario) por(k.total, i, C.arredondar(orc.globalProposta - orc.total));
-      else if (/DESCONTO/.test(t) && orc.desconto.linear !== undefined) por(k.total, i, orc.desconto.linear);
+      // Global ofertado antes do desconto: a linha do TRE-AM traz a nota "Inserir o preço global com o desconto ofertado"
+      // e, na ordem inversa, recebia 0,17 no lugar do preço global.
       else if (/(PRECO|VALOR) GLOBAL|TOTAL GERAL/.test(t) && /LICITANTE|OFERTADO|PROPOSTA/.test(t)) por(k.total, i, orc.globalProposta);
+      else if (/DESCONTO/.test(t) && orc.desconto.linear !== undefined) por(k.total, i, orc.desconto.linear);
     }
     return m;
   }

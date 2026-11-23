@@ -255,6 +255,8 @@
     for (const [id, x] of Object.entries(v)) $(id).value = x;
   }
   function lerBdi() {
+    // ISS vazio virava 0% (BDI baixo e alerta de desclassificação): a alíquota é do município, só a pessoa sabe.
+    if (!$('b-iss').value.trim()) { $('b-iss').focus(); throw erroSimples('Preencha o ISS %: a alíquota da lei do município da obra, entre 2% e 5% (o edital costuma trazer na planilha do BDI).'); }
     const e = { tipo: $('b-tipo').value, issBase: 10000 }, mapa = { ac: 'b-ac', s: 'b-s', g: 'b-g', r: 'b-r', df: 'b-df', l: 'b-l', issAliquota: 'b-iss', pis: 'b-pis', cofins: 'b-cofins', cprb: 'b-cprb' };
     for (const [k, id] of Object.entries(mapa)) {
       const v = BDI.lerPct($(id).value || '0');
@@ -399,12 +401,15 @@
   function mostrarResultado() {
     const o = estado.orc, s = o.linhas.filter((l) => l.tipo === 'servico');
     const cont = s.reduce((a, l) => ({ ...a, [l.origem]: (a[l.origem] || 0) + 1 }), {});
+    // Tabela SINAPI da UF vazia no banco (robô da CAIXA bloqueado, por exemplo): dizer, em vez de só "CPU incompleta".
+    const semSinapi = estado.sinapi && !Object.keys(estado.sinapi.precos).length
+      ? `A tabela SINAPI de ${estado.sinapi.uf} ainda não foi carregada no sistema: ${cont.edital ? 'usamos o preço do edital nos itens' : 'os itens SINAPI ficaram sem preço'}. Confira com a CPU do edital.` : '';
     $('passo-resultado').hidden = false; $('passo-alertas').hidden = false; $('passo-baixar').hidden = false;
     $('r-totais').innerHTML = `${o.bdiNoUnitario ? 'Total da proposta (com BDI)' : `Custo direto <b>${esc(reais(o.total))}</b> · BDI ${esc(pct(o.bdi))} ·`} <b>Preço global ${esc(reais(o.globalProposta))}</b>`
       + `${o.globalReferencia ? ` · orçamento do edital ${esc(reais(o.globalReferencia))} (${esc(pct(o.globalProposta / o.globalReferencia))})` : ''}`
-      + `<br>Preço de cada item: ${Object.entries(cont).map(([k, n]) => `${esc(ORIGEM[k])} ${n}`).join(' · ')}${estado.sinapi ? ` · SINAPI ${esc(estado.sinapi.uf)} ${esc(estado.sinapi.referencia)} ${estado.sinapi.desonerado ? 'desonerado' : 'não desonerado'}` : ''}`;
-    $('r-referencia').textContent = estado.referencia?.aviso || '';
-    $('r-referencia').className = estado.referencia?.aviso ? `aviso ${estado.referencia.nivel === 'erro' ? 'erro' : 'info'}` : 'aviso';
+      + `<br>Preço de cada item: ${Object.entries(cont).map(([k, n]) => `${esc(ORIGEM[k])} ${n}`).join(' · ')}${estado.sinapi && !semSinapi ? ` · SINAPI ${esc(estado.sinapi.uf)} ${esc(estado.sinapi.referencia)} ${estado.sinapi.desonerado ? 'desonerado' : 'não desonerado'}` : ''}`;
+    $('r-referencia').textContent = [semSinapi, estado.referencia?.aviso].filter(Boolean).join(' ');
+    $('r-referencia').className = semSinapi || estado.referencia?.aviso ? `aviso ${semSinapi || estado.referencia.nivel === 'erro' ? 'erro' : 'info'}` : 'aviso';
     if (o.lance) $('r-totais').innerHTML += `<br>Ajustado ao lance de ${esc(reais(o.lance))}: desconto linear de ${esc(pct(o.desconto.linear))} em cada preço, sobra ${esc(reais(o.sobra))} por causa dos centavos.`;
     $('r-lances').hidden = !estado.lances;
     $('r-lances-corpo').innerHTML = (estado.lances || []).map((x) => `<tr><td data-rotulo="Desconto">${esc(pct(x.desconto))}</td><td data-rotulo="Preço global">${esc(reais(x.global))}</td>`
