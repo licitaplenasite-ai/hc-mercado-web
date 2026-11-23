@@ -12,7 +12,8 @@
 // (caches.default, compartilhado entre clientes no mesmo data center, grátis, sem tabela nova).
 // Fora do Cloudflare (Netlify, testes) só a memória vale. Quem chama faz login e cota ANTES de chamar.
 
-const MAX_MEMORIA = 300;
+// Respostas chegam a ~150 KB (200 compras); 60 = ~9 MB, folga no limite de 128 MB de memória do isolate do Cloudflare.
+const MAX_MEMORIA = 60;
 const memoria = new Map();
 // Host do próprio site: o Cache API do Cloudflare só guarda chaves da zona do site.
 const BASE_CHAVE = "https://licitaplena.com.br/__cache-consultas/";
