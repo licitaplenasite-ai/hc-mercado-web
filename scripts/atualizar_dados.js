@@ -14,6 +14,11 @@
 //                                    ata, dentro de enriquecerAta() (padrão 6) — ver comentário lá
 //   PAUSA_429_MS_OPORTUNIDADES=5000 -> base do backoff global após 429 sem Retry-After (dobra a
 //                                    cada tentativa, teto 60s) — ver esperaAposRateLimitMs()
+//   TAMANHO_PAGINA_CONTRATOS=500  -> registros por página do scan nacional /v1/contratos (máx. da API)
+//   INTERVALO_MS_CONTRATOS=1000   -> intervalo mínimo global entre chamadas do scan nacional
+//   LIMITE_HORAS_UF_PENDENTE=24   -> UF sem coleta concluída há mais que isso aparece como pendente no painel
+//   LIMITE_HORAS_SEM_COBERTURA=48 -> UF (ou scan nacional) parada há mais que isso faz o robô falhar (e-mail)
+//   MODO_SECO=1, UFS_SECO=RR,AP   -> teste local sem chave e sem gravar nada (ver modoSeco())
 //
 // IMPORTANTE: a partir desta versão o robô é INCREMENTAL — ele não re-varre tudo do zero
 // a cada execução. Ele lê os arquivos já existentes (comitados no repo), busca só o que é
@@ -40,7 +45,13 @@ const CONCORRENCIA_PAGINAS = parseInt(process.env.CONCORRENCIA_PAGINAS || "5", 1
 // diferentes — só acelera os itens de UMA MESMA ata, que antes eram sequenciais.
 // Comece baixo (6) e suba com cuidado se o PNCP não reclamar (ver log de 429/rate-limit).
 const CONCORRENCIA_ATAS = parseInt(process.env.CONCORRENCIA_ATAS || "6", 10);
-const TAMANHO_PAGINA = 100;
+// /v1/contratos aceita até 500 por página (medido 22/11: ~3,5 s por página de 500 contra
+// ~1,7 s por página de 100). Com 100, uma semana dava ~377 páginas e o scan tomava 429 em
+// série antes da 25ª; com 500 são ~76 chamadas para o mesmo período.
+const TAMANHO_PAGINA = parseInt(process.env.TAMANHO_PAGINA_CONTRATOS || "500", 10);
+// Intervalo mínimo GLOBAL entre chamadas do scan nacional de contratos (todas as páginas
+// paralelas somadas), no mesmo espírito do limitador das oportunidades.
+const INTERVALO_MS_CONTRATOS = parseInt(process.env.INTERVALO_MS_CONTRATOS || "1000", 10);
 
 const UFS = [
   "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS",
@@ -213,6 +224,26 @@ function partesNumeroControle(numeroControlePNCP) {
   }
 }
 
+// Limitador de cadência compartilhado: só uma chamada sai a cada intervaloMs, e um 429
+// adia a próxima chamada de TODOS os workers (Retry-After ou backoff exponencial com jitter).
+// Em 20-22/11 o scan nacional mandava 5 páginas em paralelo sem cadência e tomava
+// "Rate-limit (429) persistente" a partir da 25ª página, todo dia.
+function criarCadencia(intervaloMs, pausaBaseMs) {
+  let proximaChamadaEm = 0;
+  return {
+    async antes() {
+      const agora = Date.now();
+      const espera = Math.max(0, proximaChamadaEm - agora);
+      proximaChamadaEm = Math.max(agora, proximaChamadaEm) + intervaloMs;
+      if (espera > 0) await new Promise((r) => setTimeout(r, espera));
+    },
+    pausar(retryAfter, tentativa) {
+      proximaChamadaEm = Math.max(proximaChamadaEm, Date.now() + esperaAposRateLimitMs(retryAfter, tentativa, pausaBaseMs));
+    },
+  };
+}
+const cadenciaContratos = criarCadencia(INTERVALO_MS_CONTRATOS, 5000);
+
 // ---------- Utilitário: busca um lote de páginas em paralelo (com limite de concorrência) ----------
 async function buscarPaginasEmLote(montarUrl, paginaInicial, totalPaginasConhecido, concorrencia, aoReceberPagina, anterior = null) {
   let totalPaginas = totalPaginasConhecido || 1;
@@ -227,8 +258,11 @@ async function buscarPaginasEmLote(montarUrl, paginaInicial, totalPaginasConheci
     new Set(dado.data.map((r) => r.numeroControlePNCP)).size === dado.data.length &&
     (dado.numeroPagina === undefined || dado.numeroPagina === numero);
   const assinatura = (dado) => JSON.stringify([dado.totalPaginas, dado.totalRegistros, dado.data.map((r) => r.numeroControlePNCP)]);
+  // Callbacks preguiçosos: os testes carregam esta função isolada, sem a cadência.
+  const buscar = (pagina) => fetchComRetentativa(montarUrl(pagina), 4, 30000, "contratos",
+    () => cadenciaContratos.antes(), (retryAfter, tentativa) => cadenciaContratos.pausar(retryAfter, tentativa));
   if (tempoRestanteMs() < 12000) return { paginasVarridas, totalPaginas, parcial: true, progresso: anterior };
-  const primeira = await fetchComRetentativa(montarUrl(1));
+  const primeira = await buscar(1);
   if (!valida(primeira, 1)) return { paginasVarridas, totalPaginas, parcial: true, progresso: anterior };
   totalPaginas = primeira.totalPaginas;
   let progresso = anterior && anterior.consulta === montarUrl(1) && anterior.primeiraPagina === assinatura(primeira) &&
@@ -256,7 +290,7 @@ async function buscarPaginasEmLote(montarUrl, paginaInicial, totalPaginasConheci
       if (proximaPagina > totalPaginas) return;
       const paginaAtual = proximaPagina;
       proximaPagina += 1;
-      const dados = await fetchComRetentativa(montarUrl(paginaAtual));
+      const dados = await buscar(paginaAtual);
       if (!progresso) return;
       if (!valida(dados, paginaAtual)) {
         houveFalha = true;
@@ -287,7 +321,7 @@ async function buscarPaginasEmLote(montarUrl, paginaInicial, totalPaginasConheci
   if (!parcial && totalPaginas > 1) {
     if (tempoRestanteMs() < 12000) parcial = true;
     else {
-      const conferida = await fetchComRetentativa(montarUrl(1));
+      const conferida = await buscar(1);
       if (!valida(conferida, 1)) parcial = true;
       else if (assinatura(conferida) !== assinatura(primeira)) { parcial = true; progresso = null; }
     }
@@ -568,6 +602,12 @@ function extrairFonteOrcamentaria(item) {
   return null;
 }
 
+// Horas sem coleta concluída a partir das quais uma UF aparece como pendente no Status das
+// Ferramentas (24) e a partir das quais vira erro do robô, com e-mail (48). Abaixo de 48 h a
+// próxima rodada recupera sozinha: falha parcial não é falha do robô.
+const LIMITE_HORAS_UF_PENDENTE = parseFloat(process.env.LIMITE_HORAS_UF_PENDENTE || "24");
+const LIMITE_HORAS_SEM_COBERTURA = parseFloat(process.env.LIMITE_HORAS_SEM_COBERTURA || "48");
+
 function ufsPendentesDeAtualizacao(existentes, agora = new Date()) {
   // Virar o dia UTC não garante uma coleta recente durante o expediente local.
   const limiteAtualizacao = agora.getTime() - 6 * 60 * 60 * 1000;
@@ -577,6 +617,13 @@ function ufsPendentesDeAtualizacao(existentes, agora = new Date()) {
     const atualizadoEm = cobertura[uf] && cobertura[uf].atualizadoEm;
     const ultimaColeta = atualizadoEm ? new Date(atualizadoEm).getTime() : NaN;
     return falhas.has(uf) || !!existentes?.paginasPendentesPorUf?.[uf] || !Number.isFinite(ultimaColeta) || ultimaColeta <= limiteAtualizacao;
+  });
+}
+
+function ufsSemCoberturaRecente(coberturaPorUf, horas, agora = Date.now()) {
+  return UFS.filter((uf) => {
+    const coletaEm = Date.parse(coberturaPorUf && coberturaPorUf[uf] && coberturaPorUf[uf].atualizadoEm);
+    return !Number.isFinite(coletaEm) || agora - coletaEm > horas * 60 * 60 * 1000;
   });
 }
 
@@ -646,7 +693,11 @@ async function coletarOportunidadesAbertas(caminhoArquivo) {
   const coberturaPorUf = { ...((existentes && existentes.coberturaPorUf) || {}) };
   const paginasPendentesPorUf = { ...((existentes && existentes.paginasPendentesPorUf) || {}) };
 
-  const filaUfs = [...ufsAlvo];
+  // Mais antiga primeiro (sem cobertura = mais antiga). Na ordem alfabética, uma execução
+  // que esgotava o tempo deixava sempre as mesmas UFs do fim (PE..TO) sem tentativa — em
+  // 22/11 foram 11 — e o painel mostrava "UFs pendentes" o tempo todo.
+  const ultimaCobertura = (uf) => Date.parse(coberturaPorUf[uf] && coberturaPorUf[uf].atualizadoEm) || 0;
+  const filaUfs = [...ufsAlvo].sort((a, b) => ultimaCobertura(a) - ultimaCobertura(b));
 
   async function processarUf(uf) {
     if (fonteIndisponivel) {
@@ -813,9 +864,10 @@ async function coletarOportunidadesAbertas(caminhoArquivo) {
   );
 
   const falhasDestaExecucao = [...new Set(ufsComFalha)];
-  const ufsComFalhaFinais = recuperarPendentes
-    ? UFS.filter((uf) => ufsAlvo.includes(uf) ? falhasDestaExecucao.includes(uf) : pendentesAnteriores.has(uf))
-    : falhasDestaExecucao;
+  // "Pendente" para o painel = sem coleta concluída nas últimas LIMITE_HORAS_UF_PENDENTE
+  // horas, não "falhou nesta execução": a recuperação roda a cada 3 h e retoma da página
+  // onde parou, então uma UF coletada há 4 h e que esbarrou no orçamento agora está em dia.
+  const ufsComFalhaFinais = ufsSemCoberturaRecente(coberturaPorUf, LIMITE_HORAS_UF_PENDENTE);
   const tentativaEm = new Date().toISOString();
   // Uma indisponibilidade total do PNCP não pode se passar por atualização recente.
   // Mantemos o último instante de dados efetivamente coletados e registramos a tentativa
@@ -829,6 +881,7 @@ async function coletarOportunidadesAbertas(caminhoArquivo) {
     ufsComFalha: ufsComFalhaFinais,
     ufsOk: UFS.filter((uf) => !ufsComFalhaFinais.includes(uf)),
     ufsOkNaExecucao: [...new Set(ufsOk)],
+    ufsFalhasNaExecucao: falhasDestaExecucao,
     coberturaPorUf,
     paginasPendentesPorUf,
     saudeFonte: fonteIndisponivel ? "indisponivel" : (ufsComFalha.length ? "parcial" : "ok"),
@@ -1506,7 +1559,24 @@ async function sincronizarOportunidadesNoSupabase(oportunidades) {
   await removerMaisAntigosQue("oportunidades_abertas", "encerramento", limiteRetencaoIso);
 }
 
+// MODO_SECO=1: teste local contra o PNCP real sem chave e sem gravar nada — nem Supabase
+// nem data/. Coleta oportunidades só das UFS_SECO e o scan nacional de contratos dentro dos
+// orçamentos LIMITE_MINUTOS_*, em arquivos temporários, e imprime o resumo.
+async function modoSeco() {
+  const os = await import("node:os");
+  const path = await import("node:path");
+  const ufs = (process.env.UFS_SECO || "RR,AP").split(",").map((uf) => uf.trim().toUpperCase()).filter((uf) => UFS.includes(uf));
+  UFS.splice(0, UFS.length, ...ufs);
+  const temp = (nome) => path.join(os.tmpdir(), `licitaplena-seco-${process.pid}-${nome}.json`);
+  iniciarFase(LIMITE_MINUTOS_CONTRATOS);
+  const contratos = await coletarContratos(temp("contratos"));
+  const oportunidades = await coletarOportunidadesAbertas(temp("oportunidades"));
+  console.log(`[seco] contratos: ${contratos.novosNaExecucao.length} lidos, ${contratos.paginasVarridas}/${contratos.totalPaginasDisponiveis} páginas, parcial=${contratos.parcial}.`);
+  console.log(`[seco] oportunidades: UFs ok ${oportunidades.ufsOkNaExecucao.join(",") || "nenhuma"}; falhas ${oportunidades.ufsFalhasNaExecucao.join(",") || "nenhuma"}; ${oportunidades.totalRegistros} registros.`);
+}
+
 async function main() {
+  if (process.env.MODO_SECO === "1") return modoSeco();
   const fs = await import("node:fs/promises");
   const path = await import("node:path");
 
@@ -1530,7 +1600,11 @@ async function main() {
     await hidratarContratosDoSupabase(caminhoContratos, caminhoContratosMeta);
     iniciarFase(LIMITE_MINUTOS_CONTRATOS);
     const contratos = await coletarContratos(caminhoContratos);
-    if (contratos.parcial) pendencias.push("contratos: páginas pendentes");
+    // Scan parcial retoma do cursor na próxima rodada; só é erro se a última janela
+    // concluída (dataFinal) ficar mais de LIMITE_HORAS_SEM_COBERTURA para trás.
+    const limiteContratos = fmtData(new Date(Date.now() - LIMITE_HORAS_SEM_COBERTURA * 60 * 60 * 1000));
+    if (contratos.parcial && !(String(contratos.dataFinal) >= limiteContratos)) pendencias.push(`contratos: scan nacional sem concluir desde ${contratos.dataFinal}`);
+    else if (contratos.parcial) console.warn(`[contratos] Coleta parcial; retoma na próxima rodada (última janela concluída: ${contratos.dataFinal}).`);
     await sincronizarContratosNoSupabase(contratos);
     // Painel cai nas RPCs antigas se o resumo faltar; falha aqui não deve derrubar a coleta.
     try {
@@ -1577,7 +1651,9 @@ async function main() {
     );
   }
 
-  if (oportunidades.ufsComFalha.length) pendencias.push(`cobertura de oportunidades: ${oportunidades.ufsComFalha.join(", ")}`);
+  const ufsAtrasadas = ufsSemCoberturaRecente(oportunidades.coberturaPorUf, LIMITE_HORAS_SEM_COBERTURA);
+  if (ufsAtrasadas.length) pendencias.push(`cobertura de oportunidades há mais de ${LIMITE_HORAS_SEM_COBERTURA} h: ${ufsAtrasadas.join(", ")}`);
+  else if (oportunidades.ufsComFalha.length) console.warn(`[oportunidades] UFs ainda não coletadas nas últimas ${LIMITE_HORAS_UF_PENDENTE} h (a próxima rodada retoma): ${oportunidades.ufsComFalha.join(", ")}.`);
   if (somenteOportunidades) {
     if (pendencias.length) throw new Error(pendencias.join("; "));
     console.log("Recuperação de oportunidades finalizada com sucesso.");
@@ -1590,7 +1666,8 @@ async function main() {
 
   iniciarFase(LIMITE_MINUTOS_MERCADO);
   const mercado = await coletarMercadoSegmentos(caminhoMercado);
-  if (mercado.parcial) pendencias.push("mercado: janelas/atas pendentes");
+  // Fila de atas pendentes é o funcionamento normal (ver filaPendente): aviso, não erro.
+  if (mercado.parcial) console.warn("[mercado] Janelas/atas pendentes; a fila continua na próxima rodada.");
   await sincronizarMercadoNoSupabase(mercado);
   // Itens/resultados e IDs dos scans crescem com a coleta; ficam no banco, fora do git.
   const progressoAtas = mercado.progressoAtas || {};
