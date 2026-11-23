@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#071b70"/><stop offset=".55" stop-color="#123aa8"/><stop offset="1" stop-color="#2459e6"/></linearGradient>
+<radialGradient id="b" cx="0.8" cy="0.2" r=".55"><stop offset="0" stop-color="#6f97ff" stop-opacity=".55"/><stop offset="1" stop-color="#6f97ff" stop-opacity="0"/></radialGradient>
+<pattern id="p" width="28" height="28" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.6" fill="#fff" fill-opacity=".12"/></pattern></defs>
+<rect width="1200" height="630" fill="url(#g)"/><rect width="1200" height="630" fill="url(#b)"/><rect width="1200" height="630" fill="url(#p)"/>
+<g fill="none" stroke="#fff"><circle cx="866.3" cy="278.5" r="170" stroke-opacity=".2" stroke-width="3"/><circle cx="866.3" cy="278.5" r="270" stroke-opacity=".12" stroke-width="3"/><circle cx="866.3" cy="278.5" r="380" stroke-opacity=".07" stroke-width="3"/>
+<path d="M0 540c160-50 260 40 430-10s300-70 480-20 240 10 290-10" stroke-opacity=".16" stroke-width="3"/></g>
+<circle cx="513" cy="125.4" r="8" fill="#fff" fill-opacity=".7"/><circle cx="193.8" cy="138.1" r="5" fill="#fff" fill-opacity=".45"/><circle cx="513.9" cy="78.3" r="5" fill="#fff" fill-opacity=".45"/><circle cx="214.8" cy="564.6" r="10" fill="#ffb547"/>
+<g transform="translate(830 315)" fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round"><rect x="-200" y="-160" width="400" height="320" rx="32" fill="#fff" fill-opacity=".08" stroke="#fff" stroke-opacity=".28" stroke-width="3"/><g transform="translate(-70 -30) rotate(35)"><rect x="40" y="-17" width="200" height="30" rx="14" fill="#fff" fill-opacity=".14" stroke-width="8"/><rect x="-40" y="-85" width="84" height="150" rx="18" fill="#123aa8" stroke-width="10"/></g>
+<rect x="-200" y="112" width="220" height="36" rx="14" fill="#fff" fill-opacity=".14" stroke-width="8"/>
+<path d="M70 -170h140a20 20 0 0 1 20 20v70a20 20 0 0 1-20 20h-80l-40 34v-34h-20a20 20 0 0 1-20-20v-70a20 20 0 0 1 20-20z" fill="#fff" fill-opacity=".12" stroke-width="8"/>
+<circle cx="110" cy="-115" r="9" fill="#ffb547" stroke="#ffb547"/><circle cx="145" cy="-115" r="9" fill="#ffb547" stroke="#ffb547"/><circle cx="180" cy="-115" r="9" fill="#ffb547" stroke="#ffb547"/></g>
+</svg>

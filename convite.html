@@ -26,8 +26,8 @@
     .caixa { width: 100%; max-width: 440px; padding: 24px; background: var(--surface-default); border: 1px solid var(--border-default); border-radius: var(--radius-card); }
     .topo { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 24px; }
     .marca { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 16px; line-height: 24px; color: var(--text-primary); text-decoration: none; }
-    /* Placa clara fixa: o azul-marinho do símbolo continua legível no tema escuro (regra do DS). */
-    .placa { display: inline-grid; place-content: center; width: 32px; height: 32px; border-radius: var(--radius-control); background: #f6f8fc; border: 1px solid #e3e8f0; flex: none; }
+    /* Logo livre (dono, 23/11): sem placa de fundo; no tema escuro o desenho fica todo branco (ds-tokens.css). */
+    .placa { display: inline-grid; place-content: center; width: 32px; height: 32px; border-radius: var(--radius-control); background: none; border: 0; flex: none; }
     .placa img { width: 24px; height: 24px; display: block; }
     h1 { font: var(--text-section); margin: 0 0 4px; }
     p.sub { color: var(--text-secondary); margin: 0 0 16px; }
@@ -62,8 +62,21 @@
     .rodape-link { text-align: center; margin: 24px 0 0; color: var(--text-secondary); }
     @media (max-width: 480px) { body { padding: 12px; align-items: flex-start; } .caixa { padding: 20px 16px; margin-top: 12px; } }
   </style>
+<link rel="stylesheet" href="entrar.css">
 </head>
-<body>
+<body class="tela-entrar">
+<div class="entrar-tela">
+  <aside class="entrar-arte" aria-label="Sobre o LicitaPlena">
+    <a href="index.html" class="entrar-marca"><img src="logo-icone-branco.svg" alt="" width="32" height="32">LicitaPlena</a>
+    <div>
+      <p class="entrar-titulo">Sua equipe já está no LicitaPlena.</p>
+      <ul class="entrar-beneficios"><li><svg viewBox="0 0 28 28" aria-hidden="true" focusable="false"><circle cx="14" cy="14" r="13" fill="#ffb547"/><path d="M8.5 14.5l3.5 3.5 7.5-8" fill="none" stroke="#071b70" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Você entra na mesma empresa de quem convidou</span></li><li><svg viewBox="0 0 28 28" aria-hidden="true" focusable="false"><circle cx="14" cy="14" r="13" fill="#ffb547"/><path d="M8.5 14.5l3.5 3.5 7.5-8" fill="none" stroke="#071b70" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Cada pessoa tem o próprio login e senha</span></li><li><svg viewBox="0 0 28 28" aria-hidden="true" focusable="false"><circle cx="14" cy="14" r="13" fill="#ffb547"/><path d="M8.5 14.5l3.5 3.5 7.5-8" fill="none" stroke="#071b70" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Boletim, editais e documentos no mesmo lugar</span></li></ul>
+    </div>
+    <p class="entrar-nota">Dados públicos oficiais do PNCP, do Compras.gov e do Portal da Transparência.</p>
+    <svg class="entrar-desenho" viewBox="0 0 360 300" aria-hidden="true" focusable="false"><g fill="none" stroke="#fff" stroke-linecap="round"><circle cx="200" cy="150" r="70" stroke-opacity=".35" stroke-width="2"/><circle cx="200" cy="150" r="120" stroke-opacity=".2" stroke-width="2"/><circle cx="200" cy="150" r="170" stroke-opacity=".1" stroke-width="2"/><path d="M200 150l92-74" stroke-opacity=".55" stroke-width="3"/></g><g fill="#fff"><rect x="158" y="98" width="84" height="104" rx="8" fill-opacity=".14"/><rect x="172" y="116" width="56" height="6" rx="3" fill-opacity=".75"/><rect x="172" y="132" width="44" height="6" rx="3" fill-opacity=".5"/><rect x="172" y="148" width="50" height="6" rx="3" fill-opacity=".5"/><rect x="172" y="164" width="34" height="6" rx="3" fill-opacity=".5"/><circle cx="292" cy="76" r="7"/></g></svg>
+  </aside>
+  <div class="entrar-form">
+
 <main class="caixa">
   <div class="topo">
     <a href="index.html" class="marca"><span class="placa"><img src="logo-icone.svg" alt=""></span>LicitaPlena</a>
@@ -87,6 +100,8 @@
   </form>
   <p class="rodape-link"><a href="login.html">Voltar ao login</a></p>
 </main>
+  </div>
+</div>
 <script>
   // Alternar tema: grava na mesma chave que o sistema lê (igual a login.html).
   (function () {

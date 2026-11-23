@@ -28,7 +28,7 @@ a{color:var(--action-text);text-underline-offset:3px}:focus-visible{outline:2px 
 .topo{position:sticky;top:0;z-index:50;background:var(--surface-default);border-bottom:1px solid var(--border-default)}
 .topo .c{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:60px;flex-wrap:wrap}
 .marca{display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:16px;color:var(--text-primary);text-decoration:none}
-.placa{display:inline-grid;place-content:center;width:32px;height:32px;border-radius:var(--radius-control);background:#f6f8fc;border:1px solid #e3e8f0}.placa img{width:24px;height:24px;display:block}
+.placa{display:inline-grid;place-content:center;width:32px;height:32px;border-radius:var(--radius-control);background:none;border:0}.placa img{width:24px;height:24px;display:block}
 .menu{display:flex;gap:2px;flex-wrap:wrap}.menu a{text-decoration:none;color:var(--text-secondary);font-weight:500;padding:6px 10px;border-radius:var(--radius-control)}.menu a:hover{color:var(--text-primary);background:var(--surface-sunken)}
 .acoes{display:flex;gap:8px;flex-wrap:wrap}
 .btn{min-height:36px;padding:0 16px;border-radius:var(--radius-control);border:1px solid transparent;display:inline-flex;align-items:center;justify-content:center;font-weight:500;font-size:14px;text-decoration:none;cursor:pointer;text-align:center}
@@ -61,6 +61,7 @@ footer{border-top:1px solid var(--border-default);background:var(--surface-defau
 .direitos{font:var(--text-label);color:var(--text-secondary);margin:32px 0 0;max-width:720px}
 @media (max-width:760px){.c{padding:0 16px}h1{font-size:27px;line-height:35px}.mapa-site{grid-template-columns:1fr 1fr}.menu{order:3;width:100%;margin:0 -10px 6px}.topo .c{padding-top:8px}.acoes .btn{flex:1 1 auto}.chamada{padding:20px}}
 @media (max-width:420px){.acoes{width:100%}.chamada .btn{width:100%}}</style>
+<link rel="stylesheet" href="/marca.css">
 </head>
 <body>
 <a class="pular" href="#conteudo">Pular para o conteúdo</a>
@@ -78,7 +79,7 @@ footer{border-top:1px solid var(--border-default);background:var(--surface-defau
 <p class="aviso"><strong>Importante:</strong> É uma estimativa para formar preço, não um parecer contábil. Confirme com o seu contador.</p>
 <p class="texto"><strong>Plano:</strong> Plano Empresa. <a href="/#planos">Ver planos e preços</a>.</p>
 <h2>Perguntas frequentes</h2><div class="faq"><details><summary>Serve para empresa do Simples Nacional?</summary><p>Sim. O Contador lê o regime pelo CNPJ e calcula conforme o regime. No Simples, CBS e IBS seguem regras próprias.</p></details><details><summary>Substitui o contador?</summary><p>Não. É uma estimativa para formar preço. Confirme com o seu contador antes de fechar a proposta.</p></details></div>
-<h2>Leia também</h2><ul class="grade"><li class="cartao"><p class="rotulo">Impostos e preços</p><h3><a href="/blog/cbs-ibs-2027-quem-vende-ao-governo">CBS e IBS em 2027: o que muda para quem vende ao governo</a></h3><p>O calendário da CBS e do IBS e como ele afeta o preço de quem vende para órgãos públicos.</p></li><li class="cartao"><p class="rotulo">Impostos e preços</p><h3><a href="/blog/pesquisa-de-precos-antes-do-lance">Como pesquisar quanto o governo já pagou antes de dar o lance</a></h3><p>Como descobrir o preço que o governo já pagou e usar isso para dar um lance seguro.</p></li></ul>
+<h2>Leia também</h2><ul class="grade"><li class="cartao cartao-artigo"><img class="cartao-capa" src="/blog/capas/cbs-ibs-2027-quem-vende-ao-governo.svg" alt="" width="1200" height="630" loading="lazy"><div class="cartao-corpo"><p class="rotulo">Impostos e preços</p><h3><a href="/blog/cbs-ibs-2027-quem-vende-ao-governo">CBS e IBS em 2027: o que muda para quem vende ao governo</a></h3><p>O calendário da CBS e do IBS e como ele afeta o preço de quem vende para órgãos públicos.</p><p class="cartao-meta">5 min de leitura</p></div></li><li class="cartao cartao-artigo"><img class="cartao-capa" src="/blog/capas/pesquisa-de-precos-antes-do-lance.svg" alt="" width="1200" height="630" loading="lazy"><div class="cartao-corpo"><p class="rotulo">Impostos e preços</p><h3><a href="/blog/pesquisa-de-precos-antes-do-lance">Como pesquisar quanto o governo já pagou antes de dar o lance</a></h3><p>Como descobrir o preço que o governo já pagou e usar isso para dar um lance seguro.</p><p class="cartao-meta">4 min de leitura</p></div></li></ul>
 <section class="chamada" aria-label="Teste grátis"><h2>Teste grátis por 14 dias</h2><p>Sem cartão de crédito. Cada conta é liberada pela nossa equipe, e a resposta chega por e-mail.</p><div class="acoes"><a href="/cadastro" class="btn btn-pri btn-g">Teste grátis 14 dias</a><a href="/assessoria-hc" class="btn btn-sec btn-g">Precisa de quem faça por você?</a></div></section></div>
 </div></main>
 <footer><div class="c">

@@ -41,8 +41,8 @@ button,input,select,textarea{font-family:var(--font-sans)}
 header{background:var(--surface-default);border-bottom:1px solid var(--border-default);box-shadow:none;padding:8px 24px;flex-wrap:wrap}
 .topo-marca-linha{display:flex;align-items:center;gap:8px;min-width:0}
 header .marca{display:flex;align-items:center;gap:8px;color:var(--text-primary);text-decoration:none;font:600 16px/24px var(--font-sans)}
-/* Placa clara fixa: o azul-marinho do símbolo continua legível no tema escuro (mesma regra do painel). */
-.marca-placa{display:inline-grid;place-content:center;width:32px;height:32px;border-radius:var(--radius-control);background:#f6f8fc;border:1px solid #e3e8f0;flex:none}
+/* Logo livre (dono, 23/11): sem placa de fundo; no tema escuro o desenho fica todo branco (ds-tokens.css). */
+.marca-placa{display:inline-grid;place-content:center;width:32px;height:32px;border-radius:var(--radius-control);background:none;border:0;flex:none}
 .marca-placa img{width:24px;height:24px;display:block}
 .acoes{gap:8px;flex-wrap:wrap}
 .btn{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:0 16px;border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--surface-default);color:var(--text-primary);font:500 14px/16px var(--font-sans);text-decoration:none;box-shadow:none}

@@ -1,0 +1,255 @@
+/* Camada de marca do site público (index.html e páginas de scripts/gerar_site_publico.js).
+   Carregada depois do <style> de cada página: mesma especificidade, então vale esta.
+   Paleta e regras: tokens --marca-* / --grad-* em ds-tokens.css; decisão do dono em 23/11
+   ("visual apagado, sem vida"). Degradê forte só no botão primário, na faixa de IA, na
+   chamada final e no rodapé. Cartões continuam lisos, com sombra leve. */
+:root, [data-theme="light"] { --titulo-cor: var(--marca-escuro); --ico-ac: #c7d7fe; --ferr-detalhe: var(--marca-escuro); }
+[data-theme="dark"] { --titulo-cor: var(--text-primary); --ico-ac: #24407f; --ferr-detalhe: #5e8bff; }
+
+/* ---- Topo ---- */
+.topbar, header.topo {
+  background: color-mix(in srgb, var(--surface-default) 90%, transparent);
+  -webkit-backdrop-filter: saturate(1.4) blur(10px); backdrop-filter: saturate(1.4) blur(10px);
+  border-bottom: 1px solid var(--border-default);
+}
+.marca { font-weight: 700; letter-spacing: -0.01em; }
+.placa img { width: 28px; height: 28px; }
+
+/* ---- Botões ---- */
+.btn { border-radius: 8px; font-weight: 600; }
+.btn-pri {
+  background-color: #123aa8; background-image: var(--grad-marca); color: #ffffff;
+  box-shadow: 0 6px 16px rgba(34, 85, 224, 0.28);
+}
+.btn-pri:hover { background-color: #0e2f8e; background-image: linear-gradient(135deg, #061661 0%, #0f3296 55%, #1d4ed8 100%); color: #ffffff; }
+.btn-sec { border-color: var(--border-strong); }
+.btn-sec:hover { border-color: var(--marca-medio); background: var(--marca-claro-2); }
+/* Botão branco sobre faixa azul. */
+.btn-claro { background: #ffffff; color: #071b70; border-color: #ffffff; }
+.btn-claro:hover { background: #e8effe; color: #071b70; }
+
+/* ---- Títulos de seção ---- */
+.sobretitulo, .rotulo {
+  display: inline-flex; align-items: center; gap: 8px;
+  text-transform: none; letter-spacing: 0; font-weight: 600; color: var(--marca-texto);
+}
+.sobretitulo::before, .rotulo::before { content: ""; width: 16px; height: 3px; border-radius: 2px; background: var(--marca-medio); flex: none; }
+h2.titulo { font-weight: 700; letter-spacing: -0.02em; color: var(--titulo-cor); font-size: 32px; line-height: 40px; }
+.cabeca-centro { text-align: center; margin-left: auto; margin-right: auto; max-width: 760px; }
+.cabeca-centro h2.titulo, .cabeca-centro .intro { margin-left: auto; margin-right: auto; }
+.cabeca-centro h2.titulo { max-width: 26ch; }
+
+/* ---- Primeira tela ---- */
+.hero {
+  position: relative; overflow: hidden; background-color: var(--surface-default);
+  background-image:
+    radial-gradient(ellipse 55% 65% at 88% 0%, rgba(55, 114, 248, 0.20), transparent 70%),
+    radial-gradient(ellipse 45% 55% at 0% 100%, rgba(7, 27, 112, 0.08), transparent 70%),
+    var(--grad-suave);
+}
+/* Malha de pontos discreta, como papel quadriculado de edital. */
+.hero::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background-image: radial-gradient(rgba(34, 85, 224, 0.16) 1px, transparent 1.2px); background-size: 22px 22px;
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, transparent 85%); mask-image: linear-gradient(180deg, #000 0%, transparent 85%);
+}
+[data-theme="dark"] .hero::before { background-image: radial-gradient(rgba(141, 176, 255, 0.14) 1px, transparent 1.2px); }
+.hero > .container { position: relative; }
+.hero h1 { font-size: 46px; line-height: 54px; font-weight: 700; letter-spacing: -0.025em; color: var(--titulo-cor); }
+.hero h1 .segunda { color: var(--marca-texto); }
+.busca {
+  position: relative; overflow: hidden; background: var(--surface-default);
+  border-color: var(--border-default); border-radius: 16px; box-shadow: var(--sombra-cartao-forte);
+}
+.busca::before { content: ""; position: absolute; inset: 0 0 auto; height: 4px; background: var(--grad-linha); }
+.fontes-linha { border-top: 0; padding-top: 0; gap: 8px; }
+.fontes-linha li { padding: 6px 12px; border-radius: 999px; background: var(--surface-default); border: 1px solid var(--border-default); }
+
+/* ---- Grade de ferramentas (tom claro + detalhe escuro embaixo) ---- */
+.ferr-grade { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; }
+.ferr {
+  position: relative; display: flex; flex-direction: column; gap: 8px; padding: 28px 24px 30px;
+  background: var(--marca-claro-2); border: 1px solid var(--marca-claro); border-radius: 16px; overflow: hidden;
+}
+.ferr::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: var(--ferr-detalhe); }
+.ferr-ico {
+  display: inline-grid; place-content: center; width: 64px; height: 64px; margin-bottom: 8px;
+  border-radius: 16px; background: var(--surface-default); color: var(--marca-medio); box-shadow: var(--sombra-cartao);
+}
+[data-theme="dark"] .ferr-ico { color: #8db0ff; }
+.ferr-ico .ac { fill: var(--ico-ac); }
+.ferr h2, .ferr h3 { font-size: 18px; line-height: 26px; font-weight: 700; margin: 0; color: var(--titulo-cor); }
+.ferr h2 a, .ferr h3 a { color: inherit; text-decoration: none; }
+.ferr h2 a::after, .ferr h3 a::after { content: ""; position: absolute; inset: 0; z-index: 1; }
+.ferr h2 a:focus-visible, .ferr h3 a:focus-visible { outline: none; }
+.ferr:has(a:focus-visible) { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.ferr p { margin: 0; color: var(--text-secondary); font-size: 14px; line-height: 22px; }
+.ferr-mais { margin-top: auto; padding-top: 8px; font-weight: 600; font-size: 14px; color: var(--marca-texto); }
+.ferr:hover { border-color: var(--marca-medio); }
+.ferr:hover .ferr-mais { text-decoration: underline; text-underline-offset: 3px; }
+
+/* ---- Faixa de IA ---- */
+.bloco-faixa { padding-top: 0; }
+section.bloco.bloco-faixa { padding-bottom: 24px; }
+.faixa-ia {
+  position: relative; overflow: hidden; border-radius: 24px; padding: 64px 56px; color: #ffffff;
+  background-color: #0b2580;
+  background-image: radial-gradient(ellipse 50% 80% at 80% 40%, rgba(111, 151, 255, 0.35), transparent 70%), var(--grad-marca);
+}
+.faixa-ia-arte { position: absolute; right: -20px; top: 50%; transform: translateY(-50%); width: min(52%, 520px); height: auto; }
+.faixa-ia-texto { position: relative; max-width: 560px; }
+.faixa-ia h2 { font-size: 32px; line-height: 40px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 12px; color: #ffffff; }
+.faixa-ia p { font-size: 17px; line-height: 27px; margin: 0 0 28px; color: #dbe5ff; }
+
+/* ---- Cartões ---- */
+.agente, .plano, .publicos li, .grade-blog li, .extras, .cv-lista, .email, .tela-moldura, .cartao {
+  border-radius: 14px; box-shadow: var(--sombra-cartao);
+}
+.agente { border-top: 3px solid var(--marca-medio); }
+.agente h3, .plano h3, .publicos h3, .grade-blog h3, .passos3 h3, .dif h3 { color: var(--titulo-cor); }
+.publicos a, .grade-blog a, .cartao h2 a, .cartao h3 a { color: var(--titulo-cor); text-decoration-color: var(--marca-medio); }
+.dif { border-top: 3px solid var(--marca-medio); }
+.passos3 li { border-top: 3px solid var(--marca-medio); }
+.passos3 li::before { color: var(--marca-texto); font-weight: 700; font-size: 14px; }
+.etapa-num { color: var(--marca-texto); font-weight: 700; }
+.barra i { background: var(--marca-medio); }
+.inclui li::before { color: var(--marca-texto); }
+.plano.destaque { position: relative; overflow: hidden; border: 2px solid var(--marca-medio); box-shadow: var(--sombra-cartao-forte); }
+.plano.destaque::before { content: ""; position: absolute; inset: 0 0 auto; height: 5px; background: var(--grad-linha); }
+/* O único selo âmbar da página: sobre azul-marinho (8,5:1). */
+.plano.destaque .chip { background: #071b70; border-color: #071b70; color: #ffb547; font-weight: 600; }
+.preco b { color: var(--titulo-cor); font-weight: 700; }
+.numeros dd, .fatos-site dt { color: var(--titulo-cor); font-weight: 700; }
+.faq details[open] summary { color: var(--marca-texto); }
+.faq summary::after { color: var(--marca-texto); }
+
+/* ---- Chamada final e chamada das páginas geradas ---- */
+.cta-final, .chamada {
+  position: relative; overflow: hidden; border: 1px solid var(--marca-claro); border-radius: 20px;
+  background-color: var(--marca-claro-2);
+  background-image: radial-gradient(circle at 100% 0%, rgba(55, 114, 248, 0.16), transparent 45%);
+}
+.cta-final h2, .chamada h2 { color: var(--titulo-cor); font-weight: 700; }
+.chamada h2 a { color: inherit; }
+
+/* ---- Rodapé: faixa azul-marinho separada por uma linha de marca ---- */
+footer {
+  position: relative; background: var(--marca-rodape); border-top: 0; color: #c9d3f0; padding-top: 56px;
+}
+footer::before { content: ""; position: absolute; inset: 0 0 auto; height: 4px; background: var(--grad-linha); }
+footer .marca { color: #ffffff; }
+footer .placa img { filter: brightness(0) invert(1); }
+footer .mapa-titulo { color: #ffffff; }
+footer .mapa-site a, footer .rodape-legal a { color: #b8c4ea; }
+footer .mapa-site a:hover, footer .rodape-legal a:hover { color: #ffffff; }
+footer .direitos, footer .rodape-legal { color: #aab8e6; }
+footer .direitos a { color: #ffffff; }
+footer .rodape-inner { border-top: 1px solid rgba(184, 196, 234, 0.2); padding-top: 24px; }
+footer :focus-visible { outline-color: #ffffff; }
+
+@media (max-width: 1000px) {
+  .ferr-grade { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .faixa-ia-arte { opacity: 0.45; width: 70%; }
+}
+@media (max-width: 760px) {
+  h2.titulo { font-size: 26px; line-height: 34px; }
+  .hero h1 { font-size: 34px; line-height: 42px; }
+  .faixa-ia { padding: 40px 24px; border-radius: 18px; }
+  .faixa-ia h2 { font-size: 24px; line-height: 32px; }
+  .faixa-ia-arte { right: -120px; top: auto; bottom: -60px; transform: none; width: 420px; opacity: 0.3; }
+}
+@media (max-width: 480px) {
+  .ferr-grade { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  /* Celular: cartão deitado (ícone à esquerda) para a grade não virar uma coluna longa. */
+  .ferr { display: grid; grid-template-columns: 48px minmax(0, 1fr); column-gap: 14px; row-gap: 4px; padding: 16px 16px 18px; }
+  .ferr-ico { grid-row: span 3; width: 48px; height: 48px; margin: 0; border-radius: 12px; }
+  .ferr-ico svg { width: 34px; height: 34px; }
+  .ferr h2, .ferr h3 { font-size: 16px; line-height: 22px; }
+  .ferr p { font-size: 13px; line-height: 20px; }
+  .ferr-mais { padding-top: 2px; font-size: 13px; }
+  .hero h1 { font-size: 28px; line-height: 36px; }
+  .faixa-ia .btn { width: 100%; }
+}
+
+/* Páginas geradas: título principal na cor da marca. */
+header.topo ~ main h1 { color: var(--titulo-cor); font-weight: 700; letter-spacing: -0.02em; }
+
+/* ---- Blog (pedido do dono 23/11: "só texto, sem vida") ---- */
+.cartao-artigo { padding: 0; overflow: hidden; gap: 0; position: relative; }
+.cartao-capa, .grade-blog-capa { display: block; width: 100%; height: auto; aspect-ratio: 1200 / 630; object-fit: cover; background: #123aa8; }
+.cartao-corpo { display: flex; flex-direction: column; gap: 8px; padding: 20px 22px 22px; flex: 1; }
+.cartao-artigo h2, .cartao-artigo h3 { font-size: 18px; line-height: 26px; font-weight: 700; }
+.cartao-artigo h2 a, .cartao-artigo h3 a { text-decoration: none; }
+.cartao-artigo h2 a::after, .cartao-artigo h3 a::after { content: ""; position: absolute; inset: 0; }
+.cartao-artigo:hover { box-shadow: var(--sombra-cartao-forte); }
+.cartao-artigo:hover h2 a, .cartao-artigo:hover h3 a { text-decoration: underline; }
+.cartao-artigo:has(a:focus-visible) { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.cartao-artigo a:focus-visible { outline: none; }
+.cartao-meta { margin-top: auto !important; padding-top: 4px; font: var(--text-label); color: var(--text-secondary); }
+.grade-artigos { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+.grade-artigos .destaque { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
+.grade-artigos .destaque .cartao-capa { height: 100%; }
+.grade-artigos .destaque .cartao-corpo { justify-content: center; padding: 32px 36px; }
+.grade-artigos .destaque h2 { font-size: 26px; line-height: 34px; letter-spacing: -0.01em; }
+.grade-blog li { padding: 0 0 20px; overflow: hidden; }
+.grade-blog li > :not(img) { margin-left: 20px; margin-right: 20px; }
+.grade-blog-capa { margin-bottom: 16px; }
+
+/* Cabeçalho da categoria com capa */
+.cat-cab { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 32px; align-items: center; margin: 16px 0 8px; }
+.cat-capa { order: 2; width: 100%; height: auto; border-radius: 18px; box-shadow: var(--sombra-cartao-forte); }
+.cat-cab h1 { margin-top: 8px; }
+
+/* Página do artigo */
+.artigo-cab { max-width: 820px; margin: 8px 0 0; }
+.selo-cat { display: inline-flex; align-items: center; min-height: 30px; padding: 0 12px; border-radius: 999px; background: var(--marca-claro); color: var(--marca-texto); font-weight: 600; font-size: 13px; text-decoration: none; }
+.selo-cat:hover { text-decoration: underline; }
+.artigo-cab h1 { font-size: 40px; line-height: 48px; margin: 16px 0 12px; }
+.artigo-cab .lead { margin-bottom: 16px; }
+.meta-artigo { display: flex; flex-wrap: wrap; gap: 4px 20px; }
+.artigo-capa { margin: 24px 0 40px; }
+.artigo-capa .capa { width: 100%; height: auto; border: 0; border-radius: 20px; box-shadow: var(--sombra-cartao-forte); }
+.artigo-grade { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 56px; align-items: start; }
+.artigo-grade > .texto:only-child { grid-column: 1 / -1; max-width: 72ch; }
+.sumario { position: sticky; top: 96px; padding: 20px; border-radius: 14px; background: var(--marca-claro-2); border: 1px solid var(--marca-claro); }
+.sumario-titulo { margin: 0 0 10px; font-weight: 700; color: var(--titulo-cor); }
+.sumario ol { margin: 0; padding: 0 0 0 18px; display: grid; gap: 8px; font-size: 14px; line-height: 20px; }
+.sumario li::marker { color: var(--marca-texto); font-weight: 600; }
+.sumario a { color: var(--text-primary); text-decoration: none; }
+.sumario a:hover { color: var(--marca-texto); text-decoration: underline; }
+.artigo .texto { font-size: 18px; line-height: 31px; }
+.artigo .texto > h2 { font-size: 26px; line-height: 34px; font-weight: 700; color: var(--titulo-cor); margin: 48px 0 14px; scroll-margin-top: 90px; }
+.artigo .texto > h3 { font-size: 20px; line-height: 28px; color: var(--titulo-cor); margin: 28px 0 8px; }
+.artigo .texto > p:first-child { font-size: 20px; line-height: 33px; color: var(--text-primary); }
+.artigo .texto li::marker { color: var(--marca-texto); }
+.texto blockquote {
+  position: relative; margin: 28px 0; padding: 20px 24px 20px 28px; border: 0; border-radius: 0 14px 14px 0;
+  background: var(--marca-claro-2); font-size: 19px; line-height: 31px; color: var(--titulo-cor);
+}
+.texto blockquote::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; border-radius: 2px; background: var(--grad-marca); }
+.texto blockquote p { margin: 0; }
+.texto table { border-radius: 12px; }
+.texto th { background: var(--marca-claro-2); color: var(--titulo-cor); }
+.chamada-ferramenta { background-image: none; background-color: var(--surface-default); }
+.relacionados-titulo { font-size: 26px; line-height: 34px; font-weight: 700; color: var(--titulo-cor); margin: 64px 0 8px; }
+.categorias a { border-radius: 999px; }
+.categorias a[aria-current] { background: var(--marca-escuro); border-color: var(--marca-escuro); color: #ffffff; }
+[data-theme="dark"] .categorias a[aria-current] { background: #5e8bff; border-color: #5e8bff; color: #0b1020; }
+
+@media (max-width: 1000px) {
+  .grade-artigos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .artigo-grade { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .sumario { position: static; }
+}
+@media (max-width: 760px) {
+  .grade-artigos, .grade-artigos .destaque, .cat-cab { grid-template-columns: minmax(0, 1fr); }
+  .grade-artigos .destaque .cartao-corpo { padding: 20px 22px 22px; }
+  .grade-artigos .destaque h2 { font-size: 20px; line-height: 28px; }
+  .cat-capa { order: 0; }
+  .artigo-cab h1 { font-size: 30px; line-height: 38px; }
+  .artigo .texto { font-size: 17px; line-height: 29px; }
+  .artigo .texto > p:first-child { font-size: 18px; line-height: 30px; }
+  .artigo .texto > h2 { font-size: 22px; line-height: 30px; }
+  .artigo-capa { margin: 16px 0 24px; }
+  .artigo-capa .capa { border-radius: 14px; }
+}.artigo-capa .capa { max-height: 440px; object-fit: cover; }

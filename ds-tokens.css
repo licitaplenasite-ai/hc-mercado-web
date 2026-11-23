@@ -85,6 +85,37 @@
   --text-body: 400 14px/22px var(--font-sans); /* Corpo padrão de interface, tabelas e formulários. */
   --text-label: 500 12px/16px var(--font-sans); /* Rótulos de campo, metadados, cabeçalhos de coluna. */
 }
+/* Marca premium (23/11, dono pediu "mais vida"): dois tons do mesmo azul + um selo âmbar.
+   Regras e contrastes medidos em _historico/visual-premium/PROPOSTA.md. Degradê só em botão
+   primário, faixas de chamada, arte do login e detalhe do rodapé; cartões continuam lisos. */
+:root, [data-theme="light"] {
+  --marca-escuro: #071b70; /* Azul-marinho: faixas, rodapé, números de destaque. */
+  --marca-medio: #2255e0; /* Azul de ação: ícones, detalhes, marcadores. */
+  --marca-claro: #e8effe; /* Placa de ícone, item ativo. */
+  --marca-claro-2: #f3f7ff; /* Fundo suave de seção. */
+  --marca-texto: #1a3fc4; /* Texto em azul sobre branco ou marca-claro (≥ 6,3:1). */
+  --marca-destaque: #ffb547; /* Selo âmbar: só sobre azul-escuro (8,5:1). */
+  --marca-rodape: #0a1847; /* Fundo do rodapé nos dois temas. */
+  --marca-titulo: #071b70; /* Títulos de tela e números de destaque (escuro: texto principal). */
+  --marca-on: #ffffff; /* Texto sobre o degradê da marca, nos dois temas. */
+  --grad-marca: linear-gradient(135deg, #071b70 0%, #123aa8 55%, #2459e6 100%); /* Texto branco ≥ 5,7:1. */
+  --grad-suave: linear-gradient(180deg, #f3f7ff 0%, #ffffff 100%);
+  --grad-linha: linear-gradient(90deg, #2255e0 0%, #6f97ff 60%, #ffb547 100%);
+  --sombra-cartao: 0 1px 2px rgba(7,27,112,0.06), 0 6px 20px rgba(7,27,112,0.07);
+  --sombra-cartao-forte: 0 2px 4px rgba(7,27,112,0.08), 0 18px 44px rgba(7,27,112,0.16);
+}
+[data-theme="dark"] {
+  --marca-claro: #17264a;
+  --marca-claro-2: #0f1a3a;
+  --marca-texto: #8db0ff;
+  --marca-titulo: var(--text-primary);
+  --grad-suave: linear-gradient(180deg, #0f1a3a 0%, #0b1020 100%);
+  --sombra-cartao: 0 1px 2px rgba(0,0,0,0.4), 0 6px 20px rgba(0,0,0,0.3);
+  --sombra-cartao-forte: 0 2px 4px rgba(0,0,0,0.45), 0 18px 44px rgba(0,0,0,0.5);
+}
+/* Logo livre (dono, 23/11): sem placa de fundo. No tema claro o símbolo fica nas cores da marca;
+   no escuro o desenho inteiro fica branco. O filtro vale para todas as telas que usam a placa. */
+[data-theme="dark"] :is(.placa, .marca-placa, .header-placa, .app-marca-placa) img { filter: brightness(0) invert(1); }
 .title {
   font-family: var(--font-sans);
   font-size: 28px;

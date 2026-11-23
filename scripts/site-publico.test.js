@@ -135,3 +135,17 @@ test("CSP libera o Web Analytics da Cloudflare (script e envio) no _headers e no
     assert.match(csp, /connect-src [^;]*https:\/\/cloudflareinsights\.com/, arq);
   }
 });
+
+test("og:image de cada página gerada existe; artigos e categorias do blog usam a própria capa .jpg (< 120 KB)", () => {
+  for (const loc of locs.filter((l) => saida[arquivoDoEndereco(caminho(l))])) {
+    const html = ler(arquivoDoEndereco(caminho(loc)));
+    const img = (html.match(/<meta property="og:image" content="([^"]+)">/) || [])[1];
+    assert.ok(img && img.startsWith(SITE + "/"), `og:image ausente: ${loc}`);
+    const arquivo = arquivoDoEndereco(caminho(img));
+    assert.ok(arquivo, `og:image aponta para arquivo que não existe: ${img}`);
+    if (/\/blog\/(?!$)/.test(caminho(loc))) {
+      assert.match(img, /\/blog\/capas\/[a-z0-9-]+\.jpg$/, `blog sem capa no og:image: ${loc}`);
+      assert.ok(fs.statSync(path.join(RAIZ, arquivo)).size < 120 * 1024, `capa grande demais: ${img}`);
+    }
+  }
+});

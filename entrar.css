@@ -1,0 +1,52 @@
+﻿/* Telas de entrada (login.html, cadastro.html, convite.html): sÃ³ aparÃªncia, nenhuma regra de login aqui.
+   Pedido do dono (23/11): mais acolhedor e premium. Computador: arte da marca em degradÃª com 3 benefÃ­cios
+   Ã  esquerda e o formulÃ¡rio num cartÃ£o Ã  direita. Celular: faixa azul curta em cima, formulÃ¡rio embaixo.
+   Cores: tokens --marca-* / --grad-* de ds-tokens.css (texto branco sobre o degradÃª â‰¥ 5,7:1). */
+body.tela-entrar { display: block; padding: 0; min-height: 100vh; background: var(--surface-page); }
+.entrar-tela { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr); }
+/* Formulário longo (cadastro): a arte fica presa no topo e a coluna atrás dela continua azul. */
+@media (min-width: 901px) { .entrar-tela { background: linear-gradient(90deg, #123aa8 0, #123aa8 47.5%, transparent 47.5%); } }
+.entrar-arte {
+  position: sticky; top: 0; height: 100vh; overflow: hidden; color: #ffffff;
+  display: flex; flex-direction: column; justify-content: space-between; gap: 32px; padding: 48px 56px;
+  background-color: #0b2580;
+  background-image: radial-gradient(ellipse 60% 50% at 85% 80%, rgba(111, 151, 255, 0.4), transparent 70%), var(--grad-marca);
+}
+/* Malha de pontos, a mesma da primeira tela do site. */
+.entrar-arte::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.12) 1px, transparent 1.3px); background-size: 24px 24px;
+}
+.entrar-arte > * { position: relative; }
+.entrar-marca { display: inline-flex; align-items: center; gap: 10px; color: #ffffff; text-decoration: none; font-weight: 700; font-size: 18px; letter-spacing: -0.01em; }
+.entrar-marca img { width: 32px; height: 32px; display: block; }
+.entrar-titulo { margin: 0 0 24px; max-width: 18ch; font-size: 36px; line-height: 44px; font-weight: 700; letter-spacing: -0.02em; color: #ffffff; }
+.entrar-beneficios { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; max-width: 420px; }
+.entrar-beneficios li { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 12px; align-items: start; font-size: 16px; line-height: 24px; color: #e8efff; }
+.entrar-beneficios svg { width: 28px; height: 28px; display: block; }
+.entrar-nota { margin: 0; font-size: 13px; line-height: 20px; color: #c9d6ff; }
+.entrar-desenho { position: absolute; right: -70px; bottom: -50px; width: 340px; height: auto; opacity: 0.75; pointer-events: none; }
+.entrar-form { display: flex; align-items: center; justify-content: center; padding: 48px 24px; }
+.tela-entrar .caixa { border-radius: 18px; padding: 32px; box-shadow: var(--sombra-cartao-forte); border-color: var(--border-default); }
+/* A marca jÃ¡ aparece na arte: no cartÃ£o fica sÃ³ o botÃ£o de tema. */
+.tela-entrar .caixa > .topo { justify-content: flex-end; margin-bottom: 8px; }
+.tela-entrar .caixa > .topo .marca { display: none; }
+.tela-entrar .caixa h1 { font-size: 26px; line-height: 34px; font-weight: 700; letter-spacing: -0.01em; color: var(--titulo-entrar); }
+.tela-entrar :is(input:not([type="checkbox"]):not([type="radio"]), select) { border-radius: 8px; min-height: 44px; }
+.tela-entrar :is(button.entrar, button.criar) {
+  height: 46px; border-radius: 10px; font-weight: 600; font-size: 15px; color: #ffffff;
+  background-color: #123aa8; background-image: var(--grad-marca); box-shadow: 0 8px 20px rgba(34, 85, 224, 0.28);
+}
+.tela-entrar :is(button.entrar, button.criar):hover { background-color: #0e2f8e; background-image: linear-gradient(135deg, #061661 0%, #0f3296 55%, #1d4ed8 100%); }
+.tela-entrar :is(button.entrar, button.criar):disabled { background-image: none; background-color: var(--surface-sunken); color: var(--text-disabled); box-shadow: none; }
+:root, [data-theme="light"] { --titulo-entrar: var(--marca-escuro); }
+[data-theme="dark"] { --titulo-entrar: var(--text-primary); }
+
+@media (max-width: 900px) {
+  .entrar-tela { grid-template-columns: minmax(0, 1fr); }
+  .entrar-arte { position: relative; height: auto; padding: 20px 16px 22px; gap: 10px; }
+  .entrar-titulo { font-size: 20px; line-height: 28px; margin: 0; max-width: none; }
+  .entrar-beneficios, .entrar-nota, .entrar-desenho { display: none; }
+  .entrar-form { padding: 16px 12px 32px; align-items: flex-start; }
+  .tela-entrar .caixa { padding: 20px 16px; margin-top: 0; }
+}

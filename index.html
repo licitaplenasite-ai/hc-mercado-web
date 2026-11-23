@@ -49,8 +49,8 @@
   .topbar { position: sticky; top: 0; z-index: 50; background: var(--surface-default); border-bottom: 1px solid var(--border-default); }
   .topbar-inner { display: flex; align-items: center; justify-content: space-between; gap: 16px; height: 60px; }
   .marca { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 16px; line-height: 24px; color: var(--text-primary); text-decoration: none; }
-  /* Placa clara fixa: o azul-marinho do símbolo continua legível no tema escuro (regra do DS). */
-  .placa { display: inline-grid; place-content: center; width: 32px; height: 32px; border-radius: var(--radius-control); background: #f6f8fc; border: 1px solid #e3e8f0; flex: none; }
+  /* Logo livre (dono, 23/11): sem placa de fundo; no tema escuro o desenho fica todo branco (ds-tokens.css). */
+  .placa { display: inline-grid; place-content: center; width: 32px; height: 32px; border-radius: var(--radius-control); background: none; border: 0; flex: none; }
   .placa img { width: 24px; height: 24px; display: block; }
   nav.menu { display: flex; align-items: center; gap: 2px; }
   nav.menu a { text-decoration: none; color: var(--text-secondary); font-weight: 500; padding: 6px 10px; border-radius: var(--radius-control); }
@@ -374,6 +374,7 @@
   @media (max-width: 1000px) { .passos3, .publicos, .grade-blog, .hc-parceria { grid-template-columns: minmax(0, 1fr); gap: 20px; } .fatos-site, .mapa-site { grid-template-columns: 1fr 1fr; } }
   @media (max-width: 480px) { .hc-parceria .btn, .ver-mais .btn { width: 100%; } }
 </style>
+<link rel="stylesheet" href="marca.css">
 </head>
 <body>
 <a class="pular" href="#conteudo">Pular para o conteúdo</a>
@@ -453,8 +454,20 @@
   </div>
 </div>
 
-<!-- 2. Duas rotas -->
-<section class="bloco" id="para-quem" aria-labelledby="rotas-titulo">
+<!-- 1b. Ferramentas ilustradas: os cartões saem de scripts/gerar_site_publico.js (ícones em scripts/site-publico/icones.js). -->
+<section class="bloco bloco-ferramentas" id="ferramentas" aria-labelledby="ferramentas-titulo">
+  <div class="container">
+    <div class="cabeca-secao cabeca-centro">
+      <h2 class="titulo" id="ferramentas-titulo">Uma ferramenta para cada parte da licitação</h2>
+      <p class="intro">Do edital publicado ao documento entregue. Todas usam dados públicos oficiais e funcionam no mesmo acesso.</p>
+    </div>
+<!-- gerado:ferramentas -->
+<ul class="ferr-grade"><li class="ferr"><span class="ferr-ico"><svg viewBox="0 0 48 48" width="48" height="48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="5" y="11" width="30" height="22" rx="3"/><path d="M5 14l15 10 15-10"/><circle class="ac" cx="34" cy="32" r="7"/><path d="M39 37l5 5"/></svg></span><h3><a href="/ferramentas/boletim-e-busca-de-licitacoes">Boletim e busca de licitações</a></h3><p>Receba todo dia útil as licitações novas do seu ramo e busque editais abertos no PNCP por palavra, estado, município, órgão e período.</p><span class="ferr-mais" aria-hidden="true">Conhecer a ferramenta</span></li><li class="ferr"><span class="ferr-ico"><svg viewBox="0 0 48 48" width="48" height="48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5h16l8 8v29a2 2 0 0 1-2 2H12a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/><path d="M28 5v8h8M16 21h14M16 27h9"/><path class="ac" d="M35 27l2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/></svg></span><h3><a href="/ferramentas/resumo-de-edital-com-ia">Resumo do edital com IA</a></h3><p>Leia o essencial do edital em minutos: prazos, habilitação e documentos pedidos. Pergunte ao edital e receba a resposta com o trecho e a página.</p><span class="ferr-mais" aria-hidden="true">Conhecer a ferramenta</span></li><li class="ferr"><span class="ferr-ico"><svg viewBox="0 0 48 48" width="48" height="48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M8 10h26a4 4 0 0 1 4 4v14a4 4 0 0 1-4 4H20l-8 7v-7H8a4 4 0 0 1-4-4V14a4 4 0 0 1 4-4z"/><path d="M13 21h0M21 21h0M29 21h0" stroke-width="3.5"/><circle class="ac" cx="40" cy="10" r="5"/></svg></span><h3><a href="/ferramentas/vigia-do-chat-do-pregao">Vigia do chat do pregão</a></h3><p>Extensão do navegador que acompanha o chat do pregoeiro no Compras.gov e avisa quando ele escreve, para você não perder prazo de convocação.</p><span class="ferr-mais" aria-hidden="true">Conhecer a ferramenta</span></li><li class="ferr"><span class="ferr-ico"><svg viewBox="0 0 48 48" width="48" height="48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path class="ac" d="M9 32a15 15 0 0 1 30 0z"/><path d="M24 17v-4M17 19l3 9M31 19l-3 9"/><rect x="5" y="32" width="38" height="6" rx="2"/></svg></span><h3><a href="/ferramentas/orcamento-de-obras">Orçamento de obras</a></h3><p>Leia a planilha do edital, monte o orçamento com preços SINAPI e data-base, calcule o BDI e veja os alertas do Auditor antes de enviar.</p><span class="ferr-mais" aria-hidden="true">Conhecer a ferramenta</span></li><li class="ferr"><span class="ferr-ico"><svg viewBox="0 0 48 48" width="48" height="48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="11" y="5" width="26" height="38" rx="3"/><rect class="ac" x="15" y="9" width="18" height="8" rx="1.5"/><path d="M17 24h0M24 24h0M31 24h0M17 30h0M24 30h0M31 30h0M17 36h0M24 36h0M31 36h0" stroke-width="3.5"/></svg></span><h3><a href="/ferramentas/contador-cbs-ibs">Contador CBS/IBS</a></h3><p>Forme o preço de cada item com os impostos de hoje e com CBS e IBS da reforma tributária. Regime pelo CNPJ, custos e preço mínimo.</p><span class="ferr-mais" aria-hidden="true">Conhecer a ferramenta</span></li><li class="ferr"><span class="ferr-ico"><svg viewBox="0 0 48 48" width="48" height="48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path class="ac" d="M5 25L24 6h15a2 2 0 0 1 2 2v15L22 42a3 3 0 0 1-4.2 0L5 29.2a3 3 0 0 1 0-4.2z"/><circle cx="33" cy="14" r="3"/><path d="M16 27l7-7M19 31l7-7"/></svg></span><h3><a href="/ferramentas/pesquisa-de-precos">Pesquisa de preços e cotação</a></h3><p>Veja quanto o governo pagou por um produto, quais marcas venceram, quem ganhou e em qual órgão. Dados do Compras.gov, com planilha para baixar.</p><span class="ferr-mais" aria-hidden="true">Conhecer a ferramenta</span></li><li class="ferr"><span class="ferr-ico"><svg viewBox="0 0 48 48" width="48" height="48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="6" y="27" width="6" height="14" rx="1"/><rect class="ac" x="16" y="19" width="6" height="22" rx="1"/><rect x="26" y="31" width="6" height="10" rx="1"/><circle cx="35" cy="13" r="7"/><path d="M40 18l5 5"/></svg></span><h3><a href="/ferramentas/analise-de-concorrente">Análise de concorrente</a></h3><p>Digite o CNPJ ou o nome e veja dados da empresa, alertas, desempenho em licitações, contratos com o governo e onde ela atua.</p><span class="ferr-mais" aria-hidden="true">Conhecer a ferramenta</span></li><li class="ferr"><span class="ferr-ico"><svg viewBox="0 0 48 48" width="48" height="48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path class="ac" d="M5 14a3 3 0 0 1 3-3h10l4 4h18a3 3 0 0 1 3 3v19a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3z"/><path d="M17 27l5 5 9-10"/></svg></span><h3><a href="/ferramentas/minhas-empresas-e-documentos">Minhas empresas e documentos</a></h3><p>Guarde os documentos de habilitação com a validade, veja o que vence em verde, amarelo e vermelho e junte tudo num PDF único.</p><span class="ferr-mais" aria-hidden="true">Conhecer a ferramenta</span></li></ul>
+<!-- /gerado:ferramentas -->
+  </div>
+</section>
+
+<!-- 2. Duas rotas --><section class="bloco" id="para-quem" aria-labelledby="rotas-titulo">
   <div class="container">
     <div class="cabeca-secao">
       <p class="sobretitulo">Para quem é</p>
@@ -710,8 +723,40 @@
   </div>
 </section>
 
-<!-- 6b. Time de agentes -->
-<section class="bloco" id="agentes" aria-labelledby="agentes-titulo">
+<!-- 6a. Faixa de IA: o único bloco em degradê forte da página (arte em SVG próprio). -->
+<section class="bloco bloco-faixa" aria-labelledby="faixa-ia-titulo">
+  <div class="container">
+    <div class="faixa-ia">
+      <svg class="faixa-ia-arte" viewBox="0 0 480 320" aria-hidden="true" focusable="false">
+        <g fill="none" stroke="#ffffff" stroke-linecap="round">
+          <circle cx="360" cy="170" r="70" stroke-opacity=".35" stroke-width="2"/>
+          <circle cx="360" cy="170" r="120" stroke-opacity=".22" stroke-width="2"/>
+          <circle cx="360" cy="170" r="175" stroke-opacity=".12" stroke-width="2"/>
+          <path d="M360 170L452 96" stroke-opacity=".55" stroke-width="3"/>
+          <path d="M0 260C90 230 150 290 250 250S400 200 480 230" stroke-opacity=".18" stroke-width="2"/>
+          <path d="M0 290C110 260 170 320 270 280S410 240 480 262" stroke-opacity=".12" stroke-width="2"/>
+        </g>
+        <g fill="#ffffff">
+          <rect x="318" y="128" width="84" height="104" rx="8" fill-opacity=".14"/>
+          <rect x="332" y="146" width="56" height="6" rx="3" fill-opacity=".75"/>
+          <rect x="332" y="162" width="44" height="6" rx="3" fill-opacity=".5"/>
+          <rect x="332" y="178" width="50" height="6" rx="3" fill-opacity=".5"/>
+          <rect x="332" y="194" width="34" height="6" rx="3" fill-opacity=".5"/>
+          <circle cx="452" cy="96" r="7"/>
+          <circle cx="268" cy="96" r="4" fill-opacity=".7"/>
+          <circle cx="430" cy="258" r="5" fill="#ffb547"/>
+        </g>
+      </svg>
+      <div class="faixa-ia-texto">
+        <h2 id="faixa-ia-titulo">Agentes de IA que leem o edital, vigiam o pregão e cuidam dos seus documentos</h2>
+        <p>Cada agente faz uma parte do trabalho e mostra de onde tirou a informação. Você confere e decide.</p>
+        <a href="#agentes" class="btn btn-claro btn-grande">Conhecer os agentes</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 6b. Time de agentes --><section class="bloco" id="agentes" aria-labelledby="agentes-titulo">
   <div class="container">
     <div class="cabeca-secao">
       <p class="sobretitulo">Time de agentes</p>
@@ -914,7 +959,7 @@
       <h2 class="titulo" id="blog-titulo">Licitação explicada em português simples</h2>
     </div>
 <!-- gerado:do-blog -->
-<ul class="grade-blog"><li><p class="sobretitulo">Impostos e preços</p><h3><a href="/blog/pesquisa-de-precos-antes-do-lance">Como pesquisar quanto o governo já pagou antes de dar o lance</a></h3><p>Como descobrir o preço que o governo já pagou e usar isso para dar um lance seguro.</p></li><li><p class="sobretitulo">Pregão e disputa</p><h3><a href="/blog/recurso-e-contrarrazao-prazos">Recurso e contrarrazão em licitação: prazos da Lei 14.133</a></h3><p>Os prazos de recurso, contrarrazão e impugnação na Lei 14.133 e como não perder nenhum deles.</p></li><li><p class="sobretitulo">Primeiros passos</p><h3><a href="/blog/mei-em-licitacao">MEI pode participar de licitação? Regras e primeiros passos</a></h3><p>MEI pode disputar licitação e tem vantagens garantidas em lei. Veja quais são e como começar.</p></li></ul>
+<ul class="grade-blog"><li><img class="grade-blog-capa" src="/blog/capas/pesquisa-de-precos-antes-do-lance.svg" alt="" width="1200" height="630" loading="lazy"><p class="sobretitulo">Impostos e preços</p><h3><a href="/blog/pesquisa-de-precos-antes-do-lance">Como pesquisar quanto o governo já pagou antes de dar o lance</a></h3><p>Como descobrir o preço que o governo já pagou e usar isso para dar um lance seguro.</p></li><li><img class="grade-blog-capa" src="/blog/capas/recurso-e-contrarrazao-prazos.svg" alt="" width="1200" height="630" loading="lazy"><p class="sobretitulo">Pregão e disputa</p><h3><a href="/blog/recurso-e-contrarrazao-prazos">Recurso e contrarrazão em licitação: prazos da Lei 14.133</a></h3><p>Os prazos de recurso, contrarrazão e impugnação na Lei 14.133 e como não perder nenhum deles.</p></li><li><img class="grade-blog-capa" src="/blog/capas/mei-em-licitacao.svg" alt="" width="1200" height="630" loading="lazy"><p class="sobretitulo">Primeiros passos</p><h3><a href="/blog/mei-em-licitacao">MEI pode participar de licitação? Regras e primeiros passos</a></h3><p>MEI pode disputar licitação e tem vantagens garantidas em lei. Veja quais são e como começar.</p></li></ul>
 <!-- /gerado:do-blog -->
     <div class="ver-mais"><a href="/blog/" class="btn btn-sec btn-grande">Ver todos os artigos</a><a href="/glossario" class="btn btn-sec btn-grande">Glossário de licitação</a></div>
   </div>
