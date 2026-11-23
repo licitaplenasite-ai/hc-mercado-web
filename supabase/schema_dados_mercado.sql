@@ -35,6 +35,9 @@ create table if not exists public.contratos (
 create index if not exists contratos_uf_idx on public.contratos (uf);
 create index if not exists contratos_cnpj_fornecedor_idx on public.contratos (cnpj_fornecedor);
 create index if not exists contratos_data_assinatura_idx on public.contratos (data_assinatura);
+-- 23/11: "Status das Ferramentas" pede o contrato mais recente (order by atualizado_em desc limit 1); sem índice
+-- a tabela inteira era varrida e dava statement timeout (57014), e a tela mostrava "Não foi possível verificar".
+create index if not exists contratos_atualizado_em_idx on public.contratos (atualizado_em desc);
 -- Índice trigram pra acelerar o "contém a palavra-chave" (ILIKE '%palavra%') que o
 -- Diagnóstico de Mercado usa pra casar segmento — sem isso, ILIKE em texto livre em
 -- 40k+ linhas fica lento à medida que a tabela cresce.
