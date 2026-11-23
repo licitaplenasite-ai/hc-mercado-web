@@ -7,6 +7,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const crypto = require("node:crypto");
 
 const RAIZ = path.join(__dirname, "..");
 const DESTINO = path.join(RAIZ, "publico");
@@ -43,7 +44,29 @@ function montarPublico() {
   // vídeos curtos dos tutoriais (ajuda/videos/*.mp4|.webm) quando existirem.
   const ajuda = path.join(RAIZ, "ajuda");
   if (fs.existsSync(ajuda)) fs.cpSync(ajuda, path.join(DESTINO, "ajuda"), { recursive: true, filter: (f) => fs.statSync(f).isDirectory() || /\.(webp|mp4|webm)$/.test(f) });
+  versionarArquivos(copiados);
   return copiados;
+}
+
+// 23/11: a Cloudflare guarda .js/.css no navegador por 4 h (Browser Cache TTL da zona) e o cliente via a página
+// nova com o programa velho logo depois de publicar. Cada <script src>/<link href> local ganha ?v=<hash do conteúdo>:
+// mudou o arquivo, muda o endereço e o navegador busca de novo; não mudou, continua no cache.
+function versionarHtml(html, hashDe) {
+  return html.replace(/(\b(?:src|href)=")([A-Za-z0-9._-]+\.(?:js|css))(")/g, (todo, antes, nome, depois) => {
+    const h = hashDe(nome);
+    return h ? `${antes}${nome}?v=${h}${depois}` : todo;
+  });
+}
+
+function versionarArquivos(copiados) {
+  const hashes = {};
+  for (const nome of copiados.filter((n) => /\.(js|css)$/.test(n))) {
+    hashes[nome] = crypto.createHash("sha256").update(fs.readFileSync(path.join(DESTINO, nome))).digest("hex").slice(0, 10);
+  }
+  for (const nome of copiados.filter((n) => n.endsWith(".html"))) {
+    const arq = path.join(DESTINO, nome);
+    fs.writeFileSync(arq, versionarHtml(fs.readFileSync(arq, "utf8"), (n) => hashes[n]));
+  }
 }
 
 // Pacote da extensão em publico/extensao/ (link "Baixar a extensão" do extensao.html). Gerado aqui, e não copiado
@@ -60,4 +83,4 @@ if (require.main === module) {
   }).catch((e) => { console.error(e.message); process.exitCode = 1; });
 }
 
-module.exports = { montarPublico, arquivosDaRaiz, arquivosDeDados, publicarExtensao, PASTAS_DO_SITE };
+module.exports = { montarPublico, arquivosDaRaiz, arquivosDeDados, publicarExtensao, PASTAS_DO_SITE, versionarHtml };

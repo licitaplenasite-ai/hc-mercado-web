@@ -36,3 +36,13 @@ test("_headers traz o CSP do netlify.toml e desanexa o Cache-Control em /data/*"
   assert.ok(headers.includes(`Content-Security-Policy: ${csp}`));
   assert.match(headers, /\/data\/\*\n {2}! Cache-Control\n {2}Cache-Control: public, max-age=300, stale-while-revalidate=3600/);
 });
+
+test("versionarHtml põe ?v=hash nos .js/.css locais e não mexe em CDN nem em arquivo desconhecido (cache da Cloudflare, 23/11)", () => {
+  const { versionarHtml } = require("./montar_publico.js");
+  const html = '<script src="painel.js"></script><link rel="stylesheet" href="ds-tokens.css"><script src="https://cdn.x/a.js"></script><script src="sumiu.js"></script>';
+  const out = versionarHtml(html, (n) => ({ "painel.js": "abc123", "ds-tokens.css": "def456" })[n]);
+  assert.ok(out.includes('src="painel.js?v=abc123"'));
+  assert.ok(out.includes('href="ds-tokens.css?v=def456"'));
+  assert.ok(out.includes('src="https://cdn.x/a.js"'));
+  assert.ok(out.includes('src="sumiu.js"'));
+});
