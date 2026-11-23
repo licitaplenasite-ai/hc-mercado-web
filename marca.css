@@ -96,7 +96,6 @@ section.bloco.bloco-faixa { padding-bottom: 24px; }
   background-color: #0b2580;
   background-image: radial-gradient(ellipse 50% 80% at 80% 40%, rgba(111, 151, 255, 0.35), transparent 70%), var(--grad-marca);
 }
-.faixa-ia-arte { position: absolute; right: -20px; top: 50%; transform: translateY(-50%); width: min(52%, 520px); height: auto; }
 .faixa-ia-texto { position: relative; max-width: 560px; }
 .faixa-ia h2 { font-size: 32px; line-height: 40px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 12px; color: #ffffff; }
 .faixa-ia p { font-size: 17px; line-height: 27px; margin: 0 0 28px; color: #dbe5ff; }
@@ -149,14 +148,12 @@ footer :focus-visible { outline-color: #ffffff; }
 
 @media (max-width: 1000px) {
   .ferr-grade { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .faixa-ia-arte { opacity: 0.45; width: 70%; }
 }
 @media (max-width: 760px) {
   h2.titulo { font-size: 26px; line-height: 34px; }
   .hero h1 { font-size: 34px; line-height: 42px; }
   .faixa-ia { padding: 40px 24px; border-radius: 18px; }
   .faixa-ia h2 { font-size: 24px; line-height: 32px; }
-  .faixa-ia-arte { right: -120px; top: auto; bottom: -60px; transform: none; width: 420px; opacity: 0.3; }
 }
 @media (max-width: 480px) {
   .ferr-grade { grid-template-columns: minmax(0, 1fr); gap: 12px; }
@@ -253,3 +250,154 @@ header.topo ~ main h1 { color: var(--titulo-cor); font-weight: 700; letter-spaci
   .artigo-capa { margin: 16px 0 24px; }
   .artigo-capa .capa { border-radius: 14px; }
 }.artigo-capa .capa { max-height: 440px; object-fit: cover; }
+
+/* ================= Rodada 2 do visual (23/11): nível do site da HC Licitações =================
+   Primeira tela escura com fotos que se alternam, títulos em Fraunces, botões que sobem com um
+   brilho atravessando, cartões que suspendem e ganham borda, blocos que aparecem ao rolar
+   (revelar.js) e foto com moldura deslocada. Tudo parado com "reduzir movimento". */
+:root { --fonte-titulo: "Fraunces", Georgia, "Times New Roman", serif; --ambar: #ffb547; --ambar-forte: #ffc670; }
+.hero h1, h2.titulo, .faixa-ia h2, .cta-final h2, .chamada h2, header.topo ~ main h1,
+.artigo .texto > h2, .relacionados-titulo, .busca h2 {
+  font-family: var(--fonte-titulo); font-weight: 600; letter-spacing: -0.01em;
+}
+
+/* ---- Botões: sobem e ganham brilho que atravessa ---- */
+.btn { transition: transform 0.25s ease, box-shadow 0.25s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease; }
+.btn-pri, .btn-claro { position: relative; overflow: hidden; isolation: isolate; }
+.btn-pri::after, .btn-claro::after {
+  content: ""; position: absolute; z-index: -1; top: 0; bottom: 0; left: -80%; width: 50%; pointer-events: none;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.55), transparent); transform: skewX(-20deg);
+}
+.btn-pri:hover, .btn-claro:hover { transform: translateY(-3px); box-shadow: 0 16px 30px -12px rgba(34, 85, 224, 0.75); }
+.btn-pri:hover::after, .btn-claro:hover::after { animation: lp-brilho 0.85s ease; }
+.btn-sec:hover { transform: translateY(-2px); box-shadow: 0 10px 22px -14px rgba(7, 27, 112, 0.5); }
+/* Botão do topo: o brilho passa sozinho de tempos em tempos, como chamada discreta. */
+.topo-acoes .btn-pri::after, header.topo .acoes .btn-pri::after { animation: lp-brilho-pausa 6s 2.5s ease-in-out infinite; }
+@keyframes lp-brilho { from { left: -80%; } to { left: 130%; } }
+@keyframes lp-brilho-pausa { 0%, 72% { left: -80%; } 100% { left: 130%; } }
+
+/* ---- Cartões: suspendem e ganham borda ---- */
+.ferr, .agente, .plano, .publicos li, .grade-blog li, .cartao, .rota, .dif, .passos3 li {
+  transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.35s ease, border-color 0.35s ease;
+}
+.ferr:hover, .agente:hover, .plano:hover, .publicos li:hover, .grade-blog li:hover, .cartao:hover {
+  transform: translateY(-6px); border-color: var(--marca-medio); box-shadow: var(--sombra-cartao-forte);
+}
+.cartao-capa, .grade-blog-capa { transition: transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1); }
+.cartao-artigo:hover .cartao-capa, .grade-blog li:hover .grade-blog-capa { transform: scale(1.05); }
+.grade-blog li { position: relative; }
+.grade-blog li h3 a::after { content: ""; position: absolute; inset: 0; }
+
+/* ---- Revelar ao rolar (revelar.js põe .rv e, ao aparecer, .visto) ---- */
+.mov .rv:not(.visto) { opacity: 0; }
+.mov .rv.visto { animation: lp-subir 0.75s cubic-bezier(0.2, 0.7, 0.2, 1) var(--atraso, 0ms) backwards; }
+@keyframes lp-subir { from { opacity: 0; transform: translateY(28px); } to { opacity: 1; transform: none; } }
+
+/* ---- Primeira tela escura com fotos ---- */
+.hero { background-color: #0a1f6e; background-image: none; color: #ffffff; padding: 88px 0 96px; }
+.topo-fotos { position: absolute; inset: 0; z-index: 0; overflow: hidden; }
+.topo-fotos img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 1.6s ease; }
+.topo-fotos img.ativa { opacity: 1; animation: lp-zoom 14s ease-out both; }
+@keyframes lp-zoom { from { transform: scale(1.12); } to { transform: scale(1.02); } }
+/* Véu azul por cima das fotos (texto branco legível) + malha de pontos. */
+.hero::before {
+  z-index: 1; -webkit-mask-image: none; mask-image: none;
+  background-image:
+    radial-gradient(rgba(255, 255, 255, 0.10) 1px, transparent 1.3px),
+    linear-gradient(90deg, rgba(5, 16, 66, 0.96) 0%, rgba(7, 27, 112, 0.9) 42%, rgba(7, 27, 112, 0.62) 100%),
+    linear-gradient(0deg, rgba(5, 16, 66, 0.7) 0%, transparent 40%);
+  background-size: 24px 24px, auto, auto;
+}
+[data-theme="dark"] .hero::before { background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1.3px), linear-gradient(90deg, rgba(4, 10, 40, 0.97) 0%, rgba(6, 20, 80, 0.92) 42%, rgba(6, 20, 80, 0.7) 100%), linear-gradient(0deg, rgba(4, 10, 40, 0.75) 0%, transparent 40%); }
+.hero > .container { position: relative; z-index: 2; }
+.hero h1 { color: #ffffff; font-size: 56px; line-height: 62px; }
+.hero h1 .segunda { color: var(--ambar); }
+.hero .sobretitulo { color: #dbe5ff; }
+.hero .sobretitulo::before { background: var(--ambar); }
+.hero .lead { color: #d3defc; }
+.hero .hero-nota { color: #c2cdf0; }
+.hero .fontes-linha li { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.2); color: #dbe5ff; }
+.hero .fontes-linha strong { color: #ffffff; }
+/* Na primeira tela o botão principal é âmbar com texto azul-marinho (8,5:1), como o verde-limão da HC. */
+.hero .btn-pri { background-color: var(--ambar); background-image: none; color: #071b70; border-radius: 999px; box-shadow: 0 12px 28px -10px rgba(255, 181, 71, 0.75); }
+.hero .btn-pri:hover { background-color: var(--ambar-forte); color: #071b70; box-shadow: 0 18px 34px -12px rgba(255, 181, 71, 0.9); }
+.hero .btn-sec { background: transparent; color: #ffffff; border-color: rgba(255, 255, 255, 0.6); border-radius: 999px; }
+.hero .btn-sec:hover { background: rgba(255, 255, 255, 0.12); border-color: #ffffff; }
+.hero .btn-pri::after { background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.75), transparent); }
+/* Entrada da primeira tela: texto sobe em sequência, a busca logo depois. */
+.hero-texto > *, .hero-resto > * { animation: lp-subir 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
+.hero-texto > :nth-child(2) { animation-delay: 0.08s; }
+.hero-texto > :nth-child(3) { animation-delay: 0.16s; }
+.hero-resto > * { animation-delay: 0.24s; }
+.hero .busca { color: var(--text-primary); animation: lp-subir 1s 0.2s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; box-shadow: 0 40px 80px -30px rgba(0, 0, 0, 0.6); }
+
+/* ---- Foto com moldura deslocada (âmbar) e pontos ---- */
+.moldura-foto { position: relative; margin: 0 26px 26px 0; isolation: isolate; }
+.moldura-foto::before {
+  content: ""; position: absolute; z-index: -1; inset: 26px -26px -26px 26px; border-radius: 14px;
+  background: repeating-linear-gradient(135deg, rgba(7, 27, 112, 0.12) 0 1px, transparent 1px 12px), var(--ambar);
+  transition: transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.moldura-foto::after {
+  content: ""; position: absolute; z-index: -2; width: 120px; height: 120px; left: -30px; top: -30px; opacity: 0.45;
+  background-image: radial-gradient(var(--marca-medio) 1.6px, transparent 1.6px); background-size: 14px 14px;
+}
+.moldura-foto img { display: block; width: 100%; height: auto; border-radius: 14px; box-shadow: 0 34px 60px -30px rgba(7, 27, 112, 0.6); transition: transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1); }
+.moldura-foto:hover::before { transform: translate(8px, 8px); }
+.moldura-foto:hover img { transform: translate(-4px, -4px); }
+.hc-parceria .acoes { margin-top: 28px; }
+
+/* ---- Blog: categoria em faixa com foto ---- */
+.cat-cab { position: relative; overflow: hidden; display: flex; align-items: flex-end; min-height: 300px; padding: 40px; border-radius: 22px; color: #ffffff; background: #0a1f6e; }
+.cat-cab .cat-capa { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 0; box-shadow: none; order: 0; }
+.cat-cab::before { content: ""; position: absolute; inset: 0; z-index: 1; background: linear-gradient(90deg, rgba(5, 16, 66, 0.95) 0%, rgba(7, 27, 112, 0.8) 50%, rgba(7, 27, 112, 0.35) 100%); }
+.cat-cab .cat-texto { position: relative; z-index: 2; max-width: 620px; }
+.cat-cab h1 { color: #ffffff !important; margin: 8px 0 8px; font-family: var(--fonte-titulo); }
+.cat-cab .lead { color: #d3defc; margin: 0; }
+.cat-cab .rotulo { color: #ffd38f; }
+.cat-cab .rotulo::before { background: var(--ambar); }
+.artigo-capa { overflow: hidden; border-radius: 20px; }
+.artigo-cab h1 { font-family: var(--fonte-titulo); }
+
+@media (max-width: 760px) {
+  .hero { padding: 48px 0 56px; }
+  .hero h1 { font-size: 38px; line-height: 44px; }
+  .cat-cab { min-height: 240px; padding: 24px; }
+  .moldura-foto { margin: 8px 18px 18px 0; }
+  .moldura-foto::before { inset: 18px -18px -18px 18px; }
+}
+@media (max-width: 480px) { .hero h1 { font-size: 31px; line-height: 37px; } }
+@media (prefers-reduced-motion: reduce) {
+  .btn, .ferr, .agente, .plano, .publicos li, .grade-blog li, .cartao, .cartao-capa, .grade-blog-capa, .moldura-foto img, .moldura-foto::before { transition: none; }
+  .btn:hover, .ferr:hover, .agente:hover, .plano:hover, .publicos li:hover, .grade-blog li:hover, .cartao:hover { transform: none; }
+  .btn-pri::after, .btn-claro::after, .topo-acoes .btn-pri::after, header.topo .acoes .btn-pri::after { animation: none; display: none; }
+  .topo-fotos img.ativa, .hero-texto > *, .hero-resto > *, .hero .busca { color: var(--text-primary); animation: none; }
+  .cartao-artigo:hover .cartao-capa, .grade-blog li:hover .grade-blog-capa { transform: none; }
+}.numeros dd, .fatos-site dt, .preco b { font-family: var(--fonte-titulo); font-weight: 600; }
+.cartao-artigo h2, .cartao-artigo h3, .ferr h2, .ferr h3, .agente h3, .plano h3, .publicos h3, .grade-blog h3,
+.passos3 h3, .dif h3, .rota h3, .etapa h3, .cat-cab h1 { font-family: var(--fonte-titulo); font-weight: 600; letter-spacing: -0.005em; }
+/* ---- Ferramentas com mini-tela (rodada 2: o dono recusou ícone em quadradinho) ---- */
+.ferr { padding: 0 0 28px; background: var(--surface-default); border-color: var(--border-default); }
+.ferr > :not(.ferr-arte) { margin-left: 24px; margin-right: 24px; }
+.ferr-arte {
+  display: block; margin: 0 0 18px; padding: 10px 6px 2px; overflow: hidden;
+  background: radial-gradient(circle at 85% 10%, rgba(55, 114, 248, 0.16), transparent 55%), linear-gradient(180deg, var(--marca-claro-2), var(--surface-default));
+  border-bottom: 1px solid var(--border-default);
+}
+.ferr-arte svg { display: block; width: 100%; height: auto; transition: transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1); }
+.ferr:hover .ferr-arte svg { transform: translateY(-4px) scale(1.03); }
+[data-theme="dark"] .ferr-arte { background: radial-gradient(circle at 85% 10%, rgba(94, 139, 255, 0.22), transparent 55%), linear-gradient(180deg, #13214a, var(--surface-default)); }
+@media (max-width: 480px) {
+  .ferr { display: flex; padding: 0 0 18px; }
+  .ferr-arte { grid-row: auto; }
+  .ferr-arte svg { max-height: 170px; margin: 0 auto; width: auto; max-width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) { .ferr-arte svg { transition: none; } .ferr:hover .ferr-arte svg { transform: none; } }
+/* Faixa de IA com foto (rodada 2): véu azul-marinho sobre a mesa de trabalho, como a chamada final da HC. */
+.faixa-ia {
+  background-color: #0a1f6e;
+  background-image: linear-gradient(90deg, rgba(5, 16, 66, 0.97) 0%, rgba(7, 27, 112, 0.86) 48%, rgba(7, 27, 112, 0.35) 100%), url("img/fotos/escritorio-960.webp");
+  background-size: cover; background-position: center, 80% 50%;
+}
+.faixa-ia h2 { font-size: 36px; line-height: 44px; }
+@media (max-width: 760px) { .faixa-ia { background-image: linear-gradient(180deg, rgba(5, 16, 66, 0.94), rgba(7, 27, 112, 0.88)), url("img/fotos/escritorio-960.webp"); } .faixa-ia h2 { font-size: 26px; line-height: 33px; } }

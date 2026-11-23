@@ -13,7 +13,6 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { FERRAMENTAS, PUBLICOS, GLOSSARIO } = require("./site-publico/paginas");
 const { ICONES } = require("./site-publico/icones");
-const { capaSvg } = require("./site-publico/capas");
 
 const RAIZ = path.join(__dirname, "..");
 const SITE = "https://licitaplena.com.br";
@@ -152,11 +151,12 @@ ${indexar ? `<meta property="og:url" content="${url}">\n` : ""}<meta property="o
 <meta name="twitter:card" content="${imagem === "/logo.png" ? "summary" : "summary_large_image"}">
 <link rel="icon" type="image/png" href="/favicon.png?v=3">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/ds-tokens.css">
 <script>(function(){var t=null;try{t=localStorage.getItem("licitaplena_tema");}catch(e){}document.documentElement.dataset.theme=t==="escuro"?"dark":"light";})();</script>
 ${indexar ? jsonld(grafo) + "\n" : ""}<style>${CSS}</style>
 <link rel="stylesheet" href="/marca.css">
+<script src="/revelar.js" defer></script>
 </head>
 <body>
 <a class="pular" href="#conteudo">Pular para o conteúdo</a>
@@ -181,8 +181,8 @@ ${mapaDoSite()}
 const chamada = (titulo = "Teste grátis por 14 dias", texto = "Sem cartão de crédito. Cada conta é liberada pela nossa equipe, e a resposta chega por e-mail.") =>
   `<section class="chamada" aria-label="Teste grátis"><h2>${titulo}</h2><p>${texto}</p><div class="acoes"><a href="/cadastro" class="btn btn-pri btn-g">Teste grátis 14 dias</a><a href="/assessoria-hc" class="btn btn-sec btn-g">Precisa de quem faça por você?</a></div></section>`;
 const faqHtml = (pares) => `<h2>Perguntas frequentes</h2><div class="faq">${pares.map(([q, r]) => `<details><summary>${esc(q)}</summary><p>${esc(r)}</p></details>`).join("")}</div>`;
-// Capa: SVG na tela (leve e nítido); .jpg do mesmo desenho no og:image (scripts/gerar_capas_blog.js).
-const capaDe = (chave) => `/blog/capas/${chave}.svg`;
+// Capa: foto .webp na tela e .jpg com título no og:image (scripts/gerar_imagens_site.js).
+const capaDe = (chave) => `/blog/capas/${chave}.webp`;
 const imgCapa = (chave, classe, preguica = true) => `<img class="${classe}" src="${capaDe(chave)}" alt="" width="1200" height="630"${preguica ? ' loading="lazy"' : ""}>`;
 const cartaoArtigo = (a, nivel = "h3", extra = "") => `<li class="cartao cartao-artigo${extra}">${imgCapa(a.slug, "cartao-capa")}<div class="cartao-corpo"><p class="rotulo">${esc(CATEGORIAS[a.categoria])}</p><${nivel}><a href="/blog/${a.slug}">${esc(a.titulo)}</a></${nivel}><p>${esc(a.resumo)}</p><p class="cartao-meta">${a.minutos} min de leitura</p></div></li>`;
 const idTitulo = (t) => t.replace(/<[^>]+>/g, "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -193,8 +193,8 @@ function comSumario(corpo) {
   return { html, itens };
 }
 const ferramentaPorSlug = (s) => FERRAMENTAS.find((f) => f.slug === s);
-// Cartão ilustrado (index e /ferramentas/): placa clara com ícone e detalhe azul-escuro embaixo (marca.css).
-const cartaoFerramenta = (f, nivel = "h3") => `<li class="ferr"><span class="ferr-ico">${ICONES[f.slug]}</span><${nivel}><a href="/ferramentas/${f.slug}">${esc(f.nome)}</a></${nivel}><p>${esc(f.descricao)}</p><span class="ferr-mais" aria-hidden="true">Conhecer a ferramenta</span></li>`;
+// Cartão ilustrado (index e /ferramentas/): mini-tela da ferramenta em cima e detalhe azul-escuro embaixo (marca.css).
+const cartaoFerramenta = (f, nivel = "h3") => `<li class="ferr"><span class="ferr-arte">${ICONES[f.slug]}</span><${nivel}><a href="/ferramentas/${f.slug}">${esc(f.nome)}</a></${nivel}><p>${esc(f.descricao)}</p><span class="ferr-mais" aria-hidden="true">Conhecer a ferramenta</span></li>`;
 
 // ---------- Páginas ----------
 function paginasFerramentas(artigos) {
@@ -260,7 +260,7 @@ function paginasBlog(artigos) {
     descricao: "Artigos práticos sobre licitação: como achar editais, documentos de habilitação, obras, CBS e IBS, pregão, recurso e novidades, com a lei e a fonte oficial.",
     migalhas: [["Início", "/"], ["Blog", "/blog/"]],
     schemas: [blogSchema],
-    corpo: `<h1>Blog do LicitaPlena</h1><p class="lead">Licitação explicada em português simples, com a lei e a fonte oficial de cada regra.</p>${navCat()}${lista(artigos)}${chamada()}`,
+    corpo: `<div class="cat-cab">${imgCapa("novidades", "cat-capa", false)}<div class="cat-texto"><p class="rotulo">Blog do LicitaPlena</p><h1>Licitação explicada em português simples</h1><p class="lead">Com a lei e a fonte oficial de cada regra, para quem vende ou quer vender ao governo.</p></div></div>${navCat()}${lista(artigos)}${chamada()}`,
   })]];
   for (const [s, n] of Object.entries(CATEGORIAS)) {
     const itens = artigos.filter((a) => a.categoria === s);
@@ -296,8 +296,6 @@ ${chamada()}</div></div>
 <h2 class="relacionados-titulo">Continue lendo</h2><ul class="grade grade-artigos">${outros.map((b) => cartaoArtigo(b)).join("")}</ul></article>`,
     })]);
   }
-  for (const s of Object.keys(CATEGORIAS)) saida.push([`blog/capas/${s}.svg`, capaSvg(s, s)]);
-  for (const a of artigos) saida.push([`blog/capas/${a.slug}.svg`, capaSvg(a.categoria, a.slug)]);
   return saida;
 }
 
@@ -423,4 +421,4 @@ if (require.main === module) {
   console.log(`${Object.keys(saida).length} arquivos gerados`);
 }
 
-module.exports = { gerar, urlDe, SITE, PRIVADAS, PUBLICAS_EXISTENTES };
+module.exports = { gerar, urlDe, lerArtigos, CATEGORIAS, SITE, PRIVADAS, PUBLICAS_EXISTENTES };

@@ -38,8 +38,11 @@ function montarPublico() {
   for (const nome of copiados) fs.copyFileSync(path.join(RAIZ, nome), path.join(DESTINO, nome));
   fs.mkdirSync(path.join(DESTINO, "data"));
   for (const nome of arquivosDeDados()) fs.copyFileSync(path.join(RAIZ, "data", nome), path.join(DESTINO, "data", nome));
-  // Páginas públicas de SEO geradas por scripts/gerar_site_publico.js (blog/, ferramentas/, para/): só os .html.
-  for (const pasta of PASTAS_DO_SITE.filter((p) => fs.existsSync(path.join(RAIZ, p)))) fs.cpSync(path.join(RAIZ, pasta), path.join(DESTINO, pasta), { recursive: true, filter: (f) => fs.statSync(f).isDirectory() || f.endsWith(".html") });
+  // Páginas públicas de SEO geradas por scripts/gerar_site_publico.js (blog/, ferramentas/, para/): os .html e as
+  // capas do blog (blog/capas/*.webp|.jpg, de scripts/gerar_imagens_site.js). Antes só .html: as capas não subiam.
+  for (const pasta of PASTAS_DO_SITE.filter((p) => fs.existsSync(path.join(RAIZ, p)))) fs.cpSync(path.join(RAIZ, pasta), path.join(DESTINO, pasta), { recursive: true, filter: (f) => fs.statSync(f).isDirectory() || /\.(html|webp|jpg)$/.test(f) });
+  // Fotos do site público (img/topo e img/fotos), só .webp.
+  if (fs.existsSync(path.join(RAIZ, "img"))) fs.cpSync(path.join(RAIZ, "img"), path.join(DESTINO, "img"), { recursive: true, filter: (f) => fs.statSync(f).isDirectory() || f.endsWith(".webp") });
   // Prints dos tutoriais da Central de ajuda "?" (ajuda-ui.js e ajuda.html): só imagens .webp de dados fictícios, e os
   // vídeos curtos dos tutoriais (ajuda/videos/*.mp4|.webm) quando existirem.
   const ajuda = path.join(RAIZ, "ajuda");
