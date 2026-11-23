@@ -2,8 +2,10 @@
 //   node scripts/coletar_sancoes_cgu.js
 //
 // Fonte: ZIP diário em dadosabertos-download.cgu.gov.br (ver _historico/pente-fino-pncp/03-sistemas-integrados.md,
-// ficha 10). Só o arquivo do dia fica no ar (datas antigas dão 403) e o do dia novo aparece em algum momento da
-// madrugada/manhã; por isso o robô tenta o dia de hoje (Brasília) e, se der 403/404, o de ontem.
+// ficha 10). Só o arquivo mais recente fica no ar (as outras datas dão 403). Normalmente é o de hoje ou ontem,
+// mas a CGU às vezes para de publicar por dias: em 22/11/2026 o último era 19/11 (a página oficial
+// portaldatransparencia.gov.br/download-de-dados/ceis listava 19/11). Por isso o robô procura do dia de hoje
+// (Brasília) para trás, até JANELA_DIAS, e usa o primeiro que existir; 403/404 custam uma requisição curta cada.
 // CSV: Windows-1252, separador ";", campos entre aspas, CRLF.
 //
 // LGPD: só pessoa jurídica (CNPJ de 14 dígitos) é gravada. Linhas de pessoa física (CPF, nome) são descartadas
@@ -17,7 +19,8 @@
 //
 // Variáveis (todas opcionais):
 //   SUPABASE_SERVICE_ROLE_KEY  obrigatória para gravar (scripts/supabase_dados.js)
-//   DATA_ARQUIVO               AAAAMMDD fixo (só esse dia, sem cair para ontem)
+//   DATA_ARQUIVO               AAAAMMDD fixo (só esse dia, sem procurar outras datas)
+//   JANELA_DIAS                8 — quantos dias para trás procurar o último arquivo publicado
 //   TENTATIVAS                 3 por arquivo (falha de rede/5xx; 403/404 não repete)
 //   PAUSA_TENTATIVA_MS         20000
 //   TAMANHO_LOTE_BANCO         500
@@ -229,7 +232,8 @@ async function coletarCadastro(cadastro, dias, deps) {
 async function main(env = process.env, deps = {}) {
   const fixa = env.DATA_ARQUIVO;
   if (fixa && !/^\d{8}$/.test(fixa)) throw new Error("DATA_ARQUIVO deve ser AAAAMMDD");
-  const dias = fixa ? [fixa] : [diaBrasilia(), diaBrasilia(Date.now(), -1)];
+  const janela = Math.max(1, num(env.JANELA_DIAS, 8));
+  const dias = fixa ? [fixa] : Array.from({ length: janela }, (_, i) => diaBrasilia(Date.now(), -i));
   const opcoes = {
     rest: restFetch, upsert: upsertEmLotes, fetch: globalThis.fetch,
     tentativas: num(env.TENTATIVAS, 3), pausaMs: num(env.PAUSA_TENTATIVA_MS, 20000),
