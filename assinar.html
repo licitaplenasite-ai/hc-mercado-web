@@ -201,7 +201,7 @@ legend{font:var(--text-section);margin:0 0 12px;padding:0}
       `Valor: ${reais(g.valor_centavos)}`, `E-mail da conta: ${estado.email}`, `Pedido: ${g.id.slice(0, 8)}`].join("\n");
     let html = `<dl><dt>Valor a pagar</dt><dd id="pagar-valor">${reais(g.valor_centavos)}</dd><dt>Pedido</dt><dd>${esc(resumo)} · nº ${esc(g.id.slice(0, 8))}</dd>`;
     if (codigo) {
-      html += `<dt>Chave Pix</dt><dd id="pagar-chave">${esc(chave)}</dd><dt>Recebedor</dt><dd>${esc(nome)}</dd></dl>
+      html += `<dt>Chave Pix</dt><dd id="pagar-chave">${/^\d{14}$/.test(chave) ? "CNPJ " + chave.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5") : esc(chave)}</dd><dt>Recebedor</dt><dd>${esc(nome)}</dd></dl>
         ${qrPix(codigo)}
         <label for="pix-codigo"><strong>Pix copia e cola</strong> <span class="nota">(cole no aplicativo do seu banco, em Pix &gt; Copia e cola; o valor já vem preenchido)</span></label>
         <textarea id="pix-codigo" readonly>${esc(codigo)}</textarea>`;
