@@ -12,9 +12,10 @@ const { chromium } = require(process.env.PLAYWRIGHT_CORE || 'C:/Users/harre/AppD
   const ok = (v) => { if (!v) falhas += 1; };
   try {
     const p = await novaPagina(nav); await entrar(p, seed.usuarios.gestor);
-    ok(await passo('menu: Mão de obra ativo e Consultoria abre hc.html em nova aba', p, async () => {
+    ok(await passo('menu: Orçamento de obra ativo, Mão de obra marcada na barra de obra e Consultoria abre hc.html em nova aba', p, async () => {
       await p.goto(SITE + '/mao-de-obra.html'); await p.waitForSelector('#f-salarioBase');
-      const ativo = await p.getAttribute('#menu-principal a.ativo', 'href'); exigir(ativo === 'mao-de-obra.html', ativo);
+      const ativo = await p.getAttribute('#menu-principal a.ativo', 'href'); exigir(ativo === 'orcamento-obra.html', ativo);
+      exigir(await p.getAttribute('.abas-obra a[aria-current="page"]', 'href') === 'mao-de-obra.html', 'barra de obra sem Mão de obra marcada');
       const c = p.locator('#menu-principal a[data-hc-site]');
       exigir(await c.getAttribute('href') === 'hc.html' && await c.getAttribute('target') === '_blank', 'Consultoria');
       return 'ok';
@@ -64,7 +65,8 @@ const { chromium } = require(process.env.PLAYWRIGHT_CORE || 'C:/Users/harre/AppD
       return 'ok';
     }));
     ok(await passo('menu novo em outra página (painel)', p, async () => {
-      await p.goto(SITE + '/painel.html'); await p.waitForSelector('#menu-principal a[href="mao-de-obra.html"]', { state: 'attached' });
+      await p.goto(SITE + '/painel.html'); await p.waitForSelector('#menu-principal a[href="orcamento-obra.html"]', { state: 'attached' });
+      exigir(await p.locator('#menu-principal a[href="mao-de-obra.html"]').count() === 0, 'Mão de obra ainda no menu lateral');
       exigir(await p.locator('#menu-principal a[data-hc-site][target="_blank"]').count() === 1, 'Consultoria no painel');
       return 'ok';
     }));

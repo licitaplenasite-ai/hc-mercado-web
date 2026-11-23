@@ -1,6 +1,6 @@
 'use strict';
-// Todas as páginas com menu lateral precisam trazer os mesmos itens, na mesma ordem (Prospecção, BDI, SINAPI, Hoje,
-// Processos, Calendário, Licitação anterior, Extensão, Mão de obra e Consultoria incluídos).
+// Todas as páginas com menu lateral precisam trazer os mesmos itens, na mesma ordem (Prospecção, Orçamento de obra, Hoje,
+// Processos, Calendário, Licitação anterior, Extensão e Consultoria incluídos).
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
@@ -8,25 +8,31 @@ const fs = require('node:fs');
 const paginas = ['painel', 'sistema', 'operacao', 'processos', 'prospeccao', 'bdi', 'sinapi', 'quadros', 'mao-de-obra', 'orcamento-obra'];
 
 for (const p of paginas) {
-  test(`menu lateral de ${p}.html tem Prospecção e Calculadora de BDI`, () => {
+  test(`menu lateral de ${p}.html tem Prospecção e Orçamento de obra (sem SINAPI, BDI e Mão de obra)`, () => {
     const html = fs.readFileSync(`${p}.html`, 'utf8');
     const nav = html.match(/<nav id="menu-principal"[\s\S]*?<\/nav>/)[0];
     assert.match(nav, /<a href="prospeccao\.html"[^>]*>[\s\S]*?Prospecção/);
-    // 23/11 (dono): tudo de obra num lugar só — Orçamento de obra e, logo abaixo, SINAPI, BDI e Mão de obra como subitens.
+    // 23/11 (dono): SINAPI, BDI e Mão de obra saem do menu lateral e ficam dentro da tela do Orçamento de obra (obra-abas.css).
     assert.match(nav, /<a href="orcamento-obra\.html"[^>]*>[\s\S]*?ph-toolbox[\s\S]*?Orçamento de obra/);
-    assert.match(nav, /<a class="nav-sub[^"]*" href="sinapi\.html"[^>]*>[\s\S]*?Preços SINAPI/);
-    assert.match(nav, /<a class="nav-sub[^"]*" href="bdi\.html"[^>]*>[\s\S]*?Calculadora de BDI/);
-    assert.match(nav, /<a class="nav-sub[^"]*" href="mao-de-obra\.html"[^>]*>[\s\S]*?Mão de obra/);
-    const ordem = ['Orçamento de obra', 'Preços SINAPI', 'Calculadora de BDI', 'Mão de obra'].map((r) => nav.indexOf(r));
-    assert.deepEqual([...ordem].sort((a, b) => a - b), ordem, 'Orçamento de obra, SINAPI, BDI e Mão de obra nessa ordem');
+    assert.doesNotMatch(nav, /nav-sub|href="(sinapi|bdi|mao-de-obra)\.html"/, 'SINAPI, BDI e Mão de obra fora do menu lateral');
     assert.ok(nav.indexOf('Inteligência de Mercado') < nav.indexOf('Prospecção'), 'Prospecção logo após Inteligência de Mercado');
     // Consultoria abre o site da HC em nova aba: hc.html enquanto LICITAPLENA_HC_SITE estiver vazia (ajuda-ui.js troca o href).
     assert.ok(nav.includes('<a href="hc.html" target="_blank" rel="noopener" data-hc-site title="Consultoria">'), 'Consultoria');
     assert.match(html, /<script src="supabase-config\.js"><\/script>/);
     assert.match(html, /<script src="ajuda-ui\.js"/);
-    const ativos = { prospeccao: 'prospeccao.html', bdi: 'bdi.html', sinapi: 'sinapi.html', 'mao-de-obra': 'mao-de-obra.html' };
-    if (ativos[p]) assert.match(nav, new RegExp(`<a (class="nav-sub ativo" href="${ativos[p]}"|href="${ativos[p]}" class="ativo")`));
-    else assert.doesNotMatch(nav, /(href="(prospeccao|bdi|sinapi|mao-de-obra)\.html" class="ativo"|class="nav-sub ativo")/);
+    // As ferramentas de obra (e a própria tela) marcam o Orçamento de obra como item ativo.
+    const ativos = { prospeccao: 'prospeccao.html', bdi: 'orcamento-obra.html', sinapi: 'orcamento-obra.html', 'mao-de-obra': 'orcamento-obra.html', 'orcamento-obra': 'orcamento-obra.html' };
+    if (ativos[p]) assert.ok(nav.includes(`<a href="${ativos[p]}" class="ativo" aria-current="page"`), `${p}: ${ativos[p]} ativo`);
+    else assert.doesNotMatch(nav, /href="(prospeccao|orcamento-obra)\.html" class="ativo"/);
+    if (['bdi', 'sinapi', 'mao-de-obra', 'orcamento-obra'].includes(p)) {
+      const barra = html.match(/<nav class="abas-obra"[\s\S]*?<\/nav>/)?.[0] || '';
+      for (const h of ['sinapi.html', 'bdi.html', 'mao-de-obra.html']) assert.ok(barra.includes(`<a href="${h}"`), `${p}: atalho ${h} na barra do Orçamento de obra`);
+      if (p !== 'orcamento-obra') {
+        assert.ok(barra.includes('<a href="orcamento-obra.html">Montar meu orçamento</a>') && barra.includes('<a href="orcamento-obra.html#concorrente">Analisar concorrente</a>'), `${p}: volta ao Orçamento de obra`);
+        assert.ok(barra.includes(`<a href="${p}.html" aria-current="page">`), `${p}: ferramenta atual marcada`);
+      }
+      assert.match(html, /<link rel="stylesheet" href="obra-abas\.css">/);
+    }
   });
 }
 
@@ -37,7 +43,7 @@ const rotulos = (p) => {
 
 test('todas as páginas têm o mesmo conjunto e ordem de itens no menu (o painel só soma o Dashboard)', () => {
   const referencia = rotulos('sistema');
-  for (const item of ['Hoje', 'Calendário', 'Licitação anterior', 'Processos', 'Extensão', 'Mão de obra', 'Consultoria']) assert.ok(referencia.includes(item), item);
+  for (const item of ['Hoje', 'Calendário', 'Licitação anterior', 'Processos', 'Extensão', 'Orçamento de obra', 'Consultoria']) assert.ok(referencia.includes(item), item);
   for (const p of paginas) {
     const lista = rotulos(p).filter((r) => r !== 'Dashboard');
     // Status das Ferramentas é controle interno desde 23/11: fica só na aba Saúde do sistema do admin.

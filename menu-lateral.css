@@ -26,7 +26,6 @@
 }
 #menu-principal a.ativo { background: var(--action-tint); color: var(--text-primary); font-weight: 600; box-shadow: inset 3px 0 0 var(--action-strong); }
 #menu-principal a.ativo .nav-ico { color: var(--action-text); }
-/* Subitens do Orçamento de obra (BDI, SINAPI, Mão de obra): tudo de obra num lugar só, pedido do dono em 23/11. */ #menu-principal a.nav-sub { padding-left: 28px; font-size: 13px; } #menu-principal a.nav-sub .nav-ico { width: 20px; height: 20px; font-size: 14px; } #menu-principal.colapsada a.nav-sub { padding-left: 8px; }
 #menu-principal :focus-visible, #nav-gaveta-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 #nav-colapsar-btn {
   color: var(--text-secondary); font-size: 12px; border-bottom: 1px solid var(--border-default);
