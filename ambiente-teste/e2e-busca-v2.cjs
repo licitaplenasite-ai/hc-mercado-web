@@ -173,7 +173,7 @@ be.salvar_historico = lambda h: None
 be.registrar_log_boletim = lambda *a, **k: None
 be.hoje_e_feriado_nacional = lambda: None
 enviados = []
-be.enviar_email = lambda email, nome, eds, prefixo="", *_resto, **_kw: enviados.append({"para": email, "assunto": prefixo, "n": len(eds)})
+be.enviar_email = lambda email, nome, eds, *_resto, **_kw: enviados.append({"para": email, "assunto": nome, "n": len(eds)})
 be.main()
 print("ENVIADOS=" + json.dumps(enviados, ensure_ascii=False))
 `;
@@ -182,7 +182,7 @@ print("ENVIADOS=" + json.dumps(enviados, ensure_ascii=False))
       exigir(r.status === 0 && m, (r.stdout + r.stderr).slice(-800));
       const doGestor = JSON.parse(m[1]).filter((e) => e.para === g.email);
       const assuntos = doGestor.map((e) => `${e.assunto}(${e.n})`).sort();
-      exigir(JSON.stringify(assuntos) === JSON.stringify(['[Materiais Horizonte Teste LTDA · Papel Manaus] (2)', '[Materiais Horizonte Teste LTDA] (1)', '[Papelaria Aurora Teste LTDA] (1)'].sort()), JSON.stringify(doGestor));
+      exigir(JSON.stringify(assuntos) === JSON.stringify(['Materiais Horizonte Teste LTDA(2)', 'Materiais Horizonte Teste LTDA(1)', 'Papelaria Aurora Teste LTDA(1)'].sort()), JSON.stringify(doGestor));
       return assuntos.join(' | ');
     });
     for (const [largura, nome] of [[1280, '1280'], [375, '375']]) {

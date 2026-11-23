@@ -296,7 +296,7 @@ def carregar_boletins_por_empresa():
         nome_empresa = (empresa.get("razao_social") or "Empresa").strip()
         destinatarios.append({
             "id": c["id"], "nome": nome_empresa, "email": c["email"].strip(), "ufs": _ufs_do_filtro(l.get("filtro") or {}),
-            "palavras_chave": palavras, "whatsapp": None, "assunto": "[" + nome_empresa + "] ",
+            "palavras_chave": palavras, "whatsapp": None,
             "chave_historico": "empresa:" + str(l.get("empresa_id")),
         })
     return destinatarios, {d["id"] for d in destinatarios}
@@ -628,8 +628,20 @@ FILTRO_ID_PADRAO = "principal"
 COR_MARCA = "#0b3b6f"
 
 
+FUSO_BRASILIA = timezone(timedelta(hours=-3))  # Brasilia sem horario de verao desde 2019
+MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"]
+
+
+def agora_brasilia():
+    return datetime.now(FUSO_BRASILIA)
+
+
 def hoje_brasilia():
-    return datetime.now(timezone(timedelta(hours=-3))).date()
+    return agora_brasilia().date()
+
+
+def data_por_extenso(d):
+    return str(d.day) + " de " + MESES[d.month - 1] + " de " + str(d.year)
 
 
 def montar_link_boletim(edicao, filtro_id=FILTRO_ID_PADRAO):
@@ -648,15 +660,76 @@ def _titulo_quantidade(quantidade):
     return "Chegaram " + str(quantidade) + " novas licitações"
 
 
-def montar_assunto(quantidade):
-    if quantidade:
-        return _titulo_quantidade(quantidade) + " no seu boletim"
-    return "Nenhuma licitação nova desde o último aviso"
+def montar_assunto(numero, agora):
+    # Pedido do dono (23/11): "[<edição>] Boletim LicitaPlena de <data>, <hora>", como o ConLicitação. Sem número
+    # (destinatário fixo ou falha ao gravar a edição) o assunto sai sem os colchetes.
+    return (("[" + str(numero) + "] ") if numero else "") + "Boletim LicitaPlena de " + data_por_extenso(agora) + ", " + agora.strftime("%H:%M")
+
+
+def _data_brasilia(valor):
+    # timestamptz do PostgREST ("2026-12-07T13:00:00.12345+00:00"): tira a fração, que o fromisoformat antigo recusa.
+    texto = re.sub(r"\.\d+", "", str(valor)).replace("Z", "+00:00")
+    d = datetime.fromisoformat(texto)
+    return (d.astimezone(FUSO_BRASILIA) if d.tzinfo else d).date()
+
+
+def montar_vigencia(assinatura, hoje):
+    # Linha "Vigência da assinatura" do cabeçalho (supabase/planos_e_recursos.sql). Sem dado confiável: None (a linha some).
+    if not assinatura:
+        return None
+    plano = ((assinatura.get("planos") or {}).get("nome") or "Assinatura").strip()
+    situacao = assinatura.get("situacao")
+    try:
+        if situacao == "teste" and assinatura.get("teste_ate"):
+            ate = _data_brasilia(assinatura["teste_ate"])
+            return ("Teste grátis até " if ate >= hoje else "Teste grátis encerrado em ") + data_por_extenso(ate)
+        if situacao in ("ativa", "vencida") and assinatura.get("vence_em"):
+            vence = date.fromisoformat(str(assinatura["vence_em"])[:10])
+            return plano + (", válida até " if vence >= hoje else ", venceu em ") + data_por_extenso(vence)
+    except ValueError:
+        return None
+    if situacao == "ativa":
+        return plano + ", sem data de vencimento"
+    return None
+
+
+def carregar_cabecalhos(ids, hoje=None):
+    # {cliente_id: {"codigo", "responsavel", "vigencia"}} para o cabeçalho do e-mail. Sem o SQL de 23/11
+    # (coluna clientes.codigo) ou com erro: {} e o e-mail sai só sem esses dados.
+    ids = sorted({i for i in ids if i})
+    if not ids:
+        return {}
+    hoje = hoje or hoje_brasilia()
+    lista = ",".join(ids)
+    try:
+        clientes = _get_json("clientes?select=id,nome,codigo&id=in.(" + lista + ")")
+        assinaturas = _get_json("assinaturas?select=usuario_id,situacao,teste_ate,vence_em,planos(nome)&usuario_id=in.(" + lista + ")")
+    except Exception as e:
+        log("AVISO: dados do cabecalho do boletim indisponiveis (" + str(e) + ").")
+        return {}
+    # shortcut: colaborador convidado não tem assinatura própria e fica sem a linha de vigência; ler a do titular se pedirem.
+    por_id = {a.get("usuario_id"): a for a in assinaturas}
+    return {c["id"]: {"codigo": c.get("codigo"), "responsavel": (c.get("nome") or "").strip(),
+                      "vigencia": montar_vigencia(por_id.get(c["id"]), hoje)} for c in clientes if c.get("id")}
 
 
 URL_LOGO = "https://licitaplena.com.br/logo.png"  # PNG branco 1000x1000, publicado por montar_publico.js (SVG nao abre no Gmail/Outlook)
 URL_AJUSTAR_FILTROS = URL_PAINEL + "#boletim"
 EMAIL_SUPORTE = "licitaplena.site@gmail.com"  # mesmo contato do site; WhatsApp de supabase-config.js ainda vazio
+URL_PRIVACIDADE = "https://licitaplena.com.br/politica-privacidade.html"
+# Texto próprio (23/11), com as mesmas garantias do boletim do ConLicitação: não substitui a publicação oficial,
+# obrigação de meio, uso exclusivo do cliente identificado; mais LGPD e como parar de receber.
+POLITICA_USO = [
+    "Este boletim é um serviço de informação: reúne avisos de licitação publicados em fontes oficiais e incluídos na nossa base. "
+    "Ele não substitui o edital nem a publicação oficial. Antes de participar, confira prazos, exigências e alterações no portal do órgão.",
+    "Nosso compromisso é buscar e organizar as informações com cuidado (obrigação de meio). Não garantimos que todas as licitações "
+    "sejam encontradas e não respondemos pelo resultado das disputas, que depende de cada participante e de cada órgão.",
+    "O conteúdo é de uso exclusivo do cliente identificado acima e da sua equipe. Não é permitido repassar, reproduzir ou vender "
+    "este boletim a terceiros.",
+    "Usamos seu nome, e-mail, empresa e filtros só para montar e enviar este boletim, conforme a Lei Geral de Proteção de Dados "
+    "(Lei nº 13.709/2018) e a nossa Política de Privacidade. Para parar de receber, use \"Parar ou gerenciar avisos\" abaixo ou "
+    "escreva para o e-mail de apoio.",
+]
 RODAPE_EMPRESA = "LicitaPlena, uma solução HC Licitações, desenvolvida e operada pela HCM LTDA, CNPJ nº 28.786.260/0001-53, Manaus/AM."
 
 
@@ -680,9 +753,42 @@ def montar_resumo(editais):
     return partes
 
 
-def montar_email_html(nome_empresa, filtro, edicao, quantidade, link, resumo=None):
+def _linhas_cabecalho(nome_empresa, filtro, cab):
+    # Bloco do cliente, na ordem do boletim do ConLicitação. Linha sem dado não aparece.
+    return [(rotulo, valor) for rotulo, valor in [
+        ("Identificação do cliente", cab.get("codigo")), ("Empresa", nome_empresa), ("Filtro", filtro),
+        ("Vigência da assinatura", cab.get("vigencia"))] if valor]
+
+
+def _processado(cab):
+    agora = cab.get("processado_em")
+    return (data_por_extenso(agora) + ", " + agora.strftime("%H:%M")) if agora else ""
+
+
+def montar_email_html(nome_empresa, filtro, edicao, quantidade, link, resumo=None, cab=None):
     esc = html.escape
+    cab = cab or {}
     fonte = "font-family:Arial,Helvetica,sans-serif;"
+    partes_topo = []
+    if cab.get("numero"):
+        partes_topo.append('Edição nº <b>' + esc(str(cab["numero"])) + '</b>')
+    if cab.get("processado_em"):
+        partes_topo.append('Data do processamento: <b>' + esc(_processado(cab)) + '</b>')
+    topo = ""
+    if partes_topo:
+        topo = ('<tr><td bgcolor="#eef3f9" style="' + fonte + 'font-size:13px;line-height:1.6;color:#3c4043;padding:10px 20px;'
+                'background:#eef3f9;border-bottom:1px solid #dbe3ee;">' + '<br>'.join(partes_topo) + '</td></tr>')
+    linhas = "".join(
+        '<tr><td style="' + fonte + 'font-size:13px;color:#5f6368;padding:3px 12px 3px 0;vertical-align:top;">' + esc(r) + ':</td>'
+        '<td style="' + fonte + 'font-size:13px;color:#202124;font-weight:bold;padding:3px 0;">' + esc(str(v)) + '</td></tr>'
+        for r, v in _linhas_cabecalho(nome_empresa, filtro, cab))
+    cliente = ('<tr><td style="padding:0 0 18px 0;border-bottom:1px solid #e8eaed;"><table role="presentation" cellpadding="0" cellspacing="0" border="0">'
+               + linhas + '</table></td></tr>')
+    if cab.get("responsavel"):
+        cliente += ('<tr><td style="' + fonte + 'font-size:15px;color:#202124;padding:18px 0 18px 0;">Aos cuidados de <b>'
+                    + esc(cab["responsavel"]) + '</b>,</td></tr>')
+    else:
+        cliente += '<tr><td style="padding:0 0 22px 0;"></td></tr>'
     if quantidade:
         resumo_html = ""
         if resumo:
@@ -704,10 +810,22 @@ def montar_email_html(nome_empresa, filtro, edicao, quantidade, link, resumo=Non
     else:
         corpo = (
             '<tr><td align="center" style="' + fonte + 'font-size:20px;color:#202124;padding:0 0 8px 0;">Nenhuma licitação nova desde o último aviso</td></tr>'
-            '<tr><td align="center" style="' + fonte + 'font-size:14px;color:#5f6368;">no filtro <b>' + esc(filtro)
+            '<tr><td align="center" style="' + fonte + 'font-size:14px;color:#5f6368;padding:0 0 18px 0;">no filtro <b>' + esc(filtro)
             + '</b> da empresa <b>' + esc(nome_empresa) + '</b>.</td></tr>'
+            '<tr><td align="center"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>'
+            '<td align="center" style="border:2px solid ' + COR_MARCA + ';border-radius:8px;"><a href="' + esc(URL_AJUSTAR_FILTROS, quote=True)
+            + '" style="display:inline-block;' + fonte + 'color:' + COR_MARCA
+            + ';padding:12px 28px;text-decoration:none;font-weight:bold;font-size:16px;">Abrir o painel</a></td></tr></table></td></tr>'
         )
     estilo_link = 'color:#5f6368;text-decoration:underline;'
+    link_privacidade = '<a href="' + URL_PRIVACIDADE + '" style="' + estilo_link + '">Política de Privacidade</a>'
+    politica = (
+        '<tr><td style="' + fonte + 'font-size:12px;line-height:1.6;color:#5f6368;padding:26px 0 0 0;">'
+        '<div style="font-weight:bold;color:#3c4043;letter-spacing:.3px;padding-bottom:6px;">POLÍTICA DE USO E RESPONSABILIDADE</div>'
+        + "".join('<div style="padding:0 0 6px 0;">' + str(i) + '. ' + esc(t).replace("Política de Privacidade", link_privacidade) + '</div>'
+                  for i, t in enumerate(POLITICA_USO, 1))
+        + 'Apoio: <a href="mailto:' + EMAIL_SUPORTE + '" style="' + estilo_link + '">' + EMAIL_SUPORTE + '</a></td></tr>'
+    )
     rodape = (
         '<tr><td align="center" style="' + fonte + 'font-size:12px;line-height:1.6;color:#80868b;padding:20px 8px 0 8px;">'
         'Você recebe este aviso porque cadastrou o filtro <b>' + esc(filtro) + '</b> no LicitaPlena.<br>'
@@ -730,20 +848,32 @@ def montar_email_html(nome_empresa, filtro, edicao, quantidade, link, resumo=Non
         '<td valign="middle" style="padding-right:10px;"><img src="' + URL_LOGO + '" width="36" height="36" alt="LicitaPlena" '
         'style="display:block;border:0;width:36px;height:36px;"></td>'
         '<td valign="middle" style="' + fonte + 'color:#ffffff;font-size:22px;font-weight:bold;">LicitaPlena</td>'
-        '</tr></table></td></tr>'
-        '<tr><td bgcolor="#ffffff" style="background:#ffffff;padding:32px 20px;border-radius:0 0 8px 8px;">'
-        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">' + corpo + '</table></td></tr>'
+        '</tr></table></td></tr>' + topo +
+        '<tr><td bgcolor="#ffffff" style="background:#ffffff;padding:22px 20px 28px 20px;border-radius:0 0 8px 8px;">'
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">' + cliente + corpo + politica + '</table></td></tr>'
         + rodape + '</table></td></tr></table></body></html>'
     )
 
 
-def montar_email_texto(nome_empresa, filtro, edicao, quantidade, link, resumo=None):
-    rodape = ("\n--\nVocê recebe este aviso porque cadastrou o filtro " + filtro + " no LicitaPlena.\n"
+def montar_email_texto(nome_empresa, filtro, edicao, quantidade, link, resumo=None, cab=None):
+    cab = cab or {}
+    topo = "LicitaPlena\n"
+    if cab.get("numero"):
+        topo += "Edição nº " + str(cab["numero"]) + "\n"
+    if cab.get("processado_em"):
+        topo += "Data do processamento: " + _processado(cab) + "\n"
+    topo += "\n" + "".join(r + ": " + str(v) + "\n" for r, v in _linhas_cabecalho(nome_empresa, filtro, cab))
+    if cab.get("responsavel"):
+        topo += "\nAos cuidados de " + cab["responsavel"] + ",\n"
+    politica = ("\nPOLÍTICA DE USO E RESPONSABILIDADE\n" + "".join(str(i) + ". " + t + "\n" for i, t in enumerate(POLITICA_USO, 1))
+                + "Política de Privacidade: " + URL_PRIVACIDADE + "\nApoio: " + EMAIL_SUPORTE + "\n")
+    rodape = politica + ("\n--\nVocê recebe este aviso porque cadastrou o filtro " + filtro + " no LicitaPlena.\n"
               "Ajustar meus filtros ou parar os avisos: " + URL_AJUSTAR_FILTROS + "\n"
               "Dúvidas: " + EMAIL_SUPORTE + "\nAviso automático: não responda este e-mail.\n" + RODAPE_EMPRESA + "\n")
     if not quantidade:
-        return "LicitaPlena\n\nNenhuma licitação nova desde o último aviso no filtro " + filtro + " da empresa " + nome_empresa + ".\n" + rodape
-    return ("LicitaPlena\n\n" + _titulo_quantidade(quantidade) + " no filtro " + filtro + " da empresa " + nome_empresa + ".\n"
+        return (topo + "\nNenhuma licitação nova desde o último aviso no filtro " + filtro + " da empresa " + nome_empresa + ".\n"
+                "Abrir o painel: " + URL_AJUSTAR_FILTROS + "\n" + rodape)
+    return (topo + "\n" + _titulo_quantidade(quantidade) + " no filtro " + filtro + " da empresa " + nome_empresa + ".\n"
             "Edição de " + edicao.strftime("%d/%m/%Y") + ".\n"
             + ((" · ".join(resumo) + "\n") if resumo else "") + "\n"
             "Acessar o boletim: " + link + "\n" + rodape)
@@ -816,15 +946,18 @@ def enviar_gmail(destino_email, assunto, texto, html_corpo):
         servidor.sendmail(remetente, [destino_email], msg.as_string())
 
 
-def enviar_email(destino_email, nome_destinatario, editais_novos, prefixo_assunto="", filtro="", filtro_id=FILTRO_ID_PADRAO):
-    # Aviso curto: so a quantidade e o link do painel (a lista fica la, atras do login).
+def enviar_email(destino_email, nome_destinatario, editais_novos, filtro="", filtro_id=FILTRO_ID_PADRAO, cab=None):
+    # Aviso curto: so a quantidade e o link do painel (a lista fica la, atras do login). cab: numero da edicao e
+    # dados do cliente (carregar_cabecalhos); a hora do processamento e a de agora em Brasilia.
     quantidade = len(editais_novos)
-    edicao = hoje_brasilia()
+    agora = agora_brasilia()
+    edicao = agora.date()
+    cab = dict(cab or {}, processado_em=agora)
     link = montar_link_boletim(edicao, filtro_id)
-    assunto = prefixo_assunto + montar_assunto(quantidade)
+    assunto = montar_assunto(cab.get("numero"), agora)
     resumo = montar_resumo(editais_novos)
-    texto = montar_email_texto(nome_destinatario, filtro, edicao, quantidade, link, resumo)
-    html_corpo = montar_email_html(nome_destinatario, filtro, edicao, quantidade, link, resumo)
+    texto = montar_email_texto(nome_destinatario, filtro, edicao, quantidade, link, resumo, cab)
+    html_corpo = montar_email_html(nome_destinatario, filtro, edicao, quantidade, link, resumo, cab)
     token = os.environ.get("ZEPTOMAIL_TOKEN")
     if token:
         try:
@@ -838,10 +971,11 @@ def enviar_email(destino_email, nome_destinatario, editais_novos, prefixo_assunt
 
 def registrar_edicao(destinatario, edicao, editais, filtro_id=FILTRO_ID_PADRAO, filtro_nome=None):
     # Guarda os numeros dos editais da edicao para o painel abrir pelo link do aviso e listar
-    # os dias anteriores (supabase/boletim_edicoes.sql). Sem id de conta (destinatario fixo) nao ha
-    # painel para abrir. Falha aqui nao pode derrubar o aviso.
+    # os dias anteriores (supabase/boletim_edicoes.sql). Devolve o numero da edicao (None sem ele). Sem id de conta
+    # (destinatario fixo) nao ha painel para abrir. Falha aqui nao pode derrubar o aviso.
+    # Sem novidade a linha so e criada se o dia ainda nao tem edicao: nao apaga a lista de uma rodada anterior.
     if not destinatario.get("id"):
-        return
+        return None
     try:
         numeros = [e.get("numeroControlePNCP") for e in editais if e.get("numeroControlePNCP")][:500]
         chave = _chave_servico()
@@ -857,11 +991,16 @@ def registrar_edicao(destinatario, edicao, editais, filtro_id=FILTRO_ID_PADRAO, 
         req = urllib.request.Request(SUPABASE_URL + "/rest/v1/boletim_edicoes?on_conflict=cliente_id,edicao,filtro_id",
             data=corpo, method="POST", headers={
                 "apikey": chave, "Authorization": "Bearer " + chave, "Content-Type": "application/json",
-                "Prefer": "resolution=merge-duplicates,return=minimal"})
+                "Prefer": "resolution=" + ("merge-duplicates" if editais else "ignore-duplicates") + ",return=representation"})
         with urllib.request.urlopen(req, timeout=20) as resp:
-            resp.read()
+            linhas = json.loads(resp.read().decode("utf-8") or "[]")
+        if not linhas:  # ja existia (ignore-duplicates nao devolve a linha): le o numero de antes
+            linhas = _get_json("boletim_edicoes?select=numero&cliente_id=eq." + urllib.parse.quote(str(destinatario["id"]), safe="")
+                               + "&edicao=eq." + edicao.isoformat() + "&filtro_id=eq." + urllib.parse.quote(filtro_id, safe=""))
+        return (linhas[0] if linhas else {}).get("numero")
     except Exception as e:
         log("AVISO: falha ao registrar a edicao do boletim de " + destinatario["email"] + " (" + str(e) + ").")
+        return None
 
 
 # ---- WhatsApp via CallMeBot (API gratuita, nao-oficial) ----
@@ -935,6 +1074,7 @@ def main():
 
     pool = buscar_pool_por_uf(ufs_para_buscar)
     prospecta = carregar_prospecta()
+    cabecalhos = carregar_cabecalhos([d.get("id") for d in destinatarios] + [j["cliente_id"] for j in jornais])
 
     for d in destinatarios:
         try:
@@ -954,9 +1094,9 @@ def main():
             log(d["nome"] + ": " + str(len(filtrados)) + " editais no filtro.")
 
             filtro_id = d.get("chave_historico") or FILTRO_ID_PADRAO
-            if filtrados:
-                registrar_edicao(d, hoje_brasilia(), filtrados, filtro_id)  # antes do aviso: o link ja abre a edicao
-            enviar_email(d["email"], d["nome"], filtrados, d.get("assunto", ""), nome_filtro(d), filtro_id)
+            numero = registrar_edicao(d, hoje_brasilia(), filtrados, filtro_id)  # antes do aviso: o link ja abre a edicao
+            cab = dict(cabecalhos.get(d.get("id")) or {}, numero=numero)
+            enviar_email(d["email"], d["nome"], filtrados, nome_filtro(d), filtro_id, cab)
             if filtrados:
                 log("E-mail enviado para " + d["email"] + " com " + str(len(filtrados)) + " edital(is).")
                 registrar_log_boletim(d, "enviado", len(filtrados))
@@ -993,7 +1133,7 @@ def main():
             registrar_log_boletim(d, "erro", 0, mensagem_erro=str(e))
 
     for j in jornais:
-        enviar_jornal(j, pool, historico)
+        enviar_jornal(j, pool, historico, cabecalhos)
 
     salvar_historico(historico)
     log("=== Fim da execucao ===")
@@ -1057,7 +1197,7 @@ def sugerir_no_funil(empresa_id, itens):
         return int(json.loads(resp.read().decode("utf-8")) or 0)
 
 
-def enviar_jornal(j, pool, historico):
+def enviar_jornal(j, pool, historico, cabecalhos=None):
     # Um e-mail por jornal, so com o que ainda nao foi mandado neste jornal.
     destino = {"id": j["cliente_id"], "email": j["email"], "nome": "Jornal " + j["nome"]}
     try:
@@ -1070,10 +1210,10 @@ def enviar_jornal(j, pool, historico):
         if not novos:
             log("Jornal " + j["nome"] + ": nada novo, sem e-mail.")
             return
-        prefixo = "[" + (j["empresa"] + " · " if j["empresa"] else "") + j["nome"] + "] "
-        registrar_edicao({"id": j["cliente_id"], "email": j["email"], "nome": j["empresa"] or j["nome"], "palavras_chave": [j["nome"]]},
-                         hoje_brasilia(), novos, chave, j["nome"])
-        enviar_email(j["email"], j["empresa"] or j["nome"], novos, prefixo, j["nome"], chave)
+        numero = registrar_edicao({"id": j["cliente_id"], "email": j["email"], "nome": j["empresa"] or j["nome"], "palavras_chave": [j["nome"]]},
+                                  hoje_brasilia(), novos, chave, j["nome"])
+        cab = dict((cabecalhos or {}).get(j["cliente_id"]) or {}, numero=numero)
+        enviar_email(j["email"], j["empresa"] or j["nome"], novos, j["nome"], chave, cab)
         registrar_log_boletim(destino, "enviado", len(novos))
         historico[chave] = list(vistos | {e.get("numeroControlePNCP") for e in novos})
         log("Jornal " + j["nome"] + ": " + str(len(novos)) + " edital(is) enviado(s).")
