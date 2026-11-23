@@ -401,3 +401,10 @@ header.topo ~ main h1 { color: var(--titulo-cor); font-weight: 700; letter-spaci
 }
 .faixa-ia h2 { font-size: 36px; line-height: 44px; }
 @media (max-width: 760px) { .faixa-ia { background-image: linear-gradient(180deg, rgba(5, 16, 66, 0.94), rgba(7, 27, 112, 0.88)), url("img/fotos/escritorio-960.webp"); } .faixa-ia h2 { font-size: 26px; line-height: 33px; } }
+/* Autocrítica rodada 2: cartões de agentes iguais pareciam template; viram lista editorial (fio, nome grande, plano em selo). */
+.numeros dd small { font-family: var(--font-sans); }
+.agentes { gap: 0 56px; }
+.agente { background: none; border: 0; border-top: 1px solid var(--border-strong); border-radius: 0; box-shadow: none; padding: 26px 0 30px; }
+.agente:hover { transform: none; box-shadow: none; border-color: var(--marca-medio); }
+.agente h3 { font-size: 26px; line-height: 32px; margin-bottom: 10px; }
+.agente .agente-plano { align-self: flex-start; padding: 4px 12px; border-radius: 8px; background: var(--marca-claro); color: var(--marca-titulo); font-weight: 600; }
