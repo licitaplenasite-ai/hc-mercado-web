@@ -18,6 +18,9 @@ for (const p of paginas) {
     assert.ok(nav.indexOf('Inteligência de Mercado') < nav.indexOf('Prospecção'), 'Prospecção logo após Inteligência de Mercado');
     assert.match(nav, /<a href="mao-de-obra\.html"[^>]*>[\s\S]*?Mão de obra/);
     assert.ok(nav.indexOf('Preços SINAPI') < nav.indexOf('Mão de obra'), 'Mão de obra logo após SINAPI');
+    // Orçamento de obra logo após SINAPI; no Essencial a própria tela mostra o aviso da trava (main data-recurso).
+    assert.match(nav, /<a href="orcamento-obra\.html"[^>]*>[\s\S]*?ph-toolbox[\s\S]*?Orçamento de obra/);
+    assert.ok(nav.indexOf('Preços SINAPI') < nav.indexOf('Orçamento de obra') && nav.indexOf('Orçamento de obra') < nav.indexOf('Mão de obra'), 'Orçamento de obra entre SINAPI e Mão de obra');
     // Consultoria abre o site da HC em nova aba: hc.html enquanto LICITAPLENA_HC_SITE estiver vazia (ajuda-ui.js troca o href).
     assert.ok(nav.includes('<a href="hc.html" target="_blank" rel="noopener" data-hc-site title="Consultoria">'), 'Consultoria');
     assert.match(html, /<script src="supabase-config\.js"><\/script>/);
@@ -56,7 +59,7 @@ test('painel leva Hoje, Processos e Extensão para as páginas certas e Calendá
 test('ícones novos do menu existem nos dois sprites', () => {
   const sprite = fs.readFileSync('menu-icones.svg', 'utf8');
   const painel = fs.readFileSync('painel.html', 'utf8');
-  for (const id of ['ph-calendar', 'ph-clock-counter-clockwise', 'ph-puzzle-piece', 'ph-clipboard-text', 'ph-handshake']) {
+  for (const id of ['ph-calendar', 'ph-clock-counter-clockwise', 'ph-puzzle-piece', 'ph-clipboard-text', 'ph-handshake', 'ph-toolbox']) {
     assert.match(sprite, new RegExp(`<symbol id="${id}"`), id);
     assert.match(painel, new RegExp(`<symbol id="${id}"`), id);
   }
