@@ -83,6 +83,8 @@ create table if not exists public.mercado_atas (
 create index if not exists mercado_atas_uf_orgao_idx on public.mercado_atas (uf_orgao);
 create index if not exists mercado_atas_segmentos_idx on public.mercado_atas using gin (segmentos);
 create index if not exists mercado_atas_objeto_trgm_idx on public.mercado_atas using gin (objeto gin_trgm_ops);
+-- 23/11: admin_saude_robos() pede max(atualizado_em); sem índice dava statement timeout na "Saúde do sistema".
+create index if not exists mercado_atas_atualizado_em_idx on public.mercado_atas (atualizado_em desc);
 
 alter table public.mercado_atas enable row level security;
 

@@ -42,6 +42,8 @@ create table if not exists public.sancoes_empresas (
 create index if not exists sancoes_empresas_cnpj_idx on public.sancoes_empresas (cnpj);
 -- O robô procura a última carga e marca sumiço por cadastro + data.
 create index if not exists sancoes_empresas_carga_idx on public.sancoes_empresas (cadastro, data_carga);
+-- 23/11: admin_saude_robos() pede max(atualizado_em); sem índice a "Saúde do sistema" do admin dava statement timeout.
+create index if not exists sancoes_empresas_atualizado_em_idx on public.sancoes_empresas (atualizado_em desc);
 
 -- atualizado_em no servidor (o upsert do robô não manda a coluna).
 create or replace function public.sancoes_empresas_tocar() returns trigger
