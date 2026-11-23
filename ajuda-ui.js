@@ -80,6 +80,10 @@
       passos: ["Preencha os percentuais e veja o BDI da obra."] },
     { id: "sinapi", titulo: "Preços SINAPI", telas: ["sinapi.html"], print: "p15-sinapi",
       passos: ["Escolha o estado e a tabela e digite o serviço.", "Usar este preço leva o valor para o item do processo."] },
+    { id: "contador", titulo: "Contador · Preço com impostos", telas: ["sistema.html", "/sistema"], print: "c16-contador",
+      passos: ["Abra o processo, vá em Itens do processo e abra o item: o Contador fica embaixo dele.", "O regime vem pelo CNPJ da empresa: confira, clique em Confirmar regime e informe o ICMS da sua UF.", "Preencha a planilha de custos (frete, embalagem, garantia...) e clique em Calcular: aparecem o preço mínimo, o preço com a margem e se vale a pena.", "Salvar no item para a proposta guarda o resumo. É uma estimativa para formar preço: confirme com o seu contador."] },
+    { id: "orcamento-obra", titulo: "Orçamentista · Orçamento de obra", telas: ["orcamento-obra.html"], print: "p16-orcamento-obra",
+      passos: ["Em Preços SINAPI, clique em Montar o orçamento inteiro a partir da planilha do edital.", "Envie a planilha orçamentária do edital (.xlsx) e clique em Ler a planilha; confira o que o Leitor entendeu.", "Monte o orçamento: a tela mostra a data-base de cada tabela usada. Veja os Alertas do Auditor antes de baixar as planilhas.", "Revisão e assinatura de engenheiro ou arquiteto responsável são obrigatórias."] },
   ];
 
   function criar(tag, props = {}, filhos = []) {
