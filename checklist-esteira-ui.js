@@ -38,6 +38,12 @@
     }
   }
 
+  // Etapa na fila (itens ou exigências 'pendente'): pede ao servidor que os robôs rodem já (/api/acelerar-esteira),
+  // em vez de esperar o cron do GitHub, que em 23/11 deixou o processo horas em "Na fila…".
+  function precisaAcelerar(tarefas) {
+    return ['itens', 'exigencias'].some((etapa) => tarefas.get(etapa)?.estado === 'pendente');
+  }
+
   // Declarações: pedidas pelo edital (exigências da categoria) × geradas no kit.
   function contarDeclaracoes(docs) {
     const lista = Array.isArray(docs) ? docs : [];
@@ -170,6 +176,7 @@
     let ocupado = false;
     let avisoDecl = '';
     let avisoFaixa = '';
+    let acelerado = false;
     const filtro = (q) => q.eq('empresa_id', contexto.empresaId).eq('processo_id', contexto.processoId);
 
     function h(tag, props, ...filhos) {
@@ -202,6 +209,11 @@
       ]);
       if (!vivo || g !== geracao) return;
       tarefas = new Map(t.dados.map((x) => [x.etapa, x]));
+      // Uma vez por abertura do processo; falha (ou servidor sem token configurado) não muda nada na tela.
+      if (!acelerado && typeof requisitar === 'function' && precisaAcelerar(tarefas)) {
+        acelerado = true;
+        Promise.resolve().then(() => requisitar('/api/acelerar-esteira', { method: 'POST', credentials: 'same-origin' })).catch(() => {});
+      }
       exigencias = e.dados;
       exigenciasDisponiveis = !e.ausente && !e.erro;
       // Banco sem operacao_kit_modelos/kit: o bloco de declarações some, o resto continua.
@@ -384,7 +396,7 @@
     return { fechar() { vivo = false; geracao += 1; alvo.replaceChildren(); }, atualizar: () => carregar() };
   }
 
-  const api = { montar, tentarDeNovo, rotuloEtapa, rotuloDocumentos, contarDeclaracoes, alertasLeitura, alertasCobertura, ordenarExigencias,
+  const api = { montar, tentarDeNovo, precisaAcelerar, rotuloEtapa, rotuloDocumentos, contarDeclaracoes, alertasLeitura, alertasCobertura, ordenarExigencias,
     contarPendencias, loteDeclaracoes, tituloDeclaracao, tabelaAusente, SITUACOES, RESPOSTAS, CATEGORIAS };
   global.LicitaChecklistEsteira = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

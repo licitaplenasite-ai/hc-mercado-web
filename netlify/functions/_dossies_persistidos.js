@@ -64,7 +64,8 @@ async function salvarDossiePersistido(numeroControlePNCP, dossie) {
 async function enfileirarDossie(numeroControlePNCP, { novaLeitura = false, usuario = null } = {}) {
   const chave = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!chave || !numeroControlePNCP) return { ok: true };
-  if (usuario && (novaLeitura || !(await jaNaFila(numeroControlePNCP, chave)))) {
+  const pedidoNovo = Boolean(usuario) && (novaLeitura || !(await jaNaFila(numeroControlePNCP, chave)));
+  if (pedidoNovo) {
     const teto = await require("./_auth").limitarFilaDossies(usuario);
     if (!teto.ok) return teto;
   }
@@ -80,6 +81,8 @@ async function enfileirarDossie(numeroControlePNCP, { novaLeitura = false, usuar
       body: JSON.stringify([{ numero_controle_pncp: numeroControlePNCP, concluido_em: null, ...(novaLeitura ? { tentativas: 0 } : {}) }]),
     });
     if (!resposta.ok) console.error(`fila_dossies: pedido recusado HTTP ${resposta.status} ${numeroControlePNCP}`);
+    // Pedido novo do cliente não espera o cron do GitHub (incidente 23/11); sem token configurado, não faz nada.
+    else if (pedidoNovo) await require("./_disparo_robos").dispararWorkflows(["gerar-dossies.yml"]);
   } catch (e) {
     // A ficha oficial continua sendo exibida; o boletim ainda alimenta a fila.
     console.error(`fila_dossies: pedido falhou ${numeroControlePNCP}: ${e.message}`);

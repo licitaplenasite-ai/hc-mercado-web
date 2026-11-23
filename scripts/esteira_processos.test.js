@@ -366,3 +366,40 @@ test("esteira: a fila da análise por CNPJ roda mesmo sem tempo sobrando, com 3 
     assert.ok(chamadas[0].prazoFinal - (agoraDaChamada - 11 * 60000) <= 3 * 60000 + 1);
   } finally { analise.completarAnalises = originalA; historico.completarConsultas = originalC; }
 });
+
+// Regressão 23/11: um item com timeout ("This operation was aborted") derrubava a etapa itens inteira.
+test("itens: timeout passageiro do PNCP repete na hora, curto, e a tarefa termina", async () => {
+  const db = supabaseFalso({ tarefas: [tarefa("itens")] });
+  const { fetchPncp: base } = pncpFalso(2);
+  let abortados = 0;
+  const fetchPncp = async (url, op) => {
+    if (url.endsWith("/itens/2") && abortados < 1) { abortados += 1; throw Object.assign(new Error("This operation was aborted"), { name: "AbortError" }); }
+    return base(url, op);
+  };
+  const pausas = [];
+  assert.deepEqual(await rodar({ rest: db.rest, fetchPncp, agora: relogio, esperar: async (ms) => { pausas.push(ms); } }), { feito: 1 });
+  assert.deepEqual(db.gravados.map((g) => g.p_numero), [1, 2]);
+  assert.ok(pausas.includes(2000));
+});
+
+test("itens: PNCP fora mesmo após as retentativas vira falha com backoff e motivo claro; 422 não repete", async () => {
+  const db = supabaseFalso({ tarefas: [tarefa("itens")] });
+  const { fetchPncp: base } = pncpFalso(1);
+  let chamadasItem = 0;
+  const fetchPncp = async (url, op) => {
+    if (url.endsWith("/itens/1")) { chamadasItem += 1; throw Object.assign(new Error("This operation was aborted"), { name: "AbortError" }); }
+    return base(url, op);
+  };
+  assert.deepEqual(await rodar({ rest: db.rest, fetchPncp, agora: relogio, esperar: async () => {} }), { pendente: 1 });
+  assert.equal(chamadasItem, 3);
+  assert.match(db.tarefas[0].erro, /PNCP não respondeu \(item 1\) após 3 tentativa/);
+  const db2 = supabaseFalso({ tarefas: [tarefa("itens")] });
+  const { fetchPncp: f2 } = pncpFalso(1);
+  let chamadas422 = 0;
+  const fetch422 = async (url, op) => {
+    if (url.endsWith("/itens/1")) { chamadas422 += 1; return resposta({ numeroItem: 1, descricao: "x", quantidade: 0, unidadeMedida: "UN" }); }
+    return f2(url, op);
+  };
+  await rodar({ rest: db2.rest, fetchPncp: fetch422, agora: relogio, esperar: async () => {} });
+  assert.equal(chamadas422, 1);
+});

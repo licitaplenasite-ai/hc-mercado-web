@@ -97,12 +97,22 @@ grant execute on function public.robo_registrar_sucesso(text) to service_role;
 
 -- Último sucesso: o batimento ou, enquanto o workflow ainda não grava, o rastro que o robô já deixa nos dados.
 -- Cobertura dos estados: o metadado do PNCP (dados_robo.oportunidades_meta), o mesmo do Status das Ferramentas.
+-- 23/11 (incidente "Na fila…" por horas): alarme da coleta (dados_robo.coleta_alarme, gravado por
+-- scripts/atualizar_dados.js em vez de derrubar o job) e pedidos de processo do cliente (fila_dossies, origem
+-- 'interesse') sem dossiê há mais de 1 h. fila_dossies não tem policy (só service_role): o admin vê só a contagem.
 create or replace function public.admin_saude_robos() returns jsonb
 language plpgsql stable security definer set search_path = public as $$
-declare v_meta jsonb; v jsonb;
+declare v_meta jsonb; v jsonb; v_alarme jsonb; v_fila jsonb;
 begin
   if not public.admin_planos_autorizado() then raise exception 'Saúde do sistema exige o proprietário com 2 fatores' using errcode = '42501'; end if;
   select dado into v_meta from public.dados_robo where chave = 'oportunidades_meta';
+  select dado into v_alarme from public.dados_robo where chave = 'coleta_alarme';
+  -- execute: a função continua valendo num banco em que fila_dossies.sql ainda não foi aplicado.
+  if to_regclass('public.fila_dossies') is not null then
+    execute $q$select jsonb_build_object('esperando', count(*), 'mais_antigo', min(pedido_em))
+      from public.fila_dossies where origem = 'interesse' and concluido_em is null and pedido_em < now() - interval '1 hour'$q$
+      into v_fila;
+  end if;
   select coalesce(jsonb_object_agg(robo, ultimo_sucesso), '{}'::jsonb) into v from public.robos_batimento;
   return jsonb_build_object(
     'robos', jsonb_strip_nulls(jsonb_build_object(
@@ -119,7 +129,9 @@ begin
     'ufs_com_falha', coalesce(v_meta -> 'ufsComFalha', '[]'::jsonb),
     'cobertura_por_uf', (select coalesce(jsonb_object_agg(k, x ->> 'atualizadoEm'), '{}'::jsonb)
       from jsonb_each(coalesce(v_meta -> 'coberturaPorUf', '{}'::jsonb)) as e(k, x) where jsonb_typeof(x) = 'object'),
-    'normas_para_revisar', (select count(*) from public.orcamento_normas_novidades where situacao = 'para_revisar'));
+    'normas_para_revisar', (select count(*) from public.orcamento_normas_novidades where situacao = 'para_revisar'),
+    'coleta_alarme', v_alarme,
+    'dossies_interesse_atrasados', v_fila);
 end $$;
 revoke all on function public.admin_saude_robos() from public, anon;
 grant execute on function public.admin_saude_robos() to authenticated;

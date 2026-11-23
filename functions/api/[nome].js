@@ -74,8 +74,11 @@ import * as chatIa from "../../netlify/functions/chat-ia.js";
 import * as situacaoSicaf from "../../netlify/functions/situacao-sicaf.js";
 // Planilha do concorrente em foto (Orçamento de obra): logado e aprovado, 40 páginas/dia, 1 chamada ao Gemini por página.
 import * as planilhaIa from "../../netlify/functions/planilha-ia.js";
+// Acelerar a esteira (checklist do processo): logado e aprovado, 2/min por conta; até 2 chamadas à API do GitHub.
+import * as acelerarEsteira from "../../netlify/functions/acelerar-esteira.js";
 
 const ROTAS = {
+  "acelerar-esteira": acelerarEsteira,
   "vinculo-compra-portal": vinculoCompraPortal,
   "importar-item-pncp": importacaoPncp,
   "kit-documentos": m18,

@@ -84,6 +84,17 @@ class CotaEsgotada extends Error {}
 class GeminiSobrecarregado extends CotaEsgotada {}
 // Provedor sem nenhum modelo utilizável (todos 404): não é culpa do edital; a cadeia segue para o próximo.
 class ProvedorIndisponivel extends Error {}
+// Edital maior que o contexto da reserva (MAX_CARACTERES_FONTE_COMPAT) com o Gemini (1M) em 503/429.
+// Em 23/11 esse edital caiu no modelo de reserva, saiu "sintese_parcial_limite_contexto" e
+// registroDoResultado o esgotou: nunca mais seria relido pelo Gemini e a etapa exigencias do processo
+// ficou em aguardando_leitura. Agora ele volta para a fila sem gastar tentativa: na sobrecarga,
+// gerarComEspera ainda repete com espera dentro da rodada; com a cota do dia esgotada, fica para a
+// próxima rodada (o backoff é a própria cadência das rodadas). Política mantida para o resto:
+// edital que cabe na reserva continua indo para ela (ver o cabeçalho), e sem chave do Gemini na
+// cadeia a síntese parcial continua sendo aceita, porque esperar não mudaria o resultado.
+class FonteExigeContextoLongo extends Error {
+  constructor(mensagem, sobrecarga) { super(mensagem); this.sobrecarga = sobrecarga; }
+}
 
 // O modelo às vezes devolve campos a mais, a menos ou fora do tipo. Em vez de
 // descartar o dossiê inteiro (o que antes gerava nova cobrança no dia seguinte),
@@ -276,14 +287,19 @@ function montarProvedores(env = process.env) {
 
 // Percorre a cadeia na ordem. `esgotados` vale pela rodada inteira (compartilhado entre editais).
 async function chamarCadeia(ficha, fonte, { provedores, fetchFn, esgotados = new Set(), prazoFinal }) {
-  let sobrecarga = false, cotaEsgotada = false;
+  let sobrecarga = false, cotaEsgotada = false, geminiFora = false;
   for (const provedor of provedores) {
+    if (geminiFora && provedor.nome !== "gemini" && fonte.length > MAX_CARACTERES_FONTE_COMPAT) {
+      throw new FonteExigeContextoLongo(`fonte de ${fonte.length} caracteres espera o Gemini (reserva cortaria em ${MAX_CARACTERES_FONTE_COMPAT})`, sobrecarga);
+    }
     try {
       return { ...await provedor.chamar(ficha, fonte, { fetchFn, esgotados, prazoFinal }), provedor: provedor.nome };
     } catch (erro) {
       if (erro instanceof GeminiSobrecarregado) sobrecarga = true;
       else if (erro instanceof CotaEsgotada) cotaEsgotada = true;
       else if (!(erro instanceof ProvedorIndisponivel)) throw erro;
+      // Todos os modelos 404 (ProvedorIndisponivel) não é sobrecarga passageira: a reserva assume.
+      if (provedor.nome === "gemini" && erro instanceof CotaEsgotada) geminiFora = true;
     }
   }
   if (sobrecarga) throw new GeminiSobrecarregado("IA sobrecarregada em todos os provedores");
@@ -456,7 +472,8 @@ async function gerarComEspera(numero, { prazoFinal, gerar = gerarDossie, esperar
       return await gerar(numero, { ...opcoes, prazoFinal });
     } catch (erro) {
       const cabeEspera = Date.now() + ESPERA_SOBRECARGA_MS < prazoFinal;
-      if (!(erro instanceof GeminiSobrecarregado) || espera >= ESPERAS_SOBRECARGA || !cabeEspera) throw erro;
+      const sobrecarga = erro instanceof GeminiSobrecarregado || (erro instanceof FonteExigeContextoLongo && erro.sobrecarga);
+      if (!sobrecarga || espera >= ESPERAS_SOBRECARGA || !cabeEspera) throw erro;
       console.log(`[dossiês] IA sobrecarregada; nova tentativa em ${ESPERA_SOBRECARGA_MS / 1000} s.`);
       await esperar(ESPERA_SOBRECARGA_MS);
     }
@@ -515,6 +532,11 @@ async function main() {
       contagem.gerado += 1;
       console.log(`[dossiês] gerado ${resultado.completo ? "completo" : "parcial"} (${resultado.provedor}/${resultado.modelo}, ${resultado.uso?.totalTokenCount || "?"} tokens): ${candidato.numero}`);
     } catch (erro) {
+      if (erro instanceof FonteExigeContextoLongo) {
+        // Sem registrarTentativa: não gasta tentativa nem esgota o edital; os menores seguem na rodada.
+        console.warn(`[dossiês] ${candidato.numero}: ${erro.message}; volta à fila para a próxima rodada.`);
+        continue;
+      }
       if (erro instanceof CotaEsgotada) {
         console.warn(`[dossiês] ${erro.message}; o restante fica para a próxima execução.`);
         break;
@@ -533,4 +555,5 @@ if (require.main === module) {
   main().catch((erro) => { console.error(`[dossiês] ${erro.message}`); process.exitCode = 1; });
 }
 
-module.exports = { leituraPodeMelhorar, registroDoResultado, cabeNovoDossie, limiteDocumentosLeitura, VERSAO_DOSSIE, montarProvedores, chamarCadeia, chamarCompat, corpoCompat, ajustarAoSchema, schemaParaGemini, corpoGemini, chamarGemini, montarResultado, selecionarCandidatos, carregarAntecipados, dossieCompleto, gerarComEspera, CotaEsgotada, GeminiSobrecarregado };
+module.exports = { leituraPodeMelhorar, registroDoResultado, cabeNovoDossie, limiteDocumentosLeitura, VERSAO_DOSSIE, montarProvedores, chamarCadeia, chamarCompat, corpoCompat, ajustarAoSchema, schemaParaGemini, corpoGemini, chamarGemini, montarResultado, selecionarCandidatos, carregarAntecipados, dossieCompleto, gerarComEspera, CotaEsgotada, GeminiSobrecarregado,
+  FonteExigeContextoLongo, MAX_CARACTERES_FONTE_COMPAT };
