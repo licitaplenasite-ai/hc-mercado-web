@@ -8238,7 +8238,9 @@
       const resposta = await fetchComSessao(`/api/comprasgov-marcas-produto?${parametros}`);
       const dados = await resposta.json();
       if (!resposta.ok || !dados.ok) return { erro: true, itens: [] };
-      return { erro: false, itens: Array.isArray(dados.itens) ? dados.itens : [], catalogos: Array.isArray(dados.catalogos) ? dados.catalogos : [] };
+      // guardadoEm: o Compras.gov caiu e o servidor devolveu a última consulta guardada (_cache_publico.js).
+      const guardadoEm = resposta.headers.get("X-Dados-Origem") === "guardado" ? resposta.headers.get("X-Dados-Guardados-Em") : null;
+      return { erro: false, itens: Array.isArray(dados.itens) ? dados.itens : [], catalogos: Array.isArray(dados.catalogos) ? dados.catalogos : [], guardadoEm };
     } catch (erro) {
       console.warn("[comprasgov-marcas-produto] falha na consulta:", erro);
       return { erro: true, itens: [] };
@@ -8526,35 +8528,52 @@
     try {
       const palavras = termo.split(",").map((p) => p.trim()).filter(Boolean);
       const falha = { registros: [], erro: true };
-      const [contratos, homologados, atas, aoVivo] = await Promise.all([
+      // Ao vivo (Compras.gov) em paralelo, mas sem segurar a tela: o que já está no nosso banco aparece primeiro
+      // e os preços ao vivo entram quando chegarem (antes, tudo esperava a fonte mais lenta, até 20 s).
+      const aoVivoPromessa = comPrazoMercado(consultarMarcasPorProdutoOficial(palavras[0], uf), 20000, { erro: true, itens: [] });
+      const [contratos, homologados, atas] = await Promise.all([
         comPrazoMercado(consultarContratosSupabase({ palavras, dias, uf: uf || null }), 15000, { ...falha, truncado: false }),
         comPrazoMercado(consultarResultadosHomologadosComprasGov({ palavras, dias, uf: uf || null }), 10000, falha),
         comPrazoMercado(carregarMercadoSegmentos(palavras, uf || null), 15000, null),
-        comPrazoMercado(consultarMarcasPorProdutoOficial(palavras[0], uf), 20000, { erro: true, itens: [] }),
       ]);
       if (seq !== mkBuscaSeq) return; // uma busca mais nova já está na tela
       const M = window.MercadoPesquisa;
       const desdeIso = new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-      const vendas = M.juntar([
-        contratos.registros.map((c) => M.deContrato(c, linkPncpContrato(c.numeroControlePNCP))),
-        homologados.registros.map((h) => M.deResultado(h, linkPncp(h.compra && h.compra.numeroControlePncp))),
-        (atas ? atas.atas : []).flatMap((a) => M.deAta(a, linkPncp(a.numeroControlePNCPCompra))),
-        aoVivo.itens.map(M.dePrecoAoVivo),
-      ], desdeIso);
-      const avisos = [];
-      if (contratos.erro || homologados.erro || !atas) avisos.push("Parte das compras já guardadas não carregou agora; os números podem estar incompletos. Tente de novo em instantes.");
-      if (aoVivo.erro) avisos.push("A Pesquisa de Preços do Compras.gov não respondeu agora; os preços e as marcas mostram só o que já estava guardado.");
-      // A contagem é estimativa do Postgres ("planned"): só avisa corte quando a amostra realmente encheu.
-      if (contratos.truncado && contratos.registros.length >= 1000) avisos.push(`Foram achados mais de ${contratos.registros.length.toLocaleString("pt-BR")} contratos; a tela usa os mais recentes. Para um retrato mais fiel, escolha um estado ou um período menor.`);
-      const catalogos = aoVivo.catalogos || [];
-      mkAtual = { termo, uf, dias, vendas, avisos, filtro: null, aba: mkAtual && MK_ABAS.some(([id]) => id === mkAtual.aba) ? mkAtual.aba : "correspondencias",
-        modo: (mkAtual && mkAtual.modo) || "tabela", pca: null,
+      // aoVivo null = ainda carregando: monta só com o guardado e avisa que os preços ao vivo estão a caminho.
+      const montarResultado = (aoVivo) => {
+        const vivoItens = aoVivo ? aoVivo.itens : [];
+        const vendas = M.juntar([
+          contratos.registros.map((c) => M.deContrato(c, linkPncpContrato(c.numeroControlePNCP))),
+          homologados.registros.map((h) => M.deResultado(h, linkPncp(h.compra && h.compra.numeroControlePncp))),
+          (atas ? atas.atas : []).flatMap((a) => M.deAta(a, linkPncp(a.numeroControlePNCPCompra))),
+          vivoItens.map(M.dePrecoAoVivo),
+        ], desdeIso);
+        const avisos = [];
+        if (contratos.erro || homologados.erro || !atas) avisos.push("Parte das compras já guardadas não carregou agora; os números podem estar incompletos. Tente de novo em instantes.");
+        if (!aoVivo) avisos.push("Mostrando as compras já guardadas. Buscando os preços e as marcas ao vivo no Compras.gov…");
+        else if (aoVivo.erro) avisos.push("A Pesquisa de Preços do Compras.gov não respondeu agora; os preços e as marcas mostram só o que já estava guardado.");
+        else if (aoVivo.guardadoEm) avisos.push(`O Compras.gov não respondeu agora: os preços ao vivo são da última consulta guardada, de ${new Date(aoVivo.guardadoEm).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}.`);
+        // A contagem é estimativa do Postgres ("planned"): só avisa corte quando a amostra realmente encheu.
+        if (contratos.truncado && contratos.registros.length >= 1000) avisos.push(`Foram achados mais de ${contratos.registros.length.toLocaleString("pt-BR")} contratos; a tela usa os mais recentes. Para um retrato mais fiel, escolha um estado ou um período menor.`);
+        const catalogos = (aoVivo && aoVivo.catalogos) || [];
         // A busca já leu a 1ª página (200 divididas entre os produtos). Com um produto só, ela é a página 1 inteira: começa
         // na 2. Com vários, a página 1 inteira do mais comprado ainda traz compras novas (as repetidas somem no juntar).
-        vivo: { lidas: aoVivo.itens.length, catalogos, total: catalogos.reduce((s, c) => s + (Number(c.total) || 0), 0),
-          proxima: catalogos.length ? { indice: 0, pagina: catalogos.length === 1 ? 2 : 1 } : null } };
-      renderPesquisaMercado(alvo, mkAtual);
-      mkCarregarContratacaoFutura(mkAtual);
+        const vivo = { lidas: vivoItens.length, catalogos, total: catalogos.reduce((s, c) => s + (Number(c.total) || 0), 0),
+          proxima: catalogos.length ? { indice: 0, pagina: catalogos.length === 1 ? 2 : 1 } : null };
+        return { vendas, avisos, vivo };
+      };
+      mkAtual = { termo, uf, dias, ...montarResultado(null), filtro: null, aba: mkAtual && MK_ABAS.some(([id]) => id === mkAtual.aba) ? mkAtual.aba : "correspondencias",
+        modo: (mkAtual && mkAtual.modo) || "tabela", pca: null };
+      const atual = mkAtual;
+      // Nada guardado: em vez de "Nenhuma compra" provisório, segue o carregando até o ao vivo responder.
+      if (atual.vendas.length) renderPesquisaMercado(alvo, atual);
+      else alvo.innerHTML = '<div class="carregando">Nada guardado ainda para este produto; buscando ao vivo no Compras.gov...</div>';
+      mkCarregarContratacaoFutura(atual);
+      const aoVivo = await aoVivoPromessa;
+      // Mesmo objeto (aba, filtro e o PCA que já chegou continuam): só entram as vendas e os avisos com o ao vivo.
+      if (seq !== mkBuscaSeq || mkAtual !== atual) return;
+      Object.assign(atual, montarResultado(aoVivo));
+      renderPesquisaMercado(alvo, atual);
     } catch (e) {
       if (seq === mkBuscaSeq) alvo.innerHTML = `<div class="aviso">Não foi possível pesquisar agora: ${escapeHtml(String(e && e.message || e))}</div>`;
     } finally {
