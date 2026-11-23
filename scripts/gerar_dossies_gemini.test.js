@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 process.env.MAX_TENTATIVAS_DOSSIE = "2";
-const { leituraPodeMelhorar, registroDoResultado, cabeNovoDossie, limiteDocumentosLeitura, ajustarAoSchema, schemaParaGemini, corpoGemini, chamarGemini, montarResultado, selecionarCandidatos, dossieCompleto, gerarComEspera, montarProvedores, chamarCadeia, corpoCompat, GeminiSobrecarregado, CotaEsgotada, VERSAO_DOSSIE } = require("./gerar_dossies_gemini");
+const { leituraPodeMelhorar, registroDoResultado, cabeNovoDossie, limiteDocumentosLeitura, ajustarAoSchema, schemaParaGemini, corpoGemini, chamarGemini, montarResultado, selecionarCandidatos, dossieCompleto, gerarComEspera, montarProvedores, chamarCadeia, corpoCompat, GeminiSobrecarregado, CotaEsgotada, VERSAO_DOSSIE, FonteExigeContextoLongo, MAX_CARACTERES_FONTE_COMPAT } = require("./gerar_dossies_gemini");
 const contrato = require("../netlify/functions/_resumo_gateway_contrato");
 const { estruturaValida } = require("../netlify/functions/_resumo_gateway");
 
@@ -252,6 +252,42 @@ test("todos com 429: cota esgotada, que não gasta a tentativa do edital", async
 test("todos com 5xx ou timeout: sobrecarga, que ativa a espera", async () => {
   const fetchFn = fetchPorProvedor({ gemini: () => respostaGemini(503, {}), mistral: () => { throw Object.assign(new Error("timeout"), { name: "TimeoutError" }); }, openrouter: () => respostaGemini(502, {}) });
   await assert.rejects(chamarCadeia({}, "fonte", { provedores: montarProvedores(ENV_TODOS), fetchFn }), GeminiSobrecarregado);
+});
+
+// Regressão 23/11: Gemini em 503 e o edital grande ia para o modelo de 128k, saía parcial
+// (sintese_parcial_limite_contexto) e era esgotado na fila sem nunca voltar ao Gemini.
+test("edital maior que a reserva com Gemini sobrecarregado espera o Gemini em vez de síntese parcial", async () => {
+  const chamadas = [];
+  const fetchFn = fetchPorProvedor({ gemini: () => respostaGemini(503, {}), mistral: () => respostaCompat() }, chamadas);
+  const grande = "x".repeat(MAX_CARACTERES_FONTE_COMPAT + 1);
+  const erro = await chamarCadeia({}, grande, { provedores: montarProvedores(ENV_TODOS), fetchFn }).catch((e) => e);
+  assert.ok(erro instanceof FonteExigeContextoLongo);
+  assert.equal(erro.sobrecarga, true);
+  assert.ok(!chamadas.some((c) => c.startsWith("mistral")), "não chama o modelo de contexto menor");
+});
+
+test("edital maior que a reserva com cota do Gemini esgotada não espera na rodada (sem sobrecarga)", async () => {
+  const fetchFn = fetchPorProvedor({ gemini: () => respostaGemini(429, {}), mistral: () => respostaCompat() });
+  const erro = await chamarCadeia({}, "x".repeat(MAX_CARACTERES_FONTE_COMPAT + 1), { provedores: montarProvedores(ENV_TODOS), fetchFn }).catch((e) => e);
+  assert.ok(erro instanceof FonteExigeContextoLongo);
+  assert.equal(erro.sobrecarga, false);
+  let esperas = 0;
+  await assert.rejects(gerarComEspera("x", { prazoFinal: Date.now() + 3600000, gerar: async () => { throw erro; }, esperar: async () => { esperas += 1; } }), FonteExigeContextoLongo);
+  assert.equal(esperas, 0);
+});
+
+test("edital que cabe na reserva continua indo para ela; sem Gemini na cadeia o grande também", async () => {
+  const fetchFn = fetchPorProvedor({ gemini: () => respostaGemini(503, {}), mistral: () => respostaCompat() });
+  assert.equal((await chamarCadeia({}, "fonte", { provedores: montarProvedores(ENV_TODOS), fetchFn })).provedor, "mistral");
+  const r = await chamarCadeia({}, "x".repeat(MAX_CARACTERES_FONTE_COMPAT + 1), { provedores: montarProvedores({ MISTRAL_API_KEY: "m" }), fetchFn });
+  assert.equal(r.provedor, "mistral");
+});
+
+test("sobrecarga do Gemini com edital grande repete com espera dentro da rodada", async () => {
+  let vezes = 0;
+  const r = await gerarComEspera("x", { prazoFinal: Date.now() + 3600000, esperar: async () => {},
+    gerar: async () => { vezes += 1; if (vezes < 2) throw new FonteExigeContextoLongo("espera", true); return { ok: true }; } });
+  assert.deepEqual([r.ok, vezes], [true, 2]);
 });
 
 test("cota esgotada num provedor e sobrecarga em outro contam como sobrecarga (vale esperar)", async () => {

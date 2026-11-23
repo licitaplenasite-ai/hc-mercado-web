@@ -89,6 +89,7 @@ test("prazo PNCP permanece ativo durante leitura do corpo e é limpo após falha
 function ambienteMain(falharEm) {
   const eventos = [];
   const arquivos = new Map([["data/contratos_meta.json", "anterior"], ["data/mercado_meta.json", "anterior"]]);
+  const blobs = new Map();
   const ambiente = vm.createContext({
     process: { env: {}, cwd: () => "." }, UFS: ["AM"], RETENCAO_DIAS: 730, hashProgressoAtas,
     console: { log() {}, warn() {} }, iniciarFase() {}, LIMITE_MINUTOS_CONTRATOS: 1, LIMITE_MINUTOS_MERCADO: 1,
@@ -101,12 +102,13 @@ function ambienteMain(falharEm) {
     coletarMercadoSegmentos: async () => ({ atas: [], janelasPendentes: [] }),
     coletarOportunidadesAbertas: async () => ({ registros: [], ufsComFalha: [], ufsOkNaExecucao: ["AM"], coberturaPorUf: { AM: { atualizadoEm: new Date().toISOString() } } }),
     ...Object.fromEntries(["sincronizarContratosNoSupabase", "sincronizarMercadoNoSupabase", "sincronizarOportunidadesNoSupabase"].map((nome) => [nome, async () => { eventos.push(nome); if (falharEm === nome) throw new Error("timeout simulado"); }])),
-    salvarBlob: async (_tabela, chave) => { eventos.push(chave); if (falharEm === "salvarBlob" && chave === "oportunidades_meta") throw new Error("timeout simulado"); },
+    salvarBlob: async (_tabela, chave, dado) => { eventos.push(chave); if (falharEm === "salvarBlob" && chave === "oportunidades_meta") throw new Error("timeout simulado"); blobs.set(chave, dado); },
+    buscarBlob: async (_tabela, chave) => blobs.get(chave) || null,
   });
   const fonte = codigo.slice(codigo.indexOf("async function main()"), codigo.indexOf("\nmodule.exports ="))
     .replace('await import("node:fs/promises")', "fsTeste").replace('await import("node:path")', "pathTeste");
   vm.runInContext(fonte, ambiente);
-  return { ambiente, eventos, arquivos };
+  return { ambiente, eventos, arquivos, blobs };
 }
 
 for (const etapa of ["Contratos", "Mercado", "Oportunidades"]) {
@@ -321,12 +323,37 @@ test("contratos parciais preservam cursor e contratos anteriores", async () => {
   assert.equal(resultado.registros[0].numeroControlePNCP, "antigo");
 });
 
-test("UF sem cobertura há mais de 48 h vira erro do robô após persistir dados úteis", async () => {
-  const { ambiente, eventos } = ambienteMain();
+// Regressão 18-23/11: o throw por cobertura atrasada derrubava o job em toda rodada e o gerar-dossies
+// (gatilho só em 'success') era pulado. Agora é alarme: o job termina e o admin vê o aviso.
+test("UF sem cobertura há mais de 48 h vira alarme (não derruba o robô) após persistir dados úteis", async () => {
+  const { ambiente, eventos, blobs } = ambienteMain();
+  const logs = [];
+  ambiente.console.log = (m) => logs.push(m);
   const ha49h = new Date(Date.now() - 49 * 3600000).toISOString();
   ambiente.coletarOportunidadesAbertas = async () => ({ registros: [], ufsComFalha: ["AM"], ufsOkNaExecucao: [], coberturaPorUf: { AM: { atualizadoEm: ha49h } } });
-  await assert.rejects(ambiente.main(), /cobertura.*48 h.*AM/i);
+  await ambiente.main();
   assert.ok(eventos.includes("oportunidades_meta"));
+  assert.match(blobs.get("coleta_alarme").oportunidades[0], /cobertura.*48 h.*AM/i);
+  assert.deepEqual([...blobs.get("coleta_alarme").contratos], []);
+  assert.ok(logs.some((m) => /^::warning title=Coleta PNCP::cobertura.*AM/.test(m)));
+});
+
+test("recuperação de UFs regrava só o alarme das oportunidades, sem apagar o dos contratos", async () => {
+  const { ambiente, blobs } = ambienteMain();
+  ambiente.process.env.SOMENTE_OPORTUNIDADES = "1";
+  blobs.set("coleta_alarme", { contratos: ["contratos: scan nacional sem concluir desde 20261115"], oportunidades: ["velho"] });
+  await ambiente.main();
+  assert.deepEqual([...blobs.get("coleta_alarme").oportunidades], []);
+  assert.deepEqual([...blobs.get("coleta_alarme").contratos], ["contratos: scan nacional sem concluir desde 20261115"]);
+});
+
+test("falha ao gravar o alarme não derruba a coleta", async () => {
+  const { ambiente } = ambienteMain();
+  ambiente.buscarBlob = async () => { throw new Error("blob fora"); };
+  const avisos = [];
+  ambiente.console.warn = (m) => avisos.push(m);
+  await ambiente.main();
+  assert.ok(avisos.some((m) => /Alarme da coleta não gravado: blob fora/.test(m)));
 });
 
 test("falha parcial recuperável (UF coletada há menos de 48 h, fila de atas, scan retomável) não é erro", async () => {
@@ -343,10 +370,11 @@ test("falha parcial recuperável (UF coletada há menos de 48 h, fila de atas, s
   }
 });
 
-test("scan nacional de contratos parado há mais de 48 h vira erro", async () => {
-  const { ambiente } = ambienteMain();
+test("scan nacional de contratos parado há mais de 48 h vira alarme", async () => {
+  const { ambiente, blobs } = ambienteMain();
   ambiente.coletarContratos = async () => ({ registros: [], parcial: true, dataFinal: "20261115" });
-  await assert.rejects(ambiente.main(), /contratos: scan nacional sem concluir desde 20261115/);
+  await ambiente.main();
+  assert.deepEqual([...blobs.get("coleta_alarme").contratos], ["contratos: scan nacional sem concluir desde 20261115"]);
 });
 
 test("pendência de UF para o painel = sem coleta concluída nas últimas N horas", () => {
@@ -428,7 +456,7 @@ async function coletarMercadoSimulado(cenario, opcoes = {}) {
     fmtData: () => "20261027", tempoRestanteMs: () => restante, URL, gerarJanelas: () => [],
     partesNumeroControle: () => ({ cnpj: "teste", ano: "2026", sequencial: 1 }),
     console: { log() {} }, situacaoSemVencedor: () => false, segmentosQueBatem: () => [],
-    normalizarDocumentoFornecedor: (valor) => valor,
+    normalizarDocumentoFornecedor: (valor) => valor, ritmoMercado: [],
     fetchComRetentativa: async (url) => {
       if (opcoes.buscar) return opcoes.buscar(url, (valor) => { restante = valor; });
       if (url.includes("/atas?")) return { data: [], totalPaginas: 1 };
@@ -1056,14 +1084,37 @@ test("hidratação de oportunidades lê só o metadado, nunca as linhas da tabel
   assert.equal(escritos[0].coberturaPorUf.AM.atualizadoEm, "2026-11-22T00:00:00Z");
 });
 
-test("atraso acima de 48 h sendo recuperado é aviso; sem avanço, ou acima de 120 h, é erro", async () => {
+test("atraso acima de 48 h sendo recuperado é aviso; sem avanço, ou acima de 120 h, é alarme", async () => {
   const ha = (h) => new Date(Date.now() - h * 3600000).toISOString();
   const rodar = async (horas, ok) => {
-    const { ambiente } = ambienteMain();
+    const { ambiente, blobs } = ambienteMain();
     ambiente.coletarOportunidadesAbertas = async () => ({ registros: [], ufsComFalha: ["AM"], ufsOkNaExecucao: ok, coberturaPorUf: { AM: { atualizadoEm: ha(horas) } } });
-    return ambiente.main();
+    await ambiente.main();
+    return blobs.get("coleta_alarme").oportunidades.join("; ");
   };
-  await rodar(60, ["RR"]);
-  await assert.rejects(rodar(60, []), /48 h sem avanço.*AM/);
-  await assert.rejects(rodar(121, ["RR"]), /120 h: AM/);
+  assert.equal(await rodar(60, ["RR"]), "");
+  assert.match(await rodar(60, []), /48 h sem avanço.*AM/);
+  assert.match(await rodar(121, ["RR"]), /120 h: AM/);
+});
+
+// Regressão 23/11: a fase de atas ia sem cadência e tomava 429 persistente nas rotas /orgaos/.../compras.
+test("cadência da fase de atas espaça as chamadas e um 429 com Retry-After pausa todos os workers", async () => {
+  let agora = 1000000;
+  const esperas = [];
+  const ambiente = vm.createContext({
+    Date: { now: () => agora, parse: Date.parse },
+    Math, Number,
+    setTimeout: (fn, ms) => { esperas.push(ms); agora += ms; fn(); },
+    process: { env: {} },
+  });
+  const inicio = codigo.indexOf("const TETO_PAUSA_429_MS");
+  vm.runInContext(codigo.slice(inicio, codigo.indexOf("async function lerJsonExistente(")) +
+    codigo.slice(codigo.indexOf("function criarCadencia("), codigo.indexOf("const cadenciaContratos")) +
+    "globalThis.cad = criarCadencia(300, 5000);", ambiente);
+  const { cad } = ambiente;
+  await cad.antes(); await cad.antes();
+  assert.deepEqual(esperas, [300]);
+  cad.pausar("20", 0);
+  await cad.antes();
+  assert.ok(esperas[1] >= 20000 && esperas[1] <= 20300, `esperou ${esperas[1]} ms`);
 });

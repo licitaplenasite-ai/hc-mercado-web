@@ -5,7 +5,8 @@
 // Env opcionais: LOTE_ESTEIRA (5 tarefas por rodada), LIMITE_MINUTOS_ESTEIRA (10),
 // MAX_TENTATIVAS_ESTEIRA (5), BACKOFF_MINUTOS_ESTEIRA (5, dobra a cada falha),
 // ESPERA_DOSSIE_MINUTOS_ESTEIRA (30), ESPERA_LEITURA_HORAS_ESTEIRA (6),
-// PAUSA_ITEM_MS_ESTEIRA (1500 entre itens do PNCP),
+// PAUSA_ITEM_MS_ESTEIRA (1500 entre itens do PNCP), TIMEOUT_PNCP_MS_ESTEIRA (10000 por chamada ao PNCP),
+// RETENTATIVAS_PNCP_ESTEIRA (2 retentativas curtas, 2 s e 4 s, em timeout/rede/429/5xx do PNCP),
 // RESERVA_MINUTOS_ANALISE_ESTEIRA (3: tempo garantido à fila da análise por CNPJ mesmo com as tarefas gastando a rodada),
 // ESTEIRA_SEGUNDA_PASSADA ("1" liga a segunda passada de IA; desligada por padrão).
 //
@@ -46,6 +47,11 @@ const RESERVA_MS = LIMITE_MS + 5 * 60000;
 // serial, uma tarefa por vez, fora do horário de pico; a pausa própria basta para não pesar no PNCP.
 const PAUSA_ITEM_MS = Math.max(0, Number(process.env.PAUSA_ITEM_MS_ESTEIRA ?? 1500));
 const TETO_ITENS = 1000;
+// 23/11: um único item que estourou o prazo ("This operation was aborted") derrubou a etapa itens depois de
+// 5,5 min, e ela só voltava no backoff de 5 min + cron do GitHub (que descarta rodadas). Falha passageira do
+// PNCP agora repete na hora, curto; persistindo, segue para a falha com backoff como antes.
+const TIMEOUT_PNCP_MS = Math.max(1000, Number(process.env.TIMEOUT_PNCP_MS_ESTEIRA || 10000));
+const RETENTATIVAS_PNCP = Math.max(0, Number(process.env.RETENTATIVAS_PNCP_ESTEIRA ?? 2));
 const MAX_ALERTAS_DETALHE = 20;
 
 const esperarPadrao = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -53,6 +59,24 @@ const iso = (ms) => new Date(ms).toISOString();
 const q = encodeURIComponent;
 
 class ErroPermanente extends Error {}
+
+// Timeout/rede (AbortError/TypeError do fetch) e 429/5xx (falhar(..., 502) de _pncp_item_fonte) passam;
+// 404/409/422 são do edital e repetir não muda nada.
+function falhaPassageiraPncp(erro) {
+  return erro?.name === "AbortError" || erro?.name === "TimeoutError" || erro instanceof TypeError || erro?.status === 429 || erro?.status >= 500;
+}
+
+async function comRetentativaPncp(chamar, esperar, rotulo) {
+  for (let tentativa = 0; ; tentativa += 1) {
+    try {
+      return await chamar();
+    } catch (erro) {
+      if (!falhaPassageiraPncp(erro)) throw erro;
+      if (tentativa >= RETENTATIVAS_PNCP) throw new Error(`PNCP não respondeu (${rotulo}) após ${tentativa + 1} tentativa(s): ${erro.message}`);
+      await esperar(2000 * 2 ** tentativa);
+    }
+  }
+}
 
 // Erro gravado na tarefa: curto e sem corpo de resposta (o corpo pode ecoar dados do processo).
 function erroCurto(erro) {
@@ -117,7 +141,8 @@ async function etapaItens(tarefa, { rest, fetchPncp, esperar, prazoFinal, agora 
   const p = await carregarProcesso(rest, tarefa);
   const ref = referencia(p);
   const compra = `${ref.cnpj}-1-${ref.seq}/${ref.ano}`;
-  const numeros = await listarNumerosItens(ref.cnpj, ref.ano, ref.seq, { fetch: fetchPncp });
+  const numeros = await comRetentativaPncp(() => listarNumerosItens(ref.cnpj, ref.ano, ref.seq, { fetch: fetchPncp, timeoutMs: TIMEOUT_PNCP_MS }),
+    esperar, "lista de itens");
   // Truncar esconderia itens: acima do teto a tarefa falha com motivo claro, sem retentar.
   if (numeros.length > TETO_ITENS) throw new ErroPermanente(`Edital com ${numeros.length} itens, acima do teto de ${TETO_ITENS}; importe manualmente.`);
   const feitos = new Set((await json(rest, `operacao_origens_pncp?processo_id=eq.${q(p.id)}&compra=eq.${q(compra)}&select=numero_item`))
@@ -133,7 +158,8 @@ async function etapaItens(tarefa, { rest, fetchPncp, esperar, prazoFinal, agora 
     if (agora() >= prazoFinal) return { parcial: true, detalhe };
     let r;
     try {
-      const { url, item, hash, snapshot } = await buscarFonteItem(ref, numero, { fetchImpl: fetchPncp });
+      const { url, item, hash, snapshot } = await comRetentativaPncp(() => buscarFonteItem(ref, numero, { fetchImpl: fetchPncp, timeoutMs: TIMEOUT_PNCP_MS }),
+        esperar, `item ${numero}`);
       r = await json(rest, "rpc/gravar_importacao_pncp", { method: "POST", body: JSON.stringify({ ...escopo,
         p_compra: compra, p_numero: numero, p_url: url, p_hash: hash, p_item: item, p_snapshot: snapshot, p_referencia }) });
     } catch (erro) {

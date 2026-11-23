@@ -26,7 +26,11 @@ permissions:
 
 jobs:
   gerar:
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    # Roda após a coleta em qualquer conclusão que não seja cancelada/pulada: os dados são gravados
+    # antes de o robô de coleta falhar. Com "== 'success'" (até 23/11), a coleta falhando em toda rodada
+    # desde 18/11 (alarme de cobertura do PNCP) pulava este job, o cron do GitHub era descartado quase
+    # o dia todo e pedido de processo do cliente (origem 'interesse') esperou ~5 h na fila.
+    if: ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion != 'cancelled' && github.event.workflow_run.conclusion != 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -49,6 +53,11 @@ jobs:
           IMAGEM_EXTRATOR_ANEXOS: licitaplena-anexos:local
         run: node --test scripts/extrair_anexo_local.test.js netlify/functions/__tests__/edital-operacional.test.js
       - name: Gerar dossiês da fila e dos boletins
+        # Teto do passo abaixo do teto do job: em 23/11 11:10 o job inteiro foi cancelado aos 15 min (preparo
+        # + geração). O robô para sozinho aos LIMITE_MINUTOS_DOSSIES; este teto só corta o caso patológico,
+        # e o esteira (workflow_run em qualquer conclusão) roda mesmo assim. Edital interrompido não gasta
+        # tentativa: a tentativa só é gravada depois da geração.
+        timeout-minutes: 9
         env:
           # Cadeia de provedores de IA com troca automática (ver cabeçalho do script).
           # Chave ausente = provedor desligado.
@@ -63,7 +72,8 @@ jobs:
           MISTRAL_MODELOS: ${{ vars.MISTRAL_MODELOS }}
           OPENROUTER_MODELOS: ${{ vars.OPENROUTER_MODELOS }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          LIMITE_MINUTOS_DOSSIES: "8"
+          # 7 (era 8): cabe no teto de 9 do passo com folga para a última gravação.
+          LIMITE_MINUTOS_DOSSIES: "7"
           LEITURA_MULTIFORMATO: "1"
           IMAGEM_EXTRATOR_ANEXOS: licitaplena-anexos:local
           # Prazos de download do PNCP do robô (a Function no site usa 4 s / 3,5 s).

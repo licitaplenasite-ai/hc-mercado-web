@@ -16,8 +16,11 @@
 //                                    cada tentativa, teto 60s) — ver esperaAposRateLimitMs()
 //   TAMANHO_PAGINA_CONTRATOS=500  -> registros por página do scan nacional /v1/contratos (máx. da API)
 //   INTERVALO_MS_CONTRATOS=1000   -> intervalo mínimo global entre chamadas do scan nacional
+//   INTERVALO_MS_MERCADO=300      -> intervalo mínimo global entre chamadas da fase de atas (compra, itens e
+//                                    resultados, somando todos os workers); 429 pausa todos (Retry-After)
 //   LIMITE_HORAS_UF_PENDENTE=24   -> UF sem coleta concluída há mais que isso aparece como pendente no painel
-//   LIMITE_HORAS_SEM_COBERTURA=48 -> UF (ou scan nacional) parada há mais que isso faz o robô falhar (e-mail)
+//   LIMITE_HORAS_SEM_COBERTURA=48 -> UF (ou scan nacional) parada há mais que isso vira ALARME (::warning:: no
+//                                    Actions + dados_robo.coleta_alarme na Saúde do sistema), sem derrubar o job
 //   MODO_SECO=1, UFS_SECO=RR,AP   -> teste local sem chave e sem gravar nada (ver modoSeco())
 //
 // IMPORTANTE: a partir desta versão o robô é INCREMENTAL — ele não re-varre tudo do zero
@@ -52,6 +55,8 @@ const TAMANHO_PAGINA = parseInt(process.env.TAMANHO_PAGINA_CONTRATOS || "500", 1
 // Intervalo mínimo GLOBAL entre chamadas do scan nacional de contratos (todas as páginas
 // paralelas somadas), no mesmo espírito do limitador das oportunidades.
 const INTERVALO_MS_CONTRATOS = parseInt(process.env.INTERVALO_MS_CONTRATOS || "1000", 10);
+// Idem para a fase de atas (rotas /orgaos/{cnpj}/compras/... do PNCP). Ver cadenciaMercado.
+const INTERVALO_MS_MERCADO = parseInt(process.env.INTERVALO_MS_MERCADO || "300", 10);
 
 const UFS = [
   "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS",
@@ -243,6 +248,12 @@ function criarCadencia(intervaloMs, pausaBaseMs) {
   };
 }
 const cadenciaContratos = criarCadencia(INTERVALO_MS_CONTRATOS, 5000);
+// 23/11: a fase de atas ia sem cadência nenhuma — a busca da UF (/api/consulta/v1/orgaos/.../compras/...)
+// em paralelo com os itens, mais CONCORRENCIA_ATAS workers de resultados — e tomava "Rate-limit (429)
+// persistente" em dezenas de URLs por rodada (cada 429 ainda esperava sozinho, sem Retry-After).
+// Agora todas as chamadas da fase passam pela mesma cadência global e um 429 pausa todos os workers.
+const cadenciaMercado = criarCadencia(INTERVALO_MS_MERCADO, 5000);
+const ritmoMercado = [() => cadenciaMercado.antes(), (retryAfter, tentativa) => cadenciaMercado.pausar(retryAfter, tentativa)];
 
 // ---------- Utilitário: busca um lote de páginas em paralelo (com limite de concorrência) ----------
 async function buscarPaginasEmLote(montarUrl, paginaInicial, totalPaginasConhecido, concorrencia, aoReceberPagina, anterior = null) {
@@ -1020,7 +1031,7 @@ async function coletarMercadoSegmentos(caminhoArquivo) {
     // pra usar o endpoint novo direto.
     const compra = await fetchComRetentativa(
       `https://pncp.gov.br/api/consulta/v1/orgaos/${partes.cnpj}/compras/${partes.ano}/${partes.sequencial}`,
-      2, 15000
+      3, 15000, `compra ${numeroControlePNCPCompra}`, ...ritmoMercado
     );
     if (compra) {
       ufOrgao = (compra.unidadeOrgao && compra.unidadeOrgao.ufSigla) || "";
@@ -1045,7 +1056,7 @@ async function coletarMercadoSegmentos(caminhoArquivo) {
     // em sequência economiza uma ida-e-volta inteira por ata.
     const buscarItens = (pagina) => fetchComRetentativa(
       `https://pncp.gov.br/api/pncp/v1/orgaos/${partes.cnpj}/compras/${partes.ano}/${partes.sequencial}/itens?pagina=${pagina}&tamanhoPagina=50`,
-      3, 15000, `itens ata ${referenciaAta.numeroControlePNCPAta}`);
+      3, 15000, `itens ata ${referenciaAta.numeroControlePNCPAta}`, ...ritmoMercado);
     const [{ ufOrgao, municipioOrgao, uasg, compraValida, versaoCompra }, itensResp] = await Promise.all([
       buscarUfOrgao(referenciaAta.numeroControlePNCPCompra),
       buscarItens(1),
@@ -1119,7 +1130,7 @@ async function coletarMercadoSegmentos(caminhoArquivo) {
         if (Object.hasOwn(progresso.resultados, numeroItem)) continue;
         const resultados = await fetchComRetentativa(
           `https://pncp.gov.br/api/pncp/v1/orgaos/${partes.cnpj}/compras/${partes.ano}/${partes.sequencial}/itens/${numeroItem}/resultados`,
-          3, 15000, `resultados ata ${referenciaAta.numeroControlePNCPAta} item ${numeroItem}`
+          3, 15000, `resultados ata ${referenciaAta.numeroControlePNCPAta} item ${numeroItem}`, ...ritmoMercado
         );
         const listaResultados = Array.isArray(resultados) ? resultados : resultados && resultados.data;
         if (!Array.isArray(listaResultados) || resultados.totalPaginas > 1 ||
@@ -1226,7 +1237,7 @@ async function coletarMercadoSegmentos(caminhoArquivo) {
     const janela = janelasPendentes[0];
     const buscarPagina = (pagina) => fetchComRetentativa(
       `https://pncp.gov.br/api/consulta/v1/atas?dataInicial=${janela.inicio}&dataFinal=${janela.fim}&pagina=${pagina}&tamanhoPagina=500`,
-      2, 20000, "atas");
+      2, 20000, "atas", ...ritmoMercado);
     const valida = (dado, numero) => dado && Array.isArray(dado.data) && Number.isSafeInteger(dado.totalPaginas) && dado.totalPaginas >= 0 &&
       (dado.totalRegistros === undefined || (Number.isSafeInteger(dado.totalRegistros) && dado.totalRegistros >= 0)) &&
       (dado.totalPaginas > 0 || (dado.data.length === 0 && !dado.totalRegistros)) && (dado.data.length > 0 || !dado.totalRegistros) &&
@@ -1630,7 +1641,7 @@ async function main() {
   }
 
   // Atraso acima de 48 h que está sendo recuperado (esta rodada concluiu alguma UF) é aviso;
-  // erro com e-mail só quando a recuperação não avança, ou quando uma UF passa de
+  // alarme só quando a recuperação não avança, ou quando uma UF passa de
   // LIMITE_HORAS_SEM_COBERTURA_MAXIMO (o backlog de uma UF grande parada não fica escondido).
   const ufsAtrasadas = ufsSemCoberturaRecente(oportunidades.coberturaPorUf, LIMITE_HORAS_SEM_COBERTURA);
   const ufsParadas = ufsSemCoberturaRecente(oportunidades.coberturaPorUf, LIMITE_HORAS_SEM_COBERTURA_MAXIMO);
@@ -1639,11 +1650,13 @@ async function main() {
   else if (ufsAtrasadas.length && !avancou) pendencias.push(`cobertura de oportunidades há mais de ${LIMITE_HORAS_SEM_COBERTURA} h sem avanço nesta rodada: ${ufsAtrasadas.join(", ")}`);
   else if (ufsAtrasadas.length) console.warn(`[oportunidades] Recuperando atraso de mais de ${LIMITE_HORAS_SEM_COBERTURA} h (${oportunidades.ufsOkNaExecucao.length} UF(s) concluída(s) nesta rodada): ${ufsAtrasadas.join(", ")}.`);
   else if (oportunidades.ufsComFalha.length) console.warn(`[oportunidades] UFs ainda não coletadas nas últimas ${LIMITE_HORAS_UF_PENDENTE} h (a próxima rodada retoma): ${oportunidades.ufsComFalha.join(", ")}.`);
+  // Gravado já aqui: a fase de contratos é longa e pode morrer, e o alarme das UFs vale sozinho.
+  await registrarAlarmeColeta("oportunidades", pendencias);
   if (somenteOportunidades) {
-    if (pendencias.length) throw new Error(pendencias.join("; "));
-    console.log("Recuperação de oportunidades finalizada com sucesso.");
+    console.log(`Recuperação de oportunidades finalizada${pendencias.length ? " com alarme de cobertura" : " com sucesso"}.`);
     return;
   }
+  const pendenciasContratos = [];
 
   // Contratos depois das oportunidades (antes vinha primeiro): a hidratação e o upsert de
   // contratos levavam ~10 min, e o boletim depende só das oportunidades. Cada fase tem seu
@@ -1656,7 +1669,7 @@ async function main() {
   // Scan parcial retoma do cursor na próxima rodada; só é erro se a última janela
   // concluída (dataFinal) ficar mais de LIMITE_HORAS_SEM_COBERTURA para trás.
   const limiteContratos = fmtData(new Date(Date.now() - LIMITE_HORAS_SEM_COBERTURA * 60 * 60 * 1000));
-  if (contratos.parcial && !(String(contratos.dataFinal) >= limiteContratos)) pendencias.push(`contratos: scan nacional sem concluir desde ${contratos.dataFinal}`);
+  if (contratos.parcial && !(String(contratos.dataFinal) >= limiteContratos)) pendenciasContratos.push(`contratos: scan nacional sem concluir desde ${contratos.dataFinal}`);
   else if (contratos.parcial) console.warn(`[contratos] Coleta parcial; retoma na próxima rodada (última janela concluída: ${contratos.dataFinal}).`);
   await sincronizarContratosNoSupabase(contratos);
   // Painel cai nas RPCs antigas se o resumo faltar; falha aqui não deve derrubar a coleta.
@@ -1701,8 +1714,25 @@ async function main() {
   await gravarJson(caminhoMercadoMeta, mercadoMeta);
   console.log("Gravado data/mercado_meta.json (metadado leve, vai pro git)");
 
-  if (pendencias.length) throw new Error(pendencias.join("; "));
-  console.log("Coleta finalizada com sucesso.");
+  await registrarAlarmeColeta("contratos", pendenciasContratos);
+  console.log(`Coleta finalizada${pendencias.length || pendenciasContratos.length ? " com alarme de cobertura" : " com sucesso"}.`);
+}
+
+// Cobertura atrasada vira ALARME, não erro (23/11). Desde 18/11 o 429 persistente do PNCP deixava UFs
+// paradas há mais de 48 h e o robô saía com exit 1 em TODA rodada, embora os dados coletados já
+// estivessem gravados; o gerar-dossies (workflow_run com conclusion == 'success') era pulado e os
+// pedidos de processo dos clientes esperaram ~5 h na fila. O aviso vai para o log do Actions
+// (::warning::) e para dados_robo.coleta_alarme, que a Saúde do sistema do admin mostra
+// (admin_saude_robos). Uma chave por fase: a recuperação de UFs não apaga o alarme dos contratos.
+// Erro real (Supabase, integridade) continua lançando e derrubando o job, como antes.
+async function registrarAlarmeColeta(fase, lista) {
+  for (const p of lista) console.log(`::warning title=Coleta PNCP::${p}`);
+  try {
+    const anterior = (await buscarBlob("dados_robo", "coleta_alarme")) || {};
+    await salvarBlob("dados_robo", "coleta_alarme", { ...anterior, [fase]: lista, [`${fase}Em`]: new Date().toISOString() });
+  } catch (e) {
+    console.warn(`[supabase] Alarme da coleta não gravado: ${e && e.message}`);
+  }
 }
 
 module.exports = { fetchComRetentativa, resumoDashboardMercado };
