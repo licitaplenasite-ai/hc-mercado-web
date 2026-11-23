@@ -80,6 +80,19 @@
       explica: 'O SICRO arredonda (NBR 5891); órgãos que usam o SINAPI costumam truncar em 2 casas. Vale o que o edital mandar: refaça 3 composições e 3 totais da referência e veja se fecham truncando ou arredondando.' },
   });
 
+  // Regras do modo "Analisar concorrente" (23/11/2026): fiscalizar a proposta de terceiro. Ids da lista única entre
+  // parênteses (REGRAS-AUDITOR.md); o catálogo continua sem chave para elas porque o NOSSO orçamento não as confere sozinho.
+  Object.assign(REGRAS, {
+    item_desconto_alto: { versao: 1, valeDesde: '2026-11-23', titulo: 'Item com desconto acima de 25%', fonte: 'Lei 14.133/2021 art. 59, §3º e §4º; REGRAS-AUDITOR A07 (caso TJAM 90001/2024)', link: LEI,
+      explica: 'Mesmo com o global acima de 75%, o órgão pode exigir prova de exequibilidade dos preços unitários relevantes. No TJAM, propostas com itens acima de 25% de desconto foram diligenciadas e desclassificadas.' },
+    verba_generica: { versao: 1, valeDesde: '2026-11-23', titulo: 'Item em verba ou "diversos"', fonte: 'Súmula TCU 258; Lei 14.133/2021 art. 59, V; REGRAS-AUDITOR B07', link: TCU,
+      explica: 'Item em "verba" (vb) ou descrito como "diversos", "eventuais" ou "despesas gerais" não tem composição verificável. O TCU veda esse tipo de preço sem detalhamento.' },
+    regime_nao_declarado: { versao: 1, valeDesde: '2026-11-23', titulo: 'Proposta não diz se a empresa é desonerada', fonte: 'Lei 12.546/2011 art. 7º; edital; REGRAS-AUDITOR E02 (recusa no TRE-AM 2/2023)', link: CPRB,
+      explica: 'A tabela de encargos e o BDI dependem da opção pela desoneração. No TRE-AM 2/2023 uma proposta foi recusada porque a tabela de encargos não trazia o campo "optante: sim ou não".' },
+    leitura_documento: { versao: 1, valeDesde: '2026-11-23', titulo: 'Números lidos de PDF ou imagem', fonte: 'Leitura automática do arquivo enviado (não é regra legal)', link: '',
+      explica: 'Quando a planilha vem em PDF ou foto, os números são lidos do documento. Antes de usar qualquer achado em recurso, confira o valor no original.' },
+  });
+
   // Encargos sociais do SINAPI por UF, com vigência (a tabela muda por ano). [horista desonerado, mensalista desonerado,
   // horista não desonerado, mensalista não desonerado], em %. Fonte: CAIXA, Cálculos e Parâmetros, 8ª ed. (vigência
   // 01/2026), copiado em _historico/orcamentista/BASE-TECNICA.md 2.5. Tabela nova da CAIXA entra aqui com nova vigência

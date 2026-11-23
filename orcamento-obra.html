@@ -73,9 +73,16 @@ li.alerta a{color:var(--action-text);font-weight:600}
 .estudo{margin:12px 0 0;padding:12px 16px;border:1px solid var(--info-border);border-radius:var(--radius-card);background:var(--info-bg);color:var(--info-text);line-height:1.5}
 .estudo b{display:block;margin-bottom:2px}
 .rascunho{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+/* Duas abas na mesma página: montar o nosso orçamento ou analisar a planilha do concorrente (sem pop-up). */
+.abas{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 0}
+.abas .btn[aria-selected="true"]{background:var(--action-strong);border-color:transparent;color:var(--action-on)}
+main.modo-concorrente [data-modo="orcamento"],main:not(.modo-concorrente) [data-modo="concorrente"]{display:none!important}
+.grade.arquivos3{grid-template-columns:1fr 1fr 1fr}
+.placar{font:600 18px/1.5 var(--font-sans);margin:8px 0}
+textarea.recurso{width:100%;min-height:280px;padding:12px;border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--surface-default);color:var(--text-primary);font:14px/1.6 var(--font-sans)}
 @media(max-width:640px){
   header{padding:8px 12px}main{padding:16px}.engenheiro{top:0;position:static}
-  .grade.arquivos{grid-template-columns:1fr}
+  .grade.arquivos,.grade.arquivos3{grid-template-columns:1fr}
   /* Celular: cada linha vira um cartão com o rótulo da coluna (data-rotulo), sem rolagem lateral. */
   .tabela-wrap{border:0;overflow:visible;max-height:none}.tabela thead{display:none}
   .tabela,.tabela tbody,.tabela tr,.tabela td{display:block;width:100%}
@@ -120,11 +127,55 @@ li.alerta a{color:var(--action-text);font-weight:600}
 <main data-recurso="orcamento_obra">
   <div class="topo"><h1><span class="rotulo-agente">Orçamentista</span> Orçamento de obra</h1>
   <p>Envie a planilha orçamentária do edital (mesmo em branco). O time de agentes lê os itens, liga cada um à composição do SINAPI ou de outra tabela, monta CPU, BDI, encargos, curva ABC e cronograma, confere tudo contra a lei e devolve as planilhas prontas para revisão. <a href="sinapi.html">Voltar aos preços SINAPI</a></p></div>
+  <div class="abas" role="tablist" aria-label="O que fazer">
+    <button class="btn" type="button" role="tab" id="aba-orcamento" aria-selected="true" aria-controls="form-edital">Montar meu orçamento</button>
+    <button class="btn" type="button" role="tab" id="aba-concorrente" aria-selected="false" aria-controls="conc-envio">Analisar concorrente</button>
+  </div>
   <p class="engenheiro" role="note">Revisão e assinatura de engenheiro ou arquiteto responsável são obrigatórias.</p>
   <div id="aviso" class="aviso" role="status" aria-live="polite"></div>
-  <div class="card rascunho" id="rascunho" hidden><span id="rascunho-texto"></span><span class="acoes"><button class="btn primario" type="button" id="btn-rascunho-continuar">Continuar de onde parei</button><button class="btn" type="button" id="btn-rascunho-apagar">Apagar e começar outro</button></span></div>
 
-  <form class="card" id="form-edital">
+  <section class="card" id="conc-envio" data-modo="concorrente" role="tabpanel" aria-labelledby="aba-concorrente">
+    <h2>Analisar a planilha do concorrente</h2>
+    <p class="nota">Anexe a planilha que o concorrente mandou na licitação. O Auditor aponta, pela lei e pelas regras do orçamento, o que pode desclassificar a proposta dele, com a fonte de cada ponto, e monta um rascunho de recurso. Com a planilha do edital, ele também compara itens, quantidades, preços e etapas.</p>
+    <form id="form-conc">
+      <div class="grade arquivos3">
+        <div><label for="fc-proposta">Planilha do concorrente (Excel, PDF ou foto)</label><input type="file" id="fc-proposta" accept=".xlsx,.xlsm,.xls,.ods,.pdf,.jpg,.jpeg,.png" required></div>
+        <div><label for="fc-edital">Planilha do edital (opcional, Excel)</label><input type="file" id="fc-edital" accept=".xlsx,.xlsm,.xls,.ods"></div>
+        <div><label for="fc-cpu">CPU do concorrente (opcional, Excel)</label><input type="file" id="fc-cpu" accept=".xlsx,.xlsm,.xls,.ods"></div>
+      </div>
+      <div class="grade">
+        <div><label for="fc-nome">Nome do concorrente</label><input id="fc-nome" maxlength="200" placeholder="Para o rascunho"></div>
+        <div><label for="fc-orgao">Órgão</label><input id="fc-orgao" maxlength="200"></div>
+        <div><label for="fc-numero">Edital (modalidade e número)</label><input id="fc-numero" maxlength="200"></div>
+        <div><label for="fc-empresa">Sua empresa</label><input id="fc-empresa" maxlength="200"></div>
+      </div>
+      <div class="acoes"><button class="btn primario" type="submit" id="btn-conc">Analisar a planilha</button></div>
+    </form>
+    <p class="nota">Excel e PDF com texto são lidos aqui no seu navegador, sem enviar a ninguém. Foto ou PDF digitalizado (escaneado) vai, página por página, para a IA ler a tabela: ela só copia os números, o sistema refaz as contas e você confirma antes da análise.</p>
+  </section>
+
+  <section class="card" id="conc-conferir" data-modo="concorrente" hidden>
+    <h2>Confira a leitura antes de analisar</h2>
+    <p class="nota" id="cc-resumo"></p>
+    <ul class="avisos" id="cc-problemas"></ul>
+    <label class="marca-cpu" for="cc-ok"><input type="checkbox" id="cc-ok">Conferi com o documento original e quero analisar assim</label>
+    <div class="acoes"><button class="btn primario" type="button" id="btn-cc-seguir">Analisar</button><button class="btn" type="button" id="btn-cc-cancelar">Cancelar</button></div>
+  </section>
+
+  <section class="card" id="conc-resultado" data-modo="concorrente" hidden>
+    <h2>Resultado da análise</h2>
+    <p class="placar" id="cr-placar"></p>
+    <p class="nota" id="cr-resumo"></p>
+    <ol class="alertas" id="cr-lista"></ol>
+    <h3 class="sub">Rascunho de recurso</h3>
+    <p class="nota alerta-base">Rascunho automático: revise com advogado e confira cada número no original antes de protocolar.</p>
+    <label for="cr-recurso" class="nota">Texto do rascunho (pode copiar e editar)</label>
+    <textarea class="recurso" id="cr-recurso" readonly></textarea>
+    <div class="acoes"><button class="btn primario" type="button" id="btn-cr-html">Baixar relatório para imprimir (.html)</button><button class="btn" type="button" id="btn-cr-xlsx">Baixar relatório em Excel (.xlsx)</button></div>
+  </section>
+  <div class="card rascunho" id="rascunho" data-modo="orcamento" hidden><span id="rascunho-texto"></span><span class="acoes"><button class="btn primario" type="button" id="btn-rascunho-continuar">Continuar de onde parei</button><button class="btn" type="button" id="btn-rascunho-apagar">Apagar e começar outro</button></span></div>
+
+  <form class="card" id="form-edital" data-modo="orcamento">
     <h2>1. Envie a planilha do edital</h2>
     <div class="grade arquivos">
       <div><label for="f-edital">Planilha orçamentária (.xlsx)</label><input type="file" id="f-edital" accept=".xlsx,.xlsm,.xls,.ods" required></div>
@@ -134,7 +185,7 @@ li.alerta a{color:var(--action-text);font-weight:600}
     <p class="nota">O arquivo é lido aqui no seu navegador e não é enviado a ninguém. O trabalho fica guardado só neste navegador, para você continuar se recarregar a página. PDF ainda não é lido: peça ao órgão o editável ou salve em Excel.</p>
   </form>
 
-  <section class="card" id="passo-leitura" hidden>
+  <section class="card" id="passo-leitura" data-modo="orcamento" hidden>
     <h2>2. Confira o que o Leitor entendeu</h2>
     <p class="nota" id="l-resumo"></p>
     <div class="chips" id="l-fontes"></div>
@@ -148,7 +199,7 @@ li.alerta a{color:var(--action-text);font-weight:600}
     <div class="tabela-wrap"><table class="tabela"><thead><tr><th>Item</th><th>Código</th><th>Fonte</th><th>Descrição</th><th>Unid.</th><th>Quant.</th><th>Preço do edital</th></tr></thead><tbody id="l-corpo"></tbody></table></div>
   </section>
 
-  <section class="card" id="passo-montar" hidden>
+  <section class="card" id="passo-montar" data-modo="orcamento" hidden>
     <h2>3. Monte o orçamento</h2>
     <p class="nota">BDI pela fórmula do TCU (Acórdão 2622/2013). Os valores começam na média do TCU para o tipo de obra: troque pelos da sua empresa. ISS: alíquota da lei do município da obra.</p>
     <p class="nota" id="m-bases"></p>
@@ -178,7 +229,7 @@ li.alerta a{color:var(--action-text);font-weight:600}
     <div class="acoes"><button class="btn primario" type="button" id="btn-montar">Montar orçamento</button><span class="nota">Busca o SINAPI da UF no regime escolhido e faz todas as contas.</span></div>
   </section>
 
-  <section class="card" id="passo-resultado" hidden>
+  <section class="card" id="passo-resultado" data-modo="orcamento" hidden>
     <h2>Resultado</h2>
     <div id="r-referencia" class="aviso" role="status"></div>
     <p class="totais" id="r-totais"></p>
@@ -186,20 +237,20 @@ li.alerta a{color:var(--action-text);font-weight:600}
     <div class="tabela-wrap"><table class="tabela"><thead><tr><th>Item</th><th>Descrição e base usada</th><th>Quant.</th><th>Referência (sem BDI)</th><th>Unit. da proposta</th><th>Total</th></tr></thead><tbody id="r-corpo"></tbody></table></div>
   </section>
 
-  <section class="card" id="passo-pendentes" hidden>
+  <section class="card" id="passo-pendentes" data-modo="orcamento" hidden>
     <h2>Itens sem preço do sistema</h2>
     <p class="nota">Para cada item, digite o preço da tabela indicada (ORSE, SETOP, SICRO, tabela estadual…) com o mês de referência, ou faça composição própria com 3 cotações: vale a mediana, com a memória de cálculo na aba CPU. Para cotar, use a <a href="painel.html#precos">Pesquisa de Preços</a>.</p>
     <div class="tabela-wrap"><table class="tabela"><thead><tr><th>Item</th><th>Descrição</th><th>Preço da tabela (sem BDI) e mês</th><th>Ou 3 cotações</th></tr></thead><tbody id="p-corpo"></tbody></table></div>
     <div class="acoes"><button class="btn primario" type="button" id="btn-remontar">Usar estes preços e montar de novo</button></div>
   </section>
 
-  <section class="card" id="passo-alertas" hidden>
+  <section class="card" id="passo-alertas" data-modo="orcamento" hidden>
     <h2>4. Alertas do Auditor</h2>
     <p class="nota" id="a-resumo"></p>
     <ol class="alertas" id="a-lista"></ol>
   </section>
 
-  <section class="card" id="passo-baixar" hidden>
+  <section class="card" id="passo-baixar" data-modo="orcamento" hidden>
     <h2>5. Baixe as planilhas</h2>
     <p class="nota">Orçamento sintético, CPU, composições próprias, BDI, encargos, curva ABC, cronograma físico-financeiro, carta-proposta (modelo), os alertas e a conferência antes de enviar, num arquivo só. Ou a própria planilha do edital, com os preços preenchidos.</p>
     <div class="acoes"><button class="btn primario" type="button" id="btn-baixar-completa">Baixar planilha completa (.xlsx)</button><button class="btn" type="button" id="btn-baixar-edital">Baixar no formato do edital (.xlsx)</button></div>
@@ -216,6 +267,9 @@ li.alerta a{color:var(--action-text);font-weight:600}
 <script src="orcamento-obra-auditor.js"></script>
 <script src="orcamento-obra-montador.js"></script>
 <script src="orcamento-obra-ui.js"></script>
+<script src="orcamento-obra-pdf.js"></script>
+<script src="orcamento-obra-concorrente.js"></script>
+<script src="orcamento-obra-concorrente-ui.js"></script>
 <script src="menu-lateral.js"></script>
 <script src="ajuda-ui.js" defer></script>
 <script src="avisos-celular.js" defer></script>

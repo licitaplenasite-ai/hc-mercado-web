@@ -105,6 +105,7 @@
   const mensagemSimples = (e, padrao) => (e?.simples ? e.message : padrao);
   const $ = (id) => document.getElementById(id);
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); // eslint-disable-line no-undef -- globais de supabase-config.js
+  O.sb = sb; // a aba "Analisar concorrente" (orcamento-obra-concorrente-ui.js) usa a mesma sessão para chamar a IA
   const estado = { abas: null, leitura: null, cpu: null, crono: null, orc: null, manuais: {}, cotacoes: {}, sinapi: null, nomeArquivo: '', lances: null, similares: {}, versoes: [], referencia: null };
   function aviso(texto, tipo) { const a = $('aviso'); a.textContent = texto || ''; a.className = texto ? `aviso ${tipo || 'info'}` : 'aviso'; }
 
