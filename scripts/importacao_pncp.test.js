@@ -104,6 +104,13 @@ test('importar todos: páginas de 15 com uma reserva por página, contagem e fim
  const r2=JSON.parse((await f.run({numeroItem:undefined,pagina:2})).body);assert.deepEqual([r2.lidos,r2.fim,r2.ultimo],[2,true,10017]);
  const r3=JSON.parse((await f.run({numeroItem:undefined,pagina:3})).body);assert.deepEqual([r3.lidos,r3.fim,r3.importados],[0,true,0]);
 });
+test('importar todos: lê no PNCP de 5 em 5 ao mesmo tempo e grava na ordem dos itens',async()=>{
+ const numeros=Array.from({length:12},(_,i)=>10001+i),base=pncpPorLote(numeros);let abertas=0,maximo=0;
+ const f=setup({fetch:async(url)=>{abertas++;maximo=Math.max(maximo,abertas);await new Promise(ok=>setTimeout(ok,10));abertas--;return base(url);}});
+ const r=JSON.parse((await f.run({numeroItem:undefined,pagina:1})).body);
+ assert.equal(r.importados,12);assert.equal(maximo,5);
+ assert.deepEqual(f.calls.filter(x=>x.path?.includes('gravar')).map(x=>JSON.parse(x.op.body).p_numero),numeros);
+});
 test('importar todos: cadência recusada, seletor duplo e item manual em colisão',async()=>{
  const g=setup({fetch:pncpPorLote([10001])});g.c.request=async()=>new Response('false');assert.equal((await g.run({numeroItem:undefined,pagina:1})).statusCode,429);
  assert.equal((await setup().run({pagina:1})).statusCode,400);

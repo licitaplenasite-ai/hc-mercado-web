@@ -2,6 +2,7 @@
 // do portal retorna somente um resumo; este proxy preenche modo de disputa, amparo legal,
 // SRP, valores, processo e demais campos oficiais sem expor o navegador ao bloqueio CORS.
 const { cabecalhosPadrao, exigirAprovadoComLimite } = require("./_auth");
+const { comCache, cabecalhosDoCache } = require("./_cache_publico");
 const BASE_URL = "https://pncp.gov.br/api/consulta/v1/orgaos";
 const USER_AGENT_NAVEGADOR =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
@@ -50,43 +51,48 @@ exports.handler = async (event) => {
   if (cnpj.length !== 14 || !ano || !sequencial) {
     return { statusCode: 400, headers, body: JSON.stringify({ erro: "Informe cnpj, ano e sequencial válidos.", detalhe: null }) };
   }
+  // Detalhe guardado 10 min entre clientes (o PNCP devolveu 429 na medição de 23/11); fora do ar, volta o último.
   try {
-    const ctrl = new AbortController();
-    const timeout = setTimeout(() => ctrl.abort(), 12000);
-    const resp = await fetch(`${BASE_URL}/${cnpj}/compras/${ano}/${sequencial}`, {
-      headers: { Accept: "application/json", "User-Agent": USER_AGENT_NAVEGADOR }, signal: ctrl.signal,
-    });
-    clearTimeout(timeout);
-    if (!resp.ok) return { statusCode: 200, headers, body: JSON.stringify({ erro: "PNCP não retornou o detalhe.", detalhe: null }) };
-    const dados = await resp.json();
-    const detalhe = {
-      modalidadeNome: dados.modalidadeNome || null,
-      tipoInstrumentoConvocatorioNome: dados.tipoInstrumentoConvocatorioNome || null,
-      criterioJulgamento: dados.criterioJulgamentoCompraNome || dados.criterioJulgamentoNome || dados.criterioJulgamento || null,
-      regimeExecucao: dados.regimeExecucaoNome || dados.regimeExecucao || null,
-      amparoLegal: dados.amparoLegal && (dados.amparoLegal.nome || dados.amparoLegal.descricao) || null,
-      modoDisputaNome: dados.modoDisputaNome || null,
-      srp: typeof dados.srp === "boolean" ? dados.srp : null,
-      fonteOrcamentaria: fonteOrcamentaria(dados),
-      situacaoCompraNome: dados.situacaoCompraNome || null,
-      valorTotalEstimado: dados.valorTotalEstimado ?? null,
-      valorTotalHomologado: dados.valorTotalHomologado ?? null,
-      numeroCompra: dados.numeroCompra || null,
-      anoCompra: dados.anoCompra || null,
-      processo: dados.processo || null,
-      codigoUnidade: dados.unidadeOrgao && dados.unidadeOrgao.codigoUnidade || null,
-      esferaId: dados.orgaoEntidade && dados.orgaoEntidade.esferaId || null,
-      // UF e município do órgão: DIFAL do Contador e prazo do Pagômetro (pagometro-ui.js enteDoEdital).
-      uf: dados.unidadeOrgao && dados.unidadeOrgao.ufSigla || null,
-      municipio: dados.unidadeOrgao && dados.unidadeOrgao.municipioNome || null,
-      codigoMunicipioIbge: dados.unidadeOrgao && dados.unidadeOrgao.codigoIbge ? String(dados.unidadeOrgao.codigoIbge) : null,
-      encerramento: dados.dataEncerramentoProposta || null,
-      inicioRecebimento: dados.dataAberturaProposta || dados.dataInicioRecebimentoProposta || null,
-      publicacao: dados.dataPublicacaoPncp || null,
-      ...camposDaDisputa(dados),
-    };
-    return { statusCode: 200, headers, body: JSON.stringify({ erro: null, detalhe }) };
+    const r = await comCache(`pncp-detalhe|${cnpj}|${ano}|${sequencial}`, () => lerDetalhe(cnpj, ano, sequencial), { frescoS: 600 });
+    return { statusCode: 200, headers: { ...headers, ...cabecalhosDoCache(r) }, body: r.valor };
   } catch (erro) {
     return { statusCode: 200, headers, body: JSON.stringify({ erro: String(erro && erro.message || erro), detalhe: null }) };
   }
 };
+
+async function lerDetalhe(cnpj, ano, sequencial) {
+  const ctrl = new AbortController();
+  const timeout = setTimeout(() => ctrl.abort(), 12000);
+  const resp = await fetch(`${BASE_URL}/${cnpj}/compras/${ano}/${sequencial}`, {
+    headers: { Accept: "application/json", "User-Agent": USER_AGENT_NAVEGADOR }, signal: ctrl.signal,
+  }).finally(() => clearTimeout(timeout));
+  if (!resp.ok) throw new Error("PNCP não retornou o detalhe.");
+  const dados = await resp.json();
+  const detalhe = {
+    modalidadeNome: dados.modalidadeNome || null,
+    tipoInstrumentoConvocatorioNome: dados.tipoInstrumentoConvocatorioNome || null,
+    criterioJulgamento: dados.criterioJulgamentoCompraNome || dados.criterioJulgamentoNome || dados.criterioJulgamento || null,
+    regimeExecucao: dados.regimeExecucaoNome || dados.regimeExecucao || null,
+    amparoLegal: dados.amparoLegal && (dados.amparoLegal.nome || dados.amparoLegal.descricao) || null,
+    modoDisputaNome: dados.modoDisputaNome || null,
+    srp: typeof dados.srp === "boolean" ? dados.srp : null,
+    fonteOrcamentaria: fonteOrcamentaria(dados),
+    situacaoCompraNome: dados.situacaoCompraNome || null,
+    valorTotalEstimado: dados.valorTotalEstimado ?? null,
+    valorTotalHomologado: dados.valorTotalHomologado ?? null,
+    numeroCompra: dados.numeroCompra || null,
+    anoCompra: dados.anoCompra || null,
+    processo: dados.processo || null,
+    codigoUnidade: dados.unidadeOrgao && dados.unidadeOrgao.codigoUnidade || null,
+    esferaId: dados.orgaoEntidade && dados.orgaoEntidade.esferaId || null,
+    // UF e município do órgão: DIFAL do Contador e prazo do Pagômetro (pagometro-ui.js enteDoEdital).
+    uf: dados.unidadeOrgao && dados.unidadeOrgao.ufSigla || null,
+    municipio: dados.unidadeOrgao && dados.unidadeOrgao.municipioNome || null,
+    codigoMunicipioIbge: dados.unidadeOrgao && dados.unidadeOrgao.codigoIbge ? String(dados.unidadeOrgao.codigoIbge) : null,
+    encerramento: dados.dataEncerramentoProposta || null,
+    inicioRecebimento: dados.dataAberturaProposta || dados.dataInicioRecebimentoProposta || null,
+    publicacao: dados.dataPublicacaoPncp || null,
+    ...camposDaDisputa(dados),
+  };
+  return JSON.stringify({ erro: null, detalhe });
+}
