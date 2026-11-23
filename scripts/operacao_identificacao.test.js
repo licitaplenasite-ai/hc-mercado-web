@@ -164,6 +164,7 @@ test('identificação invalidada traz os dados anteriores para conferir e só co
   const confirmacao = pedidos.find(p => p.acao === 'confirmar');
   assert.deepEqual(confirmacao.dados, anteriores); assert.equal(confirmacao.cnpj, '01222333000128'); assert.deepEqual(confirmacao.proveniencia, []);
   assert.equal(a.ui.temAlteracoesNaoSalvas(), false);
+  assert.equal(status['data-situacao'], 'normal');
 });
 
 test('identificação invalidada sem dados anteriores mantém os campos vazios', async () => {

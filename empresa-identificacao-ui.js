@@ -83,7 +83,7 @@
       if (proveniencia.length > 3 || new Set(proveniencia.map(p => p.documentoId)).size > 2) throw new Error('Use até dois documentos para comprovar os três campos.');
       const r = await contexto.solicitar({acao:'confirmar',revisado:true,razaoSocial:cadastro.empresa.razao_social,cnpj:cadastro.empresa.cnpj,dados,proveniencia});
       if (!ativo()) return; if (r?.empresa?.id !== contexto.empresaId) throw new Error('A empresa ativa mudou.');
-      cadastro = {...cadastro,...r}; alterado = false; reconfirmar = false; revisao.checked = false; contexto.atualizado?.(cadastro); aviso.textContent = contexto.semMinuta ? 'Identificação confirmada. Nenhum documento foi aprovado; prepare uma nova prévia no processo.' : 'Identificação confirmada. A minuta permanece como você a editou.';
+      cadastro = {...cadastro,...r}; alterado = false; reconfirmar = false; revisao.checked = false; aviso.setAttribute('data-situacao', 'normal'); contexto.atualizado?.(cadastro); aviso.textContent = contexto.semMinuta ? 'Identificação confirmada. Nenhum documento foi aprovado; prepare uma nova prévia no processo.' : 'Identificação confirmada. A minuta permanece como você a editou.';
     }
     salvar.onclick = () => executar(confirmar);
     // Chamado pelo botão único: sem alteração não faz nada; com alteração, salva ou devolve o motivo (o que digitou fica na tela).

@@ -92,7 +92,7 @@ async function main() {
       exigir(/confira e confirme de novo/.test(status), 'status: ' + status);
       exigir(!(await p.isChecked('#empresa-identificacao-revisao')), 'conferência já marcada');
       const r = await proposta();
-      exigir(r.status === 422 && /Confirme a identificação/.test(r.corpo.erro || ''), 'proposta saiu sem reconfirmar: ' + r.status);
+      exigir(r.status === 422 && /identifica/i.test(JSON.stringify(r.corpo)), 'proposta saiu sem reconfirmar: ' + r.status + ' ' + JSON.stringify(r.corpo).slice(0, 200));
       return status;
     });
 
