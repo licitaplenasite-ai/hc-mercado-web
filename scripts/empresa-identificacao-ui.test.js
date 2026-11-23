@@ -85,7 +85,7 @@ test('sugestão é explícita e editar o valor remove sua proveniência', async 
   const a=ambiente(async p=>{pedidos.push(p);if(p.acao==='extrair')return {documentoId:'doc1',hash:'a'.repeat(64),modo:'sugestoes',sugestoes:{endereco:'Rua Sugerida'},avisos:[],evidencias:[{campo:'endereco',pagina:1,trecho:'Endereço: Rua Sugerida',valor:'Rua Sugerida'}]};return {empresa,perfil,documentos:[{id:'doc1',arquivo_nome:'contrato.pdf'}]};});
   await a.ui.carregar(); await a.achar(e=>e.textContent==='Extrair sugestões do PDF selecionado').onclick();
   const campo=a.achar(e=>e.id==='empresa-identificacao-endereco'); assert.equal(campo.value,'Rua Exemplo, 1');
-  a.achar(e=>e.textContent==='Usar endereco: Rua Sugerida').onclick(); assert.equal(campo.value,'Rua Sugerida');
+  a.achar(e=>e.textContent==='Usar endereço: Rua Sugerida').onclick(); assert.equal(campo.value,'Rua Sugerida');
   campo.value='Rua Corrigida';campo.oninput();const revisao=a.achar(e=>e.id==='empresa-identificacao-revisao');revisao.checked=true;revisao.onchange();
   await a.achar(e=>e.textContent==='Salvar identificação confirmada').onclick();assert.deepEqual(pedidos.at(-1).proveniencia,[]);
 });
@@ -93,8 +93,44 @@ test('três campos em três páginas do mesmo contrato conservam todas as provas
   const pedidos=[], dados={endereco:'Rua Sugerida',representante:'Representante Sugerido',cargo:'Sócio administrador'};
   const a=ambiente(async p=>{pedidos.push(p);if(p.acao==='extrair')return {documentoId:'doc1',hash:'a'.repeat(64),modo:'sugestoes',sugestoes:dados,avisos:[],evidencias:Object.entries(dados).map(([campo,valor],i)=>({campo,valor,pagina:i+1,trecho:`${campo}: ${valor}`}))};return {empresa,perfil,documentos:[{id:'doc1',arquivo_nome:'contrato.pdf'}]};});
   await a.ui.carregar();await a.achar(e=>e.textContent==='Extrair sugestões do PDF selecionado').onclick();
-  for(const [campo,valor]of Object.entries(dados))a.achar(e=>e.textContent===`Usar ${campo}: ${valor}`).onclick();
+  for(const [campo,valor]of Object.entries(dados))a.achar(e=>e.textContent===`Usar ${campo==="endereco"?"endereço":campo}: ${valor}`).onclick();
   const revisao=a.achar(e=>e.id==='empresa-identificacao-revisao');revisao.checked=true;revisao.onchange();
   await a.achar(e=>e.textContent==='Salvar identificação confirmada').onclick();
   assert.deepEqual(pedidos.at(-1).dados,dados);assert.deepEqual(pedidos.at(-1).proveniencia.map(p=>p.pagina),[1,2,3]);
+});
+
+// Regressão 23/11: alteração contratual de 9+ páginas parava em "documento excede 8 páginas". Agora o navegador lê o PDF.
+function comLeitor(t, lerPdf) {
+  globalThis.EmpresaDocumentoLeitura = { ...require('../empresa-documento-leitura'), lerPdf };
+  const atobAntes = globalThis.atob; globalThis.atob = s => Buffer.from(s, 'base64').toString('latin1');
+  t.after(() => { delete globalThis.EmpresaDocumentoLeitura; globalThis.atob = atobAntes; });
+}
+test('documento longo: servidor recusa por páginas, o navegador lê e sugere sem prova da fonte', async (t) => {
+  const pedidos = [], lidos = [];
+  comLeitor(t, async bytes => { lidos.push(bytes); return [{ pagina: 13, texto: 'JOÃO DA SILVA PEREIRA, brasileiro, casado. A sociedade tem sede na Avenida Djalma Batista, nº 1000, Manaus/AM, CEP 69050-010. A administração da sociedade caberá ao sócio JOÃO DA SILVA PEREIRA, isoladamente.' }]; });
+  const a = ambiente(async p => { pedidos.push(p);
+    if (p.acao === 'extrair') return { documentoId: 'doc1', hash: 'a'.repeat(64), modo: 'manual', sugestoes: {}, evidencias: [], avisos: ['Arquivo anexado. Confira manualmente: documento excede 8 páginas.'] };
+    if (p.acao === 'baixar') return { documentoId: 'doc1', conteudoBase64: Buffer.from('%PDF-1.4 fictício').toString('base64') };
+    if (p.acao === 'confirmar') return { empresa, perfil };
+    return { empresa, perfil: null, documentos: [{ id: 'doc1', arquivo_nome: 'alteracao.pdf' }] }; });
+  await a.ui.carregar(); a.achar(e => e.id === 'empresa-identificacao-documento').value = 'doc1';
+  await a.achar(e => e.textContent === 'Extrair sugestões do PDF selecionado').onclick();
+  assert.deepEqual(pedidos.map(p => p.acao), ['consultar', 'extrair', 'baixar']);
+  assert.equal(String.fromCharCode(...lidos[0].slice(0, 5)), '%PDF-');
+  assert.equal(a.achar(e => /excede 8 páginas/.test(e.textContent || '')), undefined);
+  for (const texto of ['Usar endereço: Avenida Djalma Batista, nº 1000, Manaus/AM, CEP 69050-010', 'Usar representante: JOÃO DA SILVA PEREIRA', 'Usar cargo: Sócio-administrador']) a.achar(e => e.textContent === texto).onclick();
+  assert.ok(a.achar(e => /^Página 13: .*caberá ao sócio JOÃO DA SILVA PEREIRA/.test(e.textContent || '')));
+  const revisao = a.achar(e => e.id === 'empresa-identificacao-revisao'); revisao.checked = true; revisao.onchange();
+  await a.achar(e => e.textContent === 'Salvar identificação confirmada').onclick();
+  assert.equal(pedidos.at(-1).acao, 'confirmar');
+  assert.deepEqual(pedidos.at(-1).proveniencia, []);
+  assert.equal(pedidos.at(-1).dados.representante, 'JOÃO DA SILVA PEREIRA');
+});
+test('documento longo escaneado: mensagem clara para preencher olhando o documento', async (t) => {
+  comLeitor(t, async () => [{ pagina: 1, texto: ' ' }, { pagina: 2, texto: '' }]);
+  const a = ambiente(async p => p.acao === 'extrair' ? { documentoId: 'doc1', modo: 'manual', sugestoes: {}, evidencias: [], avisos: ['documento excede 8 páginas.'] }
+    : p.acao === 'baixar' ? { documentoId: 'doc1', conteudoBase64: Buffer.from('%PDF-1.4').toString('base64') } : { empresa, perfil: null, documentos: [{ id: 'doc1', arquivo_nome: 'x.pdf' }] });
+  await a.ui.carregar(); a.achar(e => e.id === 'empresa-identificacao-documento').value = 'doc1';
+  await a.achar(e => e.textContent === 'Extrair sugestões do PDF selecionado').onclick();
+  assert.ok(a.achar(e => /imagem escaneada, sem texto para ler/.test(e.textContent || '')));
 });

@@ -93,19 +93,41 @@
       finally { if (ativo()) { ocupado = false; atualizar(); } }
     }
     aplicar.onclick = () => executar(async () => { const r = await consultar(); if (!r) return; preencher(r); if (r.perfil?.status !== 'confirmado' || !r.perfil.dados) throw new Error('Confirme a identificação antes de aplicar.'); contexto.aplicar?.(r); aviso.textContent = 'Identificação aplicada. Revise novamente a minuta.'; });
+    // Contrato social longo ou escaneado: o servidor só lê até 8 páginas; o resto o navegador lê (pdf.js), sem IA.
+    // Sugestão lida no navegador não leva prova da fonte: vale a conferência marcada pelo usuário.
+    async function lerNoNavegador(documentoId) {
+      const leitor = raiz.EmpresaDocumentoLeitura, manual = aviso => ({modo:'manual',sugestoes:{},evidencias:[],avisos:[aviso]});
+      const b = await contexto.solicitar({acao:'baixar',documentoId}); if (!ativo()) return null;
+      if (b?.documentoId !== documentoId || typeof b.conteudoBase64 !== 'string') throw new Error('Não foi possível abrir o PDF. Tente de novo.');
+      const bin = raiz.atob(b.conteudoBase64), bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      if (String.fromCharCode(...bytes.slice(0,5)) !== '%PDF-') return manual('Este arquivo não é um PDF com texto. Preencha os dados manualmente.');
+      const paginas = await leitor.lerPdf(bytes); if (!ativo()) return null;
+      if (leitor.semTexto(paginas)) return manual('Este PDF é uma imagem escaneada, sem texto para ler. Preencha endereço, representante e cargo olhando o documento.');
+      const r = leitor.extrairDadosEmpresa(paginas, cadastro.empresa);
+      const achou = ['endereco','representante','cargo'].some(k => r.sugestoes[k]);
+      return {modo: achou ? 'sugestoes' : 'manual', sugestoes: r.sugestoes, evidencias: r.evidencias.map(e => ({...e, local: true})),
+        avisos: [achou ? `Lemos as ${paginas.length} páginas no seu computador. São sugestões de leitura, sem validação jurídica: confira cada campo.` : `Lemos as ${paginas.length} páginas, mas não achamos a sede nem a administração. Preencha olhando o documento.`, ...r.avisos]};
+    }
     extrair.onclick = () => executar(async () => {
       if (!documentos.value) throw new Error('Selecione um documento.');
       const documentoId = documentos.value;
-      const r = await contexto.solicitar({acao:'extrair',documentoId}); if (!ativo()) return;
+      let r = await contexto.solicitar({acao:'extrair',documentoId}); if (!ativo()) return;
       if (r.documentoId !== documentoId) throw new Error('A extração não corresponde ao documento selecionado.');
+      if (raiz.EmpresaDocumentoLeitura?.lerPdf && ['endereco','representante','cargo'].some(k => !r.sugestoes?.[k])) {
+        aviso.textContent = 'Lendo o PDF no seu computador…';
+        const local = await lerNoNavegador(documentoId); if (!ativo() || !local) return;
+        const doServidor = r.sugestoes || {};
+        r = {...r, modo: r.modo === 'sugestoes' || local.modo === 'sugestoes' ? 'sugestoes' : 'manual', sugestoes: {...local.sugestoes, ...doServidor},
+          evidencias: [...(r.evidencias || []), ...local.evidencias.filter(e => !doServidor[e.campo])], avisos: r.modo === 'manual' ? local.avisos : [...(r.avisos || []), ...local.avisos]};
+      }
       sugestoes.replaceChildren();
       for (const t of r.avisos || []) sugestoes.append(criar('p',t));
       if ((r.sugestoes?.razaoSocial && r.sugestoes.razaoSocial.trim() !== cadastro.empresa.razao_social?.trim()) || (r.sugestoes?.cnpj && r.sugestoes.cnpj.replace(/\D/g,'') !== cadastro.empresa.cnpj.replace(/\D/g,''))) throw new Error('O documento diverge do cadastro. Confira a empresa em Gerenciar empresas; os campos manuais continuam disponíveis.');
       for (const k of ['endereco','representante','cargo']) {
         const valor = r.sugestoes?.[k]; if (!valor) continue;
         const evidencia = r.evidencias?.find(e => e.campo === k && (e.valor === undefined || e.valor === valor));
-        const usar = botao(`Usar ${k}: ${valor}`);
-        usar.onclick = () => { if (!ativo() || ocupado) return; campos[k].value = valor; provas.delete(k); if (evidencia && /^[a-f0-9]{64}$/.test(r.hash || '')) provas.set(k,{documentoId:r.documentoId,hash:r.hash,campos:[k],pagina:evidencia.pagina,trecho:evidencia.trecho}); alterado = true; revisao.checked = false; atualizar(); };
+        const usar = botao(`Usar ${{endereco:"endereço",representante:"representante",cargo:"cargo"}[k]}: ${valor}`);
+        usar.onclick = () => { if (!ativo() || ocupado) return; campos[k].value = valor; provas.delete(k); if (evidencia && !evidencia.local && /^[a-f0-9]{64}$/.test(r.hash || '')) provas.set(k,{documentoId:r.documentoId,hash:r.hash,campos:[k],pagina:evidencia.pagina,trecho:evidencia.trecho}); alterado = true; revisao.checked = false; atualizar(); };
         sugestoes.append(usar); if (evidencia) sugestoes.append(criar('p',`Página ${evidencia.pagina}: ${evidencia.trecho}`));
       }
       aviso.textContent = r.modo === 'manual' ? 'O anexo foi preservado. Preencha os dados manualmente.' : 'Confira cada sugestão antes de usar.';

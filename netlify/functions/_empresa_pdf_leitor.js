@@ -1,7 +1,7 @@
 const { LIMITES } = require('./_empresa_identificacao');
 
 // Leitor exclusivo do cadastro empresarial. Não altera o parser do resumo nem o loader global.
-async function lerPaginasPdf(bytes, tempoMs = 10000) {
+async function lerPaginasPdf(bytes, tempoMs = 10000, limitePaginas = LIMITES.paginas) {
   if (bytes.length > LIMITES.extracao) throw new Error('Limite de extração excedido.');
   // Carregamento sob demanda, como no leitor anterior; não antecipar PDF.js na inicialização.
   const pdf = require('pdf-parse/lib/pdf.js/v1.10.100/build/pdf.js');
@@ -16,7 +16,7 @@ async function lerPaginasPdf(bytes, tempoMs = 10000) {
     const leitura = async () => {
       const doc = await tarefa;
       const paginas = [];
-      if (doc.numPages <= LIMITES.paginas) {
+      if (doc.numPages <= limitePaginas) {
         for (let pagina = 1; pagina <= doc.numPages; pagina++) {
           const page = await doc.getPage(pagina);
           const conteudo = await page.getTextContent();

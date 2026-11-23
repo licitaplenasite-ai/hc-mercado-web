@@ -89,11 +89,13 @@ exports.handler=async event=>{
  try{const r=await request('/rest/v1/operacao_documentos',{method:'POST',headers:{'Content-Type':'application/json',Prefer:'return=representation'},body:JSON.stringify({organizacao_id:empresa.organizacao_id,empresa_id:empresa.id,tipo:body.tipo==='contrato_social'?'Contrato social':'Cartão CNPJ',titulo:body.tipo==='contrato_social'?'Contrato social':'Cartão CNPJ',arquivo_nome:body.nome,arquivo_caminho:caminho,criado_por:auth.userId})});return resposta(200,{documento:(await r.json())[0]});}
  catch(e){try{await request('/storage/v1/object/operacao-documentos',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({prefixes:[caminho]})});}catch{}throw e;}
  }
- if(body.acao==='extrair'){const d=documento(body.documentoId);const bytes=await baixar(d);const {extrairDocumento}=require('./_empresa_documentos');return resposta(200,{documentoId:d.id,hash:hash(bytes),...await extrairDocumento(bytes)});}
+ if(body.acao==='extrair'){const d=documento(body.documentoId);const bytes=await baixar(d);const {extrairDocumento}=require('./_empresa_documentos');return resposta(200,{documentoId:d.id,hash:hash(bytes),...await extrairDocumento(bytes,empresa)});}
+ // Documento longo: a tela lê o PDF no navegador. Mesmo filtro de empresa/caminho do extrair; nada vai para IA.
+ if(body.acao==='baixar'){const d=documento(body.documentoId);const bytes=await baixar(d);return resposta(200,{documentoId:d.id,conteudoBase64:bytes.toString('base64')});}
  if(body.acao==='confirmar'){
  const validado=validarConfirmacao(body,empresa);const proveniencia=[];
  for(const p of validado.proveniencia){const d=documento(p.documentoId);const bytes=await baixar(d);if(hash(bytes)!==p.hash)falhar('Documento alterado. Confira novamente.',409);
- const {extrairDocumento}=require('./_empresa_documentos');const extracao=await extrairDocumento(bytes);
+ const {extrairDocumento}=require('./_empresa_documentos');const extracao=await extrairDocumento(bytes,empresa);
  for(const campo of p.campos){const ev=extracao.evidencias.find(e=>e.campo===campo&&e.pagina===p.pagina&&e.trecho===p.trecho&&e.valor===validado.dados[campo]);if(!ev)falhar('A fonte não comprova este campo. Confira e confirme como preenchimento manual.');}
  proveniencia.push({...p,arquivoCaminho:d.arquivo_caminho});}
  const svc=process.env.SUPABASE_SERVICE_ROLE_KEY;if(!svc)falhar('Confirmação indisponível neste ambiente.',503);
