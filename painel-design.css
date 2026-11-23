@@ -613,3 +613,49 @@
 #contatos-resumo-lista button:first-child { flex: 1; text-align: left; overflow-wrap: anywhere; min-width: 0; }
 .limites-sistema p { margin: 0 0 8px; font-size: 14px; line-height: 22px; color: var(--text-primary); }
 .limites-sistema p:last-child { margin-bottom: 0; color: var(--text-secondary); }
+
+/* ---- 11. Marca premium (23/11, dono: "visual apagado, sem vida") ----
+   Só tokens (--marca-*, --grad-*, --sombra-cartao* em ds-tokens.css). Sombra leve volta só nos cartões
+   de resumo e painéis; botão primário ganha o degradê da marca; menu ativo e títulos ficam no azul da marca. */
+@media screen {
+  header { background-color: var(--surface-default); background-image: var(--grad-linha); background-size: 100% 3px; background-repeat: no-repeat; background-position: top left; }
+  .header-nome { font-weight: 700; letter-spacing: -0.01em; color: var(--marca-titulo); }
+  .header-placa img { width: 28px; height: 28px; }
+
+  nav button:hover, nav a:hover { background: var(--marca-claro-2); }
+  nav button.ativo { background: var(--marca-claro); color: var(--marca-titulo); font-weight: 700; box-shadow: inset 3px 0 0 var(--marca-medio); }
+  nav button.ativo .nav-ico { color: var(--marca-texto); }
+
+  h2, .conteudo-mercado h2 { color: var(--marca-titulo); font-weight: 700; letter-spacing: -0.01em; }
+  .dash-painel-titulo { color: var(--marca-titulo); font-weight: 700; }
+
+  .dash-boas-vindas {
+    position: relative; overflow: hidden; padding: 20px 24px; margin-bottom: 16px;
+    border: 1px solid var(--marca-claro); border-radius: var(--radius-modal);
+    background-color: var(--marca-claro-2);
+    background-image: var(--grad-linha), radial-gradient(circle at 100% 0%, rgba(55, 114, 248, 0.18), transparent 50%);
+    background-size: 100% 3px, auto; background-repeat: no-repeat; background-position: top left, center;
+  }
+  .dash-boas-vindas h2 { font-size: 24px; line-height: 32px; }
+
+  .dash-card, .dash-painel, .cartao, .boletim-card { box-shadow: var(--sombra-cartao); }
+  .dash-card { position: relative; overflow: hidden; }
+  .dash-card::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--marca-medio); }
+  .dash-card-ico {
+    display: inline-grid; place-content: center; width: 36px; height: 36px; border-radius: 10px;
+    background: var(--marca-claro); color: var(--marca-texto); font-size: 18px;
+  }
+  .dash-card-num { color: var(--marca-titulo); font-weight: 700; }
+
+  .btn-buscar, .btn-buscar:hover:not(:disabled) {
+    background-color: var(--action-strong); background-image: var(--grad-marca); color: var(--marca-on);
+    border-radius: 8px; font-weight: 600; box-shadow: 0 6px 16px rgba(34, 85, 224, 0.24);
+  }
+  .btn-buscar:hover:not(:disabled) { filter: brightness(1.08); }
+  .btn-buscar:disabled { background-image: none; box-shadow: none; }
+
+  .btn-subaba.ativo, .btn-filtro-rapido.ativo, .btn-subaba.ativo:hover, .btn-filtro-rapido.ativo:hover {
+    background: var(--marca-claro); color: var(--marca-titulo); border-color: var(--marca-medio); box-shadow: inset 0 -2px 0 var(--marca-medio);
+  }
+  .chip, .situacao-ativa, .situacao-outra, .mural-tag, .kanban-card-prazo { font-weight: 600; }
+}

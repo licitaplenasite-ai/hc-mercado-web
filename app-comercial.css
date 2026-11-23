@@ -291,7 +291,14 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .contador-lista [data-veredito="vale"]{color:var(--success-text)}
 .contador-resultado{display:grid;gap:var(--space-8);min-width:0}
 .contador-corpo input:not([type="checkbox"]),.contador-corpo select{width:100%;min-width:0;box-sizing:border-box}
-/* Identificação da empresa (empresa-identificacao-ui.js). Markup real: #identificacao > details > summary, p, p[role=status], label+campo em pares, select, input file, botões .defesa-botao, div de sugestões, checkbox e label.
+/* Marca premium (23/11): faixa de marca no topo, títulos no azul da marca, botão principal em degradê. Só tokens. */
+.app-topo{background-image:var(--grad-linha);background-size:100% 3px;background-repeat:no-repeat;background-position:top left}
+.app-marca{font-weight:700;letter-spacing:-.01em;color:var(--marca-titulo)}
+.app-marca-placa img{width:28px;height:28px}
+.app-titulo{color:var(--marca-titulo);font-weight:700;letter-spacing:-.01em}
+.app-cartao{box-shadow:var(--sombra-cartao)}
+.app-primario,.app-primario:hover{background-color:var(--action-strong);background-image:var(--grad-marca);border-color:transparent;color:var(--marca-on);box-shadow:0 6px 16px rgba(34,85,224,.24)}
+.app-primario:hover{filter:brightness(1.08)}/* Identificação da empresa (empresa-identificacao-ui.js). Markup real: #identificacao > details > summary, p, p[role=status], label+campo em pares, select, input file, botões .defesa-botao, div de sugestões, checkbox e label.
    Desktop (641px+): duas colunas label | campo; textos, botões, arquivo, tipo e sugestões ocupam a largura toda; checkbox e label ficam na mesma linha.
    Mobile: uma coluna, rótulo acima do campo; checkbox e label na mesma linha.
    Quando o navegador expõe ::details-content, o grid vai nesse conteúdo; senão, no próprio details. Cores só por tokens, escopo em #identificacao. */

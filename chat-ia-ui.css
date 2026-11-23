@@ -2,7 +2,8 @@
    (gaveta-lateral.css). Só tokens do Design System (ds-tokens.css). Mudança visual: aguarda aprovação do dono. */
 .lp-chat-flutuante { position: fixed; right: 16px; bottom: 16px; z-index: 150; /* abaixo dos modais do painel (200) */
   display: inline-flex; align-items: center; gap: 6px; min-height: 48px; padding: 0 16px; border: 0; border-radius: 999px;
-  background: var(--success-text, #15803d); color: #fff; font: 700 16px/1 var(--font-sans); box-shadow: var(--shadow-overlay); cursor: pointer; }
+  /* 23/11: degradê da marca; o verde de "sucesso" no tema escuro é claro e o texto branco ficava ilegível (1,7:1). */
+  background-color: #123aa8; background-image: var(--grad-marca, none); color: #fff; font: 700 16px/1 var(--font-sans); box-shadow: var(--shadow-overlay); cursor: pointer; }
 .lp-chat-flutuante:hover { filter: brightness(1.08); }
 .lp-chat-flutuante:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .lp-chat-beta { font: 700 10px/1 var(--font-sans); letter-spacing: .04em; padding: 3px 6px; border-radius: 999px; background: rgba(255,255,255,.22); }

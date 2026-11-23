@@ -64,3 +64,7 @@
 }
 @media (prefers-reduced-motion: reduce) { #menu-principal { transition: none; } }
 [hidden].nav-gaveta-fundo { display: none; }
+/* Marca premium (23/11): item ativo no azul da marca, com barra mais forte. */
+#menu-principal button:hover, #menu-principal a:hover { background: var(--marca-claro-2); }
+#menu-principal a.ativo { background: var(--marca-claro); color: var(--marca-titulo); font-weight: 700; box-shadow: inset 3px 0 0 var(--marca-medio); }
+#menu-principal a.ativo .nav-ico { color: var(--marca-texto); }
