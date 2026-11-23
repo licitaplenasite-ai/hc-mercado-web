@@ -35,10 +35,10 @@ jobs:
           SOMENTE_OPORTUNIDADES: "1"
           RECUPERAR_UFS_PENDENTES: "1"
           LIMITE_MINUTOS_OPORTUNIDADES: "28"
-          # A taxa é limitada pela cadência global (INTERVALO_MS), não pelos workers: com
-          # 2, a latência de ~4,5 s por página deixava só ~14 UFs por rodada (22/11).
+          # A taxa é a cadência global: o PNCP aceita ~20 chamadas/min por origem (medido
+          # 23/11). Com 900 ms, os 429 em série pausavam todos e a rodada fazia ~14 UFs.
           CONCORRENCIA_UF_OPORTUNIDADES: "3"
-          INTERVALO_MS_OPORTUNIDADES: "900"
+          INTERVALO_MS_OPORTUNIDADES: "3000"
           MIN_UFS_OK_OPORTUNIDADES: "1"
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: node scripts/atualizar_dados.js

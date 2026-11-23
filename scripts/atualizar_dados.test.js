@@ -92,7 +92,7 @@ function ambienteMain(falharEm) {
   const ambiente = vm.createContext({
     process: { env: {}, cwd: () => "." }, UFS: ["AM"], RETENCAO_DIAS: 730, hashProgressoAtas,
     console: { log() {}, warn() {} }, iniciarFase() {}, LIMITE_MINUTOS_CONTRATOS: 1, LIMITE_MINUTOS_MERCADO: 1,
-    LIMITE_HORAS_UF_PENDENTE: 24, LIMITE_HORAS_SEM_COBERTURA: 48, ufsSemCoberturaRecente,
+    LIMITE_HORAS_UF_PENDENTE: 24, LIMITE_HORAS_SEM_COBERTURA: 48, LIMITE_HORAS_SEM_COBERTURA_MAXIMO: 120, ufsSemCoberturaRecente,
     fmtData: (d) => d.toISOString().slice(0, 10).replace(/-/g, ""),
     fsTeste: { mkdir: async () => {}, rename: async (origem, destino) => { eventos.push(destino); arquivos.set(destino, arquivos.get(origem)); arquivos.delete(origem); }, writeFile: async (nome, dado) => { eventos.push(nome); arquivos.set(nome, dado); } },
     pathTeste: { join: (...partes) => partes.filter((p) => p !== ".").join("/") },
@@ -1040,4 +1040,30 @@ test("oportunidades tentam primeiro a UF com cobertura mais antiga", async () =>
   vm.runInContext(codigo.slice(inicio, fim) + codigo.slice(inicioColeta, fimColeta), ambiente);
   await ambiente.coletarOportunidadesAbertas("ignorado");
   assert.deepEqual(chamadas, ["RR", "AM", "AC"]);
+});
+
+test("hidratação de oportunidades lê só o metadado, nunca as linhas da tabela", async () => {
+  const comeco = codigo.indexOf("async function hidratarOportunidadesDoSupabase(");
+  const escritos = [];
+  const ambiente = vm.createContext({
+    buscarBlob: async () => ({ coberturaPorUf: { AM: { atualizadoEm: "2026-11-22T00:00:00Z" } } }),
+    baixarTodasAsLinhas: async () => { throw new Error("não deveria baixar a tabela inteira"); },
+    fsTeste: { writeFile: async (_c, d) => escritos.push(JSON.parse(d)) }, console: { log() {} },
+  });
+  vm.runInContext(codigo.slice(comeco, codigo.indexOf("\n}\n", comeco) + 2).replace('await import("node:fs/promises")', "fsTeste"), ambiente);
+  await ambiente.hidratarOportunidadesDoSupabase("ignorado");
+  assert.deepEqual(escritos[0].registros, []);
+  assert.equal(escritos[0].coberturaPorUf.AM.atualizadoEm, "2026-11-22T00:00:00Z");
+});
+
+test("atraso acima de 48 h sendo recuperado é aviso; sem avanço, ou acima de 120 h, é erro", async () => {
+  const ha = (h) => new Date(Date.now() - h * 3600000).toISOString();
+  const rodar = async (horas, ok) => {
+    const { ambiente } = ambienteMain();
+    ambiente.coletarOportunidadesAbertas = async () => ({ registros: [], ufsComFalha: ["AM"], ufsOkNaExecucao: ok, coberturaPorUf: { AM: { atualizadoEm: ha(horas) } } });
+    return ambiente.main();
+  };
+  await rodar(60, ["RR"]);
+  await assert.rejects(rodar(60, []), /48 h sem avanço.*AM/);
+  await assert.rejects(rodar(121, ["RR"]), /120 h: AM/);
 });
