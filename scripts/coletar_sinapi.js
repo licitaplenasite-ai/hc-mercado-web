@@ -99,7 +99,9 @@ async function existe(url, pedirFn = pedir, pausaMs = num(process.env.SINAPI_PAU
   for (let tentativa = 0; tentativa < 4; tentativa++) {
     const r = await pedirFn(url, "HEAD", 30000);
     status = r.status;
-    if (status === 200 || status === 404) {
+    // Arquivo inexistente: a CAIXA não dá 404, redireciona (302) para outra página. O 302 para a MESMA URL (cookie)
+    // já foi tratado em pedir(); aqui sobra só o redirecionamento para fora, que significa "não publicado".
+    if (status === 200 || status === 404 || (status >= 300 && status < 400)) {
       await esperar(pausaMs);
       return status === 200;
     }

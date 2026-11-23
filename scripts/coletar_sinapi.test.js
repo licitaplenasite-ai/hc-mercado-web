@@ -123,6 +123,7 @@ test("existe: só 404 é 'não publicado'; 429/403 repete e, se persistir, falha
   const resposta = (...status) => { let i = 0; return async () => ({ status: status[Math.min(i++, status.length - 1)], headers: new Headers() }); };
   assert.equal(await S.existe("https://x/a.zip", resposta(200), 0), true);
   assert.equal(await S.existe("https://x/a.zip", resposta(404), 0), false);
+// Regressão 23/11: arquivo inexistente na CAIXA vem como 302 para outra página, não 404. assert.equal(await S.existe("https://x/a.zip", resposta(302), 0), false);
   assert.equal(await S.existe("https://x/a.zip", resposta(429, 429, 200), 0), true);
   await assert.rejects(S.existe("https://x/a.zip", resposta(429, 403), 0), /HTTP 403 .*anti-robô/);
 });
