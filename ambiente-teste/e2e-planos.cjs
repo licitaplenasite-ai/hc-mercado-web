@@ -148,6 +148,7 @@ async function main() {
     const aal1 = await comoUsuario(tD.access_token, 'POST', '/rest/v1/rpc/admin_definir_assinatura', { p_usuario: E.id, p_dados: { plano: 'assessoria' } });
     const tokenAal2 = assinar({ ...payload, aal: 'aal2', amr: [{ method: 'password', timestamp: payload.iat }, { method: 'totp', timestamp: payload.iat }] }, segredo);
     const pD = await novaPagina(navegador);
+    pD.on('dialog', d => d.accept()); // 22/11: salvar plano e registrar Pix recebido perguntam antes (admin reorganizado)
     const fator = { id: '00000000-0000-4000-8000-0000000000f1', friendly_name: 'teste', factor_type: 'totp', status: 'verified', created_at: '2026-11-19T00:00:00Z', updated_at: '2026-11-19T00:00:00Z' };
     await pD.route('**/auth/v1/user', async rota => {
       const r = await rota.fetch(); const u = await r.json();
@@ -197,7 +198,7 @@ async function main() {
       exigir(r.status === 201, `2º CNPJ após mudança: ${r.status} ${r.corpo.slice(0, 200)}`);
       return JSON.stringify(a);
     });
-    await passo('dono: abas Planos, Uso e Financeiro (registra Pix recebido)', null, async () => {
+    await passo('dono: abas Planos, Clientes (uso) e Cobrança (registra Pix recebido à mão)', null, async () => {
       await pD.keyboard.press('Escape');
       await pD.evaluate(() => document.getElementById('modal-detalhe-fundo').classList.remove('aberto'));
       await pD.setViewportSize({ width: 1280, height: 900 });
@@ -205,9 +206,9 @@ async function main() {
       await pD.waitForSelector('#conteudo-planos table', { timeout: 20000 });
       for (const largura of [1280, 375]) { await pD.setViewportSize({ width: largura, height: largura === 375 ? 812 : 900 }); await pD.waitForTimeout(300); await print(pD, `admin-planos-${largura}.png`); }
       await pD.setViewportSize({ width: 1280, height: 900 });
-      await pD.click('.tabs button[data-status="uso"]');
+      await pD.click('.tabs button[data-status="clientes"]');
       await pD.waitForSelector('#conteudo-uso table, #conteudo-uso .vazio', { timeout: 20000 });
-      await pD.click('.tabs button[data-status="financeiro"]');
+      await pD.click('.tabs button[data-status="cobranca"]');
       await pD.waitForFunction(() => document.querySelectorAll('#pag-conta option').length > 1, null, { timeout: 20000 });
       await pD.selectOption('#pag-conta', A.id);
       await pD.selectOption('#pag-plano', 'assessoria');

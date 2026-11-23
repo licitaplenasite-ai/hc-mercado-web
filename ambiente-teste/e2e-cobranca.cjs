@@ -121,7 +121,7 @@ async function main() {
     await passo('dono: aba Cobrança com totais do mês e o cliente em atraso (dias, valor, plano, contato)', null, async () => {
       await pD.reload();
       await pD.waitForSelector('#painel .card-num', { timeout: 30000 });
-      exigir(await pD.isVisible('#link-normas-obra'), 'link "Normas de obra" no topo do admin');
+      exigir(await pD.isVisible('.tabs button[data-status="normas"]'), 'item "Normas de obra" no menu do admin');
       await pD.click('.tabs button[data-status="cobranca"]');
       await pD.waitForSelector(linha, { timeout: 20000 });
       const t = await pD.innerText(linha), tot = await pD.innerText('#cobranca-totais');
