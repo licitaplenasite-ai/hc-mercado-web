@@ -122,7 +122,7 @@
       ? ' Tente outra palavra (uma só, como "limpeza" em vez de "material de limpeza"), confira a grafia ou apague o CATMAT.'
       : '';
     const outros = tipo === 'ata' ? '' : ' Também dá para aumentar o período.';
-    if (tipo === 'irp') return `Nenhuma IRP aberta agora com esse filtro. O módulo de IRP do PNCP é novo (31/08/2026) e ainda tem poucas IRPs no Brasil todo.${sugestao}`;
+    if (tipo === 'irp') return `Nenhuma IRP aberta agora com esse filtro. Os órgãos só passaram a publicar esses avisos no portal oficial em agosto de 2026, por isso ainda há poucas IRPs no Brasil todo.${sugestao}`;
     if (cob && f.uf && !(cob[f.uf] && cob[f.uf].concluidaEm)) {
       return `Ainda não temos ${nome} de ${f.uf}: a coleta está em andamento e fica pronta em até 3 dias. Enquanto isso, veja outra UF ou escolha "Todas".`;
     }
