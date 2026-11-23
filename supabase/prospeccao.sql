@@ -58,7 +58,7 @@ create index if not exists prospeccao_itens_tipo_data_valor_idx on public.prospe
 create index if not exists prospeccao_itens_coletado_em_idx on public.prospeccao_itens (coletado_em desc);
 -- shortcut: o ILIKE em busca faz varredura das linhas do tipo na janela de datas (medido: ~0,6 s em 900 mil linhas).
 -- Índice gin_trgm_ops NÃO ajuda aqui: sob RLS o Postgres só usa no índice operador leakproof, e o ILIKE não é (o plano
--- ignora o índice). Se a varredura voltar a estourar, o caminho é uma função security definer de busca, não o trigram.
+-- ignora o índice). Por isso a busca com palavra passou para a função security definer buscar_prospeccao (v5, abaixo).
 
 -- LGPD: razão social de MEI vem com o CPF do titular ("FULANA DE TAL 97048143215"). Limpeza única e idempotente
 -- do que já foi gravado (só toca linha que ainda tem CPF), depois o CHECK recusa CPF daqui para frente. Mesma forma
@@ -114,5 +114,63 @@ drop policy if exists dados_robo_select_prospeccao_cobertura on public.dados_rob
 create policy dados_robo_select_prospeccao_cobertura on public.dados_robo for select to authenticated
   using ((select public.cliente_aprovado()) and chave like 'prospeccao\_cobertura\_%');
 grant select on public.dados_robo to authenticated;
+
+-- v5 (23/11/2026): busca por palavra com UF "Todas" seguia estourando os 8 s mesmo com o índice v4: sob RLS o ILIKE
+-- (não leakproof) não entra em índice, e o banco lia o tipo inteiro na janela. A busca com palavra passa por esta função
+-- security definer (sem RLS por dentro, então o trigram vale) e /api/prospeccao a chama via /rpc. A leitura direta da
+-- tabela pelo PostgREST continua igual, com as policies de sempre. Em produção, criar os dois índices antes, cada um
+-- sozinho com "create index concurrently" (fora de transação), para não travar a gravação do robô.
+create extension if not exists pg_trgm;
+create index if not exists prospeccao_itens_busca_trgm_idx on public.prospeccao_itens using gin (busca gin_trgm_ops);
+create index if not exists prospeccao_itens_busca_nome_trgm_idx on public.prospeccao_itens using gin (busca_nome gin_trgm_ops);
+
+-- Mesmos três níveis e mesma regra de netlify/functions/prospeccao.js (frase = todas as palavras; frases somam):
+--   inicio  busca_nome começa pela 1a palavra e tem as demais
+--   nome    casa em busca_nome, mas não no início
+--   espec   casa só em busca (fora de busca_nome)
+-- SQL montado com quote_literal sobre palavras validadas aqui ([a-z0-9]): o planejador vê constantes e usa o trigram.
+-- Por dentro roda como dono (sem RLS), então a função repete a barreira das policies: cliente aprovado e plano com o recurso.
+create or replace function public.buscar_prospeccao(p_tipo text, p_uf text, p_catmat text, p_de date, p_ate date,
+  p_frases jsonb, p_nivel text, p_limite int)
+returns setof public.prospeccao_itens
+language plpgsql stable security definer set search_path = '' as $$
+declare
+  f jsonb; w text; k bigint;
+  b text; n text; i text; ob text := ''; o_n text := ''; oi text := ''; cond text; filtro text := '';
+begin
+  if not (public.cliente_aprovado() and public.eu_posso('prospeccao')) then return; end if;
+  if p_tipo is null or p_tipo not in ('pca', 'irp', 'ata', 'contrato') or p_nivel is null or p_nivel not in ('inicio', 'nome', 'espec')
+     or p_de is null or p_limite is null or p_limite not between 1 and 201
+     or (p_uf is not null and p_uf !~ '^[A-Z]{2}$') or (p_catmat is not null and p_catmat !~ '^[0-9]{1,12}$')
+     or jsonb_typeof(p_frases) is distinct from 'array' or jsonb_array_length(p_frases) not between 1 and 8 then
+    raise exception 'buscar_prospeccao: parâmetros inválidos' using errcode = '22023';
+  end if;
+  for f in select value from jsonb_array_elements(p_frases) loop
+    if jsonb_typeof(f) <> 'array' or jsonb_array_length(f) not between 1 and 5 then
+      raise exception 'buscar_prospeccao: frase inválida' using errcode = '22023';
+    end if;
+    b := ''; n := ''; i := '';
+    for w, k in select value, ordinality from jsonb_array_elements_text(f) with ordinality loop
+      if w !~ '^[a-z0-9]+$' or length(w) not between 2 and 300 then raise exception 'buscar_prospeccao: palavra inválida' using errcode = '22023'; end if;
+      b := b || ' and busca ilike ' || quote_literal('%' || w || '%');
+      n := n || ' and busca_nome ilike ' || quote_literal('%' || w || '%');
+      i := i || ' and busca_nome ilike ' || quote_literal(case when k = 1 then '' else '%' end || w || '%');
+    end loop;
+    ob := ob || ' or (' || substr(b, 6) || ')';
+    o_n := o_n || ' or (' || substr(n, 6) || ')';
+    oi := oi || ' or (' || substr(i, 6) || ')';
+  end loop;
+  ob := '(' || substr(ob, 5) || ')'; o_n := '(' || substr(o_n, 5) || ')'; oi := '(' || substr(oi, 5) || ')';
+  cond := case p_nivel when 'inicio' then oi when 'nome' then o_n || ' and not ' || oi else ob || ' and not ' || o_n end;
+  if p_uf is not null then filtro := filtro || ' and uf = ' || quote_literal(p_uf); end if;
+  if p_catmat is not null then filtro := filtro || ' and catmat = ' || quote_literal(p_catmat); end if;
+  if p_ate is not null then filtro := filtro || ' and data_ref <= ' || quote_literal(p_ate) || '::date'; end if;
+  return query execute 'select * from public.prospeccao_itens where tipo = ' || quote_literal(p_tipo)
+    || ' and data_ref >= ' || quote_literal(p_de) || '::date' || filtro || ' and ' || cond
+    || ' order by data_ref asc, valor_total desc nulls last limit ' || p_limite;
+end;
+$$;
+revoke all on function public.buscar_prospeccao(text, text, text, date, date, jsonb, text, int) from public, anon;
+grant execute on function public.buscar_prospeccao(text, text, text, date, date, jsonb, text, int) to authenticated;
 
 commit;

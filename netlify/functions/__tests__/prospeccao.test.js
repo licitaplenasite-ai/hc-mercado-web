@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { validar, montarConsulta, handler, coberturaDoTipo } = require("../prospeccao");
+const { validar, montarConsulta, montarBusca, handler, coberturaDoTipo } = require("../prospeccao");
 
 const AGORA = Date.parse("2026-11-19T15:00:00Z"); // 12h em Brasília
 
@@ -19,11 +19,11 @@ test("validar: palavras sem acento e sem sintaxe do PostgREST; curtas e repetida
 });
 
 test("montarConsulta: janela hoje..hoje+dias por data_ref, filtros e limite+1", () => {
-  const u = new URL(montarConsulta(validar({ tipo: "contrato", uf: "AM", palavras: "limpeza, papel a4", dias: "180" }), AGORA));
+  const u = new URL(montarConsulta(validar({ tipo: "contrato", uf: "AM", dias: "180" }), AGORA));
   assert.equal(u.searchParams.get("tipo"), "eq.contrato");
   assert.equal(u.searchParams.get("uf"), "eq.AM");
   assert.deepEqual(u.searchParams.getAll("data_ref"), ["gte.2026-11-19", "lte.2027-05-18"]);
-  assert.equal(u.searchParams.get("or"), "(busca.ilike.*limpeza*,and(busca.ilike.*pape*,busca.ilike.*a4*))");
+  assert.equal(u.searchParams.get("order"), "data_ref.asc,valor_total.desc.nullslast");
   assert.equal(u.searchParams.get("limit"), "201");
 });
 
@@ -60,26 +60,29 @@ test("handler: só cadastro aprovado lê a tabela (pendente 403), com o token do
   }
 });
 
-test("montarConsulta com nível: início do nome, nome e só especificação (nunca AND solto entre termos)", () => {
-  const f = validar({ tipo: "ata", palavras: "papel a4, cafe" });
-  const p = (n) => new URL(montarConsulta(f, AGORA, n)).searchParams;
-  const papel = (ini) => `and(busca_nome.ilike.${ini ? "" : "*"}pape*,busca_nome.ilike.*a4*)`;
-  assert.equal(p("inicio").get("or"), `(${papel(true)},busca_nome.ilike.cafe*)`);
-  assert.equal(p("inicio").get("and"), null);
-  assert.equal(p("nome").get("and"), `(or(${papel(false)},busca_nome.ilike.*cafe*),not.or(${papel(true)},busca_nome.ilike.cafe*))`);
-  assert.equal(p("espec").get("and"), "(or(and(busca.ilike.*pape*,busca.ilike.*a4*),busca.ilike.*cafe*),not.or(and(busca_nome.ilike.*pape*,busca_nome.ilike.*a4*),busca_nome.ilike.*cafe*))");
-  assert.equal(new URL(montarConsulta(f, AGORA, "espec", 17)).searchParams.get("limit"), "17");
+test("montarBusca: argumentos da RPC buscar_prospeccao com a mesma janela, frases e nível", () => {
+  assert.deepEqual(montarBusca(validar({ tipo: "ata", palavras: "papel a4, cafe" }), AGORA, "espec", 17), {
+    p_tipo: "ata", p_uf: null, p_catmat: null, p_de: "2026-12-19", p_ate: null, p_frases: [["pape", "a4"], ["cafe"]], p_nivel: "espec", p_limite: 17,
+  });
+  const b = montarBusca(validar({ tipo: "pca", uf: "sp", catmat: "269941", palavras: "limpeza", dias: "180" }), AGORA);
+  assert.deepEqual([b.p_uf, b.p_catmat, b.p_de, b.p_ate, b.p_nivel, b.p_limite], ["SP", "269941", "2026-11-19", "2027-05-18", "inicio", 201]);
 });
 
 test("handler: com palavras consulta nome antes da especificação, marca so_especificacao e respeita o limite", async () => {
   const anterior = global.fetch;
   const consultas = [];
-  global.fetch = async (url) => {
+  global.fetch = async (url, op = {}) => {
     const u = new URL(url);
     if (u.pathname === "/auth/v1/user") return Response.json({ id: "u1" });
     if (u.pathname === "/rest/v1/clientes") return Response.json([{ status: "aprovado" }]);
     if (u.pathname === "/rest/v1/dados_robo") return Response.json([]);
-    const nivel = u.searchParams.get("or") ? "inicio" : /not\.or\(and\(busca_nome\.ilike\.p/.test(u.searchParams.get("and")) ? "nome" : "espec";
+    // Com palavra a busca vai pela RPC (com o token do usuário), um nível por chamada.
+    assert.equal(u.pathname, "/rest/v1/rpc/buscar_prospeccao");
+    assert.equal(op.method, "POST");
+    assert.equal(op.headers.Authorization, "Bearer T");
+    assert.match(u.searchParams.get("select"), /^id,tipo,/);
+    const { p_nivel: nivel, p_frases } = JSON.parse(op.body);
+    assert.deepEqual(p_frases, [["pape", "a4"]]);
     consultas.push(nivel);
     return Response.json([{ id: `${nivel}1`, coletado_em: "2026-11-19" }]);
   };
@@ -100,10 +103,9 @@ test("busca: acento, plural/singular e palavras fora de ordem viram o mesmo filt
   assert.deepEqual(frases("papéis"), frases("papel"));
   assert.deepEqual(frases("materiais de expediente"), [["materia", "expediente"]]);
   assert.deepEqual(frases("computadores"), [["computador"]]);
-  // Ordem não importa: cada palavra vira um ILIKE e a frase é o AND delas.
-  const u = (t) => new URL(montarConsulta(validar({ tipo: "pca", palavras: t }), AGORA)).searchParams.get("or");
-  assert.equal(u("limpeza material"), "(and(busca.ilike.*limpeza*,busca.ilike.*materia*))");
-  assert.equal(u("material de limpeza"), "(and(busca.ilike.*materia*,busca.ilike.*limpeza*))");
+  // Ordem não importa: cada palavra vira um ILIKE na função buscar_prospeccao e a frase é o AND delas.
+  assert.deepEqual(frases("limpeza material"), [["limpeza", "materia"]]);
+  assert.deepEqual(frases("material de limpeza"), [["materia", "limpeza"]]);
   // Número (CATMAT digitado na caixa de palavras) e palavra curta ficam como estão.
   assert.deepEqual(frases("papel a4 269941"), [["pape", "a4", "269941"]]);
 });

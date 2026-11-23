@@ -100,5 +100,49 @@ do $$ declare n int; begin
 end $$;
 do $$ begin
  if has_table_privilege('anon','public.prospeccao_itens','SELECT') then raise exception 'anon lê prospecção'; end if;
+ if has_function_privilege('anon','public.buscar_prospeccao(text,text,text,date,date,jsonb,text,int)','EXECUTE') then raise exception 'anon executa buscar_prospeccao'; end if;
 end $$;
+-- v5: buscar_prospeccao (busca com palavra, security definer). Mesmos níveis da function; pendente não lê; entrada validada.
+insert into public.prospeccao_itens(id,tipo,fonte,uf,data_ref,valor_total,link,busca,busca_nome) values
+ ('pca:QA-10','pca','pncp','AM','2027-01-10',10,'https://pncp.gov.br/app/pca/10','material de limpeza predial orgao qa','material de limpeza'),
+ ('pca:QA-11','pca','pncp','SP','2027-01-05',20,'https://pncp.gov.br/app/pca/11','limpeza de vidros orgao qa','limpeza de vidros'),
+ ('pca:QA-12','pca','pncp','AM','2027-01-20',30,'https://pncp.gov.br/app/pca/12','impressora laser com kit de limpeza orgao qa','impressora laser'),
+ ('pca:QA-13','pca','pncp','AM','2029-01-01',40,'https://pncp.gov.br/app/pca/13','limpeza fora da janela','limpeza fora da janela');
+set local role authenticated;
+select set_config('request.jwt.claim.sub','c9000000-0000-4000-8000-000000000002',true);
+do $$ begin
+ if exists(select 1 from public.buscar_prospeccao('pca',null,null,'2026-11-01','2028-01-01','[["limpeza"]]','inicio',201)) then raise exception 'pendente leu pela RPC'; end if;
+end $$;
+select set_config('request.jwt.claim.sub','c9000000-0000-4000-8000-000000000001',true);
+do $$
+declare ids text;
+begin
+ select string_agg(id, ',' order by data_ref) into ids from public.buscar_prospeccao('pca',null,null,'2026-11-01','2028-01-01','[["limpeza"]]','inicio',201) where id like '%QA-%';
+ if ids is distinct from 'pca:QA-11' then raise exception 'nível inicio errado: %', ids; end if;
+ select string_agg(id, ',' order by data_ref) into ids from public.buscar_prospeccao('pca',null,null,'2026-11-01','2028-01-01','[["limpeza"]]','nome',201) where id like '%QA-%';
+ if ids is distinct from 'pca:QA-10' then raise exception 'nível nome errado: %', ids; end if;
+ select string_agg(id, ',' order by data_ref) into ids from public.buscar_prospeccao('pca',null,null,'2026-11-01','2028-01-01','[["limpeza"]]','espec',201) where id like '%QA-%';
+ if ids is distinct from 'pca:QA-12' then raise exception 'nível espec errado: %', ids; end if;
+ -- Janela aberta em cima (ata): sem p_ate entra o que vence depois.
+ if not exists(select 1 from public.buscar_prospeccao('pca',null,null,'2026-11-01',null,'[["limpeza"]]','inicio',201) where id = 'pca:QA-13') then raise exception 'sem p_ate cortou a janela'; end if;
+ if exists(select 1 from public.buscar_prospeccao('pca','AM',null,'2026-11-01','2028-01-01','[["limpeza"]]','inicio',201)) then raise exception 'filtro de UF ignorado'; end if;
+ -- Frase = todas as palavras; só a primeira precisa abrir o nome. Frases somam (or).
+ if not exists(select 1 from public.buscar_prospeccao('pca',null,null,'2026-11-01','2028-01-01','[["limpeza","vidro"]]','inicio',201) where id = 'pca:QA-11') then raise exception 'frase com duas palavras não casou'; end if;
+ if exists(select 1 from public.buscar_prospeccao('pca',null,null,'2026-11-01','2028-01-01','[["vidro","limpeza"]]','inicio',201) where id like '%QA-%') then raise exception 'inicio casou fora do começo'; end if;
+ select string_agg(id, ',' order by data_ref) into ids from public.buscar_prospeccao('pca',null,null,'2026-11-01','2028-01-01','[["impressora"],["limpeza","vidro"]]','inicio',201) where id like '%QA-%';
+ if ids is distinct from 'pca:QA-11,pca:QA-12' then raise exception 'frases não somaram: %', ids; end if;
+ if (select count(*) from public.buscar_prospeccao('pca',null,null,'2026-11-01','2028-01-01','[["qa"]]','espec',1)) <> 1 then raise exception 'limite ignorado'; end if;
+ -- Entrada fora do formato (curinga, aspas, nível, limite) é recusada, não vira SQL.
+ begin perform public.buscar_prospeccao('pca',null,null,'2026-11-01',null,'[["lim%"]]','inicio',10); raise exception 'curinga aceito';
+ exception when invalid_parameter_value then null; end;
+ begin perform public.buscar_prospeccao('pca',null,null,'2026-11-01',null,'[["a'') or true --"]]','inicio',10); raise exception 'aspas aceitas';
+ exception when invalid_parameter_value then null; end;
+ begin perform public.buscar_prospeccao('pca',null,null,'2026-11-01',null,'[["limpeza"]]','tudo',10); raise exception 'nível inválido aceito';
+ exception when invalid_parameter_value then null; end;
+ begin perform public.buscar_prospeccao('pca',null,null,'2026-11-01',null,'[["limpeza"]]','inicio',5000); raise exception 'limite gigante aceito';
+ exception when invalid_parameter_value then null; end;
+ begin perform public.buscar_prospeccao('pca','sp',null,'2026-11-01',null,'[["limpeza"]]','inicio',10); raise exception 'UF inválida aceita';
+ exception when invalid_parameter_value then null; end;
+end $$;
+reset role;
 rollback;

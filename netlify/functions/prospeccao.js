@@ -5,7 +5,8 @@
 // Resposta: { tipo, linhas:[...], limite, truncado, coletadoEm, cobertura: { UF: { concluidaEm, emAndamento, linhas } } | null }.
 // Até quatro subrequisições por chamada (três níveis da busca + cobertura; a tela pede uma aba por vez): cabe folgado nos 50 do Cloudflare, e o
 // trabalho pesado (varrer PNCP/Compras.gov) já foi feito pelo robô. Lê com o token do PRÓPRIO usuário,
-// e a RLS (authenticated) é a barreira. Sem verificarLimiteDiario: a mesma leitura já é possível direto
+// e a RLS (authenticated) é a barreira (na busca com palavra, a mesma checagem dentro de buscar_prospeccao). Sem
+// verificarLimiteDiario: a mesma leitura já é possível direto
 // pelo PostgREST com a sessão (mesmo raciocínio de sancoes-cnpj.js).
 const { cabecalhosPadrao, exigirUsuarioAprovado } = require("./_auth");
 
@@ -50,38 +51,30 @@ function validar(q = {}) {
 
 // Janela por data_ref: o que vence/acontece de hoje até hoje+dias. Ata é diferente: para adesão interessa a
 // ata ainda vigente por pelo menos 30 dias (carona leva tempo), sem teto.
-//
-// Com palavras, a busca é em três níveis (cada um é uma consulta, na ordem; os de baixo só entram se sobrar lugar):
+const janela = (f, agora) => (f.tipo === "ata" ? { de: hojeBrasilia(agora, 30), ate: null } : { de: hojeBrasilia(agora), ate: hojeBrasilia(agora, f.dias) });
+
+// Sem palavras: leitura direta da tabela pelo PostgREST (RLS de sempre; o índice (tipo, data_ref, valor_total) entrega a ordem).
+function montarConsulta(f, agora = Date.now(), limite = LIMITE + 1) {
+  const p = new URLSearchParams({ select: COLUNAS, tipo: `eq.${f.tipo}`, order: "data_ref.asc,valor_total.desc.nullslast", limit: String(limite) });
+  if (f.uf) p.set("uf", `eq.${f.uf}`);
+  if (f.catmat) p.set("catmat", `eq.${f.catmat}`);
+  const { de, ate } = janela(f, agora);
+  p.append("data_ref", `gte.${de}`);
+  if (ate) p.append("data_ref", `lte.${ate}`);
+  return `${URL_SB}/rest/v1/prospeccao_itens?${p}`;
+}
+
+// Com palavras, a busca é em três níveis (cada um é uma chamada, na ordem; os de baixo só entram se sobrar lugar):
 //   inicio  o nome do item (busca_nome = começo da descrição/objeto) começa com o termo
 //   nome    o termo aparece em outro ponto do nome
 //   espec   o termo só aparece no resto do texto (especificação): a tela recolhe esse grupo ("papel a4" dentro da ficha da impressora)
 // Uma frase casa quando TODAS as palavras dela aparecem (and); frases diferentes somam (or). "inicio" = o nome começa
-// pela primeira palavra e tem as demais.
+// pela primeira palavra e tem as demais. Quem monta o ILIKE é a função buscar_prospeccao (supabase/prospeccao.sql, v5):
+// pela tabela, a RLS impede o índice trigram e a UF "Todas" estourava o statement_timeout (503).
 const NIVEIS = ["inicio", "nome", "espec"];
-function casar(frases, coluna, inicio = false) {
-  return frases.map((ws) => {
-    const c = ws.map((w, i) => `${coluna}.ilike.${inicio && i === 0 ? "" : "*"}${w}*`);
-    return c.length === 1 ? c[0] : `and(${c.join(",")})`;
-  }).join(",");
-}
-function filtroTexto(frases, nivel) {
-  if (nivel === "inicio") return ["or", `(${casar(frases, "busca_nome", true)})`];
-  if (nivel === "nome") return ["and", `(or(${casar(frases, "busca_nome")}),not.or(${casar(frases, "busca_nome", true)}))`];
-  return ["and", `(or(${casar(frases, "busca")}),not.or(${casar(frases, "busca_nome")}))`];
-}
-
-function montarConsulta(f, agora = Date.now(), nivel = null, limite = LIMITE + 1) {
-  const p = new URLSearchParams({ select: COLUNAS, tipo: `eq.${f.tipo}`, order: "data_ref.asc,valor_total.desc.nullslast", limit: String(limite) });
-  if (f.uf) p.set("uf", `eq.${f.uf}`);
-  if (f.catmat) p.set("catmat", `eq.${f.catmat}`);
-  if (f.frases.length && !nivel) p.set("or", `(${casar(f.frases, "busca")})`);
-  else if (f.frases.length) p.set(...filtroTexto(f.frases, nivel));
-  if (f.tipo === "ata") p.append("data_ref", `gte.${hojeBrasilia(agora, 30)}`);
-  else {
-    p.append("data_ref", `gte.${hojeBrasilia(agora)}`);
-    p.append("data_ref", `lte.${hojeBrasilia(agora, f.dias)}`);
-  }
-  return `${URL_SB}/rest/v1/prospeccao_itens?${p}`;
+function montarBusca(f, agora = Date.now(), nivel = "inicio", limite = LIMITE + 1) {
+  const { de, ate } = janela(f, agora);
+  return { p_tipo: f.tipo, p_uf: f.uf, p_catmat: f.catmat, p_de: de, p_ate: ate, p_frases: f.frases, p_nivel: nivel, p_limite: limite };
 }
 
 // Cobertura da coleta (o robô grava um resumo por grupo de UFs em dados_robo, chaves prospeccao_cobertura_<grupo>):
@@ -108,10 +101,13 @@ exports.handler = async (event) => {
   if (filtro.erro) return resposta(400, { erro: filtro.erro });
   try {
     const consultar = async (nivel, limite) => {
-      const r = await fetch(montarConsulta(filtro, Date.now(), nivel, limite), {
-        headers: { apikey: ANON, Authorization: event.headers?.authorization || event.headers?.Authorization, Accept: "application/json" },
-        signal: globalThis.AbortSignal.timeout(10000),
-      });
+      const headers = { apikey: ANON, Authorization: event.headers?.authorization || event.headers?.Authorization, Accept: "application/json" };
+      const r = await (nivel
+        ? fetch(`${URL_SB}/rest/v1/rpc/buscar_prospeccao?${new URLSearchParams({ select: COLUNAS })}`, {
+          method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(montarBusca(filtro, Date.now(), nivel, limite)),
+          signal: globalThis.AbortSignal.timeout(10000),
+        })
+        : fetch(montarConsulta(filtro, Date.now(), limite), { headers, signal: globalThis.AbortSignal.timeout(10000) }));
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const lote = await r.json();
       if (!Array.isArray(lote)) throw new Error("resposta inválida");
@@ -137,4 +133,5 @@ exports.handler = async (event) => {
 };
 exports.validar = validar;
 exports.montarConsulta = montarConsulta;
+exports.montarBusca = montarBusca;
 exports.coberturaDoTipo = coberturaDoTipo;
