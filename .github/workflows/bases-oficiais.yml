@@ -6,6 +6,33 @@ name: Bases oficiais de obra (SICRO, SEINFRA-CE, ORSE)
 # Roda toda segunda às 11:00 UTC (8h de Brasília): basta para pegar cada publicação na mesma semana.
 # Falha de acesso ou formato: o job falha (e-mail do GitHub) e o motivo fica em dados_robo "bases_preco_saude".
 # Não escreve no repositório. Precisa de supabase/bases_preco.sql aplicado antes.
+#
+# ROTA RESERVA (os sites barram ou derrubam a conexão dos servidores do GitHub, nos EUA, como em 23/11/2026:
+# "SICRO: terminated", "SEINFRA-CE: fetch failed", "ORSE: fetch failed"). Uma pessoa baixa o arquivo oficial no
+# navegador, anexa a um Release e roda este workflow com arquivo_release=<tag>. Um arquivo por Release, uma base
+# (e, no SICRO, uma UF) por execução. NÃO renomeie o arquivo: o nome diz base, UF e mês, e o robô confere com a tag.
+#
+#   SICRO (exemplo: Amazonas, trimestre mais recente)
+#     1. Abra gov.br/dnit > Custos referenciais > SICRO > Relatórios > Norte:
+#        https://www.gov.br/dnit/pt-br/assuntos/planejamento-e-pesquisa/custos-referenciais/sistemas-de-custos/sicro/relatorios/relatorios-sicro/norte/norte
+#     2. Em "Amazonas", clique no mês mais novo (jan/abr/jul/out; se houver "Revisado" do mesmo mês, use o revisado).
+#     3. Na página do mês, clique no link do arquivo .7z (texto "Julho/2026" etc.). Vem "am-07-2026.7z" (~26 MB).
+#     4. Tag do Release: sicro-<uf>-AAAA-MM  (ex.: sicro-am-2026-07). Outra UF: troque a região na URL do passo 1.
+#   SEINFRA-CE (só catálogo: o robô registra a versão vigente, não lê preços)
+#     1. Abra https://www.ce.gov.br/seinfra/tabela-de-custos/ e confira que aparece "Tabela NNN Sem/Com Desoneração".
+#     2. Salve a página: Ctrl+S, tipo "Página da Web, somente HTML". O arquivo tem que terminar em .html ou .htm.
+#     3. Tag do Release: seinfra-ce-AAAA-MM com o mês em que salvou (ex.: seinfra-ce-2026-11).
+#   ORSE (só catálogo: registra o mês vigente; o arquivo .ORSE só abre no programa ORSE)
+#     1. Abra http://orse.cehop.se.gov.br/downloads.asp, em "Atualização da Base de Dados do ORSE" escolha o ano.
+#     2. Baixe o mês mais novo. O nome é AAAAMM01-NN.ORSE (ex.: 20261001-00.ORSE).
+#     3. Tag do Release: orse-AAAA-MM (ex.: orse-2026-10).
+#
+#   Criar o Release (github.com > este repositório > Releases > Draft a new release):
+#     tag nova com o nome acima, marque "Set as a pre-release", arraste o arquivo, Publish release.
+#   Rodar: Actions > "Bases oficiais de obra" > Run workflow > arquivo_release = a tag (bases e sicro_ufs vazios,
+#     ou iguais aos do arquivo). O job baixa o anexo com o GITHUB_TOKEN (só leitura) e o robô não fala com o site.
+#   Arquivo com nome fora do padrão, tag que não bate, ou .7z ilegível: o job falha sem tocar no que está gravado.
+#   Mês do SICRO já gravado com preço não é regravado.
 concurrency:
   group: bases-oficiais
   cancel-in-progress: false
@@ -21,6 +48,10 @@ on:
         default: ""
       sicro_ufs:
         description: "UFs do SICRO (vazio = todas)"
+        required: false
+        default: ""
+      arquivo_release:
+        description: "Rota reserva: tag do Release com o arquivo oficial (ex.: sicro-am-2026-07, orse-2026-10, seinfra-ce-2026-11). Vazio = baixa dos sites"
         required: false
         default: ""
 
@@ -39,6 +70,20 @@ jobs:
       - run: npm ci
       # O .7z do SICRO precisa do 7z (p7zip). O runner ubuntu já costuma ter; instala se faltar.
       - run: command -v 7z || (sudo apt-get update && sudo apt-get install -y p7zip-full)
+      - name: Baixar o arquivo anexado ao Release (rota reserva)
+        if: github.event.inputs.arquivo_release != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.inputs.arquivo_release }}
+        run: |
+          [[ "$TAG" =~ ^(sicro-[a-z]{2}|orse|seinfra-ce)-[0-9]{4}-[0-9]{2}$ ]] || { echo "::error::Tag inválida: $TAG (use sicro-am-AAAA-MM, orse-AAAA-MM ou seinfra-ce-AAAA-MM)"; exit 1; }
+          pasta="$RUNNER_TEMP/bases"; mkdir -p "$pasta"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir "$pasta"
+          arquivos=("$pasta"/*)
+          [ "${#arquivos[@]}" = 1 ] && [ -f "${arquivos[0]}" ] || { echo "::error::O Release $TAG precisa ter exatamente 1 arquivo anexado (achei ${#arquivos[@]})."; exit 1; }
+          ls -l "${arquivos[0]}"
+          echo "BASES_ARQUIVO=${arquivos[0]}" >> "$GITHUB_ENV"
+          echo "BASES_RELEASE=$TAG" >> "$GITHUB_ENV"
       - name: Coletar bases oficiais
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

@@ -70,3 +70,83 @@ test("atrasada: SICRO trimestral com 2 meses de tolerância; base sem calendári
   assert.equal(C.atrasada("SICRO", "2026-04", Date.UTC(2026, 10, 22)), true); // 7 meses
   assert.equal(C.atrasada("SEINFRA-CE", "2023-10", Date.UTC(2026, 10, 22)), false);
 });
+
+// ---------- rota reserva (arquivo baixado no navegador) e "falha não apaga nada" ----------
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const pasta = fs.mkdtempSync(path.join(os.tmpdir(), "bases-reserva-"));
+const fetchOriginal = globalThis.fetch;
+const ENV = ["BASES_ARQUIVO", "BASES_RELEASE", "BASES", "SICRO_UFS"];
+test.after(() => { globalThis.fetch = fetchOriginal; for (const k of ENV) delete process.env[k]; fs.rmSync(pasta, { recursive: true, force: true }); });
+process.env.SUPABASE_SERVICE_ROLE_KEY ||= "chave-de-teste";
+// Banco falso: qualquer site que não seja o Supabase responde 403 (o site barrando o robô); anota cada pedido.
+function bancoFalso(versoes = []) {
+  const pedidos = [];
+  globalThis.fetch = async (url, op = {}) => {
+    const metodo = op.method || "GET", u = String(url);
+    pedidos.push({ metodo, u, corpo: op.body });
+    if (!u.includes("supabase.co")) return new Response("bloqueado", { status: 403 });
+    if (u.includes("bases_preco_versoes?base=eq.")) return Response.json(versoes);
+    if (u.includes("bases_preco_versoes?on_conflict")) return Response.json([{ id: 9 }]);
+    if (u.includes("dados_robo?chave")) return Response.json([]);
+    return new Response(null, { status: 201 });
+  };
+  return pedidos;
+}
+const arquivo = (nome, conteudo) => { const c = path.join(pasta, nome); fs.writeFileSync(c, conteudo); return c; };
+const rodar = async (env) => { for (const k of ENV) delete process.env[k]; Object.assign(process.env, env); return C.main(); };
+// Escritas no banco, fora a retenção de 24 meses (que roda sempre e só apaga data-base antiga).
+const escritas = (pedidos) => pedidos.filter((p) => p.metodo !== "GET" && !/data_base=lt\./.test(p.u));
+
+test("arquivoReserva: nome oficial diz base/UF/mês; tag, BASES e SICRO_UFS têm que concordar", () => {
+  assert.deepEqual(C.arquivoReserva("/x/am-07-2026.7z", { tag: "sicro-am-2026-07", bases: "SICRO", ufs: "am" }), { base: "SICRO", uf: "AM", mes: "2026-07", tag: "sicro-am-2026-07", nome: "am-07-2026.7z", caminho: "/x/am-07-2026.7z" });
+  assert.equal(C.arquivoReserva("20261001-00.ORSE", { tag: "orse-2026-10" }).mes, "2026-10");
+  assert.equal(C.arquivoReserva("tabela.html", { tag: "seinfra-ce-2026-11" }).base, "SEINFRA-CE");
+  assert.throws(() => C.arquivoReserva("am-07-2026.7z", { tag: "sicro-am-2026-04" }), /devia ser sicro-am-2026-07/);
+  assert.throws(() => C.arquivoReserva("am-07-2026.7z", { ufs: "PA" }), /SICRO AM, mas SICRO_UFS pede PA/);
+  assert.throws(() => C.arquivoReserva("20261001-00.ORSE", { bases: "SICRO" }), /é ORSE, mas BASES pede SICRO/);
+  assert.throws(() => C.arquivoReserva("tabela.html", { tag: "orse-2026-10" }), /devia ser seinfra-ce-AAAA-MM/);
+  assert.throws(() => C.arquivoReserva("am-07-2026 (1).7z"), /nome oficial/);
+  assert.throws(() => C.arquivoReserva("xx-07-2026.7z"), /nome oficial/); // UF que não existe
+  assert.throws(() => C.arquivoReserva("am-08-2026.7z"), /nome oficial/); // SICRO só sai em jan/abr/jul/out
+});
+
+test("rota reserva ORSE: grava o catálogo do mês do arquivo sem falar com o site", async () => {
+  const pedidos = bancoFalso();
+  await rodar({ BASES_ARQUIVO: arquivo("20261001-00.ORSE", "x"), BASES_RELEASE: "orse-2026-10" });
+  assert.ok(pedidos.every((p) => p.u.includes("supabase.co")), "não fala com o ORSE");
+  const v = JSON.parse(pedidos.find((p) => p.u.includes("bases_preco_versoes?on_conflict")).corpo)[0];
+  assert.equal(v.data_base, "2026-10-01");
+  assert.equal(v.arquivo, "20261001-00.ORSE");
+});
+
+test("rota reserva SEINFRA-CE: lê a versão da página salva", async () => {
+  const pedidos = bancoFalso();
+  await rodar({ BASES_ARQUIVO: arquivo("tabela-de-custos.html", "<li>Tabela 029 Sem Desoneração</li><li>Tabela 029.1 Com Desoneração</li>"), BASES_RELEASE: "seinfra-ce-2026-11" });
+  assert.ok(pedidos.every((p) => p.u.includes("supabase.co")));
+  assert.equal(JSON.parse(pedidos.find((p) => p.u.includes("bases_preco_versoes?on_conflict")).corpo)[0].versao, "029 / 029.1");
+});
+
+test("rota reserva SICRO: .7z falso falha como formato_mudou e só grava a saúde", async () => {
+  const pedidos = bancoFalso();
+  await assert.rejects(rodar({ BASES_ARQUIVO: arquivo("am-07-2026.7z", "não é 7z"), BASES_RELEASE: "sicro-am-2026-07" }), /Falharam: SICRO/);
+  assert.ok(pedidos.every((p) => p.u.includes("supabase.co")));
+  assert.ok(escritas(pedidos).every((p) => p.u.includes("dados_robo")), "nenhuma escrita em bases_preco_*");
+  assert.match(escritas(pedidos).find((p) => p.u.includes("dados_robo")).corpo, /formato_mudou/);
+});
+
+test("rota reserva SICRO: mês já gravado com preço não é regravado (nem abre o arquivo)", async () => {
+  const pedidos = bancoFalso([{ abrangencia: "AM", data_base: "2026-07-01", situacao: "precos" }]);
+  await rodar({ BASES_ARQUIVO: path.join(pasta, "am-07-2026.7z"), BASES_RELEASE: "sicro-am-2026-07" });
+  assert.ok(!escritas(pedidos).some((p) => p.u.includes("bases_preco_")));
+});
+
+test("rota reserva com página sem versão ou tag errada: falha sem gravar versão", async () => {
+  let pedidos = bancoFalso();
+  await assert.rejects(rodar({ BASES_ARQUIVO: arquivo("pagina.html", "<p>erro 500</p>"), BASES_RELEASE: "seinfra-ce-2026-11" }), /Falharam: SEINFRA-CE/);
+  assert.ok(!escritas(pedidos).some((p) => p.u.includes("bases_preco_")));
+  pedidos = bancoFalso();
+  await assert.rejects(rodar({ BASES_ARQUIVO: path.join(pasta, "20261001-00.ORSE"), BASES_RELEASE: "orse-2026-09" }), /devia ser orse-2026-10/);
+  assert.equal(pedidos.length, 0);
+});
