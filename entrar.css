@@ -1,4 +1,4 @@
-﻿/* Telas de entrada (login.html, cadastro.html, convite.html): sÃ³ aparÃªncia, nenhuma regra de login aqui.
+/* Telas de entrada (login.html, cadastro.html, convite.html): sÃ³ aparÃªncia, nenhuma regra de login aqui.
    Pedido do dono (23/11): mais acolhedor e premium. Computador: arte da marca em degradÃª com 3 benefÃ­cios
    Ã  esquerda e o formulÃ¡rio num cartÃ£o Ã  direita. Celular: faixa azul curta em cima, formulÃ¡rio embaixo.
    Cores: tokens --marca-* / --grad-* de ds-tokens.css (texto branco sobre o degradÃª â‰¥ 5,7:1). */
@@ -25,7 +25,6 @@ body.tela-entrar { display: block; padding: 0; min-height: 100vh; background: va
 .entrar-beneficios li { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 12px; align-items: start; font-size: 16px; line-height: 24px; color: #e8efff; }
 .entrar-beneficios svg { width: 28px; height: 28px; display: block; }
 .entrar-nota { margin: 0; font-size: 13px; line-height: 20px; color: #c9d6ff; }
-.entrar-desenho { position: absolute; right: -70px; bottom: -50px; width: 340px; height: auto; opacity: 0.75; pointer-events: none; }
 .entrar-form { display: flex; align-items: center; justify-content: center; padding: 48px 24px; }
 .tela-entrar .caixa { border-radius: 18px; padding: 32px; box-shadow: var(--sombra-cartao-forte); border-color: var(--border-default); }
 /* A marca jÃ¡ aparece na arte: no cartÃ£o fica sÃ³ o botÃ£o de tema. */
@@ -46,7 +45,35 @@ body.tela-entrar { display: block; padding: 0; min-height: 100vh; background: va
   .entrar-tela { grid-template-columns: minmax(0, 1fr); }
   .entrar-arte { position: relative; height: auto; padding: 20px 16px 22px; gap: 10px; }
   .entrar-titulo { font-size: 20px; line-height: 28px; margin: 0; max-width: none; }
-  .entrar-beneficios, .entrar-nota, .entrar-desenho { display: none; }
-  .entrar-form { padding: 16px 12px 32px; align-items: flex-start; }
+  .entrar-beneficios, .entrar-nota,   .entrar-form { padding: 16px 12px 32px; align-items: flex-start; }
   .tela-entrar .caixa { padding: 20px 16px; margin-top: 0; }
+}
+
+/* Rodada 2 (23/11, referência: site da HC): foto atrás da arte, título em Fraunces, botão que sobe com brilho. */
+.entrar-arte {
+  background-image:
+    radial-gradient(ellipse 60% 50% at 85% 80%, rgba(111, 151, 255, 0.35), transparent 70%),
+    linear-gradient(160deg, rgba(5, 16, 66, 0.94) 0%, rgba(7, 27, 112, 0.78) 50%, rgba(18, 58, 168, 0.55) 100%),
+    url("img/fotos/documentos-960.webp");
+  background-size: auto, auto, cover; background-position: center, center, 60% 50%;
+}
+.entrar-titulo, .tela-entrar .caixa h1 { font-family: "Fraunces", Georgia, serif; font-weight: 600; letter-spacing: -0.01em; }
+.entrar-beneficios li { animation: entrar-subir 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
+.entrar-beneficios li:nth-child(2) { animation-delay: 0.1s; }
+.entrar-beneficios li:nth-child(3) { animation-delay: 0.2s; }
+.tela-entrar .caixa { animation: entrar-subir 0.8s 0.1s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
+@keyframes entrar-subir { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: none; } }
+.tela-entrar :is(button.entrar, button.criar) { position: relative; overflow: hidden; isolation: isolate; transition: transform 0.25s ease, box-shadow 0.25s ease; }
+.tela-entrar :is(button.entrar, button.criar)::after {
+  content: ""; position: absolute; z-index: -1; top: 0; bottom: 0; left: -80%; width: 45%; pointer-events: none;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.5), transparent); transform: skewX(-20deg);
+}
+.tela-entrar :is(button.entrar, button.criar):hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 16px 30px -12px rgba(34, 85, 224, 0.75); }
+.tela-entrar :is(button.entrar, button.criar):hover:not(:disabled)::after { animation: entrar-brilho 0.85s ease; }
+@keyframes entrar-brilho { from { left: -80%; } to { left: 130%; } }
+@media (prefers-reduced-motion: reduce) {
+  .entrar-beneficios li, .tela-entrar .caixa { animation: none; }
+  .tela-entrar :is(button.entrar, button.criar) { transition: none; }
+  .tela-entrar :is(button.entrar, button.criar):hover:not(:disabled) { transform: none; }
+  .tela-entrar :is(button.entrar, button.criar)::after { display: none; }
 }
