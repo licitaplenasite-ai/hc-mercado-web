@@ -13,7 +13,7 @@
 //   ?termo=notebook&codigoPdm=8435&pagina=2 -> 200 compras de um só produto (1 subrequisição), para a tela paginar;
 //   ?termo=caneta&codigoItem=622254         -> 200 compras de um item CATMAT exato (o catalogoCodigoItem do PNCP), 1 subrequisição.
 
-const { cabecalhosPadrao, exigirAprovadoComLimite } = require("./_auth");
+const { cabecalhosPadrao, exigirAprovadoComLimite, SUPABASE_URL, SUPABASE_ANON_KEY } = require("./_auth");
 const { comCache, cabecalhosDoCache } = require("./_cache_publico");
 const CATALOGO_URL = "https://cnbs.estaleiro.serpro.gov.br/cnbs-api/material/v1/palavra";
 const PRECO_URL = "https://dadosabertos.compras.gov.br/modulo-pesquisa-preco/1_consultarMaterial";
@@ -244,7 +244,13 @@ function marcarEspecificacao(itens, termo) {
 
 async function buscarJson(url, signal) {
   const resposta = await fetch(url, { headers: { Accept: "application/json" }, signal });
-  if (!resposta.ok) throw new Error(`fonte-${resposta.status}`);
+  if (!resposta.ok) {
+    // status e Retry-After seguem no erro: o robô da pré-consulta (scripts/pre_consultar_precos.js) respeita o 429.
+    const erro = new Error(`fonte-${resposta.status}`);
+    erro.status = resposta.status;
+    erro.esperarS = Number(resposta.headers?.get?.("retry-after")) || null;
+    throw erro;
+  }
   return resposta.json();
 }
 
@@ -280,12 +286,12 @@ async function consultarComPrazo(promessas, prazoMs = PRAZO_PARCIAL_MS) {
 }
 
 // Busca por termo (sem produto escolhido): catálogo + 1 página de cada produto. Devolve o corpo JSON e se é parcial.
-async function buscarPorTermo(termo, uf, atributos, signal) {
+async function buscarPorTermo(termo, uf, atributos, signal, prazoParcialMs = PRAZO_PARCIAL_MS) {
   const catalogo = await buscarJson(`${CATALOGO_URL}?${new URLSearchParams({ palavra: termo })}`, signal);
   const pdms = selecionarPdms(catalogo, termo);
   if (!pdms.length) return { corpo: JSON.stringify({ ok: true, itens: [], catalogos: [], atributos }), parcial: false };
   const tamanhoPagina = Math.max(10, Math.floor(MAX_LINHAS / pdms.length));
-  const consultas = await consultarComPrazo(pdms.map((pdm) => paginaDoPdm(pdm, { tamanhoPagina, uf, signal })));
+  const consultas = await consultarComPrazo(pdms.map((pdm) => paginaDoPdm(pdm, { tamanhoPagina, uf, signal })), prazoParcialMs);
   const grupos = consultas.filter((consulta) => consulta.status === "fulfilled").map((consulta) => consulta.value);
   // Pendente entra no catálogo sem total (vai para o fim da sua faixa); a tela pagina ele ao ser escolhido.
   const pendentes = pdms.filter((_, k) => consultas[k].status === "pendente").map((pdm) => ({ ...pdm, total: null }));
@@ -295,45 +301,110 @@ async function buscarPorTermo(termo, uf, atributos, signal) {
   grupos.sort((a, b) => posicao.get(a.pdm.codigo) - posicao.get(b.pdm.codigo));
   const itens = marcarEspecificacao(grupos.flatMap((grupo) => grupo.itens.map((i) => ({ ...i, ordemCatalogo: posicao.get(grupo.pdm.codigo) })).sort(porData)).slice(0, MAX_LINHAS), termo);
   const falhas = consultas.filter((c) => c.status !== "fulfilled").length;
+  const bloqueios = consultas.filter((c) => c.status === "rejected" && c.reason?.status === 429);
   return {
     corpo: JSON.stringify({ ok: true, fonte: "Catálogo e Pesquisa de Preços do Compras.gov", catalogos: ordem.filter((p) => p.total !== 0), atributos, itens, consultasComFalha: falhas }),
     parcial: falhas > 0,
+    esperarS: bloqueios.length ? Math.max(10, ...bloqueios.map((c) => c.reason.esperarS || 0)) : null,
   };
+}
+
+// Parâmetros da tela já validados -> chave do cache (a mesma da tabela cache_consultas_publicas, que o robô grava).
+const chaveDaConsulta = (p) => ["marcas-produto", semAcento(p.termo), p.uf || "", p.codigoPdm ?? "", p.codigoItem ?? "", p.pagina || 1, p.produto || ""].join("|");
+
+// Uma resposta pronta para a tela: página de um produto/CATMAT, ou a busca por termo. Usada pela função e pelo robô.
+// prazoParcialMs: a tela não espera produto lento (3,5 s); o robô de madrugada espera (resposta completa para guardar).
+async function montarCorpo(p, { signal, prazoParcialMs = PRAZO_PARCIAL_MS } = {}) {
+  const atributos = separarEspecificacao(p.termo).atributos.map((a) => a.rotulo);
+  if (p.codigoPdm !== null || p.codigoItem !== null) {
+    // Paginação de um produto já escolhido (ou item CATMAT exato): o nome vem do parâmetro da tela.
+    const pdm = p.codigoItem !== null ? { codigo: p.codigoItem, tipo: "codigoItemCatalogo", descricao: p.produto || p.termo, ordem: 0 }
+      : { codigo: p.codigoPdm, descricao: p.produto || "Produto do catálogo", ordem: 0 };
+    const r = await paginaDoPdm(pdm, { pagina: p.pagina, tamanhoPagina: LINHAS_POR_PAGINA, uf: p.uf, signal });
+    return { corpo: JSON.stringify({ ok: true, fonte: "Pesquisa de Preços do Compras.gov", catalogo: r.pdm, pagina: p.pagina, paginas: r.paginas, atributos, itens: marcarEspecificacao(r.itens.sort(porData), p.termo) }), parcial: false };
+  }
+  return buscarPorTermo(p.termo, p.uf, atributos, signal, prazoParcialMs);
+}
+
+// Termo da busca para a contagem anônima dos mais buscados: minúsculo, sem acento, espaços simples. Sem letra ou com
+// sequência longa de dígitos (CPF/CNPJ digitado por engano) não é contado.
+function termoParaContagem(termo) {
+  const t = semAcento(textoSeguro(termo)).replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 100);
+  // "123.456.789-01": junta os dígitos separados por ponto/traço/barra/espaço antes de procurar a sequência longa.
+  const digitosJuntos = String(termo || "").replace(/(\d)[\s./-]+(?=\d)/g, "$1");
+  return t.length >= 2 && /[a-z]/.test(t) && !/\d{9,}/.test(digitosJuntos) ? t : null;
+}
+
+// Pré-consulta do robô (cache_consultas_publicas), lida com a sessão do próprio usuário (RLS: só cliente aprovado).
+// Vale por 26 h (o robô roda 1x/dia); falha ou demora vira null e a função segue para o cache e o ao vivo.
+const VALIDADE_PRE_CONSULTA_MS = 26 * 3600 * 1000;
+async function lerPreConsulta(chave, event) {
+  const auth = event.headers?.authorization || event.headers?.Authorization || "";
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/cache_consultas_publicas?chave=eq.${encodeURIComponent(chave)}&select=corpo,atualizado_em`, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: auth, Accept: "application/json" }, signal: globalThis.AbortSignal.timeout(1500),
+    });
+    if (!r.ok) return null;
+    const [linha] = await r.json();
+    const idade = linha ? Date.now() - Date.parse(linha.atualizado_em) : Infinity;
+    return idade <= VALIDADE_PRE_CONSULTA_MS && typeof linha.corpo === "string" ? linha : null;
+  } catch {
+    return null;
+  }
+}
+
+// Soma 1 no termo (só o termo; nunca quem buscou). Sem chave de serviço ou com o banco fora, não conta e não atrapalha.
+async function registrarBusca(termo) {
+  const chave = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const t = termoParaContagem(termo);
+  if (!chave || !t) return;
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/rpc/registrar_busca_termo`, {
+      method: "POST", body: JSON.stringify({ p_fonte: "precos", p_termo: t }), signal: globalThis.AbortSignal.timeout(1500),
+      headers: { apikey: chave, Authorization: `Bearer ${chave}`, "Content-Type": "application/json" },
+    });
+  } catch { /* contagem é estatística: falha não bloqueia a busca */ }
 }
 
 exports.handler = async (event) => {
   // Proxy do governo: CORS só do nosso domínio, login aprovado, teto por minuto da conta e teto diário por IP (abuso 20/11).
   const headers = cabecalhosPadrao(event);
-  const limite = await exigirAprovadoComLimite(event, "comprasgov-marcas-produto");
-  if (!limite.ok) return { statusCode: limite.status, headers, body: JSON.stringify({ erro: limite.erro }) };
   const q = event.queryStringParameters || {};
   const termo = textoSeguro(q.termo, 100);
   const uf = textoSeguro(q.uf, 2).toUpperCase();
   const codigoPdm = q.codigoPdm === undefined ? null : Number(q.codigoPdm);
   const codigoItem = q.codigoItem === undefined ? null : Number(q.codigoItem);
   const pagina = q.pagina === undefined ? 1 : Number(q.pagina);
+  const valido = termo.length >= 2 && (!uf || /^[A-Z]{2}$/.test(uf)) && (codigoPdm === null || (Number.isSafeInteger(codigoPdm) && codigoPdm > 0))
+    && (codigoItem === null || (Number.isSafeInteger(codigoItem) && codigoItem > 0)) && Number.isSafeInteger(pagina) && pagina >= 1 && pagina <= MAX_PAGINA;
+  const consulta = { termo, uf, codigoPdm, codigoItem, pagina, produto: textoSeguro(q.produto, 120) };
+  // Chave só com o que a tela pediu (dado público): o mesmo termo de outro cliente reaproveita a resposta.
+  const chave = chaveDaConsulta(consulta);
+  // A pré-consulta é lida junto com a checagem do login (1 ida ao banco a menos). Ela usa a sessão do próprio pedido
+  // (RLS: só cliente aprovado lê) e o resultado só é usado depois que o login passou.
+  const temSessao = Boolean(event.headers?.authorization || event.headers?.Authorization);
+  const leituraPre = valido && temSessao ? lerPreConsulta(chave, event) : Promise.resolve(null);
+  const limite = await exigirAprovadoComLimite(event, "comprasgov-marcas-produto");
+  if (!limite.ok) return { statusCode: limite.status, headers, body: JSON.stringify({ erro: limite.erro }) };
   if (termo.length < 2) return { statusCode: 400, headers, body: JSON.stringify({ ok: false, erro: "Informe ao menos 2 caracteres do produto." }) };
   if (uf && !/^[A-Z]{2}$/.test(uf)) return { statusCode: 400, headers, body: JSON.stringify({ ok: false, erro: "UF inválida." }) };
   if (codigoPdm !== null && !(Number.isSafeInteger(codigoPdm) && codigoPdm > 0)) return { statusCode: 400, headers, body: JSON.stringify({ ok: false, erro: "Produto do catálogo inválido." }) };
   if (codigoItem !== null && !(Number.isSafeInteger(codigoItem) && codigoItem > 0)) return { statusCode: 400, headers, body: JSON.stringify({ ok: false, erro: "Código CATMAT inválido." }) };
   if (!(Number.isSafeInteger(pagina) && pagina >= 1 && pagina <= MAX_PAGINA)) return { statusCode: 400, headers, body: JSON.stringify({ ok: false, erro: "Página inválida." }) };
 
+  // Só a busca por termo entra na contagem dos mais buscados (páginas e CATMAT são desdobramentos dela).
+  const contagem = codigoPdm === null && codigoItem === null && pagina === 1 ? registrarBusca(termo) : Promise.resolve();
   const controlador = new AbortController();
   const timeout = setTimeout(() => controlador.abort(), 25000);
-  const atributos = separarEspecificacao(termo).atributos.map((a) => a.rotulo);
-  // Chave só com o que a tela pediu (dado público): o mesmo termo de outro cliente reaproveita a resposta.
-  const chave = ["marcas-produto", semAcento(termo), uf, codigoPdm ?? "", codigoItem ?? "", pagina, textoSeguro(q.produto, 120)].join("|");
   let parcial = false;
   try {
+    // 1º a pré-consulta da madrugada (resposta na hora, com a data); depois o cache compartilhado; depois o portal.
+    const pre = await leituraPre;
+    if (pre) {
+      return { statusCode: 200, headers: { ...headers, "Cache-Control": CACHE, ...cabecalhosDoCache({ origem: "pre-consulta", guardadoEm: new Date(pre.atualizado_em).toISOString() }) }, body: pre.corpo };
+    }
     const r = await comCache(chave, async () => {
-      if (codigoPdm !== null || codigoItem !== null) {
-        // Paginação de um produto já escolhido (ou item CATMAT exato): o nome vem do parâmetro da tela.
-        const pdm = codigoItem !== null ? { codigo: codigoItem, tipo: "codigoItemCatalogo", descricao: textoSeguro(q.produto, 120) || termo, ordem: 0 }
-          : { codigo: codigoPdm, descricao: textoSeguro(q.produto, 120) || "Produto do catálogo", ordem: 0 };
-        const p = await paginaDoPdm(pdm, { pagina, tamanhoPagina: LINHAS_POR_PAGINA, uf, signal: controlador.signal });
-        return JSON.stringify({ ok: true, fonte: "Pesquisa de Preços do Compras.gov", catalogo: p.pdm, pagina, paginas: p.paginas, atributos, itens: marcarEspecificacao(p.itens.sort(porData), termo) });
-      }
-      const busca = await buscarPorTermo(termo, uf, atributos, controlador.signal);
+      const busca = await montarCorpo(consulta, { signal: controlador.signal });
       parcial = busca.parcial;
       return busca.corpo;
       // A fonte muda no máximo 1 vez por dia: 6 h novo, 7 dias guardado para quando ela cair. Parcial não é guardado.
@@ -348,6 +419,7 @@ exports.handler = async (event) => {
     return { statusCode: 502, headers, body: JSON.stringify({ ok: false, erro: "Não foi possível consultar as fontes públicas agora." }) };
   } finally {
     clearTimeout(timeout);
+    await contagem;
   }
 };
 
@@ -361,3 +433,6 @@ module.exports.marcarEspecificacao = marcarEspecificacao;
 module.exports.MAX_PDMS = MAX_PDMS;
 module.exports.ordenarPorVolume = ordenarPorVolume;
 module.exports.consultarComPrazo = consultarComPrazo;
+module.exports.montarCorpo = montarCorpo;
+module.exports.chaveDaConsulta = chaveDaConsulta;
+module.exports.termoParaContagem = termoParaContagem;

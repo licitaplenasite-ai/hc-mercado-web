@@ -1,0 +1,43 @@
+name: Pré-consultar a Pesquisa de Preços (termos mais buscados)
+
+on:
+  schedule:
+    # 05:41 UTC = 02:41 em Brasília: madrugada, fora do minuto 00 (o GitHub descarta/atrasa crons no :00) e longe
+    # do robô de resultados do Compras.gov (10:30 UTC), que usa a mesma fonte.
+    - cron: "41 5 * * *"
+  workflow_dispatch:
+    inputs:
+      so_termos:
+        description: "Só estes termos, separados por vírgula (vazio = os ~200 de sempre)"
+        required: false
+        default: ""
+
+concurrency:
+  group: pre-consultar-precos
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  pre-consultar:
+    runs-on: ubuntu-latest
+    # O limite interno (LIMITE_MINUTOS) para antes e grava o que já fez.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "20"
+      - name: Consultar e guardar as respostas prontas
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          LIMITE_MINUTOS: "35"
+          TOTAL_TERMOS: "200"
+          PAGINAS_PRODUTO: "3"
+          INTERVALO_MS: "2500"
+          CONCORRENCIA_TERMOS: "2"
+          PAUSA_429_MS: "15000"
+          MAX_BLOQUEIOS: "3"
+          SO_TERMOS: ${{ github.event.inputs.so_termos }}
+        run: node scripts/pre_consultar_precos.js

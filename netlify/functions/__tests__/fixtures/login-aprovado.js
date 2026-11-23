@@ -9,6 +9,8 @@ function comLogin(fetchDoTeste, status = "aprovado") {
     const u = String(url);
     if (u.startsWith(`${SUPABASE}/auth/v1/user`)) return new Response(JSON.stringify({ id: "00000000-0000-4000-8000-000000000001" }));
     if (u.startsWith(`${SUPABASE}/rest/v1/clientes?`)) return new Response(JSON.stringify([{ status }]));
+    // Pré-consulta da Pesquisa de Preços (comprasgov-marcas-produto): vazia, o teste segue para a fonte simulada.
+    if (u.startsWith(`${SUPABASE}/rest/v1/cache_consultas_publicas?`)) return new Response("[]");
     return fetchDoTeste(url, op);
   };
 }

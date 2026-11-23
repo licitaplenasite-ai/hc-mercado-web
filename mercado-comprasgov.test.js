@@ -125,6 +125,8 @@ test('mensagemBusca: zero compras com consulta que falhou pede para tentar de no
   // Fonte fora do ar: o servidor devolveu o guardado e a tela diz de quando é.
   assert.match(M.mensagemBusca(5, 3, 0, '2026-11-20T15:00:00Z'), /não respondeu agora: mostrando dados guardados de 20\/11\./);
   assert.equal(M.mensagemBusca(5, 3, 0, 'data-ruim'), '5 compra(s) encontradas, 3 com marca declarada.');
+  // Pré-consulta da madrugada: resposta na hora, com a data e a hora em que o robô consultou.
+  assert.match(M.mensagemBusca(5, 3, 0, '2026-11-24T07:17:00-03:00', 'pre-consulta'), /3 com marca declarada\. Atualizado em 24\/11 às \d{2}:\d{2}\.$/);
 });
 
 test('marcaModelo: número depois da 1ª palavra vira modelo; marca de várias palavras e "/" ficam inteiras', () => {
