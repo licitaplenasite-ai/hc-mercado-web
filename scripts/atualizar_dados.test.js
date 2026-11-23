@@ -11,6 +11,7 @@ const inicio = codigo.indexOf("function ufsPendentesDeAtualizacao(");
 const fim = codigo.indexOf("\nasync function coletarOportunidadesAbertas", inicio);
 const contexto = vm.createContext({ UFS: ["AM", "RR", "SP", "AC", "AL"] });
 vm.runInContext(codigo.slice(inicio, fim), contexto);
+const ufsSemCoberturaRecente = (cobertura, horas) => contexto.ufsSemCoberturaRecente(cobertura, horas).filter((uf) => uf === "AM");
 
 test("recuperação inclui UF antiga, falha explícita e cobertura desconhecida", () => {
   const existentes = {
@@ -38,7 +39,7 @@ test("recuperação mantém UF antiga não concluída como pendente", async () =
   const existentes = { ufsComFalha: [], registros: [], coberturaPorUf: { AM: { atualizadoEm: "2026-09-03T00:00:00Z" } } };
   const chamadas = [];
   const ambiente = vm.createContext({
-    UFS: ["AM", "RR"], RETENCAO_DIAS_OPORTUNIDADES: 120,
+    UFS: ["AM", "RR"], RETENCAO_DIAS_OPORTUNIDADES: 120, LIMITE_HORAS_UF_PENDENTE: 24,
     process: { env: { RECUPERAR_UFS_PENDENTES: "1", CONCORRENCIA_UF_OPORTUNIDADES: "1", INTERVALO_MS_OPORTUNIDADES: "0" } },
     console: { log() {} }, iniciarFase() {}, tempoRestanteMs: () => 15000,
     lerJsonExistente: async () => existentes, fmtData: () => "20270911",
@@ -91,12 +92,14 @@ function ambienteMain(falharEm) {
   const ambiente = vm.createContext({
     process: { env: {}, cwd: () => "." }, UFS: ["AM"], RETENCAO_DIAS: 730, hashProgressoAtas,
     console: { log() {}, warn() {} }, iniciarFase() {}, LIMITE_MINUTOS_CONTRATOS: 1, LIMITE_MINUTOS_MERCADO: 1,
+    LIMITE_HORAS_UF_PENDENTE: 24, LIMITE_HORAS_SEM_COBERTURA: 48, ufsSemCoberturaRecente,
+    fmtData: (d) => d.toISOString().slice(0, 10).replace(/-/g, ""),
     fsTeste: { mkdir: async () => {}, rename: async (origem, destino) => { eventos.push(destino); arquivos.set(destino, arquivos.get(origem)); arquivos.delete(origem); }, writeFile: async (nome, dado) => { eventos.push(nome); arquivos.set(nome, dado); } },
     pathTeste: { join: (...partes) => partes.filter((p) => p !== ".").join("/") },
     hidratarContratosDoSupabase: async () => {}, hidratarMercadoDoSupabase: async () => {}, hidratarOportunidadesDoSupabase: async () => {},
     coletarContratos: async () => ({ registros: [], dataFinal: "novo" }),
     coletarMercadoSegmentos: async () => ({ atas: [], janelasPendentes: [] }),
-    coletarOportunidadesAbertas: async () => ({ registros: [], ufsComFalha: [], ufsOkNaExecucao: ["AM"] }),
+    coletarOportunidadesAbertas: async () => ({ registros: [], ufsComFalha: [], ufsOkNaExecucao: ["AM"], coberturaPorUf: { AM: { atualizadoEm: new Date().toISOString() } } }),
     ...Object.fromEntries(["sincronizarContratosNoSupabase", "sincronizarMercadoNoSupabase", "sincronizarOportunidadesNoSupabase"].map((nome) => [nome, async () => { eventos.push(nome); if (falharEm === nome) throw new Error("timeout simulado"); }])),
     salvarBlob: async (_tabela, chave) => { eventos.push(chave); if (falharEm === "salvarBlob" && chave === "oportunidades_meta") throw new Error("timeout simulado"); },
   });
@@ -182,7 +185,7 @@ for (const nome of ["sincronizarContratosNoSupabase", "sincronizarMercadoNoSupab
 
 function ambienteOportunidades(existentes, buscar, tempo = () => 15000) {
   const ambiente = vm.createContext({
-    UFS: ["AM"], RETENCAO_DIAS_OPORTUNIDADES: 120,
+    UFS: ["AM"], RETENCAO_DIAS_OPORTUNIDADES: 120, LIMITE_HORAS_UF_PENDENTE: 24,
     process: { env: { INTERVALO_MS_OPORTUNIDADES: "0" } }, console: { log() {} },
     iniciarFase() {}, tempoRestanteMs: tempo, URL,
     lerJsonExistente: async () => existentes,
@@ -264,7 +267,7 @@ class DataRetencaoFixa extends Date {
 test("retenção preserva edital antigo aberto, encerrado recente e data desconhecida do cache e PNCP", async () => {
   const registro = (id, encerramento) => ({ numeroControlePNCP: id, publicacao: "2023-01-01", encerramento });
   const ambiente = vm.createContext({
-    Date: DataRetencaoFixa, UFS: ["AM"], RETENCAO_DIAS_OPORTUNIDADES: 120,
+    Date: DataRetencaoFixa, UFS: ["AM"], RETENCAO_DIAS_OPORTUNIDADES: 120, LIMITE_HORAS_UF_PENDENTE: 24,
     process: { env: { INTERVALO_MS_OPORTUNIDADES: "0" } }, console: { log() {} },
     iniciarFase() {}, tempoRestanteMs: () => 15000, fmtData: () => "20271028",
     lerJsonExistente: async () => ({ registros: [
@@ -285,7 +288,7 @@ test("persistência poda pela data de encerramento e preserva encerramento desco
   let linhas;
   let poda;
   const ambiente = vm.createContext({
-    Date: DataRetencaoFixa, RETENCAO_DIAS_OPORTUNIDADES: 120, console: { log() {} },
+    Date: DataRetencaoFixa, RETENCAO_DIAS_OPORTUNIDADES: 120, LIMITE_HORAS_UF_PENDENTE: 24, console: { log() {} },
     chaveOportunidade: (r) => r.numeroControlePNCP,
     upsertEmLotes: async (_tabela, valores) => { linhas = valores; return valores.length; },
     removerMaisAntigosQue: async (...args) => { poda = args; },
@@ -318,11 +321,39 @@ test("contratos parciais preservam cursor e contratos anteriores", async () => {
   assert.equal(resultado.registros[0].numeroControlePNCP, "antigo");
 });
 
-test("cobertura parcial não termina com sucesso verde após persistir dados úteis", async () => {
+test("UF sem cobertura há mais de 48 h vira erro do robô após persistir dados úteis", async () => {
   const { ambiente, eventos } = ambienteMain();
-  ambiente.coletarOportunidadesAbertas = async () => ({ registros: [], ufsComFalha: ["AM"], ufsOkNaExecucao: [] });
-  await assert.rejects(ambiente.main(), /cobertura.*AM/i);
+  const ha49h = new Date(Date.now() - 49 * 3600000).toISOString();
+  ambiente.coletarOportunidadesAbertas = async () => ({ registros: [], ufsComFalha: ["AM"], ufsOkNaExecucao: [], coberturaPorUf: { AM: { atualizadoEm: ha49h } } });
+  await assert.rejects(ambiente.main(), /cobertura.*48 h.*AM/i);
   assert.ok(eventos.includes("oportunidades_meta"));
+});
+
+test("falha parcial recuperável (UF coletada há menos de 48 h, fila de atas, scan retomável) não é erro", async () => {
+  const { ambiente } = ambienteMain();
+  const avisos = [];
+  ambiente.console.warn = (m) => avisos.push(m);
+  const ha30h = new Date(Date.now() - 30 * 3600000).toISOString();
+  ambiente.coletarOportunidadesAbertas = async () => ({ registros: [], ufsComFalha: ["AM"], ufsOkNaExecucao: [], coberturaPorUf: { AM: { atualizadoEm: ha30h } } });
+  ambiente.coletarContratos = async () => ({ registros: [], parcial: true, dataFinal: ambiente.fmtData(new Date()) });
+  ambiente.coletarMercadoSegmentos = async () => ({ atas: [], janelasPendentes: [], parcial: true });
+  await ambiente.main();
+  for (const esperado of [/\[contratos\] Coleta parcial/, /\[oportunidades\] UFs ainda não coletadas.*AM/, /\[mercado\] Janelas/]) {
+    assert.ok(avisos.some((m) => esperado.test(m)), String(esperado));
+  }
+});
+
+test("scan nacional de contratos parado há mais de 48 h vira erro", async () => {
+  const { ambiente } = ambienteMain();
+  ambiente.coletarContratos = async () => ({ registros: [], parcial: true, dataFinal: "20261115" });
+  await assert.rejects(ambiente.main(), /contratos: scan nacional sem concluir desde 20261115/);
+});
+
+test("pendência de UF para o painel = sem coleta concluída nas últimas N horas", () => {
+  const agora = Date.parse("2026-11-22T12:00:00Z");
+  const cobertura = { AM: { atualizadoEm: "2026-11-22T08:00:00Z" }, RR: { atualizadoEm: "2026-11-21T11:00:00Z" }, SP: { atualizadoEm: "lixo" } };
+  assert.deepEqual(Array.from(contexto.ufsSemCoberturaRecente(cobertura, 24, agora)), ["RR", "SP", "AC", "AL"]);
+  assert.deepEqual(Array.from(contexto.ufsSemCoberturaRecente(cobertura, 48, agora)), ["SP", "AC", "AL"]);
 });
 
 for (const tipo of ["Contratos", "Mercado", "Oportunidades"]) {
@@ -973,4 +1004,40 @@ test("resumoDashboardMercado limita rankings a 10 e aceita base vazia", () => {
   assert.equal(resumo.estados_top.length, 10);
   assert.deepEqual(resumoDashboardMercado([]).estados_top, []);
   assert.equal(resumoDashboardMercado([]).total, 0);
+});
+
+test("cadência do scan nacional: uma chamada por intervalo e 429 pausa todos os workers", async () => {
+  const comeco = codigo.indexOf("function criarCadencia(");
+  const agora = 1000;
+  const esperas = [];
+  const ambiente = vm.createContext({
+    Date: { now: () => agora },
+    setTimeout: (r, ms) => { esperas.push(ms); r(); },
+    esperaAposRateLimitMs: (retryAfter) => Number(retryAfter) * 1000,
+  });
+  vm.runInContext(codigo.slice(comeco, codigo.indexOf("\n}\n", comeco) + 2), ambiente);
+  const cadencia = ambiente.criarCadencia(1000, 5000);
+  await Promise.all([cadencia.antes(), cadencia.antes(), cadencia.antes()]);
+  assert.deepEqual(esperas, [1000, 2000]); // a 1ª sai na hora; as outras esperam a vez
+  cadencia.pausar("30", 0);
+  esperas.length = 0;
+  await cadencia.antes();
+  assert.deepEqual(esperas, [30000]);
+});
+
+test("oportunidades tentam primeiro a UF com cobertura mais antiga", async () => {
+  const inicioColeta = codigo.indexOf("async function coletarOportunidadesAbertas(");
+  const fimColeta = codigo.indexOf("\n// ---------- Mercado", inicioColeta);
+  const chamadas = [];
+  const ambiente = vm.createContext({
+    UFS: ["AC", "AM", "RR"], RETENCAO_DIAS_OPORTUNIDADES: 120, LIMITE_HORAS_UF_PENDENTE: 24,
+    process: { env: { CONCORRENCIA_UF_OPORTUNIDADES: "1", INTERVALO_MS_OPORTUNIDADES: "0" } },
+    console: { log() {} }, iniciarFase() {}, tempoRestanteMs: () => 15000, fmtData: () => "20271122",
+    lerJsonExistente: async () => ({ registros: [], coberturaPorUf: {
+      AC: { atualizadoEm: "2026-11-22T10:00:00Z" }, AM: { atualizadoEm: "2026-11-21T10:00:00Z" } } }),
+    fetchComRetentativa: async (url) => { chamadas.push(url.match(/uf=(\w+)/)[1]); return { data: [], totalPaginas: 0 }; },
+  });
+  vm.runInContext(codigo.slice(inicio, fim) + codigo.slice(inicioColeta, fimColeta), ambiente);
+  await ambiente.coletarOportunidadesAbertas("ignorado");
+  assert.deepEqual(chamadas, ["RR", "AM", "AC"]);
 });
