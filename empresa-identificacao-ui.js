@@ -6,7 +6,7 @@
     const criar = (tag, texto) => { const e = doc.createElement(tag); if (texto) e.textContent = texto; return e; };
     const estado = {}; host._identificacaoEmpresa = estado;
     const ativo = () => host._identificacaoEmpresa === estado && contexto.ativo?.() !== false;
-    let cadastro, ocupado = false, alterado = false;
+    let cadastro, ocupado = false, alterado = false, reconfirmar = false;
     const provas = new Map();
     const secao = criar('details'); secao.open = contexto.aberto === true;
     secao.append(criar('summary', contexto.titulo || 'Dados da empresa'));
@@ -54,12 +54,15 @@
     }
     function preencher(r) {
       cadastro = r; campos.razao.value = r.empresa.razao_social || ''; campos.cnpj.value = r.empresa.cnpj || '';
-      for (const k of ['endereco','representante','cargo']) campos[k].value = r.perfil?.status === 'confirmado' ? r.perfil.dados?.[k] || '' : '';
+      // Invalidada (ex.: CNPJ corrigido): traz os dados anteriores para conferir; só vale depois de marcar a conferência e salvar.
+      const anteriores = r.perfil?.status === 'invalidado' ? r.perfil.dadosAnteriores : null; reconfirmar = !!anteriores;
+      for (const k of ['endereco','representante','cargo']) campos[k].value = (r.perfil?.status === 'confirmado' ? r.perfil.dados?.[k] : anteriores?.[k]) || '';
       const selecionado = documentos.value;
       documentos.replaceChildren();
       for (const d of r.documentos || []) { const o = criar('option',d.arquivo_nome || d.titulo || 'PDF'); o.value = d.id; documentos.append(o); }
       documentos.value = r.documentos?.some(d => d.id === selecionado) ? selecionado : r.documentos?.[0]?.id || ''; provas.clear(); alterado = false; revisao.checked = false;
-      aviso.textContent = !campos.razao.value || !campos.cnpj.value ? 'Complete o cadastro em Gerenciar empresas.' : r.perfil?.status === 'invalidado' ? 'A identificação foi invalidada. Confira os documentos e confirme novamente.' : contexto.semMinuta ? 'Dados carregados. Confira a identificação antes de usá-la nos documentos.' : 'Dados carregados. A aplicação à minuta depende de sua ação.';
+      aviso.textContent = !campos.razao.value || !campos.cnpj.value ? 'Complete a razão social e o CNPJ em Minhas empresas e documentos, aba Dados da empresa, botão Corrigir razão social ou CNPJ.' : r.perfil?.status === 'invalidado' ? (reconfirmar ? 'Atenção: a identificação foi invalidada (o cadastro ou um documento mudou). Trouxemos os dados anteriores: confira e confirme de novo marcando a conferência e salvando.' : 'A identificação foi invalidada. Confira os documentos e confirme novamente.') : contexto.semMinuta ? 'Dados carregados. Confira a identificação antes de usá-la nos documentos.' : 'Dados carregados. A aplicação à minuta depende de sua ação.';
+      aviso.setAttribute('data-situacao', reconfirmar ? 'atencao' : 'normal');
       atualizar();
     }
     const carregar = () => executar(async () => { const r = await consultar(); if (r) preencher(r); });
@@ -80,12 +83,12 @@
       if (proveniencia.length > 3 || new Set(proveniencia.map(p => p.documentoId)).size > 2) throw new Error('Use até dois documentos para comprovar os três campos.');
       const r = await contexto.solicitar({acao:'confirmar',revisado:true,razaoSocial:cadastro.empresa.razao_social,cnpj:cadastro.empresa.cnpj,dados,proveniencia});
       if (!ativo()) return; if (r?.empresa?.id !== contexto.empresaId) throw new Error('A empresa ativa mudou.');
-      cadastro = {...cadastro,...r}; alterado = false; revisao.checked = false; contexto.atualizado?.(cadastro); aviso.textContent = contexto.semMinuta ? 'Identificação confirmada. Nenhum documento foi aprovado; prepare uma nova prévia no processo.' : 'Identificação confirmada. A minuta permanece como você a editou.';
+      cadastro = {...cadastro,...r}; alterado = false; reconfirmar = false; revisao.checked = false; contexto.atualizado?.(cadastro); aviso.textContent = contexto.semMinuta ? 'Identificação confirmada. Nenhum documento foi aprovado; prepare uma nova prévia no processo.' : 'Identificação confirmada. A minuta permanece como você a editou.';
     }
     salvar.onclick = () => executar(confirmar);
     // Chamado pelo botão único: sem alteração não faz nada; com alteração, salva ou devolve o motivo (o que digitou fica na tela).
     async function salvarPendente() {
-      if (!alterado || !ativo()) return { ok: true, salvou: false };
+      if ((!alterado && !pendenteReconfirmar()) || !ativo()) return { ok: true, salvou: false };
       if (ocupado) return { ok: false, erro: 'Aguarde a identificação terminar de carregar e salve de novo.' };
       ocupado = true; atualizar();
       try { await confirmar(); return { ok: true, salvou: true }; }
@@ -122,7 +125,7 @@
       }
       sugestoes.replaceChildren();
       for (const t of r.avisos || []) sugestoes.append(criar('p',t));
-      if ((r.sugestoes?.razaoSocial && r.sugestoes.razaoSocial.trim() !== cadastro.empresa.razao_social?.trim()) || (r.sugestoes?.cnpj && r.sugestoes.cnpj.replace(/\D/g,'') !== cadastro.empresa.cnpj.replace(/\D/g,''))) throw new Error('O documento diverge do cadastro. Confira a empresa em Gerenciar empresas; os campos manuais continuam disponíveis.');
+      if ((r.sugestoes?.razaoSocial && r.sugestoes.razaoSocial.trim() !== cadastro.empresa.razao_social?.trim()) || (r.sugestoes?.cnpj && r.sugestoes.cnpj.replace(/\D/g,'') !== cadastro.empresa.cnpj.replace(/\D/g,''))) throw new Error('O documento diverge do cadastro. Se o cadastro estiver errado, use Corrigir razão social ou CNPJ em Dados da empresa; os campos manuais continuam disponíveis.');
       for (const k of ['endereco','representante','cargo']) {
         const valor = r.sugestoes?.[k]; if (!valor) continue;
         const evidencia = r.evidencias?.find(e => e.campo === k && (e.valor === undefined || e.valor === valor));
@@ -140,7 +143,9 @@
       const anexo = await contexto.solicitar({acao:'anexar',tipo:tipo.value,nome:f.name,conteudoBase64:raiz.btoa(binario)}); if (!ativo()) return;
       const r = await consultar(); if (r) { cadastro = {...cadastro,documentos:r.documentos}; documentos.replaceChildren(); for (const d of r.documentos || []) { const o=criar('option',d.arquivo_nome || d.titulo); o.value=d.id; documentos.append(o); } documentos.value = r.documentos?.some(d => d.id === anexo?.documento?.id) ? anexo.documento.id : ''; sugestoes.replaceChildren(); aviso.textContent='PDF anexado. Confira as sugestões ou preencha manualmente.'; }
     });
-    atualizar(); return {carregar,consultar,salvarPendente,temAlteracoesNaoSalvas: () => alterado};
+    // Dados anteriores pré-preenchidos contam como pendentes só depois que a pessoa marca a conferência.
+    function pendenteReconfirmar() { return reconfirmar && revisao.checked; }
+    atualizar(); return {carregar,consultar,salvarPendente,temAlteracoesNaoSalvas: () => alterado || pendenteReconfirmar()};
   }
   const api = {renderizar}; if (typeof module !== 'undefined' && module.exports) module.exports = api; raiz.EmpresaIdentificacaoUI = api;
 })(globalThis);

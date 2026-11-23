@@ -51,7 +51,14 @@
     }
     return { abrir, limpar, salvarPendente: () => uiAtiva ? uiAtiva.salvarPendente() : Promise.resolve({ ok: true, salvou: false }), temAlteracoesNaoSalvas: () => uiAtiva?.temAlteracoesNaoSalvas?.() === true };
   }
-  const api = { montar, empresaDoLink, retornoAoProcesso };
+  // Dígito verificador do CNPJ (mesma conta de supabase/empresa_editar.sql): recusa 13 dígitos e número trocado.
+  function cnpjValido(valor) {
+    const c = String(valor || '').replace(/\D/g, '');
+    if (!/^\d{14}$/.test(c) || /^(\d)\1{13}$/.test(c)) return false;
+    const dv = n => { const r = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2].slice(13 - n).reduce((s, p, i) => s + Number(c[i]) * p, 0) % 11; return r < 2 ? 0 : 11 - r; };
+    return dv(12) === Number(c[12]) && dv(13) === Number(c[13]);
+  }
+  const api = { montar, empresaDoLink, retornoAoProcesso, cnpjValido };
   global.OperacaoIdentificacao = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(globalThis);

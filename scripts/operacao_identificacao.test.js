@@ -130,3 +130,46 @@ test('sem título a identificação mantém o nome antigo (painel e processos us
   const a = ambiente();
   assert.equal(a.buscar(e => e.tag === 'summary').textContent, 'Dados da empresa');
 });
+
+test('cnpjValido confere o dígito verificador e recusa 13 dígitos', () => {
+  const { cnpjValido } = require('../operacao-identificacao');
+  assert.equal(cnpjValido('11.222.333/0001-81'), true);
+  assert.equal(cnpjValido('01222333000128'), true);
+  assert.equal(cnpjValido('1222333000128'), false);
+  assert.equal(cnpjValido('11222333000182'), false);
+  assert.equal(cnpjValido('00000000000000'), false);
+  assert.equal(cnpjValido(''), false);
+  assert.equal(cnpjValido(null), false);
+});
+
+// Defeito 23/11: depois de corrigir o CNPJ a tela esvaziava endereço, representante e cargo.
+test('identificação invalidada traz os dados anteriores para conferir e só confirma com a conferência marcada', async () => {
+  const pedidos = [], empresa = { id: 'empresaA', razao_social: 'Empresa fictícia', cnpj: '01222333000128' };
+  const anteriores = { endereco: 'Rua Fictícia, 1', representante: 'Pessoa Fictícia', cargo: 'Sócia' };
+  const a = ambiente({ semMinuta: true, salvarPorFora: true, solicitar: async p => {
+    pedidos.push(p);
+    return { empresa, documentos: [], perfil: p.acao === 'confirmar' ? { status: 'confirmado', dados: p.dados } : { status: 'invalidado', dados: null, dadosAnteriores: anteriores } };
+  } });
+  await a.ui.carregar();
+  for (const [k, v] of Object.entries(anteriores)) assert.equal(a.buscar(e => e.id === `empresa-identificacao-${k}`).value, v);
+  const status = a.buscar(e => e.role === 'status');
+  assert.match(status.textContent, /confira e confirme de novo/); assert.equal(status['data-situacao'], 'atencao');
+  // Sem marcar a conferência: nada é confirmado nem fica pendente (não bloqueia salvar o perfil).
+  assert.equal(a.ui.temAlteracoesNaoSalvas(), false);
+  assert.deepEqual(await a.ui.salvarPendente(), { ok: true, salvou: false });
+  assert.equal(pedidos.some(p => p.acao === 'confirmar'), false);
+  const revisao = a.buscar(e => e.id === 'empresa-identificacao-revisao'); revisao.checked = true; revisao.onchange();
+  assert.equal(a.ui.temAlteracoesNaoSalvas(), true);
+  assert.deepEqual(await a.ui.salvarPendente(), { ok: true, salvou: true });
+  const confirmacao = pedidos.find(p => p.acao === 'confirmar');
+  assert.deepEqual(confirmacao.dados, anteriores); assert.equal(confirmacao.cnpj, '01222333000128'); assert.deepEqual(confirmacao.proveniencia, []);
+  assert.equal(a.ui.temAlteracoesNaoSalvas(), false);
+});
+
+test('identificação invalidada sem dados anteriores mantém os campos vazios', async () => {
+  const empresa = { id: 'empresaA', razao_social: 'Empresa fictícia', cnpj: '01222333000128' };
+  const a = ambiente({ solicitar: async () => ({ empresa, documentos: [], perfil: { status: 'invalidado', dados: null } }) });
+  await a.ui.carregar();
+  assert.equal(a.buscar(e => e.id === 'empresa-identificacao-endereco').value, '');
+  assert.match(a.buscar(e => e.role === 'status').textContent, /Confira os documentos e confirme novamente/);
+});

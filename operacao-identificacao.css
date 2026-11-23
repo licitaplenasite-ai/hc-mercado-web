@@ -14,6 +14,7 @@
 #identificacao-empresa details>*:not(summary) {grid-column:1/-1;min-width:0}
 #identificacao-empresa p {margin:0;line-height:1.6;color:var(--text-secondary);overflow-wrap:anywhere}
 #identificacao-empresa p[role="status"] {color:var(--text-primary)}
+#identificacao-empresa p[role="status"][data-situacao="atencao"] {padding:8px 12px;border:1px solid var(--attention-border);border-radius:var(--radius-control);background:var(--attention-bg);color:var(--attention-text);font-weight:600}
 #identificacao-empresa label {margin:0;font:var(--text-label);color:var(--text-primary)}
 #identificacao-empresa input:not([type="checkbox"]),#identificacao-empresa select {width:100%;min-width:0}
 #identificacao-empresa input:read-only {background:var(--surface-sunken);color:var(--text-secondary)}
