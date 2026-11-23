@@ -22,6 +22,18 @@
 //   SICRO_BAIXAR               "1" — baixa e lê o .7z da versão nova ("0" = só catálogo)
 //   LIMITE_MINUTOS             40 — orçamento da execução; UF que não couber fica para a próxima semana
 //   BASES_RETENCAO_MESES       24 — ver scripts/bases_preco.js
+//   BASES_ARQUIVO              opcional — caminho de um arquivo oficial já baixado no navegador (rota reserva, abaixo)
+//   BASES_RELEASE              opcional — tag do Release de onde veio o BASES_ARQUIVO (conferida contra o nome)
+//
+// Rota reserva (os sites barram ou derrubam conexão dos servidores do GitHub, como em 23/11/2026): alguém baixa o
+// arquivo oficial no navegador, anexa SEM renomear a um Release com a tag certa e roda bases-oficiais.yml com
+// arquivo_release=<tag>. O robô não fala com o site: o nome do arquivo diz base, UF e mês, e tem que bater com a tag,
+// com BASES e com SICRO_UFS (se preenchidos), para não gravar no lugar errado. Arquivos aceitos:
+//   SICRO       o .7z da UF, como vem do DNIT: "am-07-2026.7z" (uf-MM-AAAA)       tag sicro-am-2026-07
+//   ORSE        o arquivo da base mensal: "20261001-00.ORSE" (AAAAMM01-NN)        tag orse-2026-10
+//   SEINFRA-CE  a página ce.gov.br/seinfra/tabela-de-custos salva como .html      tag seinfra-ce-AAAA-MM
+// O resto é igual: catálogo, versões, saúde em dados_robo, e mês já gravado com preço não é regravado. Leitura e
+// conferência vêm antes de qualquer escrita: arquivo errado ou ilegível falha sem tocar no que está gravado.
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -112,7 +124,9 @@ async function baixarSicro(url) {
   await bp.conferirRobots(url);
   const r = await fetch(url, { headers: { "user-agent": bp.UA }, signal: globalThis.AbortSignal.timeout(600000) });
   if (!r.ok) throw new Error(`HTTP ${r.status} em ${url}`);
-  const b = Buffer.from(await r.arrayBuffer());
+  return lerSicro7z(Buffer.from(await r.arrayBuffer()), url);
+}
+function lerSicro7z(b, url) {
   if (b.slice(0, 6).toString("hex") !== "377abcaf271c") throw Object.assign(new Error(`${url} não é um arquivo 7z. O DNIT mudou o formato?`), { formato: true });
   const pasta = fs.mkdtempSync(path.join(os.tmpdir(), "sicro-"));
   const arquivo = path.join(pasta, "a.7z");
@@ -129,7 +143,26 @@ async function baixarSicro(url) {
   } finally { fs.rmSync(pasta, { recursive: true, force: true }); }
 }
 
-async function coletarSicro(gravadas) {
+// Grava a versão com preços de uma UF/mês já lida do .7z.
+async function gravarSicro(uf, mes, url, { composicoes, materiais }, extra = {}) {
+  if (!composicoes.linhas.length) throw Object.assign(new Error(`SICRO ${uf} ${mes}: não achei código/descrição/custo no relatório sintético de composições. O formato mudou?`), { formato: true });
+  const deson = composicoes.temDesonerado ? "ambos" : "nao_informado";
+  await bp.gravarVersao({ ...versaoSicro(uf, mes, url, "precos", composicoes.linhas.length + materiais.linhas.length, deson), ...extra }, partesSicro(uf, composicoes.linhas, materiais.linhas));
+  return `${uf} ${mes} (${composicoes.linhas.length} composições, ${materiais.linhas.length} materiais)`;
+}
+const maisNova = (mes, gravadas) => [mes, ...gravadas.map((v) => String(v.data_base).slice(0, 7))].sort().pop();
+
+async function coletarSicro(gravadas, reserva) {
+  if (reserva) {
+    const { uf, mes, nome, caminho } = reserva;
+    if (gravadas.some((v) => v.abrangencia === uf && String(v.data_base).slice(0, 7) === mes && v.situacao === "precos")) {
+      console.log(`SICRO ${uf} ${mes}: já gravado com preço; não regravo.`);
+      return { ultimaDataBase: maisNova(mes, gravadas), feitas: [] };
+    }
+    // fonte_url = raiz dos relatórios (a pasta do mês varia por UF); arquivo = nome oficial anexado.
+    const feita = await gravarSicro(uf, mes, SICRO_RAIZ, lerSicro7z(fs.readFileSync(caminho), nome), { arquivo: nome });
+    return { ultimaDataBase: maisNova(mes, gravadas), feitas: [`${feita} pela rota reserva`] };
+  }
   const ufs = new Set(String(process.env.SICRO_UFS || Object.values(SICRO_UF).join(",")).split(",").map((u) => u.trim().toUpperCase()));
   const baixar = process.env.SICRO_BAIXAR !== "0";
   const ultimos = {};
@@ -145,11 +178,7 @@ async function coletarSicro(gravadas) {
     const url7z = sicroArquivo(await bp.buscarTexto(u.url));
     if (!url7z) throw Object.assign(new Error(`SICRO ${uf} ${u.mes}: página sem o arquivo .7z (${u.url}). O DNIT mudou a página?`), { formato: true });
     if (!baixar) { await bp.gravarVersao(versaoSicro(uf, u.mes, url7z, "catalogo", 0, "nao_informado"), []); feitas.push(`${uf} ${u.mes} (catálogo)`); continue; }
-    const { composicoes, materiais } = await baixarSicro(url7z);
-    if (!composicoes.linhas.length) throw Object.assign(new Error(`SICRO ${uf} ${u.mes}: não achei código/descrição/custo no relatório sintético de composições. O formato mudou?`), { formato: true });
-    const deson = composicoes.temDesonerado ? "ambos" : "nao_informado";
-    await bp.gravarVersao(versaoSicro(uf, u.mes, url7z, "precos", composicoes.linhas.length + materiais.linhas.length, deson), partesSicro(uf, composicoes.linhas, materiais.linhas));
-    feitas.push(`${uf} ${u.mes} (${composicoes.linhas.length} composições, ${materiais.linhas.length} materiais)`);
+    feitas.push(await gravarSicro(uf, u.mes, url7z, await baixarSicro(url7z)));
   }
   return { ultimaDataBase: Object.values(ultimos).map((x) => x.mes).sort().pop(), feitas };
 }
@@ -166,9 +195,9 @@ function orseUltimoMes(html) {
 }
 const mesAtual = () => new Date().toISOString().slice(0, 7);
 
-async function coletarSeinfraCe(gravadas) {
+async function coletarSeinfraCe(gravadas, reserva) {
   const url = "https://www.ce.gov.br/seinfra/tabela-de-custos/";
-  const v = seinfraVersoes(await bp.buscarTexto(url));
+  const v = seinfraVersoes(reserva ? fs.readFileSync(reserva.caminho, "utf8") : await bp.buscarTexto(url));
   if (!v.length) throw Object.assign(new Error("SEINFRA-CE: a página não mostra mais \"Tabela NNN Sem/Com Desoneração\". O formato mudou?"), { formato: true });
   const nome = v.map((x) => x.versao).sort().join(" / ");
   if (gravadas.some((g) => g.versao === nome)) return { ultimaDataBase: String(gravadas[0].data_base).slice(0, 7), feitas: [] };
@@ -180,14 +209,14 @@ async function coletarSeinfraCe(gravadas) {
   return { ultimaDataBase: mesAtual(), feitas: [`versão ${nome}`] };
 }
 
-async function coletarOrse(gravadas) {
+async function coletarOrse(gravadas, reserva) {
   const url = "http://orse.cehop.se.gov.br/downloads.asp";
-  const mes = orseUltimoMes(await bp.buscarTexto(url));
+  const mes = reserva ? reserva.mes : orseUltimoMes(await bp.buscarTexto(url));
   if (!mes) throw Object.assign(new Error("ORSE: a página de downloads não mostra arquivo AAAAMM01-NN.ORSE. O formato mudou?"), { formato: true });
   if (gravadas.some((g) => String(g.data_base).slice(0, 7) === mes)) return { ultimaDataBase: mes, feitas: [] };
   await bp.gravarVersao({
     base: "ORSE", abrangencia: "SE", data_base: `${mes}-01`, versao: mes, desonerado: "nao_informado", arredondamento: "edital", casas_decimais: null,
-    fonte: "CEHOP-SE — ORSE", fonte_url: url, arquivo: null, situacao: "catalogo", itens: 0,
+    fonte: "CEHOP-SE — ORSE", fonte_url: url, arquivo: reserva ? reserva.nome : null, situacao: "catalogo", itens: 0,
     observacao: "Base só no programa ORSE (formato próprio .ORSE): o robô não abre. Preço digitado com o mês.",
   }, []);
   return { ultimaDataBase: mes, feitas: [`mês ${mes}`] };
@@ -202,15 +231,40 @@ function atrasada(base, ultimaDataBase, agora = Date.now()) {
   return (d.getUTCFullYear() - a) * 12 + (d.getUTCMonth() + 1 - m) > f + 2;
 }
 
+// Rota reserva: o nome do arquivo diz base/UF/mês; tag do Release, BASES e SICRO_UFS (se vierem) têm que concordar.
+const SICRO_SIGLAS = new Set(Object.values(SICRO_UF));
+function arquivoReserva(caminho, { tag = "", bases = "", ufs = "" } = {}) {
+  const nome = path.basename(caminho);
+  let r = null, m;
+  if ((m = /^([a-z]{2})-(01|04|07|10)-(20\d{2})\.7z$/i.exec(nome)) && SICRO_SIGLAS.has(m[1].toUpperCase())) {
+    const uf = m[1].toUpperCase(), mes = `${m[3]}-${m[2]}`;
+    r = { base: "SICRO", uf, mes, tag: `sicro-${uf.toLowerCase()}-${mes}` };
+  } else if ((m = /^(20\d{2})(0[1-9]|1[0-2])01-\d{2}\.ORSE$/i.exec(nome))) {
+    const mes = `${m[1]}-${m[2]}`;
+    r = { base: "ORSE", uf: "SE", mes, tag: `orse-${mes}` };
+  } else if (/\.html?$/i.test(nome)) {
+    // A página não diz o mês no nome: a tag só precisa ter o formato seinfra-ce-AAAA-MM.
+    r = { base: "SEINFRA-CE", uf: "CE", mes: null, tag: /^seinfra-ce-\d{4}-(0[1-9]|1[0-2])$/i.test(tag) ? tag.toLowerCase() : "seinfra-ce-AAAA-MM" };
+  }
+  if (!r) throw new Error(`BASES_ARQUIVO "${nome}" não tem nome oficial: SICRO "uf-MM-AAAA.7z" de jan/abr/jul/out (ex.: am-07-2026.7z), ORSE "AAAAMM01-NN.ORSE" ou SEINFRA-CE página salva .html. Anexe o arquivo como veio do site, sem renomear.`);
+  if (tag && tag.toLowerCase() !== r.tag) throw new Error(`O arquivo "${nome}" é ${r.base} ${r.uf}${r.mes ? " " + r.mes : ""}; a tag do Release devia ser ${r.tag}, mas é ${tag}. Confira o anexo.`);
+  const lista = (s) => String(s || "").split(",").map((x) => x.trim().toUpperCase()).filter(Boolean);
+  const pedidas = lista(bases), ufsPedidas = lista(ufs);
+  if (pedidas.length && (pedidas.length > 1 || pedidas[0] !== r.base)) throw new Error(`O arquivo "${nome}" é ${r.base}, mas BASES pede ${pedidas.join(",")}. Deixe vazio ou use só ${r.base}.`);
+  if (r.base === "SICRO" && ufsPedidas.length && (ufsPedidas.length > 1 || ufsPedidas[0] !== r.uf)) throw new Error(`O arquivo "${nome}" é do SICRO ${r.uf}, mas SICRO_UFS pede ${ufsPedidas.join(",")}.`);
+  return { ...r, nome, caminho };
+}
+
 const COLETORES = { SICRO: coletarSicro, "SEINFRA-CE": coletarSeinfraCe, ORSE: coletarOrse };
 
 async function main() {
-  const pedidas = String(process.env.BASES || Object.keys(COLETORES).join(",")).split(",").map((b) => b.trim().toUpperCase()).filter(Boolean);
+  const reserva = process.env.BASES_ARQUIVO ? arquivoReserva(process.env.BASES_ARQUIVO, { tag: process.env.BASES_RELEASE, bases: process.env.BASES, ufs: process.env.SICRO_UFS }) : null;
+  const pedidas = reserva ? [reserva.base] : String(process.env.BASES || Object.keys(COLETORES).join(",")).split(",").map((b) => b.trim().toUpperCase()).filter(Boolean);
   const falhas = [];
   for (const base of pedidas) {
     if (!COLETORES[base]) throw new Error(`Base sem robô: ${base}. Use ${Object.keys(COLETORES).join(", ")}.`);
     try {
-      const r = await COLETORES[base](await bp.versoesGravadas(base));
+      const r = await COLETORES[base](await bp.versoesGravadas(base), reserva);
       const saudeFonte = atrasada(base, r.ultimaDataBase) ? "atrasada" : "ok";
       await bp.registrarSaude(base, { saudeFonte, ultimoSucessoEm: new Date().toISOString(), ultimaDataBase: r.ultimaDataBase, ultimoErro: null });
       console.log(`${base}: ${r.feitas.length ? r.feitas.join("; ") : "nada novo"} (mais nova: ${r.ultimaDataBase || "?"}${saudeFonte === "atrasada" ? ", ATRASADA" : ""}).`);
@@ -227,4 +281,4 @@ async function main() {
 
 if (require.main === module) main().catch((e) => { console.error(e.message); process.exit(1); });
 
-module.exports = { sicroMesesDaRegiao, sicroArquivo, lerTabelaPorCabecalho, partesSicro, versaoSicro, seinfraVersoes, orseUltimoMes, atrasada, SICRO_RAIZ };
+module.exports = { main, arquivoReserva, sicroMesesDaRegiao, sicroArquivo, lerTabelaPorCabecalho, partesSicro, versaoSicro, seinfraVersoes, orseUltimoMes, atrasada, SICRO_RAIZ };
