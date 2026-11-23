@@ -5,10 +5,10 @@
 (function () {
   'use strict';
   const ABAS = {
-    pca: { titulo: 'Planos de contratação', data: 'Data prevista', vazio: 'Nenhum item de PCA/PGC com data prevista no período.' },
-    irp: { titulo: 'IRP abertas', data: 'Prazo para participar', vazio: 'Nenhuma Intenção de Registro de Preço aberta com esse filtro. O módulo de IRP do PNCP é de 31/08/2026 e ainda tem poucas IRPs.' },
-    ata: { titulo: 'Atas para adesão', data: 'Vigente até', vazio: 'Nenhuma ata vigente que permita adesão com esse filtro.' },
-    contrato: { titulo: 'Contratos vencendo', data: 'Vence em', vazio: 'Nenhum contrato vencendo no período com esse filtro.' },
+    pca: { titulo: 'Planos de contratação', data: 'Data prevista' },
+    irp: { titulo: 'IRP abertas', data: 'Prazo para participar' },
+    ata: { titulo: 'Atas para adesão', data: 'Vigente até' },
+    contrato: { titulo: 'Contratos vencendo', data: 'Vence em' },
   };
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const moeda = (v) => (v === null || v === undefined || v === '' ? '—' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
@@ -81,7 +81,58 @@
     return nome.map((l) => linhaHtml(l, agora)).join('') + botao + espec.map((l) => linhaHtml(l, agora).replace('<tr>', '<tr class="so-espec" hidden>')).join('');
   }
 
-  if (typeof module !== 'undefined' && module.exports) module.exports = { diasAte, linhaHtml, cabecalhoHtml, corpoHtml, linkOficial, esc };
+  // Cobertura da coleta (resposta da API: { UF: { concluidaEm, emAndamento } }; IRP é nacional, chave BR).
+  const UFS = 'AC AL AM AP BA CE DF ES GO MA MG MS MT PA PB PE PI PR RJ RN RO RR RS SC SE SP TO'.split(' ');
+  const NOME_TIPO = { pca: 'o plano de compras (PCA)', irp: 'as intenções de registro de preço (IRP)', ata: 'as atas para adesão', contrato: 'os contratos vencendo' };
+  const coletadas = (cob) => UFS.filter((uf) => cob && cob[uf] && cob[uf].concluidaEm);
+
+  // Uma linha sobre a coleta, sempre visível: com UF, a data dela; com "Todas", quantas UFs já entraram.
+  function textoCobertura(tipo, uf, cob) {
+    if (!cob) return '';
+    if (tipo === 'irp') return cob.BR && cob.BR.concluidaEm ? `IRP do Brasil todo coletada em ${dataBr(cob.BR.concluidaEm)}.` : 'IRP: primeira coleta em andamento.';
+    if (uf) {
+      const c = cob[uf];
+      if (c && c.concluidaEm) return `Última coleta completa de ${uf}: ${dataBr(c.concluidaEm)}${c.emAndamento ? ' (atualização em andamento)' : ''}.`;
+      return `${uf} ainda não tem coleta completa${c && c.emAndamento ? ' (em andamento)' : ''}.`;
+    }
+    const ok = coletadas(cob);
+    if (!ok.length) return 'Primeira coleta em andamento: ainda nenhuma UF completa.';
+    const maisAntiga = ok.map((u) => cob[u].concluidaEm).sort()[0];
+    return ok.length === UFS.length ? `Todas as 27 UFs coletadas; a mais antiga em ${dataBr(maisAntiga)}.` : `${ok.length} de 27 UFs já coletadas (a mais antiga em ${dataBr(maisAntiga)}); as outras estão em andamento.`;
+  }
+
+  // Lista "UF: data" da aba, recolhida num <details> abaixo do contador.
+  function coberturaHtml(tipo, cob) {
+    if (!cob || tipo === 'irp') return '';
+    const itens = UFS.map((uf) => {
+      const c = cob[uf];
+      const quando = c && c.concluidaEm ? dataBr(c.concluidaEm) : (c && c.emAndamento ? 'em andamento' : 'aguardando');
+      return `<li><b>${uf}</b> ${esc(quando)}</li>`;
+    }).join('');
+    return `<summary>Data da última coleta por UF</summary><ul class="cobertura-lista">${itens}</ul>`;
+  }
+
+  // Tela vazia nunca parece quebrada: diz por quê e o que fazer, em português simples.
+  function mensagemVazio(tipo, f, cob) {
+    const nome = NOME_TIPO[tipo];
+    const temTexto = Boolean((f.palavras || '').trim() || (f.catmat || '').trim());
+    const sugestao = temTexto
+      ? ' Tente outra palavra (uma só, como "limpeza" em vez de "material de limpeza"), confira a grafia ou apague o CATMAT.'
+      : '';
+    const outros = tipo === 'ata' ? '' : ' Também dá para aumentar o período.';
+    if (tipo === 'irp') return `Nenhuma IRP aberta agora com esse filtro. O módulo de IRP do PNCP é novo (31/08/2026) e ainda tem poucas IRPs no Brasil todo.${sugestao}`;
+    if (cob && f.uf && !(cob[f.uf] && cob[f.uf].concluidaEm)) {
+      return `Ainda não temos ${nome} de ${f.uf}: a coleta está em andamento e fica pronta em até 3 dias. Enquanto isso, veja outra UF ou escolha "Todas".`;
+    }
+    if (cob && !f.uf) {
+      const n = coletadas(cob).length;
+      if (n === 0) return `Ainda não temos ${nome} de nenhuma UF: a primeira coleta está em andamento e fica pronta em até 3 dias.`;
+      if (n < UFS.length) return `Nada encontrado nas ${n} UFs já coletadas; as outras ${UFS.length - n} ainda estão em andamento.${sugestao}${outros}`;
+    }
+    return `Nada encontrado ${f.uf ? `em ${f.uf}` : 'no Brasil'} com esse filtro.${sugestao || ' Tente uma palavra do seu ramo (ex.: limpeza, expediente, construção).'}${outros}`;
+  }
+
+  if (typeof module !== 'undefined' && module.exports) module.exports = { diasAte, linhaHtml, cabecalhoHtml, corpoHtml, linkOficial, esc, textoCobertura, coberturaHtml, mensagemVazio };
   if (typeof document === 'undefined') return;
 
   const $ = (id) => document.getElementById(id);
@@ -127,16 +178,21 @@
       }
       if (minha !== carga) return;
       const linhas = dados.linhas || [];
-      $('tabela-corpo').innerHTML = linhas.length ? corpoHtml(linhas) : `<tr><td colspan="6" class="vazio">${esc(ABAS[tipo].vazio)}</td></tr>`;
+      $('tabela-corpo').innerHTML = linhas.length ? corpoHtml(linhas) : `<tr><td colspan="6" class="vazio">${esc(mensagemVazio(tipo, f, dados.cobertura))}</td></tr>`;
       const soEspec = linhas.filter((l) => l.so_especificacao).length;
       $('contador').textContent = linhas.length
         ? `${linhas.length}${dados.truncado ? '+ (mostrando os primeiros ' + dados.limite + '; refine o filtro)' : ''} resultado${linhas.length === 1 ? '' : 's'}${soEspec ? ` (${soEspec} só na especificação, recolhido${soEspec === 1 ? '' : 's'})` : ''} · coletado em ${dataBr(dados.coletadoEm)}`
         : '';
+      $('cobertura-texto').textContent = textoCobertura(tipo, f.uf, dados.cobertura);
+      $('cobertura').innerHTML = coberturaHtml(tipo, dados.cobertura);
+      $('cobertura').hidden = !$('cobertura').innerHTML;
       aviso('');
     } catch (e) {
       if (minha !== carga) return;
-      $('tabela-corpo').innerHTML = '<tr><td colspan="6" class="vazio">Sem resultado.</td></tr>';
+      $('tabela-corpo').innerHTML = '<tr><td colspan="6" class="vazio">Não deu para consultar agora. Espere um instante e clique em Buscar de novo.</td></tr>';
       $('contador').textContent = '';
+      $('cobertura-texto').textContent = '';
+      $('cobertura').hidden = true;
       aviso(e.message || 'Não foi possível consultar.', 'erro');
     }
   }

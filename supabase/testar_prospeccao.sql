@@ -39,6 +39,19 @@ do $$ begin
  exception when insufficient_privilege then null; end;
 end $$;
 reset role;
+-- v3: cliente aprovado lê só o resumo da cobertura em dados_robo (não o progresso do robô); pendente não lê nada.
+insert into public.dados_robo(chave,dado) values ('prospeccao_cobertura_qa','{"etapas":{"AM:pca":{"concluidaEm":null}}}'),('prospeccao_estado_qa','{"orgaos":{}}'),('prospeccaoXcoberturaXqa','{}')
+ on conflict (chave) do nothing;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','c9000000-0000-4000-8000-000000000002',true);
+do $$ begin if exists(select 1 from public.dados_robo where chave like 'prospeccao%') then raise exception 'pendente leu a cobertura'; end if; end $$;
+select set_config('request.jwt.claim.sub','c9000000-0000-4000-8000-000000000001',true);
+do $$ begin
+ if not exists(select 1 from public.dados_robo where chave='prospeccao_cobertura_qa') then raise exception 'aprovado não lê a cobertura'; end if;
+ if exists(select 1 from public.dados_robo where chave in ('prospeccao_estado_qa','prospeccaoXcoberturaXqa')) then raise exception 'aprovado leu o progresso do robô'; end if;
+end $$;
+reset role;
+delete from public.dados_robo where chave in ('prospeccao_cobertura_qa','prospeccao_estado_qa','prospeccaoXcoberturaXqa');
 -- Dado antigo com CPF (gravado antes do CHECK): a limpeza do .sql tira só o CPF e é idempotente.
 alter table public.prospeccao_itens drop constraint prospeccao_itens_fornecedor_sem_cpf;
 insert into public.prospeccao_itens(id,tipo,fonte,link,fornecedor_cnpj,fornecedor_nome) values('ata:QA-8','ata','pncp','https://pncp.gov.br/app/atas/8','12345678000195','FULANA DE TAL 97048143215');

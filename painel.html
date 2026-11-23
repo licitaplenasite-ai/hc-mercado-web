@@ -2812,7 +2812,22 @@
     // isso "atualizado há 14 dia(s)" nunca mudava, mesmo com o robô do PNCP rodando OK.
     { supabase: "convenios", nome: "Convênios e Emendas Federais", afeta: "Convênios e Emendas Federais", icone: "<svg class='icone-ph'><use href='#ph-handshake'></use></svg>" },
     { supabase: "sistema_s_am", nome: "Sistema S/AM (SENAC/SESC)", afeta: "Boletim (editais do Sistema S no AM)", icone: "<svg class='icone-ph'><use href='#ph-graduation-cap'></use></svg>" },
+    // Prospecção: o robô coleta UF por UF em rodízio e grava um resumo por grupo (prospeccao_cobertura_<grupo>).
+    { prospeccao: true, nome: "Prospecção (PCA, IRP, atas, contratos)", afeta: "Prospecção", icone: "<svg class='icone-ph'><use href='#ph-chart-bar'></use></svg>" },
   ];
+
+  // Cobertura real da Prospecção: quantas das 27 UFs têm coleta completa nos últimos 3 dias, por tipo.
+  function resumoProspeccao(blobs, agora = Date.now()) {
+    const ufs = "AC AL AM AP BA CE DF ES GO MA MG MS MT PA PB PE PI PR RJ RN RO RR RS SC SE SP TO".split(" ");
+    const etapas = Object.assign({}, ...blobs.map((b) => (b && b.dado && b.dado.etapas) || {}));
+    const recente = (k) => { const t = Date.parse(etapas[k] && etapas[k].concluidaEm); return Number.isFinite(t) && agora - t <= 72 * 36e5; };
+    const tipos = [["pca", "planos de compras"], ["ata", "atas"], ["contrato", "contratos"]];
+    const contagem = tipos.map(([t, nome]) => [nome, ufs.filter((uf) => recente(`${uf}:${t}`)).length]);
+    const pendentes = ufs.filter((uf) => tipos.some(([t]) => !recente(`${uf}:${t}`)));
+    const atualizadoEm = blobs.map((b) => b && b.dado && b.dado.atualizadoEm).filter(Boolean).sort().pop() || null;
+    const detalhe = `Coleta completa nos últimos 3 dias: ${contagem.map(([nome, n]) => `${nome} em ${n} de 27 UFs`).join(", ")}; IRP ${recente("irp") ? "em dia" : "pendente"}.`;
+    return { atualizadoEm, pendentes, detalhe };
+  }
 
   function formatarHaQuanto(iso) {
     if (!iso) return null;
@@ -2853,6 +2868,13 @@
             ufsComFalha: Array.isArray(dados.ufsComFalha) ? dados.ufsComFalha : [],
             saudeFonte: dados.saudeFonte || null,
           };
+        }
+        if (fonte.prospeccao) {
+          await aguardarSupabaseAutenticado();
+          const { data, error } = await window.__sbClient.from("dados_robo").select("dado").like("chave", "prospeccao_cobertura_%");
+          if (error || !data || !data.length) return { ...fonte, ok: false };
+          const r = resumoProspeccao(data);
+          return { ...fonte, ok: true, atualizadoEm: r.atualizadoEm, ufsPendentesProspeccao: r.pendentes, detalheProspeccao: r.detalhe };
         }
         if (fonte.tabelaSupabase) {
           await aguardarSupabaseAutenticado();
@@ -2900,6 +2922,14 @@
             ? "A última execução não trouxe oportunidades novas; mostramos a última base válida."
             : `UFs pendentes: ${r.ufsComFalha.join(", ")}.`;
         }
+      }
+      if (r.ok && r.ufsPendentesProspeccao) {
+        // A data da última gravação diz só que o robô está rodando; o que importa ao cliente é quantas UFs já têm dado.
+        const n = r.ufsPendentesProspeccao.length;
+        if (n === 0) { cor = "var(--verde)"; texto = "Em dia — as 27 UFs coletadas nos últimos 3 dias"; }
+        else if (n === 27) { cor = "var(--laranja)"; texto = "Primeira coleta em andamento"; }
+        else { cor = "var(--laranja)"; texto = `Cobertura parcial — ${27 - n} de 27 UFs completas`; }
+        detalhe = r.detalheProspeccao + (n && n < 27 ? ` Ainda faltam: ${r.ufsPendentesProspeccao.join(", ")}.` : "");
       }
       return `<div class="cartao" style="border-top-color:${cor};">
         <h3>${r.icone} ${escapeHtml(r.nome)}</h3>
