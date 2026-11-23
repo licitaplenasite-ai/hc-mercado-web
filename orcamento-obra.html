@@ -73,6 +73,13 @@ li.alerta a{color:var(--action-text);font-weight:600}
 .estudo{margin:12px 0 0;padding:12px 16px;border:1px solid var(--info-border);border-radius:var(--radius-card);background:var(--info-bg);color:var(--info-text);line-height:1.5}
 .estudo b{display:block;margin-bottom:2px}
 .rascunho{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+/* Meus orçamentos (salvos na nuvem por empresa, orcamento-obra-nuvem.js). */
+.nuvem-topo{display:flex;flex-wrap:wrap;gap:12px;align-items:end;justify-content:space-between}.nuvem-topo h2{margin:0}
+.nuvem-topo .empresa{min-width:260px}
+#nuvem-estado{margin:8px 0}#nuvem-estado.nuvem-ok{color:var(--success-text,#067647);font-weight:600}
+#nuvem-estado.nuvem-erro{color:var(--error-text);font-weight:600}#nuvem-estado.nuvem-aviso{color:var(--warning-text,#7a2e0e)}
+#nuvem-estado a{color:var(--action-text);font-weight:600}
+.tabela tr.aberto td{background:var(--info-bg)}span.acoes-linha{display:flex;flex-wrap:wrap;gap:6px}
 /* Duas abas na mesma página: montar o nosso orçamento ou analisar a planilha do concorrente (sem pop-up). */
 .abas{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 0}
 .abas .btn[aria-selected="true"]{background:var(--action-strong);border-color:transparent;color:var(--action-on)}
@@ -82,7 +89,7 @@ main.modo-concorrente [data-modo="orcamento"],main:not(.modo-concorrente) [data-
 textarea.recurso{width:100%;min-height:280px;padding:12px;border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--surface-default);color:var(--text-primary);font:14px/1.6 var(--font-sans)}
 @media(max-width:640px){
   header{padding:8px 12px}main{padding:16px}.engenheiro{top:0;position:static}
-  .grade.arquivos,.grade.arquivos3{grid-template-columns:1fr}
+  .grade.arquivos,.grade.arquivos3{grid-template-columns:1fr}.nuvem-topo .empresa{min-width:0;flex:1 1 100%}
   /* Celular: cada linha vira um cartão com o rótulo da coluna (data-rotulo), sem rolagem lateral. */
   .tabela-wrap{border:0;overflow:visible;max-height:none}.tabela thead{display:none}
   .tabela,.tabela tbody,.tabela tr,.tabela td{display:block;width:100%}
@@ -171,7 +178,13 @@ textarea.recurso{width:100%;min-height:280px;padding:12px;border:1px solid var(-
     <textarea class="recurso" id="cr-recurso" readonly></textarea>
     <div class="acoes"><button class="btn primario" type="button" id="btn-cr-html">Baixar relatório para imprimir (.html)</button><button class="btn" type="button" id="btn-cr-xlsx">Baixar relatório em Excel (.xlsx)</button></div>
   </section>
-  <div class="card rascunho" id="rascunho" data-modo="orcamento" hidden><span id="rascunho-texto"></span><span class="acoes"><button class="btn" type="button" id="btn-rascunho-apagar">Apagar e começar outro</button></span></div>
+  <section class="card" id="nuvem" data-modo="orcamento" aria-labelledby="nuvem-titulo">
+    <div class="nuvem-topo"><h2 id="nuvem-titulo">Meus orçamentos</h2><div class="empresa" id="nuvem-empresa-campo" hidden><label for="nuvem-empresa">Empresa</label><select id="nuvem-empresa"></select></div></div>
+    <p class="nota" id="nuvem-estado" role="status" aria-live="polite">Carregando os orçamentos salvos…</p>
+    <div class="tabela-wrap curta" id="nuvem-lista-wrap" hidden><table class="tabela"><thead><tr><th>Orçamento</th><th>Valor global</th><th>Salvo em</th><th>Ações</th></tr></thead><tbody id="nuvem-lista"></tbody></table></div>
+    <p class="nota" id="nuvem-vazia" hidden>Nenhum orçamento salvo nesta empresa ainda. Envie a planilha do edital abaixo: o orçamento é salvo sozinho, a cada mudança.</p>
+  </section>
+  <div class="card rascunho" id="rascunho" data-modo="orcamento" hidden><span id="rascunho-texto"></span><span class="acoes"><button class="btn" type="button" id="btn-rascunho-apagar">Começar outro orçamento</button></span></div>
 
   <form class="card" id="form-edital" data-modo="orcamento">
     <h2>1. Envie a planilha do edital</h2>
@@ -180,7 +193,7 @@ textarea.recurso{width:100%;min-height:280px;padding:12px;border:1px solid var(-
       <div><label for="f-cpu">Composições do edital, CPU (opcional)</label><input type="file" id="f-cpu" accept=".xlsx,.xlsm,.xls,.ods"></div>
       <div><button class="btn primario" type="submit">Ler a planilha</button></div>
     </div>
-    <p class="nota">O arquivo é lido aqui no seu navegador e não é enviado a ninguém. O trabalho fica guardado só neste navegador, para você continuar se recarregar a página. PDF ainda não é lido: peça ao órgão o editável ou salve em Excel.</p>
+    <p class="nota">O arquivo é lido aqui no seu navegador. O orçamento montado (itens, preços e campos) fica salvo na nuvem, só para quem tem acesso à sua empresa, e uma cópia fica neste navegador. PDF ainda não é lido: peça ao órgão o editável ou salve em Excel.</p>
   </form>
 
   <section class="card" id="passo-leitura" data-modo="orcamento" hidden>
@@ -264,6 +277,8 @@ textarea.recurso{width:100%;min-height:280px;padding:12px;border:1px solid var(-
 <script src="orcamento-obra-leitor.js"></script>
 <script src="orcamento-obra-auditor.js"></script>
 <script src="orcamento-obra-montador.js"></script>
+<script src="orcamento-obra-documento.js"></script>
+<script src="orcamento-obra-nuvem.js"></script>
 <script src="orcamento-obra-ui.js"></script>
 <script src="orcamento-obra-pdf.js"></script>
 <script src="orcamento-obra-concorrente.js"></script>

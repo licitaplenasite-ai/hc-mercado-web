@@ -235,14 +235,16 @@
     return { nome: 'Composições próprias', linhas: out };
   }
 
-  // Carta-proposta: modelo com os números do orçamento e os campos da empresa em branco (a ferramenta não assina).
-  function abaCartaProposta(orc) {
+  // Carta-proposta: modelo com os números do orçamento; razão social e CNPJ da empresa do orçamento (operacao_empresas),
+  // o resto em branco (a ferramenta não assina). Sem empresa (orçamento só no navegador): os campos ficam para preencher.
+  const cnpjFormatado = (c) => String(c || '').replace(/\D/g, '').replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+  function abaCartaProposta(orc, empresa) {
     const c = orc.leitura.cabecalho || {}, g = orc.globalProposta, d = orc.desconto?.linear;
     const meses = orc.crono?.porMes?.length || 0;
     return { nome: 'Carta-proposta', linhas: [
       ['CARTA-PROPOSTA (modelo: confira com o modelo do edital)'], [AVISO], [],
       ['À', '[órgão licitante]'], ['Referência:', '[modalidade e número do edital]'], ['Objeto:', c.objeto || '[objeto do edital]'], [],
-      ['Empresa:', '[razão social]'], ['CNPJ:', '[CNPJ]'], ['Endereço:', '[endereço]'], ['Representante legal:', '[nome e cargo]'], [],
+      ['Empresa:', empresa?.razao_social || '[razão social]'], ['CNPJ:', cnpjFormatado(empresa?.cnpj) || '[CNPJ]'], ['Endereço:', '[endereço]'], ['Representante legal:', '[nome e cargo]'], [],
       ['Valor global da proposta (R$):', g], ['Por extenso:', valorPorExtenso(g)],
       ...(d ? [['Desconto linear sobre a referência:', d]] : []),
       ...(orc.globalReferencia ? [['Valor de referência do edital (R$):', orc.globalReferencia]] : []),
@@ -280,8 +282,9 @@
     return { nome: 'Conferência antes de enviar', linhas };
   }
 
-  function montarAbas(orc) {
-    return [abaSintetico(orc), abaCpu(orc), abaComposicoesProprias(orc), abaBdi(orc), abaEncargos(orc), abaAbc(orc), abaCronograma(orc), abaCartaProposta(orc), abaAlertas(orc), abaConferencia(orc)];
+  // op.empresa = { razao_social, cnpj } da empresa licitante (carta-proposta).
+  function montarAbas(orc, op = {}) {
+    return [abaSintetico(orc), abaCpu(orc), abaComposicoesProprias(orc), abaBdi(orc), abaEncargos(orc), abaAbc(orc), abaCronograma(orc), abaCartaProposta(orc, op.empresa), abaAlertas(orc), abaConferencia(orc)];
   }
 
   // Planilha do edital preenchida: copia a matriz original e troca só preço unitário e total de cada linha lida,

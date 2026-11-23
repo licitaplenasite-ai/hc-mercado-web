@@ -1,8 +1,9 @@
-/* global document, window, location, FileReader, CSS, module -- script de navegador (orcamento-obra.html); funções puras testadas no Node */
+/* global document, window, location, FileReader, CSS, module, require -- script de navegador (orcamento-obra.html); funções puras testadas no Node */
 // Tela "Orçamento de obra" (agente Orçamentista): envia a planilha do edital -> confere o que o Leitor entendeu ->
 // monta (preços do SINAPI da UF pelo Supabase, CPU do edital, preço digitado de outra tabela ou 3 cotações) ->
-// vê os alertas do Auditor -> baixa as planilhas. A conta é toda no navegador (orcamento-obra-*.js); o banco só
-// entrega o SINAPI, pela sessão do usuário (RLS cliente_aprovado). Nada do edital é enviado ao servidor.
+// vê os alertas do Auditor -> baixa as planilhas. A conta é toda no navegador (orcamento-obra-*.js); o banco entrega o
+// SINAPI, pela sessão do usuário (RLS cliente_aprovado). O arquivo do edital é lido aqui e não sobe; o orçamento montado
+// (documento v2, orcamento-obra-documento.js) fica salvo na nuvem só para a empresa (orcamento-obra-nuvem.js).
 (function () {
   'use strict';
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -82,21 +83,11 @@
       + (v.situacao === 'catalogo' ? ` (${SO_CATALOGO[v.base] || 'só o catálogo'})` : ` (atualizada em ${dia(v.coletado_em)})`)).join(' · ')}.`;
   }
 
-  // ---- Rascunho no navegador (fase 1: recarregar perdia o trabalho) ----
+  // ---- Rascunho no navegador (cópia local do documento v2; o v1 de antes da nuvem é migrado ao ler) ----
+  const Doc = typeof module !== 'undefined' && module.exports ? require('./orcamento-obra-documento.js') : window.OrcObra.documento;
   const CHAVE_RASCUNHO = 'licitaplena_orcamento_obra_rascunho';
-  const VERSAO_RASCUNHO = 1;
-  // Só o necessário para voltar ao ponto: a aba lida (a única que o "Baixar no formato do edital" usa), CPU,
-  // cronograma, preços digitados, cotações, os campos e se já tinha sido montado (ao abrir, as contas são refeitas).
-  function montarRascunho(estado, campos, agora = new Date()) {
-    return JSON.stringify({ versao: VERSAO_RASCUNHO, salvoEm: agora.toISOString(), nomeArquivo: estado.nomeArquivo, abas: (estado.abas || []).filter((a) => a.nome === estado.leitura?.aba),
-      leitura: estado.leitura, cpu: estado.cpu, crono: estado.crono, manuais: estado.manuais, cotacoes: estado.cotacoes, montado: Boolean(estado.montado), campos });
-  }
-  function lerRascunho(texto) {
-    try {
-      const r = JSON.parse(texto);
-      return r && r.versao === VERSAO_RASCUNHO && r.leitura && Array.isArray(r.abas) && r.campos && typeof r.campos === 'object' ? r : null;
-    } catch { return null; }
-  }
+  const montarRascunho = (estado, campos, agora = new Date()) => JSON.stringify(Doc.documentoDoEstado(estado, campos, agora));
+  const lerRascunho = Doc.lerDocumento;
 
   if (typeof module !== 'undefined' && module.exports) { module.exports = { baseDoSupabase, lerCotacoes, numero, palavrasBusca, escolherReferencia, baseDoHistorico, textoBases, montarRascunho, lerRascunho }; return; }
 
@@ -107,6 +98,9 @@
   const $ = (id) => document.getElementById(id);
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); // eslint-disable-line no-undef -- globais de supabase-config.js
   O.sb = sb; // a aba "Analisar concorrente" (orcamento-obra-concorrente-ui.js) usa a mesma sessão para chamar a IA
+  // Ganchos da nuvem: as funções da tela são declaradas mais adiante e só são chamadas depois de a página carregar.
+  const nuvem = O.nuvem.criar({ sb, $: (id) => document.getElementById(id), esc, reais, aviso: (t, k) => aviso(t, k), lerLocal: () => lerLocal(), esquecerLocal: () => esquecerLocal(),
+    documentoAtual: () => documentoAtual(), abrirDocumento: (doc) => abrirDocumento(doc, Promise.resolve(estado.versoes)), valorGlobal: () => estado.orc?.globalProposta });
   const estado = { abas: null, leitura: null, cpu: null, crono: null, orc: null, manuais: {}, cotacoes: {}, sinapi: null, nomeArquivo: '', lances: null, similares: {}, versoes: [], referencia: null };
   function aviso(texto, tipo) { const a = $('aviso'); a.textContent = texto || ''; a.className = texto ? `aviso ${tipo || 'info'}` : 'aviso'; }
 
@@ -118,6 +112,7 @@
     const versoes = carregarVersoes();
     void oferecerAjuda(session.user.id);
     oferecerRascunho(versoes);
+    void nuvem.iniciar();
     return cliente;
   }
 
@@ -161,36 +156,43 @@
     });
   }
 
-  // ---- Rascunho (fica só neste navegador) ----
+  // ---- Rascunho (cópia neste navegador; a nuvem recebe 2 s depois, orcamento-obra-nuvem.js) ----
   const CAMPOS = ['l-uf', 'l-data', 'l-regime', 'b-tipo', 'b-ac', 'b-s', 'b-g', 'b-r', 'b-df', 'b-l', 'b-iss', 'b-pis', 'b-cofins', 'b-cprb', 'm-desconto', 'm-lance', 'm-modo', 'm-meses', 'm-lei', 'm-simples'];
   // Devolve false quando não coube no navegador: quem chama avisa, em vez de perder calado (23/11: o dono recarregou e sumiu tudo).
+  const lerCampos = () => Object.fromEntries(CAMPOS.map((id) => [id, $(id).type === 'checkbox' ? $(id).checked : $(id).value]));
+  const documentoAtual = () => (estado.leitura ? Doc.documentoDoEstado(estado, lerCampos()) : null);
+  function lerLocal() { try { return lerRascunho(window.localStorage.getItem(CHAVE_RASCUNHO)); } catch { return null; } }
+  function esquecerLocal() { for (const k of [CHAVE_RASCUNHO, O.nuvem.CHAVE_META]) { try { window.localStorage.removeItem(k); } catch { /* nada a apagar */ } } }
   function salvarRascunho() {
     if (!estado.leitura) return true;
-    const campos = Object.fromEntries(CAMPOS.map((id) => [id, $(id).type === 'checkbox' ? $(id).checked : $(id).value]));
-    try { window.localStorage.setItem(CHAVE_RASCUNHO, montarRascunho(estado, campos)); return true; } catch {
+    const doc = documentoAtual();
+    nuvem.mudou(doc); // a nuvem vale mesmo quando não cabe no navegador
+    try { window.localStorage.setItem(CHAVE_RASCUNHO, JSON.stringify(doc)); return true; } catch {
       try { window.localStorage.removeItem(CHAVE_RASCUNHO); } catch { /* nada a apagar */ } // rascunho velho não volta no lugar do novo
-      aviso('Esta planilha é grande demais para ficar guardada neste navegador. Se recarregar ou fechar a página, vai precisar enviar a planilha de novo. Baixe as planilhas antes de sair.', 'erro');
+      aviso('Esta planilha é grande demais para ficar guardada neste navegador. Ela continua sendo salva na nuvem (veja "Meus orçamentos"); sem internet, baixe as planilhas antes de sair.', 'erro');
       return false;
     }
   }
-  // Ao abrir a página, o trabalho volta sozinho (sem clique) e, se já tinha sido montado, as contas são refeitas.
-  function oferecerRascunho(versoes) {
-    let r = null;
-    try { r = lerRascunho(window.localStorage.getItem(CHAVE_RASCUNHO)); } catch { r = null; }
-    if (!r) return;
-    Object.assign(estado, { abas: r.abas, leitura: r.leitura, cpu: r.cpu, crono: r.crono, manuais: r.manuais || {}, cotacoes: r.cotacoes || {}, nomeArquivo: r.nomeArquivo, orc: null, similares: {}, montado: r.montado === true });
+  // Põe um documento (do navegador ou da nuvem) na tela; se já tinha sido montado, as contas são refeitas.
+  function abrirDocumento(r, versoes) {
+    Object.assign(estado, Doc.estadoDoDocumento(r));
     mostrarLeitura();
     for (const id of CAMPOS) if (id in r.campos) { if ($(id).type === 'checkbox') $(id).checked = r.campos[id] === true; else $(id).value = String(r.campos[id] ?? ''); }
     mostrarBases();
     $('rascunho').hidden = false;
-    $('rascunho-texto').textContent = `Orçamento em andamento recuperado: ${r.nomeArquivo || 'planilha'}, salvo neste navegador em ${new Date(r.salvoEm).toLocaleString('pt-BR')}.`;
-    $('btn-rascunho-apagar').onclick = () => { try { window.localStorage.removeItem(CHAVE_RASCUNHO); } catch { /* nada a apagar */ } location.reload(); };
-    if (!r.montado) return;
+    $('rascunho-texto').textContent = `Orçamento aberto: ${r.nomeArquivo || 'planilha'}, última mudança em ${new Date(r.salvoEm).toLocaleString('pt-BR')}.`;
+    salvarRascunho(); // cópia local do que abriu (vindo da nuvem); igual ao que já estava salvo não vira versão nova
+    if (!r.montado) { for (const id of ['passo-resultado', 'passo-pendentes', 'passo-alertas', 'passo-baixar']) $(id).hidden = true; return; }
     // Espera as versões do SINAPI (data-base antiga usa o histórico). Aba "Analisar concorrente" aberta (#concorrente):
     // não mexe no aviso dela; refaz quando a pessoa voltar para cá.
     const refazer = () => void Promise.resolve(versoes).catch(() => null).then(() => montar());
     if (document.querySelector('main').classList.contains('modo-concorrente')) $('aba-orcamento').addEventListener('click', refazer, { once: true });
     else refazer();
+  }
+  // Ao abrir a página, o trabalho volta sozinho (sem clique).
+  function oferecerRascunho(versoes) {
+    const r = lerLocal();
+    if (r) abrirDocumento(r, versoes);
   }
 
   // ---- 1. Ler o arquivo (SheetJS) ----
@@ -224,6 +226,7 @@
       estado.cpu = cpuArq ? O.leitor.lerCpu((await lerArquivo(cpuArq)).flatMap((a) => a.linhas)) : null;
       const abaCrono = abas.find((a) => /cronog/i.test(a.nome));
       Object.assign(estado, { abas, leitura, crono: abaCrono ? O.leitor.lerCronograma(abaCrono.linhas) : null, orc: null, montado: false, manuais: {}, cotacoes: {}, similares: {}, nomeArquivo: $('f-edital').files[0].name.replace(/\.[^.]+$/, '') });
+      nuvem.novoDocumento(); // planilha nova = orçamento novo na lista; o que estava aberto continua salvo
       mostrarLeitura();
       $('rascunho').hidden = true;
       if (salvarRascunho()) aviso('');
@@ -462,7 +465,12 @@
   // Campo mudado (UF, BDI, ISS, preço digitado, cotação) já fica guardado (depois do preencherBdi, que troca o BDI ao mudar tipo/regime): recarregar antes de montar não perde nada.
   for (const id of CAMPOS) $(id).addEventListener('change', () => salvarRascunho());
   $('p-corpo').addEventListener('change', () => { if (estado.orc) { guardarPendentes(); salvarRascunho(); } });
-  $('btn-baixar-completa').addEventListener('click', () => estado.orc && baixarXlsx(O.montador.montarAbas(estado.orc), `orcamento-${estado.nomeArquivo || 'obra'}.xlsx`));
+  $('btn-baixar-completa').addEventListener('click', () => estado.orc && baixarXlsx(O.montador.montarAbas(estado.orc, { empresa: nuvem.empresaDoOrcamento() }), `orcamento-${estado.nomeArquivo || 'obra'}.xlsx`));
+  $('btn-rascunho-apagar').addEventListener('click', () => {
+    if (nuvem.temPendente() && !window.confirm('As últimas mudanças ainda não chegaram à nuvem e vão se perder. Começar outro mesmo assim?')) return;
+    esquecerLocal(); location.reload();
+  });
+  nuvem.preparar();
   $('btn-baixar-edital').addEventListener('click', () => {
     if (!estado.orc) return;
     const aba = estado.abas.find((a) => a.nome === estado.leitura.aba);

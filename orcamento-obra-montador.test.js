@@ -165,3 +165,15 @@ test('conferência antes de enviar: regras que o Auditor não confere sozinho; m
   assert.ok(c2.some((l) => l[0] === 'A03'));
   assert.ok(c2.some((l) => /MEMORIAL DE EXEQUIBILIDADE \(desconto de 27/.test(l[0])));
 });
+
+test('carta-proposta: razão social e CNPJ da empresa do orçamento; sem empresa, campos para preencher', () => {
+  const { orc } = orcamentoDoEdital({});
+  const carta = (op) => Object.fromEntries(M.montarAbas(orc, op).find((a) => a.nome === 'Carta-proposta').linhas.filter((l) => l.length === 2).map((l) => [l[0], l[1]]));
+  const c = carta({ empresa: { razao_social: 'Construtora Exemplo LTDA', cnpj: '11222333000181' } });
+  assert.equal(c['Empresa:'], 'Construtora Exemplo LTDA');
+  assert.equal(c['CNPJ:'], '11.222.333/0001-81');
+  const vazia = carta();
+  assert.equal(vazia['Empresa:'], '[razão social]');
+  assert.equal(vazia['CNPJ:'], '[CNPJ]');
+  assert.equal(carta({ empresa: { razao_social: 'Sem CNPJ', cnpj: null } })['CNPJ:'], '[CNPJ]');
+});

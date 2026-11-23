@@ -4,13 +4,17 @@
 // as planilhas. Também: trava no plano Essencial, 1280 e 375 px sem rolagem lateral e sem erro no console.
 // Fase 2: "Bases no sistema", "o que costuma acontecer", data-base antiga pelo histórico (bases_preco_*), rascunho
 // depois de recarregar, aba "Conferência antes de enviar", opção de motivos escondida (desligada) e normas-obra.html só do dono.
+// F1 (nuvem): salvo sozinho em "Meus orçamentos", abre igual noutro navegador, conflito entre abas, carta-proposta com a
+// empresa, duplicar/apagar, isolamento por organização e empresa; planilha real do Santo Antônio (se ORCAMENTO_REAL_DIR
+// tiver edital-santo-antonio-original.xlsx e edital-santo-antonio-cpu.xlsx) com global R$ 849.986,63 igual nos dois navegadores.
 //   PORTA_TESTE=8851 node ambiente-teste/servidor.cjs   e depois   PORTA_TESTE=8851 node ambiente-teste/e2e-orcamento-obra.cjs
 // Grava dados fictícios (SINAPI 9902xx, versões com fonte "E2E", recortes do estudo) e apaga no fim; aplica
-// supabase/orcamento_obra_recurso.sql, bases_preco.sql, orcamento_normas.sql e orcamento_estudo.sql (idempotentes).
+// supabase/orcamento_obra_recurso.sql, bases_preco.sql, orcamento_normas.sql, orcamento_estudo.sql e orcamento_obra_salvos.sql (idempotentes).
 const fs = require('node:fs'), path = require('node:path'), os = require('node:os');
 const { spawnSync } = require('node:child_process');
 process.env.PRINTS = process.env.PRINTS || 'C:/Users/harre/Desktop/LICITAPLENA/_historico/orcamentista/prints-e2e';
-const { passo, exigir, novaPagina, entrar, seed, chaves, PRINTS, SITE, resultados } = require('./e2e.cjs');
+const { passo, exigir, novaPagina, entrar, seed, chaves, PRINTS, SITE, resultados, comoUsuario } = require('./e2e.cjs');
+const REAL = process.env.ORCAMENTO_REAL_DIR || 'C:/Users/harre/AppData/Local/Temp/claude/e257df18cf4a105f/9a6e7e17-9121-4fcf-9a05-82ed04d70d19/scratchpad';
 const { gravarXlsx, lerXlsx } = require('../scripts/xlsx_simples');
 const { chromium } = require(process.env.PLAYWRIGHT_CORE || 'C:/Users/harre/AppData/Local/npm-cache/_npx/e41f203b7505f1fb/node_modules/playwright-core');
 
@@ -31,7 +35,11 @@ async function limpar() {
   await sv('DELETE', '/rest/v1/sinapi_composicao_itens?composicao=like.9902*');
   await sv('DELETE', '/rest/v1/sinapi_custos?codigo=like.9902*');
   await sv('DELETE', '/rest/v1/sinapi_itens?codigo=like.9902*');
+  await sv('DELETE', `/rest/v1/orcamento_obra_salvos?organizacao_id=in.(${seed.ids.orgA},${seed.ids.orgB})`);
 }
+const banco = (c) => fetch(chaves.API_URL + '/rest/v1/' + c, { headers: { apikey: chaves.SERVICE_ROLE_KEY, Authorization: 'Bearer ' + chaves.SERVICE_ROLE_KEY } }).then((r) => r.json());
+const salvoNaNuvem = (p) => p.waitForFunction(() => /Salvo na nuvem às \d\d:\d\d/.test(document.getElementById('nuvem-estado').textContent), null, { timeout: 30000 });
+const textoDe = async (p, sel) => (await p.innerText(sel)).replace(/\s+/g, ' ');
 
 // Planilha em branco no jeito da dos Correios: várias bases, preços zerados, sem data-base no cabeçalho.
 const EDITAL = path.join(os.tmpdir(), 'e2e-orcamento-obra-edital.xlsx');
@@ -48,7 +56,7 @@ fs.writeFileSync(EDITAL, gravarXlsx([{ nome: 'Planilha Orçamentária Sintética
   const nav = await chromium.launch({ channel: process.env.NAVEGADOR === 'chrome' ? 'chrome' : 'msedge', headless: true });
   let essencialOriginal = null;
   try {
-    for (const f of ['orcamento_obra_recurso.sql', 'bases_preco.sql', 'orcamento_normas.sql', 'orcamento_estudo.sql']) psql(fs.readFileSync(path.join(__dirname, '..', 'supabase', f), 'utf8'));
+    for (const f of ['orcamento_obra_recurso.sql', 'bases_preco.sql', 'orcamento_normas.sql', 'orcamento_estudo.sql', 'orcamento_obra_salvos.sql']) psql(fs.readFileSync(path.join(__dirname, '..', 'supabase', f), 'utf8'));
     await limpar();
     // Histórico: SINAPI 2026-10 (vigente, nas tabelas sinapi_*) e 2026-09 guardado nas partes, com outro preço.
     const versao = (data, versao) => ({ base: 'SINAPI', abrangencia: 'BR', data_base: data, versao, desonerado: 'ambos', arredondamento: 'edital', casas_decimais: 2, fonte: 'E2E CAIXA', situacao: 'precos', itens: 3, coletado_em: '2026-11-16T12:00:00Z' });
@@ -180,6 +188,127 @@ fs.writeFileSync(EDITAL, gravarXlsx([{ nome: 'Planilha Orçamentária Sintética
       exigir(/Digitado 1 · Cotações 1/.test(await p.innerText('#r-totais')), 'preço digitado e cotações não voltaram');
       return t;
     });
+    // ---- F1: nuvem ----
+    let linhaNuvem = null;
+    await passo('salvo na nuvem sozinho, na empresa ativa; recarregar não cria versão nova', p, async () => {
+      await p.waitForFunction(() => /Salvo na nuvem/.test(document.getElementById('nuvem-estado').textContent), null, { timeout: 30000 });
+      await p.waitForTimeout(2600); // passa a espera de 2 s do salvamento: nada pendente
+      [linhaNuvem] = await banco(`orcamento_obra_salvos?organizacao_id=eq.${seed.ids.orgA}&select=id,empresa_id,versao,titulo,valor_global`);
+      exigir(linhaNuvem && linhaNuvem.empresa_id === seed.ids.empA2, `linha: ${JSON.stringify(linhaNuvem)}`); // "Materiais Horizonte" vem primeiro na ordem alfabética
+      const global = Number(/Preço global R\$\s([\d.,]+)/.exec(await textoDe(p, '#r-totais'))[1].replace(/\./g, '').replace(',', '.'));
+      exigir(Number(linhaNuvem.valor_global) === global, `valor da lista ${linhaNuvem.valor_global} ≠ ${global}`);
+      exigir(await p.locator('#nuvem-lista tr').count() === 1 && /aberto agora/.test(await p.innerText('#nuvem-lista')), 'lista sem o orçamento aberto');
+      await p.reload();
+      await p.waitForSelector('#passo-resultado:not([hidden])');
+      await p.waitForFunction(() => /Salvo na nuvem/.test(document.getElementById('nuvem-estado').textContent), null, { timeout: 30000 });
+      await p.waitForTimeout(2600);
+      const [depois] = await banco(`orcamento_obra_salvos?id=eq.${linhaNuvem.id}&select=versao`);
+      exigir(depois.versao === linhaNuvem.versao, `recarregar subiu a versão ${linhaNuvem.versao} -> ${depois.versao}`);
+      return `${linhaNuvem.titulo} v${linhaNuvem.versao} · ${await p.innerText('#nuvem-estado')}`;
+    });
+    const p2 = await novaPagina(nav, seed.usuarios.gestor);
+    await passo('outro navegador, sem nada guardado: abre pela lista igual (mesmo total e mesmos alertas)', p2, async () => {
+      await p2.goto(SITE + '/orcamento-obra.html');
+      await p2.waitForSelector('#nuvem-lista tr');
+      exigir(await p2.locator('#passo-leitura').isHidden(), 'abriu sozinho num navegador novo');
+      await p2.click(`[data-nuvem-abrir="${linhaNuvem.id}"]`);
+      await p2.waitForSelector('#passo-resultado:not([hidden])');
+      await p2.waitForFunction((t) => document.getElementById('r-totais').innerText.replace(/\s+/g, ' ') === t, await textoDe(p, '#r-totais'), { timeout: 30000 });
+      exigir(await textoDe(p2, '#a-resumo') === await textoDe(p, '#a-resumo') && await textoDe(p2, '#a-lista') === await textoDe(p, '#a-lista'), 'alertas diferentes');
+      exigir(await p2.inputValue('#b-iss') === '3' && await p2.inputValue('#m-desconto') === '10', 'campos não vieram');
+      return await textoDe(p2, '#r-totais');
+    });
+    await passo('outra aba mudou antes: aviso para recarregar, nada sobrescrito', p, async () => {
+      await p2.fill('#b-iss', '4'); await p2.dispatchEvent('#b-iss', 'change');
+      await salvoNaNuvem(p2);
+      await p.fill('#m-desconto', '11'); await p.dispatchEvent('#m-desconto', 'change');
+      await p.waitForFunction(() => /mudado em outra aba ou outro computador/.test(document.getElementById('nuvem-estado').textContent), null, { timeout: 30000 });
+      const [l] = await banco(`orcamento_obra_salvos?id=eq.${linhaNuvem.id}&select=versao,documento`);
+      exigir(l.documento.campos['b-iss'] === '4' && l.documento.campos['m-desconto'] === '10', 'a aba velha sobrescreveu a nuvem');
+      await p.click('#nuvem-recarregar');
+      await p.waitForFunction(() => document.getElementById('b-iss').value === '4' && /Aberto da nuvem/.test(document.getElementById('nuvem-estado').textContent), null, { timeout: 30000 });
+      return `versão ${l.versao}; ${await p.innerText('#nuvem-estado')}`;
+    });
+    await passo('carta-proposta com razão social e CNPJ da empresa do orçamento', p, async () => {
+      await p.waitForSelector('#passo-baixar:not([hidden])');
+      const [d] = await Promise.all([p.waitForEvent('download'), p.click('#btn-baixar-completa')]);
+      const carta = lerXlsx(fs.readFileSync(await d.path())).find((a) => a.nome === 'Carta-proposta').linhas;
+      const campo = (k) => carta.find((l) => l[0] === k)?.[1];
+      exigir(campo('Empresa:') === 'Materiais Horizonte Teste LTDA' && campo('CNPJ:') === '12.345.678/0001-95', `${campo('Empresa:')} / ${campo('CNPJ:')}`);
+      return `${campo('Empresa:')} · ${campo('CNPJ:')}`;
+    });
+    await passo('duplicar e apagar (com confirmação; cancelar não apaga)', p, async () => {
+      await p.click(`[data-nuvem-duplicar="${linhaNuvem.id}"]`);
+      await p.waitForFunction(() => document.querySelectorAll('#nuvem-lista tr').length === 2);
+      const copia = (await banco(`orcamento_obra_salvos?organizacao_id=eq.${seed.ids.orgA}&titulo=like.C*&select=id,titulo`))[0];
+      exigir(copia && /^Cópia de /.test(copia.titulo), JSON.stringify(copia));
+      p.once('dialog', (dg) => void dg.dismiss());
+      await p.click(`[data-nuvem-apagar="${copia.id}"]`);
+      await p.waitForTimeout(800);
+      exigir(await p.locator('#nuvem-lista tr').count() === 2, 'cancelar apagou');
+      let pergunta = '';
+      p.once('dialog', (dg) => { pergunta = dg.message(); void dg.accept(); });
+      await p.click(`[data-nuvem-apagar="${copia.id}"]`);
+      await p.waitForFunction(() => document.querySelectorAll('#nuvem-lista tr').length === 1);
+      exigir(/Não dá para desfazer/.test(pergunta), pergunta);
+      return pergunta;
+    });
+    await passo('isolamento: outra organização, colaborador de outra empresa e sem login não veem', null, async () => {
+      const outra = await comoUsuario(seed.usuarios.outra_org, '/rest/v1/orcamento_obra_salvos?select=id');
+      const operador = await comoUsuario(seed.usuarios.operador, '/rest/v1/orcamento_obra_salvos?select=id'); // só a empresa A1
+      const leitura = await comoUsuario(seed.usuarios.leitura, '/rest/v1/orcamento_obra_salvos?select=id');
+      const anon = await fetch(chaves.API_URL + '/rest/v1/orcamento_obra_salvos?select=id', { headers: { apikey: chaves.ANON_KEY } });
+      exigir(outra.corpo === '[]' && operador.corpo === '[]', `outra ${outra.corpo} · operador ${operador.corpo}`);
+      exigir(JSON.parse(leitura.corpo).length === 1, `leitura ${leitura.corpo}`);
+      exigir(anon.status === 401 || anon.status === 403 || (await anon.text()) === '[]', `anon ${anon.status}`);
+      const injetar = await comoUsuario(seed.usuarios.outra_org, '/rest/v1/orcamento_obra_salvos', { method: 'POST', body: JSON.stringify({ organizacao_id: seed.ids.orgA, empresa_id: seed.ids.empA1, titulo: 'x', documento: {} }) });
+      exigir(injetar.status === 403 || injetar.status === 401, `injeção ${injetar.status}`);
+      return `outra org ${outra.corpo} · operador A1 ${operador.corpo} · leitura vê 1 · anon ${anon.status} · injeção ${injetar.status}`;
+    });
+    await passo('outro navegador sem erro no console', p2, async () => {
+      const erros = p2.erros.filter((e) => !/favicon/.test(e));
+      exigir(!erros.length, erros.join(' | '));
+    });
+    await p2.context().close();
+    // Planilha real do edital do Santo Antônio (TRE-AM), com a CPU do edital: UF AM, ISS 2.
+    const real = ['original', 'cpu'].map((n) => path.join(REAL, `edital-santo-antonio-${n}.xlsx`));
+    if (real.every((f) => fs.existsSync(f))) {
+      const p3 = await novaPagina(nav, seed.usuarios.gestor), p4 = await novaPagina(nav, seed.usuarios.gestor);
+      let antes = null;
+      await passo('Santo Antônio real: importar, montar (AM, ISS 2) e salvar na nuvem', p3, async () => {
+        await p3.goto(SITE + '/orcamento-obra.html');
+        await p3.setInputFiles('#f-edital', real[0]); await p3.setInputFiles('#f-cpu', real[1]);
+        await p3.click('#form-edital button[type=submit]');
+        await p3.waitForSelector('#passo-montar:not([hidden])', { timeout: 30000 });
+        await p3.selectOption('#l-uf', 'AM'); await p3.dispatchEvent('#l-uf', 'change');
+        await p3.fill('#b-iss', '2'); await p3.dispatchEvent('#b-iss', 'change');
+        await p3.click('#btn-montar');
+        await p3.waitForSelector('#passo-resultado:not([hidden])', { timeout: 90000 });
+        await salvoNaNuvem(p3);
+        antes = { totais: await textoDe(p3, '#r-totais'), resumo: await textoDe(p3, '#a-resumo'), alertas: await textoDe(p3, '#a-lista'), linhas: await p3.locator('#r-corpo tr').count() };
+        exigir(/Preço global R\$\s849\.986,63/.test(antes.totais), antes.totais);
+        return `${antes.linhas} linhas · ${antes.totais.slice(0, 160)} · ${antes.resumo}`;
+      });
+      await passo('Santo Antônio real: abre igual noutro navegador (mesmo global e mesmos alertas)', p4, async () => {
+        await p4.goto(SITE + '/orcamento-obra.html');
+        const [l] = await banco(`orcamento_obra_salvos?organizacao_id=eq.${seed.ids.orgA}&titulo=eq.edital-santo-antonio-original&select=id,versao,valor_global`);
+        exigir(l && Number(l.valor_global) === 849986.63, JSON.stringify(l));
+        await p4.click(`[data-nuvem-abrir="${l.id}"]`);
+        await p4.waitForSelector('#passo-resultado:not([hidden])', { timeout: 90000 });
+        await p4.waitForFunction((n) => document.querySelectorAll('#r-corpo tr').length === n, antes.linhas, { timeout: 90000 });
+        const depois = { totais: await textoDe(p4, '#r-totais'), resumo: await textoDe(p4, '#a-resumo'), alertas: await textoDe(p4, '#a-lista'), linhas: await p4.locator('#r-corpo tr').count() };
+        exigir(JSON.stringify(depois) === JSON.stringify(antes), `diferente:\n${JSON.stringify(antes).slice(0, 300)}\n${JSON.stringify(depois).slice(0, 300)}`);
+        await p4.waitForTimeout(2600);
+        const [l2] = await banco(`orcamento_obra_salvos?id=eq.${l.id}&select=versao`);
+        exigir(l2.versao === l.versao, `abrir subiu a versão ${l.versao} -> ${l2.versao}`);
+        return `${depois.totais.slice(0, 120)} · ${depois.resumo}`;
+      });
+      await passo('Santo Antônio real: sem erro no console', p4, async () => {
+        const erros = [...p3.erros, ...p4.erros].filter((e) => !/favicon/.test(e));
+        exigir(!erros.length, erros.join(' | '));
+      });
+      await p3.context().close(); await p4.context().close();
+    } else console.log(`(planilha real do Santo Antônio não está em ${REAL}: passos pulados)`);
     await passo('1280 px: sem rolagem lateral', p, async () => {
       const larg = await p.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
       exigir(larg[0] <= larg[1], `rolagem lateral ${larg}`);
