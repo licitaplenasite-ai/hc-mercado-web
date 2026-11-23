@@ -73,10 +73,10 @@ def test_boletim_por_empresa_e_jornal_viram_emails_separados(monkeypatch):
     monkeypatch.setattr(be, "buscar_pool_por_uf", lambda ufs: {"AM": [_edital(1, "Papel sulfite A4")], "SP": [_edital(2, "Café torrado", uf="SP", municipio="São Paulo")]})
     monkeypatch.setenv("JORNAIS_SEMPRE", "1")
     enviados = []
-    monkeypatch.setattr(be, "enviar_email", lambda email, nome, eds, prefixo="", *a: enviados.append((prefixo, len(eds))))
+    monkeypatch.setattr(be, "enviar_email", lambda email, nome, eds, filtro="", *a: enviados.append((nome, filtro, len(eds))))
     be.main()
     # Boletim antigo da conta some (a conta já usa filtro por empresa); um e-mail por empresa e um pelo jornal.
-    assert enviados == [("[HCM] ", 1), ("[RYMO] ", 1), ("[HCM · Sulfite] ", 1)]
+    assert enviados == [("HCM", "papel", 1), ("RYMO", "café", 1), ("HCM", "Sulfite", 1)]
 
 
 # ---- Prospecta (funil_v3.sql) ----
@@ -135,9 +135,10 @@ def _capturar_envios(monkeypatch, zepto_falha=False):
 def test_enviar_email_usa_zeptomail_quando_ha_token(monkeypatch):
     envios = _capturar_envios(monkeypatch)
     monkeypatch.setenv("ZEPTOMAIL_TOKEN", "token-falso")
-    be.enviar_email("a@b.com", "Ana", [], "[Teste] ")
+    monkeypatch.setattr(be, "agora_brasilia", lambda: be.datetime(2026, 11, 23, 9, 30, tzinfo=be.FUSO_BRASILIA))
+    be.enviar_email("a@b.com", "Ana", [], "papel", "principal", {"numero": 1768})
     assert [e[0] for e in envios] == ["zepto"]
-    assert envios[0][2] == "[Teste] Nenhuma licitação nova desde o último aviso"
+    assert envios[0][2] == "[1768] Boletim LicitaPlena de 23 de novembro de 2026, 09:30"
 
 
 def test_enviar_email_cai_no_gmail_sem_token_ou_com_falha_e_mantem_o_conteudo(monkeypatch):
@@ -172,9 +173,9 @@ def test_email_e_so_aviso_sem_lista_de_editais():
     assert "Chegaram 7 novas licitações" in html and "Chegaram 7 novas licitações" in texto
     assert "Empresa X" in html and "limpeza, higiene" in html and "20/11/2026" in html
     assert "Acessar o boletim" in html and html_escape(LINK) in html and LINK in texto
-    # links: botao, ajustar filtros, gerenciar avisos e e-mail de suporte; sem PNCP, sem site do orgao
+    # links: botao, privacidade, ajustar filtros, gerenciar avisos e e-mail de suporte; sem PNCP, sem site do orgao
     hrefs = re.findall(r'href="([^"]+)"', html)
-    assert hrefs[0] == html_escape(LINK) and set(hrefs[1:]) == {b.URL_AJUSTAR_FILTROS, "mailto:" + b.EMAIL_SUPORTE}
+    assert hrefs[0] == html_escape(LINK) and set(hrefs[1:]) == {b.URL_AJUSTAR_FILTROS, b.URL_PRIVACIDADE, "mailto:" + b.EMAIL_SUPORTE}
     assert "pncp" not in (html + texto).lower()
     # logo em PNG por URL absoluta, rodape com motivo, nao responder e CNPJ da HCM
     assert 'src="https://licitaplena.com.br/logo.png"' in html and 'alt="LicitaPlena"' in html
@@ -195,14 +196,105 @@ def test_resumo_so_numeros_sem_objeto():
     assert "2 em AM" in html and "Papel" not in html and b.montar_resumo([]) == []
 
 
-def test_assunto_e_singular_ou_plural():
-    assert b.montar_assunto(1) == "Chegou 1 nova licitação no seu boletim"
-    assert b.montar_assunto(3) == "Chegaram 3 novas licitações no seu boletim"
+def test_assunto_tem_edicao_data_e_hora_de_brasilia():
+    agora = b.datetime(2026, 11, 3, 6, 5, tzinfo=b.FUSO_BRASILIA)
+    assert b.montar_assunto(1768, agora) == "[1768] Boletim LicitaPlena de 3 de novembro de 2026, 06:05"
+    assert b.montar_assunto(None, agora) == "Boletim LicitaPlena de 3 de novembro de 2026, 06:05"
+    # 23h30 de Brasilia ja e o dia seguinte em UTC: vale o dia de Brasilia.
+    assert b.agora_brasilia().utcoffset() == b.timedelta(hours=-3)
 
 
-def test_email_sem_novidade_nao_tem_botao():
+CAB = {"numero": 1768, "processado_em": b.datetime(2026, 11, 23, 9, 30, tzinfo=b.FUSO_BRASILIA), "codigo": 1042,
+       "responsavel": "Maria Souza", "vigencia": "Empresa, válida até 22 de janeiro de 2027"}
+
+
+def test_cabecalho_e_politica_no_html_e_no_texto():
+    html = b.montar_email_html("HCM LTDA", "papel, sulfite", EDICAO, 7, LINK, None, CAB)
+    texto = b.montar_email_texto("HCM LTDA", "papel, sulfite", EDICAO, 7, LINK, None, CAB)
+    for t in (html, texto):
+        assert "Edição nº" in t and "1768" in t and "23 de novembro de 2026, 09:30" in t
+        assert "Identificação do cliente" in t and "1042" in t and "HCM LTDA" in t and "papel, sulfite" in t
+        assert "Empresa, válida até 22 de janeiro de 2027" in t and "Aos cuidados de" in t and "Maria Souza" in t
+        assert "POLÍTICA DE USO E RESPONSABILIDADE" in t and "não substitui o edital" in t
+        assert "obrigação de meio" in t and "uso exclusivo do cliente identificado" in t and "13.709/2018" in t
+    # o aviso continua o mesmo: quantidade e botao para a edicao
+    assert "Chegaram 7 novas licitações" in html and "Acessar o boletim" in html and LINK in texto
+    assert texto.index("Edição nº") < texto.index("Chegaram 7") < texto.index("POLÍTICA DE USO")
+
+
+def test_cabecalho_sem_dados_some_sem_deixar_rotulo_vazio():
+    html = b.montar_email_html("HCM", "papel", EDICAO, 2, LINK)
+    assert "Edição nº" not in html and "Identificação do cliente" not in html and "Aos cuidados" not in html
+    assert "Empresa:" in html and "POLÍTICA DE USO" in html
+    html = b.montar_email_html("HCM", "papel", EDICAO, 2, LINK, None, {"responsavel": "<b>x</b>"})
+    assert "<b>x</b>" not in html
+
+
+def test_vigencia_por_situacao_da_assinatura():
+    hoje = date(2026, 11, 23)
+    plano = {"nome": "Empresa"}
+    assert b.montar_vigencia({"situacao": "teste", "teste_ate": "2026-12-07T02:30:00.12345+00:00"}, hoje) == "Teste grátis até 6 de dezembro de 2026"
+    assert b.montar_vigencia({"situacao": "teste", "teste_ate": "2026-11-20T15:00:00+00:00"}, hoje) == "Teste grátis encerrado em 20 de novembro de 2026"
+    assert b.montar_vigencia({"situacao": "ativa", "vence_em": "2027-01-22", "planos": plano}, hoje) == "Empresa, válida até 22 de janeiro de 2027"
+    assert b.montar_vigencia({"situacao": "vencida", "vence_em": "2026-11-10", "planos": plano}, hoje) == "Empresa, venceu em 10 de novembro de 2026"
+    assert b.montar_vigencia({"situacao": "ativa", "planos": {"nome": "Dono (ilimitado)"}}, hoje) == "Dono (ilimitado), sem data de vencimento"
+    assert b.montar_vigencia({"situacao": "suspensa", "vence_em": "2027-01-22"}, hoje) is None
+    assert b.montar_vigencia({"situacao": "ativa", "vence_em": "lixo"}, hoje) is None
+    assert b.montar_vigencia(None, hoje) is None
+
+
+def test_carregar_cabecalhos_junta_cliente_e_assinatura_e_falha_sem_derrubar(monkeypatch):
+    respostas = {
+        "clientes?select=id,nome,codigo": [{"id": "c1", "nome": " Maria ", "codigo": 1042}],
+        "assinaturas?": [{"usuario_id": "c1", "situacao": "ativa", "vence_em": "2027-01-22", "planos": {"nome": "Empresa"}}],
+    }
+    monkeypatch.setattr(b, "_get_json", lambda caminho: next(v for k, v in respostas.items() if caminho.startswith(k)))
+    cab = b.carregar_cabecalhos(["c1", None, "c1"], date(2026, 11, 23))
+    assert cab == {"c1": {"codigo": 1042, "responsavel": "Maria", "vigencia": "Empresa, válida até 22 de janeiro de 2027"}}
+    assert b.carregar_cabecalhos([]) == {}
+
+    def falha(caminho):
+        raise RuntimeError("coluna codigo nao existe")
+    monkeypatch.setattr(b, "_get_json", falha)
+    assert b.carregar_cabecalhos(["c1"]) == {}
+
+
+class _RespJson:
+    def __init__(self, corpo):
+        self.corpo = corpo
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def read(self):
+        return self.corpo.encode("utf-8")
+
+
+def test_registrar_edicao_devolve_numero_e_dia_sem_novidade_nao_apaga_a_lista(monkeypatch):
+    import json as _json
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "chave-falsa")
+    pedidos = []
+    respostas = iter(['[{"numero": 1768}]', '[]'])
+    monkeypatch.setattr(b.urllib.request, "urlopen", lambda req, timeout=None: pedidos.append(req) or _RespJson(next(respostas)))
+    lidos = []
+    monkeypatch.setattr(b, "_get_json", lambda caminho: lidos.append(caminho) or [{"numero": 1768}])
+    d = {"id": "c1", "email": "a@b.c", "nome": "HCM", "palavras_chave": ["papel"]}
+    assert b.registrar_edicao(d, EDICAO, [{"numeroControlePNCP": "x1"}], "empresa:e1") == 1768
+    assert "merge-duplicates" in pedidos[0].get_header("Prefer")
+    # rodada seguinte sem novidade: so cria se nao existe e le o numero que ja estava
+    assert b.registrar_edicao(d, EDICAO, [], "empresa:e1") == 1768
+    assert "ignore-duplicates" in pedidos[1].get_header("Prefer") and _json.loads(pedidos[1].data)[0]["quantidade"] == 0
+    assert lidos == ["boletim_edicoes?select=numero&cliente_id=eq.c1&edicao=eq.2026-11-20&filtro_id=eq.empresa%3Ae1"]
+    assert b.registrar_edicao({"email": "fixo@b.c", "nome": "X"}, EDICAO, []) is None
+
+
+def test_email_sem_novidade_nao_tem_botao_da_edicao():
     html = b.montar_email_html("Empresa X", "limpeza", EDICAO, 0, LINK)
     assert "Acessar o boletim" not in html and html_escape(LINK) not in html and "Ajustar meus filtros" in html
+    assert "Abrir o painel" in html
 
 
 def test_nome_da_empresa_e_escapado_no_html():
@@ -215,9 +307,9 @@ def test_enviar_email_manda_so_aviso_com_link_do_filtro(monkeypatch):
     monkeypatch.setattr(b, "enviar_zeptomail", lambda token, email, nome, assunto, texto, html_corpo: envios.append((assunto, texto, html_corpo)))
     monkeypatch.setenv("ZEPTOMAIL_TOKEN", "token-falso")
     editais = [{"objetoCompra": "Papel", "numeroControlePNCP": "11222333000181-1-000001/2026"}] * 3
-    b.enviar_email("a@b.com", "HCM", editais, "[HCM] ", "papel", "empresa:e1")
+    b.enviar_email("a@b.com", "HCM", editais, "papel", "empresa:e1", {"numero": 9})
     assunto, texto, html_corpo = envios[0]
-    assert assunto == "[HCM] Chegaram 3 novas licitações no seu boletim"
+    assert assunto.startswith("[9] Boletim LicitaPlena de ") and "Chegaram 3 novas licitações" in texto
     assert "filtro=empresa%3Ae1#boletim" in texto and "Papel" not in texto + html_corpo
 
 
