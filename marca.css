@@ -159,7 +159,14 @@ footer :focus-visible { outline-color: #ffffff; }
   .faixa-ia-arte { right: -120px; top: auto; bottom: -60px; transform: none; width: 420px; opacity: 0.3; }
 }
 @media (max-width: 480px) {
-  .ferr-grade { grid-template-columns: minmax(0, 1fr); }
+  .ferr-grade { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  /* Celular: cartão deitado (ícone à esquerda) para a grade não virar uma coluna longa. */
+  .ferr { display: grid; grid-template-columns: 48px minmax(0, 1fr); column-gap: 14px; row-gap: 4px; padding: 16px 16px 18px; }
+  .ferr-ico { grid-row: span 3; width: 48px; height: 48px; margin: 0; border-radius: 12px; }
+  .ferr-ico svg { width: 34px; height: 34px; }
+  .ferr h2, .ferr h3 { font-size: 16px; line-height: 22px; }
+  .ferr p { font-size: 13px; line-height: 20px; }
+  .ferr-mais { padding-top: 2px; font-size: 13px; }
   .hero h1 { font-size: 28px; line-height: 36px; }
   .faixa-ia .btn { width: 100%; }
 }
