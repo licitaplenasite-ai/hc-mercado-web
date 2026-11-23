@@ -37,6 +37,7 @@
 //   ADESOES_POR_RODADA         1500 — teto de consultas a 5_consultarAdesoesItem por rodada (uma por item de ata)
 //   ADESOES_VALIDADE_DIAS      3 — adesão consultada há menos que isso não é consultada de novo
 //   ITENS_ATA_PNCP_MAX         30 — itens lidos por ata fora do Compras.gov
+//   ATAS_PNCP_COM_ITENS        300 — atas fora do Compras.gov que ganham itens por UF e volta (as mais recentes)
 //   PROSPECCAO_REINICIAR       1 — ignora o progresso salvo e recomeça
 //   MODO_SECO=1 (+ AMOSTRA_SECO) rodada real sem chave e sem gravar nada (ver modoSeco())
 //
@@ -322,7 +323,7 @@ function fecharEtapa(est, chave, agora = Date.now()) {
   const e = est.etapas[chave];
   e.concluidaEm = new Date(agora).toISOString();
   e.linhas = e.linhasAndamento || 0;
-  delete e.inicio; delete e.linhasAndamento;
+  delete e.inicio; delete e.linhasAndamento; delete e.atasComItens;
   const [uf, tipo] = chave.split(":");
   if (tipo) for (const k of [...est.feitos]) if (k.startsWith(`${tipo}:${uf}:`)) est.feitos.delete(k);
   if (tipo === "ata") delete est.comItens[uf];
@@ -441,14 +442,30 @@ async function etapaAta(uf, est, ctx) {
     });
     if (!cg) return false;
     // Resto (fora do Compras.gov, ou UASG sem item vigente): itens e resultados pelo PNCP; sem item, fica a linha da ata.
+    // Itens pelo PNCP custam ~8 chamadas por ata (medido no AM em 22/11: 40 atas, 400 chamadas com as UASGs); no Brasil
+    // são ~130 mil atas fora do Compras.gov. Só as ATAS_PNCP_COM_ITENS mais recentes de cada UF por volta ganham itens;
+    // as outras ficam com a linha da ata (objeto, órgão, vigência), que a busca por texto já acha, gravadas em lote.
     const memo = new Map();
+    const teto = num(process.env.ATAS_PNCP_COM_ITENS, 300);
+    const semItem = [];
+    const descarregar = () => gravar(semItem.splice(0), null, ctx, `${uf} ata (PNCP sem item)`);
     const resto = new Map(atas.filter((d) => !comItens.has(d.numero_controle_pncp)).map((d) => [`ata:${uf}:pncp:${d.numero_controle_pncp}`, d]));
-    return unidades([...resto.keys()], est, ctx, async (k) => {
-      const d = resto.get(k);
-      const ata = porAta.get(d.numero_controle_pncp);
-      const itens = await itensAtaPncp(d, ata, ctx, memo);
-      await gravar(itens.length ? itens : [ata], null, ctx, `${uf} ata (PNCP${itens.length ? " com itens" : " sem item"})`);
-    });
+    try {
+      return await unidades([...resto.keys()], est, ctx, async (k) => {
+        const d = resto.get(k);
+        const ata = porAta.get(d.numero_controle_pncp);
+        if ((ctx.etapa?.atasComItens || 0) >= teto) {
+          semItem.push(ata);
+          if (semItem.length >= 500) await descarregar();
+          return;
+        }
+        if (ctx.etapa) ctx.etapa.atasComItens = (ctx.etapa.atasComItens || 0) + 1;
+        const itens = await itensAtaPncp(d, ata, ctx, memo);
+        await gravar(itens.length ? itens : [ata], null, ctx, `${uf} ata (PNCP${itens.length ? " com itens" : " sem item"})`);
+      });
+    } finally {
+      await descarregar();
+    }
   });
   console.log(`${uf} atas com adesão lidas nesta rodada: ${total} (${lotes.length} lote(s); ${comItens.size} com itens do Compras.gov)${ok ? "" : "; continua na próxima rodada"}`);
   if (ok) await limpar(`tipo=eq.ata&uf=eq.${uf}`, ctx);
@@ -665,5 +682,5 @@ if (require.main === module) (process.env.MODO_SECO === "1" ? modoSeco() : main(
 module.exports = {
   hojeBrasilia, normalizar, desfazerMojibake, nomeBusca, contratoInteressa, linhaContrato, linhaAta, linhaItemAta, linhaItemAtaPncp, somarAdesoes, linhaIrp, linhaPcaPncp, linhaPgc,
   semRepetir, obter, unidades, carregarEstado, estadoSerializavel, itensAtaPncp, consultarAdesoes,
-  filaEtapas, fecharEtapa, etapasAtrasadas, resumoCobertura, esperaAposLimite, UFS_BRASIL, buscarPncp, lotesDaUf,
+  filaEtapas, fecharEtapa, etapasAtrasadas, resumoCobertura, esperaAposLimite, UFS_BRASIL, buscarPncp, lotesDaUf, etapaAta, banco,
 };

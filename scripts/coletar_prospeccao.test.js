@@ -246,3 +246,43 @@ test("consultarAdesoes: pergunta por ata + UASG + item, soma as páginas; 429 so
   const limitado = async () => ({ status: 429, ok: false, json: async () => ({}) });
   await assert.rejects(P.consultarAdesoes(l, { fetch: limitado, pausaMs: 0, tentativas: 1 }), /HTTP 429/);
 });
+
+// SP em 22/11: 14.292 atas e a busca do PNCP recusa página além de 10.000 documentos (HTTP 400). E itens pelo PNCP
+// custam ~8 chamadas por ata: só as ATAS_PNCP_COM_ITENS mais recentes ganham itens, as outras ficam com a linha da ata.
+test("etapaAta: UF acima da janela é lida por município; só as N atas mais recentes ganham itens; retoma de onde parou", async () => {
+  const gravadas = [];
+  const antes = { ...P.banco };
+  Object.assign(P.banco, { upsertEmLotes: async (_t, ls) => { gravadas.push(...ls); return ls.length; }, restFetch: async () => ({ ok: true }) });
+  const urls = [];
+  const ata = (n, mun) => ({ ...contrato, numero_controle_pncp: `13272780000170-1-00000${n}/2026-000001`, item_url: `/atas/13272780000170/2026/${n}/1`,
+    unidade_codigo: "UG-X", municipio_nome: mun, fornecedor_ni: null, data_fim_vigencia: "2027-06-30", permite_adesao: true });
+  const fetch = async (url) => {
+    const u = new URL(url);
+    urls.push(u.pathname + u.search);
+    let j = [];
+    if (u.hostname === "servicodados.ibge.gov.br") j = [{ id: 1302603 }, { id: 1300144 }];
+    else if (u.pathname === "/api/search" && u.searchParams.get("tam_pagina") === "1") j = { items: [], total: 14292 };
+    else if (u.pathname === "/api/search") j = u.searchParams.get("municipios") === "1302603" ? { items: [ata(1, "MANAUS"), ata(2, "MANAUS")], total: 2 } : { items: [ata(3, "APUI")], total: 1 };
+    else if (/\/itens\?/.test(u.search) || /\/itens$/.test(u.pathname)) j = [{ numeroItem: 1, descricao: "PAPEL A4" }];
+    else if (/resultados$/.test(u.pathname)) j = [{ niFornecedor: "11111111000111", nomeRazaoSocialFornecedor: "A LTDA", valorUnitarioHomologado: 1 }];
+    return { status: 200, ok: true, json: async () => j };
+  };
+  process.env.ATAS_PNCP_COM_ITENS = "1";
+  try {
+    const est = { feitos: new Set(), orgaos: {}, comItens: {}, etapas: { "AM:ata": {} } };
+    const ctx = { op: { fetch, pausaMs: 0 }, hoje: "2026-11-22", coletadoEm: EM, etapa: est.etapas["AM:ata"], gravadas: {}, prazoFinal: Date.now() + 60000, salvar: async () => {} };
+    assert.equal(await P.etapaAta("AM", est, ctx), true);
+    assert.ok(urls.some((x) => /municipios=1302603/.test(x)) && urls.some((x) => /municipios=1300144/.test(x)));
+    assert.ok(!urls.some((x) => /pagina=21/.test(x)));
+    // 1 ata com itens (a primeira, mais recente) e 2 com a linha da ata.
+    assert.deepEqual(gravadas.map((l) => [l.id.split("#").length > 1 ? "item" : "ata", l.municipio]), [["item", "MANAUS"], ["ata", "MANAUS"], ["ata", "APUI"]]);
+    assert.ok(est.feitos.has("ata:AM:lote:1302603") && est.feitos.has("ata:AM:lote:1300144"));
+    // Retomada: com tudo marcado como feito, nada é relido além da contagem da UF.
+    urls.length = 0;
+    assert.equal(await P.etapaAta("AM", est, ctx), true);
+    assert.deepEqual(urls.filter((x) => !/tam_pagina=1(&|$)/.test(x)), []);
+  } finally {
+    delete process.env.ATAS_PNCP_COM_ITENS;
+    Object.assign(P.banco, antes);
+  }
+});
