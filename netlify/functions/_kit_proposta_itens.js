@@ -16,11 +16,15 @@ const selectListaOrigem=selectLista+',operacao_origens_pncp(item_id)';
 const origemPncp=l=>Array.isArray(l.operacao_origens_pncp)?l.operacao_origens_pncp.length>0:Boolean(l.operacao_origens_pncp);
 // Tentativas da listagem, da mais completa à do banco mais antigo: com numero_ordem (operacao_itens_numero_ordem.sql),
 // sem ela (ordem por id), e sem as colunas de preço. Só passa para a próxima quando a coluna não existe.
-async function paginaComFallback(pagina){
- const tentativas=[[selectListaOrigem+',numero_ordem:numero_ordem::text',true,true],[selectListaOrigem,true,false],[select,false,false]];
+// soParticipar (proposta e lote da extensão): só itens marcados para participar (operacao_itens_resultado.participar);
+// banco sem a coluna cai nas mesmas tentativas sem o filtro, ou seja, todos os itens, como antes.
+const PARTICIPAR='&participar=is.true';
+async function paginaComFallback(pagina,soParticipar=false){
+ const base=[[selectListaOrigem+',numero_ordem:numero_ordem::text',true,true],[selectListaOrigem,true,false],[select,false,false]];
+ const tentativas=[...(soParticipar?base.map(t=>[...t,PARTICIPAR]):[]),...base.map(t=>[...t,''])];
  let r;
- for(const [campos,precoDisponivel,porNumero] of tentativas){
-  r=await pagina(campos,porNumero);
+ for(const [campos,precoDisponivel,porNumero,filtro] of tentativas){
+  r=await pagina(campos,porNumero,filtro);
   if(r.ok)return {r,precoDisponivel,porNumero};
   if(!await colunaInexistente(r))break;
  }
@@ -51,10 +55,10 @@ function filtroCursor(c,porNumero){
  if(c.numero===undefined)falhar('Página inválida. Recarregue a lista.',400);
  return c.numero===null?`&numero_ordem=is.null&id=gt.${c.id}`:`&or=(numero_ordem.gt.${c.numero},numero_ordem.is.null,and(numero_ordem.eq.${c.numero},id.gt.${c.id}))`;
 }
-async function listarPaginaItens({request,organizacaoId,processoId,afterId,limit=100}){
+async function listarPaginaItens({request,organizacaoId,processoId,afterId,limit=100,soParticipar=false}){
  if(!Number.isInteger(limit)||limit<1||limit>100)falhar('Página inválida.',400);
  const cursor=lerCursor(afterId);
- const {r,precoDisponivel,porNumero}=await paginaComFallback((campos,porNumero)=>request('/rest/v1/'+base(organizacaoId,processoId,campos)+`&order=${porNumero?'numero_ordem.asc.nullslast,id.asc':'id.asc'}&limit=${limit+1}`+filtroCursor(cursor,porNumero),{headers:{Prefer:'count=exact'}}));
+ const {r,precoDisponivel,porNumero}=await paginaComFallback((campos,porNumero,filtro)=>request('/rest/v1/'+base(organizacaoId,processoId,campos)+filtro+`&order=${porNumero?'numero_ordem.asc.nullslast,id.asc':'id.asc'}&limit=${limit+1}`+filtroCursor(cursor,porNumero),{headers:{Prefer:'count=exact'}}),soParticipar);
  const rows=await r.json();conferir(rows,organizacaoId,processoId);
  const range=r.headers.get('content-range')||'',m=/^0-(\d+)\/(\d+)$/.exec(range);
  if(!/(?:^|,\s*)count=exact(?:,|$)/.test(r.headers.get('preference-applied')||'')||(!rows.length?range!=='*/0':!m||!Number.isSafeInteger(Number(m[2]))||Number(m[1])!==rows.length-1||rows.length!==Math.min(Number(m[2]),limit+1)))falhar('Não foi possível comprovar a página completa.',503);

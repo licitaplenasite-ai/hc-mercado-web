@@ -65,7 +65,7 @@ async function revisar(f,documentoId){const p=await f.run({acao:'preparar',docum
 test('variáveis do perfil preenchem o modelo; sem valor vira [PREENCHER: campo]; CPF fica marcador',()=>{
  const vars=variaveis({empresa:{razao_social:'Empresa {{cnpj}} QA',cnpj:'11222333000181'},processo:{numero:'1/2026',orgao:null},identificacao:{endereco:'Rua 1',representante:'Ana',cargo:'Sócia'},perfilEmpresa:{porte:'epp',cpf_representante:CPF,telefone:'(92) 3333-4444'},objeto:''});
  const t=preencherVariaveis('{{razao_social}}|{{cnpj}}|{{ cpf_representante }}|{{porte}}|{{orgao}}|{{objeto}}|{{cidade}}|{{data}}|{{email}}|{{telefone}}|{{desconhecida}}',vars);
- assert.equal(t,'Empresa cnpj QA|11.222.333/0001-81|{{cpf_representante}}|empresa de pequeno porte (EPP)|[PREENCHER: órgão]|[PREENCHER: objeto]|[PREENCHER: cidade]|[PREENCHER: data]|[PREENCHER: e-mail]|(92) 3333-4444|{{desconhecida}}');
+ assert.equal(t,'Empresa cnpj QA|11.222.333/0001-81|{{cpf_representante}}|empresa de pequeno porte (EPP)|[PREENCHER: órgão]|[PREENCHER: objeto]|____________________|{{data}}|[PREENCHER: e-mail]|(92) 3333-4444|{{desconhecida}}');
  assert.match(preencherVariaveis('{{porte}}',variaveis({empresa:{},processo:{},perfilEmpresa:{porte:'demais'}})),/^\[PREENCHER: porte\]$/);
  assert.match(preencherVariaveis('{{cnpj}}',variaveis({empresa:{cnpj:'123'},processo:{}})),/PREENCHER: CNPJ/);
  // Texto do edital não puxa variável: chaves duplas viram "{ {" / "} }".
@@ -82,7 +82,8 @@ test('lote grava rascunhos com modelo, é idempotente por processo+modelo e CPF 
  assert.ok(r.json.criados.every(d=>d.dados===undefined&&d.revisadoPor===null));
  const art63=f.state.kit[0].dados.declaracao;
  assert.match(art63.texto,/^Empresa QA, inscrita no CNPJ sob o nº 11\.222\.333\/0001-81, com sede em Rua QA, 1, neste ato representada por Ana, Sócia, inscrito\(a\) no CPF sob o nº \{\{cpf_representante\}\}, para fins de participação no processo licitatório nº 90001\/2026, promovido por Órgão QA, cujo objeto é Material de expediente/);
- assert.match(art63.texto,/\[PREENCHER: cidade\], \[PREENCHER: data\]/);assert.doesNotMatch(art63.texto.replace('{{cpf_representante}}',''),/\{\{|\b____\b/);
+ // Cidade sai do endereço (aqui sem cidade: lacuna para escrever à mão); a data fica marcador até o download.
+ assert.match(art63.texto,/\n_{20}, \{\{data\}\}\./);assert.doesNotMatch(art63.texto.replace('{{cpf_representante}}','').replace('{{data}}',''),/\{\{|\[PREENCHER/);
  assert.match(f.state.kit[1].dados.declaracao.texto,/condição de microempresa \(ME\)/);
  assert.equal(f.state.kit[2].dados.declaracao.texto,'DECLARAÇÃO I\nDeclaramos para o edital.');
  assert.ok(!f.state.selectsPerfil.some(s=>s.includes('cpf')),'lote não lê CPF');
@@ -114,8 +115,9 @@ test('lote nunca lê CPF e texto do edital não puxa variável; limite de 30, du
 });
 
 test('marcador [PREENCHER] aparece na prévia mas bloqueia revisão',async t=>{
- const f=fixture(t);await f.run(lote([{modeloCodigo:'HAB_ART63_I'}]));const id=f.state.kit[0].id;
- const p=await f.run({acao:'preparar',documentoId:id,versaoEsperada:1});assert.equal(p.statusCode,200);assert.match(p.json.previa.texto,/\[PREENCHER: cidade\]/);
+ const f=fixture(t);f.state.processo.objeto=null;await f.run(lote([{modeloCodigo:'HAB_ART63_I'}]));const id=f.state.kit[0].id;
+ const p=await f.run({acao:'preparar',documentoId:id,versaoEsperada:1});assert.equal(p.statusCode,200);assert.match(p.json.previa.texto,/\[PREENCHER: objeto\]/);
+ assert.match(p.json.previa.texto,/\[data do download\]/);
  const c=await f.run({acao:'confirmarRevisao',documentoId:id,versaoEsperada:1,revisado:true,revisaoHash:p.json.revisaoHash});assert.equal(c.statusCode,422);assert.match(c.json.pendencias[0],/PREENCHER/);
 });
 
@@ -169,7 +171,8 @@ test('logo inválida ou com hash divergente: documento sai sem logo, como antes'
  const f=fixture(t);await f.run(lote([{modeloCodigo:'livre',titulo:'A',texto:'Declaro A.'}]));await revisar(f,f.state.kit[0].id);
  f.state.logo=Buffer.from('nao e png');
  const x=await f.run({acao:'exportarDeclaracoes'});assert.equal(x.statusCode,200);assert.equal(x.json.logoAplicada,false);
- const zip=zipDe(x.json.arquivoBase64);assert.equal(zip.getEntry('word/media/logo.png'),null);assert.equal(zip.getEntry('word/header1.xml'),null);
+ // Cabeçalho continua (dados da empresa), só sem a imagem.
+ const zip=zipDe(x.json.arquivoBase64);assert.equal(zip.getEntry('word/media/logo.png'),null);assert.doesNotMatch(zip.readAsText('word/header1.xml'),/rIdLogo/);
 });
 
 test('montarDocx: com logo cria mídia, cabeçalho e relações; sem logo o pacote é o de hoje',()=>{
@@ -199,7 +202,9 @@ test('proposta em tabela só para peça nova (formato 2); peça antiga continua 
  assert.match(antigo.previa,/\nItem 1: Caneta\nQuantidade: 2 \| Unidade informada pelo usuário: un\nMarca: não informada \| Modelo: não informado\nUnitário ofertado: R\$ 1,25 \| Total: R\$ 2,50\n/);
  f.state.kit[0].formato=2;f.state.kit[0].revisao_hash=null;
  const novo=await exportar();
- assert.match(novo.doc,/<w:tblHeader\/>/);assert.match(novo.doc,/Marca \/ modelo/);assert.match(novo.doc,/>Caneta</);assert.match(novo.doc,/>2,50</);assert.match(novo.doc,/Total da proposta: R\$ 2,50 \(dois reais e cinquenta centavos\)/);assert.doesNotMatch(antigo.doc+novo.previa,/dois reais/);
+ assert.match(novo.doc,/<w:tblHeader\/>/);assert.match(novo.doc,/Marca \/ modelo/);assert.match(novo.doc,/>Caneta</);assert.match(novo.doc,/>2,50</);assert.match(novo.doc,/Valor total por extenso: dois reais e cinquenta centavos\./);
+ // Prévia (revisada) já traz o extenso, nos dois formatos.
+ assert.match(novo.previa,/Total da proposta: R\$ 2,50 \(dois reais e cinquenta centavos\)/);
  // Prévia e hash não mudam com o formato (revisões antigas continuam valendo).
  assert.equal(novo.previa,antigo.previa);assert.equal(novo.hash,antigo.hash);
  const lista=await f.run({acao:'listar'});assert.equal(lista.json.documentos[0].formato,2);assert.equal(lista.json.documentos[0].modeloCodigo,null);

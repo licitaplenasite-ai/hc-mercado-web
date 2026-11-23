@@ -39,6 +39,11 @@
     m('ME_EPP_DESENQUADRAMENTO', 'Declaração de desenquadramento da condição de ME/EPP', 'me_epp', 'LC 123/2006',
       'que deixou de se enquadrar na condição de microempresa ou empresa de pequeno porte, nos termos da Lei Complementar nº 123/2006, e que não fará uso do tratamento diferenciado e favorecido previsto para essas empresas no presente certame.',
       [/desenquadra/, /simples nacional/, /exclus\w+ do simples/, /\bme\s*\/\s*epp\b/, /microempresa|empresa de pequeno porte/]),
+    // Empresa fora do Simples/acima do teto: declara que NÃO é ME/EPP. Declaração de "inatividade" ou de enquadramento
+    // sem ser ME/EPP é declaração falsa (estudo PE 467/2025, seção 3.2). A tela escolhe esta ou a de enquadramento pelo porte.
+    m('ME_EPP_NAO_ENQUADRAMENTO', 'Declaração de não enquadramento como ME/EPP', 'me_epp', 'LC 123/2006, art. 3º; Lei 14.133/2021, art. 4º',
+      'que não se enquadra como microempresa ou empresa de pequeno porte, nos termos do art. 3º da Lei Complementar nº 123/2006, e que, por isso, não usufruirá do tratamento diferenciado e favorecido previsto nos arts. 42 a 49 dessa Lei Complementar no presente certame.',
+      [/nao\s+(se\s+)?enquadra/, /\bme\s*\/\s*epp\b/, /microempresa|empresa de pequeno porte/]),
     m('HAB_RESERVA_PCD', 'Declaração de cumprimento da reserva de cargos para PcD e reabilitados', 'habilitacao', 'Lei 14.133/2021, art. 63, IV; Lei 8.213/1991, art. 93',
       'que cumpre as exigências de reserva de cargos para pessoa com deficiência e para reabilitado da Previdência Social, previstas em lei e em outras normas específicas.',
       [/pessoas? com deficiencia|\bpcd\b/, /reabilitad/, /reserva de cargos/, /8\.?213/, /63,?\s*(inciso\s*)?iv\b/]),
