@@ -66,7 +66,9 @@ function estatico(req, res, caminho) {
   let arq = path.normalize(path.join(PUBLICO, decodeURIComponent(caminho === '/' ? '/index.html' : caminho)));
   if (!arq.startsWith(PUBLICO + path.sep)) { res.writeHead(403).end(); return; }
   if (!path.extname(arq) && fs.existsSync(arq + '.html')) arq += '.html'; // URL limpa, como no Pages (/sistema, /cliente)
-  if (!fs.existsSync(arq) || !fs.statSync(arq).isFile()) { res.writeHead(404, { 'content-type': 'text/plain' }).end('404'); return; }
+  if (fs.existsSync(arq) && fs.statSync(arq).isDirectory()) arq = path.join(arq, 'index.html'); // /blog/ -> blog/index.html, como no Pages
+  // Como no Pages: endereço que não existe devolve o 404.html com status 404 (e não a página inicial com 200).
+  if (!fs.existsSync(arq) || !fs.statSync(arq).isFile()) { res.writeHead(404, { 'content-type': TIPOS['.html'] }).end(fs.readFileSync(path.join(PUBLICO, '404.html'))); return; }
   res.writeHead(200, { ...cabecalhosDe(caminho), 'content-type': TIPOS[path.extname(arq).toLowerCase()] || 'application/octet-stream' }).end(fs.readFileSync(arq));
 }
 
