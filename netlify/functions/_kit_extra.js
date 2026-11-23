@@ -16,8 +16,8 @@ function editalDoDossie(estrutura,texto,processo){
 async function carregarExtra(c,empresa,processo,comFabricantes=false){
  const filtro=`empresa_id=eq.${empresa.id}&organizacao_id=eq.${empresa.organizacao_id}`;
  // uf_sede veio depois (perfil antigo sem a coluna): tenta sem ela antes de desistir do perfil.
- const perfilEmpresa=(await opcional(c.rest(`operacao_perfil_empresa?${filtro}&select=nome_fantasia,telefone,email,inscricao_estadual,inscricao_municipal,porte,uf_sede`)))?.[0]
-  ||(await opcional(c.rest(`operacao_perfil_empresa?${filtro}&select=nome_fantasia,telefone,email,inscricao_estadual,inscricao_municipal,porte`)))?.[0]||{};
+ const perfilEmpresa=(await opcional(c.rest(`operacao_perfil_empresa?${filtro}&select=nome_fantasia,telefone,email,inscricao_estadual,inscricao_municipal,porte,regime_tributario,uf_sede`)))?.[0]
+  ||(await opcional(c.rest(`operacao_perfil_empresa?${filtro}&select=nome_fantasia,telefone,email,inscricao_estadual,inscricao_municipal,porte,regime_tributario`)))?.[0]||{};
  const id=processo.origem_externa_id;
  const dossie=typeof id==='string'&&id?(await opcional(c.rest(`dossies_editais?numero_controle_pncp=eq.${encodeURIComponent(id)}&select=estrutura:dossie->estrutura,texto:dossie->>textoEdital`)))?.[0]:null;
  const fabricantes={};
