@@ -13,6 +13,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { FERRAMENTAS, PUBLICOS, GLOSSARIO } = require("./site-publico/paginas");
 const { ICONES } = require("./site-publico/icones");
+const { capaSvg } = require("./site-publico/capas");
 
 const RAIZ = path.join(__dirname, "..");
 const SITE = "https://licitaplena.com.br";
@@ -130,7 +131,7 @@ footer{border-top:1px solid var(--border-default);background:var(--surface-defau
 @media (max-width:760px){.c{padding:0 16px}h1{font-size:27px;line-height:35px}.mapa-site{grid-template-columns:1fr 1fr}.menu{order:3;width:100%;margin:0 -10px 6px}.topo .c{padding-top:8px}.acoes .btn{flex:1 1 auto}.chamada{padding:20px}}
 @media (max-width:420px){.acoes{width:100%}.chamada .btn{width:100%}}`;
 
-function pagina({ arquivo, titulo, descricao, corpo, schemas = [], migalhas = [], tipoOg = "website", indexar = true }) {
+function pagina({ arquivo, titulo, descricao, corpo, schemas = [], migalhas = [], tipoOg = "website", indexar = true, imagem = "/logo.png" }) {
   const url = SITE + urlDe(arquivo);
   const grafo = { "@context": "https://schema.org", "@graph": [ORGANIZACAO, ...schemas, ...(migalhas.length ? [migalhasSchema(migalhas)] : [])] };
   const trilha = migalhas.length ? `<ol class="migalhas">${migalhas.map(([n, u], i) => (i === migalhas.length - 1 ? `<li aria-current="page">${esc(n)}</li>` : `<li><a href="${u}">${esc(n)}</a></li>`)).join("")}</ol>` : "";
@@ -147,8 +148,8 @@ ${indexar ? `<link rel="canonical" href="${url}">` : '<meta name="robots" conten
 <meta property="og:locale" content="pt_BR">
 <meta property="og:title" content="${esc(titulo)}">
 <meta property="og:description" content="${esc(descricao)}">
-${indexar ? `<meta property="og:url" content="${url}">\n` : ""}<meta property="og:image" content="${SITE}/logo.png">
-<meta name="twitter:card" content="summary">
+${indexar ? `<meta property="og:url" content="${url}">\n` : ""}<meta property="og:image" content="${SITE}${imagem}">
+<meta name="twitter:card" content="${imagem === "/logo.png" ? "summary" : "summary_large_image"}">
 <link rel="icon" type="image/png" href="/favicon.png?v=3">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -180,7 +181,17 @@ ${mapaDoSite()}
 const chamada = (titulo = "Teste grátis por 14 dias", texto = "Sem cartão de crédito. Cada conta é liberada pela nossa equipe, e a resposta chega por e-mail.") =>
   `<section class="chamada" aria-label="Teste grátis"><h2>${titulo}</h2><p>${texto}</p><div class="acoes"><a href="/cadastro" class="btn btn-pri btn-g">Teste grátis 14 dias</a><a href="/assessoria-hc" class="btn btn-sec btn-g">Precisa de quem faça por você?</a></div></section>`;
 const faqHtml = (pares) => `<h2>Perguntas frequentes</h2><div class="faq">${pares.map(([q, r]) => `<details><summary>${esc(q)}</summary><p>${esc(r)}</p></details>`).join("")}</div>`;
-const cartaoArtigo = (a, nivel = "h3") => `<li class="cartao"><p class="rotulo">${esc(CATEGORIAS[a.categoria])}</p><${nivel}><a href="/blog/${a.slug}">${esc(a.titulo)}</a></${nivel}><p>${esc(a.resumo)}</p></li>`;
+// Capa: SVG na tela (leve e nítido); .jpg do mesmo desenho no og:image (scripts/gerar_capas_blog.js).
+const capaDe = (chave) => `/blog/capas/${chave}.svg`;
+const imgCapa = (chave, classe, preguica = true) => `<img class="${classe}" src="${capaDe(chave)}" alt="" width="1200" height="630"${preguica ? ' loading="lazy"' : ""}>`;
+const cartaoArtigo = (a, nivel = "h3", extra = "") => `<li class="cartao cartao-artigo${extra}">${imgCapa(a.slug, "cartao-capa")}<div class="cartao-corpo"><p class="rotulo">${esc(CATEGORIAS[a.categoria])}</p><${nivel}><a href="/blog/${a.slug}">${esc(a.titulo)}</a></${nivel}><p>${esc(a.resumo)}</p><p class="cartao-meta">${a.minutos} min de leitura</p></div></li>`;
+const idTitulo = (t) => t.replace(/<[^>]+>/g, "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+// Sumário: âncora em cada <h2> do corpo do artigo.
+function comSumario(corpo) {
+  const itens = [];
+  const html = corpo.replace(/<h2>([\s\S]*?)<\/h2>/g, (_, t) => { const id = idTitulo(t); itens.push([id, t.replace(/<[^>]+>/g, "")]); return `<h2 id="${id}">${t}</h2>`; });
+  return { html, itens };
+}
 const ferramentaPorSlug = (s) => FERRAMENTAS.find((f) => f.slug === s);
 // Cartão ilustrado (index e /ferramentas/): placa clara com ícone e detalhe azul-escuro embaixo (marca.css).
 const cartaoFerramenta = (f, nivel = "h3") => `<li class="ferr"><span class="ferr-ico">${ICONES[f.slug]}</span><${nivel}><a href="/ferramentas/${f.slug}">${esc(f.nome)}</a></${nivel}><p>${esc(f.descricao)}</p><span class="ferr-mais" aria-hidden="true">Conhecer a ferramenta</span></li>`;
@@ -240,7 +251,8 @@ ${chamada()}</div>`,
 
 function paginasBlog(artigos) {
   const navCat = (atual) => `<ul class="categorias">${Object.entries(CATEGORIAS).map(([s, n]) => `<li><a href="/blog/categoria/${s}"${s === atual ? ' aria-current="page"' : ""}>${esc(n)}</a></li>`).join("")}</ul>`;
-  const lista = (itens) => `<ul class="grade">${itens.map((a) => cartaoArtigo(a, "h2")).join("")}</ul>`;
+  // O primeiro da lista vira o destaque (cartão largo).
+  const lista = (itens) => `<ul class="grade grade-artigos">${itens.map((a, i) => cartaoArtigo(a, "h2", i === 0 && itens.length > 2 ? " destaque" : "")).join("")}</ul>`;
   const blogSchema = { "@type": "Blog", "@id": `${SITE}/blog/#blog`, name: "Blog do LicitaPlena", url: `${SITE}/blog/`, inLanguage: "pt-BR", publisher: { "@id": `${SITE}/#organizacao` } };
   const saida = [["blog/index.html", pagina({
     arquivo: "blog/index.html",
@@ -257,28 +269,35 @@ function paginasBlog(artigos) {
       titulo: `${n}: artigos sobre licitação | LicitaPlena`,
       descricao: `Artigos do LicitaPlena sobre ${n.toLowerCase()} em licitações públicas, em português simples e com a fonte oficial de cada regra.`,
       migalhas: [["Início", "/"], ["Blog", "/blog/"], [n, `/blog/categoria/${s}`]],
-      schemas: [{ "@type": "CollectionPage", name: n, url: `${SITE}/blog/categoria/${s}`, isPartOf: { "@id": `${SITE}/blog/#blog` } }],
-      corpo: `<h1>${esc(n)}</h1><p class="lead">${itens.length} ${itens.length === 1 ? "artigo" : "artigos"} nesta categoria.</p>${navCat(s)}${itens.length ? lista(itens) : '<p class="texto">Os primeiros artigos desta categoria saem em breve. Enquanto isso, veja <a href="/blog/">todos os artigos</a>.</p>'}${chamada()}`,
+      schemas: [{ "@type": "CollectionPage", name: n, url: `${SITE}/blog/categoria/${s}`, isPartOf: { "@id": `${SITE}/blog/#blog` }, image: `${SITE}/blog/capas/${s}.jpg` }],
+      imagem: `/blog/capas/${s}.jpg`,
+      corpo: `<div class="cat-cab">${imgCapa(s, "cat-capa", false)}<div class="cat-texto"><p class="rotulo">Categoria do blog</p><h1>${esc(n)}</h1><p class="lead">${itens.length} ${itens.length === 1 ? "artigo" : "artigos"} nesta categoria, em português simples e com a fonte oficial de cada regra.</p></div></div>${navCat(s)}${itens.length ? lista(itens) : '<p class="texto">Os primeiros artigos desta categoria saem em breve. Enquanto isso, veja <a href="/blog/">todos os artigos</a>.</p>'}${chamada()}`,
     })]);
   }
   for (const a of artigos) {
     const f = a.ferramenta;
     const outros = artigos.filter((b) => b.slug !== a.slug).sort((x, y) => (y.categoria === a.categoria) - (x.categoria === a.categoria)).slice(0, 3);
+    const { html: corpo, itens: sumario } = comSumario(a.corpo);
     saida.push([`blog/${a.slug}.html`, pagina({
-      arquivo: `blog/${a.slug}.html`, titulo: a.titulo, descricao: a.descricao, tipoOg: "article",
+      arquivo: `blog/${a.slug}.html`, titulo: a.titulo, descricao: a.descricao, tipoOg: "article", imagem: `/blog/capas/${a.slug}.jpg`,
       migalhas: [["Início", "/"], ["Blog", "/blog/"], [CATEGORIAS[a.categoria], `/blog/categoria/${a.categoria}`], [a.titulo, `/blog/${a.slug}`]],
       schemas: [{
         "@type": "Article", headline: a.titulo, description: a.descricao, datePublished: a.data, dateModified: a.data, inLanguage: "pt-BR",
         author: { "@type": "Organization", name: "Equipe LicitaPlena", url: `${SITE}/sobre` }, publisher: { "@id": `${SITE}/#organizacao` },
-        mainEntityOfPage: `${SITE}/blog/${a.slug}`, image: `${SITE}/logo.png`, articleSection: CATEGORIAS[a.categoria], isPartOf: { "@id": `${SITE}/blog/#blog` },
+        mainEntityOfPage: `${SITE}/blog/${a.slug}`, image: `${SITE}/blog/capas/${a.slug}.jpg`, articleSection: CATEGORIAS[a.categoria], isPartOf: { "@id": `${SITE}/blog/#blog` },
       }],
-      corpo: `<article class="estreito"><h1>${esc(a.titulo)}</h1><p class="meta-artigo">Por Equipe LicitaPlena · <time datetime="${a.data}">${dataBr(a.data)}</time> · ${a.minutos} min de leitura · <a href="/blog/categoria/${a.categoria}">${esc(CATEGORIAS[a.categoria])}</a></p>
-<div class="texto">${a.corpo}</div>
-<section class="chamada" aria-label="Ferramenta relacionada"><p class="rotulo">Ferramenta relacionada</p><h2><a href="${f}">${esc(a.ferramentaNome)}</a></h2><p>Veja como o LicitaPlena ajuda nesta etapa.</p></section>
-${chamada()}
-<h2>Continue lendo</h2><ul class="grade">${outros.map((b) => cartaoArtigo(b)).join("")}</ul></article>`,
+      corpo: `<article class="artigo"><header class="artigo-cab"><a class="selo-cat" href="/blog/categoria/${a.categoria}">${esc(CATEGORIAS[a.categoria])}</a><h1>${esc(a.titulo)}</h1><p class="lead">${esc(a.descricao)}</p>
+<p class="meta-artigo"><span>Por Equipe LicitaPlena</span><span><time datetime="${a.data}">${dataBr(a.data)}</time></span><span>${a.minutos} min de leitura</span></p></header>
+<figure class="artigo-capa">${imgCapa(a.slug, "capa", false)}</figure>
+<div class="artigo-grade">${sumario.length > 1 ? `<nav class="sumario" aria-label="Neste artigo"><p class="sumario-titulo">Neste artigo</p><ol>${sumario.map(([id, t]) => `<li><a href="#${id}">${esc(t)}</a></li>`).join("")}</ol></nav>` : ""}
+<div class="texto">${corpo}
+<section class="chamada chamada-ferramenta" aria-label="Ferramenta relacionada"><p class="rotulo">Ferramenta relacionada</p><h2><a href="${f}">${esc(a.ferramentaNome)}</a></h2><p>Veja como o LicitaPlena ajuda nesta etapa.</p></section>
+${chamada()}</div></div>
+<h2 class="relacionados-titulo">Continue lendo</h2><ul class="grade grade-artigos">${outros.map((b) => cartaoArtigo(b)).join("")}</ul></article>`,
     })]);
   }
+  for (const s of Object.keys(CATEGORIAS)) saida.push([`blog/capas/${s}.svg`, capaSvg(s, s)]);
+  for (const a of artigos) saida.push([`blog/capas/${a.slug}.svg`, capaSvg(a.categoria, a.slug)]);
   return saida;
 }
 
@@ -361,7 +380,7 @@ function montarIndex(html, artigos) {
     '<meta property="og:locale" content="pt_BR">', `<meta property="og:title" content="${titulo}">`, `<meta property="og:description" content="${descricao}">`,
     `<meta property="og:url" content="${SITE}/">`, `<meta property="og:image" content="${SITE}/logo.png">`, '<meta name="twitter:card" content="summary">',
     jsonld({ "@context": "https://schema.org", "@graph": [ORGANIZACAO, { "@type": "WebSite", "@id": `${SITE}/#site`, name: "LicitaPlena", url: `${SITE}/`, inLanguage: "pt-BR", publisher: { "@id": `${SITE}/#organizacao` } }, SOFTWARE, faqSchema(faqDoIndex(html))] })].join("\n");
-  const blog = `<ul class="grade-blog">${artigos.slice(0, 3).map((a) => `<li><p class="sobretitulo">${esc(CATEGORIAS[a.categoria])}</p><h3><a href="/blog/${a.slug}">${esc(a.titulo)}</a></h3><p>${esc(a.resumo)}</p></li>`).join("")}</ul>`;
+  const blog = `<ul class="grade-blog">${artigos.slice(0, 3).map((a) => `<li>${imgCapa(a.slug, "grade-blog-capa")}<p class="sobretitulo">${esc(CATEGORIAS[a.categoria])}</p><h3><a href="/blog/${a.slug}">${esc(a.titulo)}</a></h3><p>${esc(a.resumo)}</p></li>`).join("")}</ul>`;
   let saida = trocarBloco(html, "seo-cabeca", cabeca);
   saida = trocarBloco(saida, "do-blog", blog);
   saida = trocarBloco(saida, "ferramentas", `<ul class="ferr-grade">${FERRAMENTAS.map((f) => cartaoFerramenta(f)).join("")}</ul>`);
