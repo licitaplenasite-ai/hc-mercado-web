@@ -43,15 +43,33 @@ async function restFetch(caminho, opcoes = {}) {
 async function upsertEmLotes(tabela, linhas, chaveConflito, tamanhoLote = 500) {
   let enviadas = 0;
   for (let i = 0; i < linhas.length; i += tamanhoLote) {
-    const lote = linhas.slice(i, i + tamanhoLote);
+    enviadas += await enviarLote(tabela, linhas.slice(i, i + tamanhoLote), chaveConflito);
+  }
+  return enviadas;
+}
+
+// 20-22/11: lotes de 500 em "contratos" (índice GIN trigram em objeto) e em
+// "comprasgov_resultados" estouravam o statement timeout do banco (57014) e derrubavam o
+// robô inteiro. Upsert é idempotente: em timeout, divide o lote ao meio e reenvia, até
+// LOTE_MINIMO linhas — abaixo disso o problema não é tamanho de lote e o erro sobe.
+const LOTE_MINIMO = 25;
+function ehTimeout(e) {
+  return (e && e.name === "TimeoutError") || /57014|statement timeout/.test(String(e && e.message));
+}
+async function enviarLote(tabela, lote, chaveConflito) {
+  try {
     await restFetch(`${tabela}?on_conflict=${chaveConflito}`, {
       method: "POST",
       headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
       body: JSON.stringify(lote),
     });
-    enviadas += lote.length;
+    return lote.length;
+  } catch (e) {
+    if (lote.length <= LOTE_MINIMO || !ehTimeout(e)) throw e;
+    const meio = Math.ceil(lote.length / 2);
+    console.warn(`[supabase] ${tabela}: timeout num lote de ${lote.length}; reenviando em 2 lotes de até ${meio}.`);
+    return (await enviarLote(tabela, lote.slice(0, meio), chaveConflito)) + (await enviarLote(tabela, lote.slice(meio), chaveConflito));
   }
-  return enviadas;
 }
 
 // Baixa todas as linhas de uma tabela em páginas (Postgrest limita a 1000 linhas
