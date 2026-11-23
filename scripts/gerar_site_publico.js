@@ -95,7 +95,7 @@ a{color:var(--action-text);text-underline-offset:3px}:focus-visible{outline:2px 
 .topo{position:sticky;top:0;z-index:50;background:var(--surface-default);border-bottom:1px solid var(--border-default)}
 .topo .c{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:60px;flex-wrap:wrap}
 .marca{display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:16px;color:var(--text-primary);text-decoration:none}
-.placa{display:inline-grid;place-content:center;width:32px;height:32px;border-radius:var(--radius-control);background:#f6f8fc;border:1px solid #e3e8f0}.placa img{width:24px;height:24px;display:block}
+.placa{display:inline-grid;place-content:center;width:32px;height:32px;border-radius:var(--radius-control);background:none;border:0}.placa img{width:24px;height:24px;display:block}
 .menu{display:flex;gap:2px;flex-wrap:wrap}.menu a{text-decoration:none;color:var(--text-secondary);font-weight:500;padding:6px 10px;border-radius:var(--radius-control)}.menu a:hover{color:var(--text-primary);background:var(--surface-sunken)}
 .acoes{display:flex;gap:8px;flex-wrap:wrap}
 .btn{min-height:36px;padding:0 16px;border-radius:var(--radius-control);border:1px solid transparent;display:inline-flex;align-items:center;justify-content:center;font-weight:500;font-size:14px;text-decoration:none;cursor:pointer;text-align:center}

@@ -10,7 +10,7 @@ body{min-height:100vh;padding-bottom:140px}
 
 .cl-topo{display:flex;flex-wrap:wrap;gap:var(--space-12);align-items:center;justify-content:space-between;padding:var(--space-12) var(--space-24);background:var(--surface-default);border-bottom:1px solid var(--border-default)}
 .cl-marca{display:inline-flex;align-items:center;gap:var(--space-8);font-weight:600;font-size:16px;line-height:24px;color:var(--brand-navy)}
-.placa{display:inline-grid;place-content:center;width:32px;height:32px;border-radius:var(--radius-control);background:#f6f8fc;border:1px solid #e3e8f0;flex:none}
+.placa{display:inline-grid;place-content:center;width:32px;height:32px;border-radius:var(--radius-control);background:none;border:0;flex:none}
 .placa img{width:24px;height:24px;display:block}
 .cl-empresa{font:var(--text-section);font-size:18px;color:var(--text-primary);overflow-wrap:anywhere;min-width:0}
 

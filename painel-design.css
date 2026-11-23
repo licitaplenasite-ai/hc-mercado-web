@@ -78,8 +78,8 @@
   header::after { display: none; }
   .header-marca { gap: 8px; }
   .header-nome { color: var(--text-primary); font-size: 16px; line-height: 24px; font-weight: 600; letter-spacing: 0; }
-  /* Placa clara fixa: o azul-marinho do símbolo continua legível no tema escuro (mesma regra do login). */
-  .header-placa { display: inline-grid; place-content: center; width: 32px; height: 32px; border-radius: var(--radius-control); background: #f6f8fc; border: 1px solid #e3e8f0; flex: none; }
+  /* Logo livre (dono, 23/11): sem placa de fundo; no tema escuro o desenho fica todo branco (ds-tokens.css). */
+  .header-placa { display: inline-grid; place-content: center; width: 32px; height: 32px; border-radius: var(--radius-control); background: none; border: 0; flex: none; }
   .header-placa img { width: 24px; height: 24px; display: block; }
   .header-acoes { gap: 8px; }
   .header-badge, .header-badge-plano {

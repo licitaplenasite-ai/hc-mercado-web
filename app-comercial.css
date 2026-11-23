@@ -6,7 +6,7 @@ body{min-height:100vh}
 .app-marca{font:var(--text-section);color:var(--text-primary)}
 /* 23/11 (dono): a marca do /sistema volta ao painel, como nas outras páginas; antes era texto solto e o cliente ficava sem saída. */
 a.app-marca{display:inline-flex;align-items:center;gap:var(--space-8);text-decoration:none}
-.app-marca-placa{display:inline-grid;place-content:center;width:32px;height:32px;border-radius:var(--radius-control);background:var(--surface-sunken);border:1px solid var(--border-default);flex:none}
+.app-marca-placa{display:inline-grid;place-content:center;width:32px;height:32px;border-radius:var(--radius-control);background:none;border:0;flex:none}
 .app-marca-placa img{width:24px;height:24px;display:block}
 .app-controles{display:flex;flex-wrap:wrap;gap:var(--space-8);align-items:center;min-width:0}
 .app-empresa{display:flex;flex-wrap:wrap;gap:var(--space-8);align-items:center;font:var(--text-label);color:var(--text-secondary)}

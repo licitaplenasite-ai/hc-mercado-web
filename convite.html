@@ -26,8 +26,8 @@
     .caixa { width: 100%; max-width: 440px; padding: 24px; background: var(--surface-default); border: 1px solid var(--border-default); border-radius: var(--radius-card); }
     .topo { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 24px; }
     .marca { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 16px; line-height: 24px; color: var(--text-primary); text-decoration: none; }
-    /* Placa clara fixa: o azul-marinho do símbolo continua legível no tema escuro (regra do DS). */
-    .placa { display: inline-grid; place-content: center; width: 32px; height: 32px; border-radius: var(--radius-control); background: #f6f8fc; border: 1px solid #e3e8f0; flex: none; }
+    /* Logo livre (dono, 23/11): sem placa de fundo; no tema escuro o desenho fica todo branco (ds-tokens.css). */
+    .placa { display: inline-grid; place-content: center; width: 32px; height: 32px; border-radius: var(--radius-control); background: none; border: 0; flex: none; }
     .placa img { width: 24px; height: 24px; display: block; }
     h1 { font: var(--text-section); margin: 0 0 4px; }
     p.sub { color: var(--text-secondary); margin: 0 0 16px; }
