@@ -39,3 +39,21 @@
 .jur-trecho { color: var(--text-primary); }
 .jur-trecho mark { background: var(--action-tint); color: var(--action-text); font-weight: 600; padding: 0; border-radius: 2px; }
 .jur-integral { white-space: pre-wrap; max-height: 420px; overflow: auto; font: var(--text-body); color: var(--text-primary); }
+/* Área refeita em 22/11/2026: topo fixo (aviso + HC), busca em tudo, prazos e artigos. */
+.jur-topo { display: grid; gap: var(--space-8); }
+.jur-hc { font: var(--text-label); }
+.jur-hc a { font-weight: 600; }
+#juridico-central h3.jur-grupo { margin: var(--space-8) 0 0; font: 600 15px/22px var(--font-sans); color: var(--text-primary); }
+.jur-resultado { background: none; border: 0; padding: 0; text-align: left; color: var(--action-text); font: 600 15px/22px var(--font-sans); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.jur-resultado:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.jur-prazo { display: grid; gap: var(--space-4); }
+.jur-calculado { color: var(--text-primary); }
+.jur-faltar ul { margin: 0; padding-left: 20px; display: grid; gap: var(--space-4); }
+.jur-faltar > summary { cursor: pointer; font-weight: 600; }
+.jur-prazo-dia { font: 700 18px/26px var(--font-sans); color: var(--text-primary); }
+.jur-prazo-linha .jur-botao { justify-self: start; }
+.jur-artigo > summary { cursor: pointer; display: grid; gap: var(--space-4); }
+.jur-artigo-titulo { font-weight: 600; }
+.jur-artigo-resumo { font-weight: 400; }
+#juridico-central input[type=date] { max-width: 100%; }
+@media (max-width: 480px) { .jur-acoes .jur-botao { flex: 1 1 100%; } }
