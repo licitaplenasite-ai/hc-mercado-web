@@ -145,4 +145,51 @@ begin
  exception when invalid_parameter_value then null; end;
 end $$;
 reset role;
+-- v7: cópia estreita prospeccao_busca, mantida pelo trigger; a busca acima já passou por ela (banco de teste nasce "pronto").
+do $$
+declare x text; ids text;
+begin
+ if not exists(select 1 from public.dados_robo where chave='prospeccao_busca_pronta') then raise exception 'banco novo deveria nascer com a cópia pronta'; end if;
+ if has_table_privilege('authenticated','public.prospeccao_busca','SELECT') or has_table_privilege('anon','public.prospeccao_busca','SELECT')
+    or has_table_privilege('service_role','public.prospeccao_busca','INSERT') then raise exception 'papel do PostgREST chega à cópia'; end if;
+ if has_function_privilege('authenticated','public.prospeccao_busca_carregar(int)','EXECUTE') then raise exception 'autenticado roda a carga'; end if;
+ -- Palavras distintas, só [a-z0-9] com 2+ letras, em ordem: '%palavra%' casa igual ao texto original.
+ if public.prospeccao_palavras('Papel A4, papel-a4; x 75g') <> '75g a4 papel' then raise exception 'palavras: %', public.prospeccao_palavras('Papel A4, papel-a4; x 75g'); end if;
+ if (select (nome, texto, tipo, uf, data_ref, valor_total) from public.prospeccao_busca where id='pca:QA-12')
+    is distinct from ('impressora laser'::text, 'com de impressora kit laser limpeza orgao qa'::text, 'pca'::text, 'AM'::text, '2027-01-20'::date, 30::numeric) then
+   raise exception 'trigger não copiou o insert: %', (select row(nome, texto) from public.prospeccao_busca where id='pca:QA-12');
+ end if;
+ -- Upsert do robô que só muda coletado_em não regrava a cópia (é o que mantém o VM "all-visible").
+ x := (select xmin::text from public.prospeccao_busca where id='pca:QA-12');
+ insert into public.prospeccao_itens(id,tipo,fonte,uf,data_ref,valor_total,link,busca,busca_nome,coletado_em) values
+  ('pca:QA-12','pca','pncp','AM','2027-01-20',30,'https://pncp.gov.br/app/pca/12','impressora laser com kit de limpeza orgao qa','impressora laser',now())
+  on conflict (id) do update set coletado_em = excluded.coletado_em, busca = excluded.busca;
+ if (select xmin::text from public.prospeccao_busca where id='pca:QA-12') <> x then raise exception 'upsert sem mudança regravou a cópia'; end if;
+ -- Mudou campo da busca: a cópia acompanha (no mesmo upsert do robô).
+ insert into public.prospeccao_itens(id,tipo,fonte,uf,data_ref,valor_total,link,busca,busca_nome) values
+  ('pca:QA-12','pca','pncp','SP','2027-01-21',31,'https://pncp.gov.br/app/pca/12','Limpeza de piso orgao qa','limpeza de piso')
+  on conflict (id) do update set uf = excluded.uf, data_ref = excluded.data_ref, valor_total = excluded.valor_total, busca = excluded.busca, busca_nome = excluded.busca_nome;
+ if (select (nome, texto, uf, data_ref, valor_total) from public.prospeccao_busca where id='pca:QA-12')
+    is distinct from ('limpeza de piso'::text, 'de limpeza orgao piso qa'::text, 'SP'::text, '2027-01-21'::date, 31::numeric) then raise exception 'trigger não copiou o update'; end if;
+ -- Robô apaga: some da cópia.
+ delete from public.prospeccao_itens where id='pca:QA-13';
+ if exists(select 1 from public.prospeccao_busca where id='pca:QA-13') then raise exception 'trigger não apagou'; end if;
+ -- Mesmo resultado pela cópia e, sem a marca de pronta, direto em prospeccao_itens (caminho da carga em produção).
+ select string_agg(id, ',' order by data_ref) into ids from public.buscar_prospeccao('pca',null,null,'2026-11-01','2028-01-01','[["limpeza"]]','inicio',201) where id like '%QA-%';
+ if ids is distinct from 'pca:QA-11,pca:QA-12' then raise exception 'inicio pela cópia: %', ids; end if;
+ delete from public.dados_robo where chave='prospeccao_busca_pronta';
+ select string_agg(id, ',' order by data_ref) into ids from public.buscar_prospeccao('pca',null,null,'2026-11-01','2028-01-01','[["limpeza"]]','inicio',201) where id like '%QA-%';
+ if ids is distinct from 'pca:QA-11,pca:QA-12' then raise exception 'inicio sem a cópia: %', ids; end if;
+ select string_agg(id, ',' order by data_ref) into ids from public.buscar_prospeccao('pca',null,null,'2026-11-01','2028-01-01','[["qa"]]','espec',201) where id like '%QA-%';
+ if ids is distinct from 'pca:QA-11,pca:QA-10,pca:QA-12' then raise exception 'espec sem a cópia: %', ids; end if;
+ -- Carga: repõe o que faltar, apaga sobra e volta a marcar pronta (os dois índices existem aqui).
+ delete from public.prospeccao_busca where id='pca:QA-10';
+ insert into public.prospeccao_busca(id,tipo,nome,texto) values ('pca:QA-sobra','pca','x','x');
+ while public.prospeccao_busca_carregar(1000) > 0 loop end loop;
+ if not exists(select 1 from public.prospeccao_busca where id='pca:QA-10') then raise exception 'carga não repôs'; end if;
+ if exists(select 1 from public.prospeccao_busca where id='pca:QA-sobra') then raise exception 'carga não apagou sobra'; end if;
+ if not exists(select 1 from public.dados_robo where chave='prospeccao_busca_pronta') then raise exception 'carga não marcou pronta'; end if;
+ select string_agg(id, ',' order by data_ref) into ids from public.buscar_prospeccao('pca',null,null,'2026-11-01','2028-01-01','[["qa"]]','espec',201) where id like '%QA-%';
+ if ids is distinct from 'pca:QA-11,pca:QA-10,pca:QA-12' then raise exception 'espec pela cópia: %', ids; end if;
+end $$;
 rollback;
