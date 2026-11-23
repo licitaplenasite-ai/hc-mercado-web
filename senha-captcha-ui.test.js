@@ -148,5 +148,5 @@ test("páginas de acesso usam o olho e o hCaptcha visível, sem Turnstile nem ch
       assert.ok(csp.split("Content-Security-Policy")[1].split(`${dir} `)[1].split(";")[0].includes("https://*.hcaptcha.com"), `${arq} ${dir}`);
     }
   }
-  assert.match(fs.readFileSync(`${__dirname}/supabase-config.js`, "utf8"), /const HCAPTCHA_SITEKEY = "E358601C-A03C-4316-9F24-B3DC4316992E";/);
+  assert.match(fs.readFileSync(`${__dirname}/supabase-config.js`, "utf8"), /const HCAPTCHA_SITEKEY = "[^"]*";/); // vazia (desligado) ou a chave do painel
 });

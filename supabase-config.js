@@ -5,7 +5,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_yH695cc52QUKYfFEgV5RwQ_0a8GLIeb";
 // Captcha do login (hCaptcha, caixinha "Sou humano"): "Site Key" do painel do hCaptcha, entre as aspas.
 // Vazia = captcha desligado e login normal. No localhost a chave de teste entra sozinha (senha-captcha-ui.js).
 // 23/11: dono trocou o Turnstile invisível da Cloudflare de volta pelo hCaptcha visível.
-const HCAPTCHA_SITEKEY = "E358601C-A03C-4316-9F24-B3DC4316992E";
+const HCAPTCHA_SITEKEY = ""; // 23/11: hCaptcha da conta dá "Solicitação não permitida" mesmo com domínio liberado; desligado até resolver (chave: E358601C-A03C-4316-9F24-B3DC4316992E)
 // WhatsApp do suporte: TROCAR pelo número de suporte (botão da Central de ajuda, ajuda-ui.js): só dígitos com DDI 55, ex.: "55" + DDD + número.
 // Vazio = botão "WhatsApp (em breve)" desligado. "var" de propósito: vira window.LICITAPLENA_WHATSAPP_SUPORTE.
 var LICITAPLENA_WHATSAPP_SUPORTE = "5592981937781"; // mesmo número da HC/HCM (decisão do dono, 22/11)
