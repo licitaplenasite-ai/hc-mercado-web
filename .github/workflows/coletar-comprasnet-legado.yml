@@ -31,10 +31,10 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout do repositório
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@v5
 
       - name: Configurar Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@v5
         with:
           node-version: "20"
 
@@ -53,7 +53,10 @@ jobs:
             exit 1
           fi
           rm -rf /tmp/dados-historicos-comprasnet
-          git clone --depth 1 "https://harresoncoelho-lang:${DADOS_HISTORICOS_TOKEN}@github.com/harresoncoelho-lang/hc-licitacoes-dados-historicos.git" /tmp/dados-historicos-comprasnet
+          git clone --depth 1 "https://harresoncoelho-lang:${DADOS_HISTORICOS_TOKEN}@github.com/harresoncoelho-lang/hc-licitacoes-dados-historicos.git" /tmp/dados-historicos-comprasnet || {
+            echo "::error::DADOS_HISTORICOS_TOKEN recusado pelo GitHub (vencido ou revogado). Gere um token novo na conta harresoncoelho-lang com acesso de escrita a hc-licitacoes-dados-historicos e atualize o secret do repositório."
+            exit 1
+          }
 
       - name: Rodar robô de coleta ComprasNet Legado
         env:

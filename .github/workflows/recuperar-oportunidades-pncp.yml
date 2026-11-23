@@ -26,8 +26,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: "20"
       - name: Recuperar somente UFs pendentes
@@ -35,7 +35,9 @@ jobs:
           SOMENTE_OPORTUNIDADES: "1"
           RECUPERAR_UFS_PENDENTES: "1"
           LIMITE_MINUTOS_OPORTUNIDADES: "28"
-          CONCORRENCIA_UF_OPORTUNIDADES: "2"
+          # A taxa é limitada pela cadência global (INTERVALO_MS), não pelos workers: com
+          # 2, a latência de ~4,5 s por página deixava só ~14 UFs por rodada (22/11).
+          CONCORRENCIA_UF_OPORTUNIDADES: "3"
           INTERVALO_MS_OPORTUNIDADES: "900"
           MIN_UFS_OK_OPORTUNIDADES: "1"
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
