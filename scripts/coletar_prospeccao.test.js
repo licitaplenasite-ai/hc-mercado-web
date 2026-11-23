@@ -286,3 +286,31 @@ test("etapaAta: UF acima da janela é lida por município; só as N atas mais re
     Object.assign(P.banco, antes);
   }
 });
+
+// 22-23/11/2026: DELETE único data_ref=lt.hoje estourou o statement timeout (57014) e derrubou a rodada.
+test("limparVencidos: um dia por vez, só as UFs do grupo (+ sem UF no grupo da IRP), nunca o que vence hoje", async () => {
+  const linhas = [
+    { uf: "AM", data_ref: "2026-11-01" }, { uf: "AM", data_ref: "2026-11-01" }, { uf: "AM", data_ref: "2026-11-20" },
+    { uf: "AM", data_ref: "2026-11-23" }, { uf: "SP", data_ref: "2026-11-22" }, { uf: "MG", data_ref: "2026-11-02" },
+    { uf: null, data_ref: "2026-11-10" },
+  ];
+  const deletes = [];
+  const casa = (q, l) => (q.get("uf") === "is.null" ? l.uf === null : q.get("uf").slice(4, -1).split(",").includes(l.uf))
+    && l.data_ref < q.get("data_ref").slice(3);
+  const original = P.banco.restFetch;
+  P.banco.restFetch = async (caminho, op = {}) => {
+    const q = new URLSearchParams(caminho.split("?")[1]);
+    if (op.method === "DELETE") {
+      deletes.push(q.get("data_ref"));
+      for (let i = linhas.length - 1; i >= 0; i--) if (casa(q, linhas[i])) linhas.splice(i, 1);
+      return { ok: true };
+    }
+    const achou = linhas.filter((l) => casa(q, l)).sort((a, b) => a.data_ref.localeCompare(b.data_ref)).slice(0, 1);
+    return { ok: true, json: async () => achou };
+  };
+  try {
+    assert.equal(await P.limparVencidos("2026-11-23", ["AM", "SP"], true), 4);
+  } finally { P.banco.restFetch = original; }
+  assert.deepEqual(deletes, ["lt.2026-11-02", "lt.2026-11-21", "lt.2026-11-23", "lt.2026-11-11"]);
+  assert.deepEqual(linhas, [{ uf: "AM", data_ref: "2026-11-23" }, { uf: "MG", data_ref: "2026-11-02" }]);
+});

@@ -3,6 +3,7 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const AdmZip = require("adm-zip");
 const robo = require("./coletar_sancoes_cgu");
@@ -188,6 +189,21 @@ test("main sem data fixa usa o último arquivo publicado, mesmo de dias atrás (
   await robo.main({}, { ...b, rest, fetch, tentativas: 1 });
   assert.equal(pedidos.filter((p) => p.endsWith("_CEIS.zip")).length, 4); // hoje, -1, -2 (403) e -3 (achou)
   assert.equal(b.linhas.size > 0, true);
-  // Mais velho que a janela: aí sim é erro (fonte parada há mais de uma semana).
-  await assert.rejects(robo.main({ JANELA_DIAS: "3" }, { ...bancoFalso(), rest, fetch, tentativas: 1 }), /2 etapa\(s\) com falha/);
+  // Mais velho que a janela: a CGU não publicou nada. 22-23/11/2026: 5 de 10 agendados vermelhos por isso. Agora é
+  // aviso (sai 0, base anterior intacta, indisponivel=1 pula o batimento: o admin mostra o atraso se durar).
+  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), "sancoes-"));
+  const saida = path.join(pasta, "out");
+  const vazio = bancoFalso();
+  const r = await robo.main({ JANELA_DIAS: "3", GITHUB_OUTPUT: saida }, { ...vazio, rest, fetch, tentativas: 1 });
+  assert.equal(r.indisponiveis.length, 2);
+  assert.equal(fs.readFileSync(saida, "utf8"), "indisponivel=1\n");
+  assert.equal(vazio.linhas.size, 0);
+  assert.equal(vazio.patches.length, 0);
+});
+
+test("main: arquivo indisponível num cadastro não esconde falha real no outro (continua vermelho)", async () => {
+  const b = bancoFalso();
+  const rest = async (caminho, op) => (caminho.startsWith("rpc/") ? { json: async () => 0 } : b.rest(caminho, op));
+  const fetch = fetchCom({ "20261119_CNEP.zip": Buffer.from("não é zip") });
+  await assert.rejects(robo.main({ DATA_ARQUIVO: "20261119" }, { ...b, rest, fetch, tentativas: 1 }), /1 etapa\(s\) com falha/);
 });

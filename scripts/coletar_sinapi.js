@@ -94,6 +94,7 @@ async function pedir(url, metodo, timeoutMs) {
 // 23/11/2026 o robô contou isso como "não existe" e concluiu que nenhum mês estava publicado. Agora o robô espera
 // entre sondagens, repete com espera maior (Retry-After, se vier) e, se o bloqueio continuar, falha dizendo o motivo.
 const esperar = (ms) => new Promise((ok) => setTimeout(ok, ms));
+const bloqueio = (status) => status === 429 || status === 403;
 async function existe(url, pedirFn = pedir, pausaMs = num(process.env.SINAPI_PAUSA_MS, 3000)) {
   let status;
   for (let tentativa = 0; tentativa < 4; tentativa++) {
@@ -108,7 +109,7 @@ async function existe(url, pedirFn = pedir, pausaMs = num(process.env.SINAPI_PAU
     const retry = Number(r.headers?.get?.("retry-after"));
     await esperar(Number.isFinite(retry) && retry > 0 ? Math.min(retry, 300) * 1000 : pausaMs * 10 * (tentativa + 1));
   }
-  throw new Error(`CAIXA respondeu HTTP ${status} para ${url.split("/").pop()} (${status === 429 || status === 403 ? "limite/bloqueio anti-robô" : "erro do site"}). Tente mais tarde; não é falta de publicação.`);
+  throw Object.assign(new Error(`CAIXA respondeu HTTP ${status} para ${url.split("/").pop()} (${bloqueio(status) ? "limite/bloqueio anti-robô" : "erro do site"}). Tente mais tarde; não é falta de publicação.`), { indisponivel: bloqueio(status) });
 }
 // Rota reserva: ZIP local. O nome tem que ser o oficial (é o que vai para fonte_url/arquivo no catálogo e para a
 // conferência de retificação) e o mês tem que bater com SINAPI_REFERENCIA, para não gravar um mês no lugar de outro.
@@ -125,12 +126,12 @@ async function acharReferencia(agora = Date.now()) {
   if (forcado) {
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(forcado)) throw new Error("SINAPI_REFERENCIA deve ser AAAA-MM.");
     for (const nome of nomesDoMes(forcado)) if (await existe(BASE + nome)) return { mes: forcado, url: BASE + nome };
-    throw new Error(`SINAPI ${forcado} não encontrado na CAIXA.`);
+    throw Object.assign(new Error(`SINAPI ${forcado} não encontrado na CAIXA.`), { indisponivel: true });
   }
   for (const mes of mesesParaTras(agora, num(process.env.SINAPI_MESES_ATRAS, 6))) {
     for (const nome of nomesDoMes(mes)) if (await existe(BASE + nome)) return { mes, url: BASE + nome };
   }
-  throw new Error("Nenhuma referência SINAPI encontrada nos últimos meses. Confira a página de downloads da CAIXA.");
+  throw Object.assign(new Error("Nenhuma referência SINAPI encontrada nos últimos meses. Confira a página de downloads da CAIXA."), { indisponivel: true });
 }
 
 // ---------- leitura do xlsx (XML) ----------
@@ -265,7 +266,7 @@ function versaoSinapi(mes, url, situacao, itens, zerados) {
 async function baixarZip(ref) {
   if (ref.arquivo) return fs.readFileSync(ref.arquivo);
   const r = await pedir(ref.url, "GET", 300000);
-  if (!r.ok) throw new Error(`Download do SINAPI falhou: HTTP ${r.status}`);
+  if (!r.ok) throw Object.assign(new Error(`Download do SINAPI falhou: HTTP ${r.status}`), { indisponivel: bloqueio(r.status) });
   return Buffer.from(await r.arrayBuffer());
 }
 async function lerMes(ref, ufs) {
@@ -354,13 +355,20 @@ async function main() {
 }
 
 // Alarme: guarda o motivo em dados_robo e sai com erro (o GitHub Actions avisa por e-mail).
-async function falhar(e) {
+// Mês não publicado ou WAF da CAIXA barrando o runner (e.indisponivel) é o esperado: aviso, a referência gravada
+// continua valendo e o job sai com sucesso (sem batimento no admin; a rota reserva é o Release com arquivo_release).
+async function falhar(e, sair = process.exit) {
   const saudeFonte = e.zerada ? "zerada" : e.formato || /formato da CAIXA mudou|layout da CAIXA mudou|O site mudou/.test(e.message) ? "formato_mudou" : "indisponivel";
   await bp.registrarSaude("SINAPI", { saudeFonte, ultimoErro: String(e.message).slice(0, 500) }).catch(() => {});
+  if (e.indisponivel) {
+    console.log(`::warning::${e.message} A referência gravada continua valendo. Rota reserva: Release sinapi-AAAA-MM + arquivo_release.`);
+    if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, "indisponivel=1\n");
+    return sair(0);
+  }
   console.error(e);
-  process.exit(1);
+  return sair(1);
 }
 
 if (require.main === module) main().catch(falhar);
 
-module.exports = { pedir, existe, acharReferencia, referenciaDoArquivo, coletarMes, partesSinapi, versaoSinapi, retificacoesPendentes, mesesParaTras, nomesDoMes, textosCompartilhados, mapaAbas, linhasDaAba, lerTabela, lerAnalitico, montarLinhas, semAcento, xmlTexto, abrirReferencia };
+module.exports = { falhar, pedir, existe, acharReferencia, referenciaDoArquivo, coletarMes, partesSinapi, versaoSinapi, retificacoesPendentes, mesesParaTras, nomesDoMes, textosCompartilhados, mapaAbas, linhasDaAba, lerTabela, lerAnalitico, montarLinhas, semAcento, xmlTexto, abrirReferencia };

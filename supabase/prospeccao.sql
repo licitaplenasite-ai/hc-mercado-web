@@ -56,6 +56,9 @@ create index if not exists prospeccao_itens_tipo_data_valor_idx on public.prospe
 -- admin_saude_robos() (admin_painel.sql) faz max(coletado_em) na tabela toda: sem índice era varredura completa e
 -- statement timeout no painel admin. Com o índice o max lê uma entrada só. Em produção, também com "concurrently".
 create index if not exists prospeccao_itens_coletado_em_idx on public.prospeccao_itens (coletado_em desc);
+-- v5 (23/11/2026): a limpeza do robô (data_ref < hoje, sem tipo) não tinha índice que começasse por data_ref e estourava o
+-- statement timeout (57014). Em produção, criar antes com supabase/prospeccao_indice_data_ref.sql (concurrently).
+create index if not exists prospeccao_itens_data_ref_idx on public.prospeccao_itens (data_ref);
 -- shortcut: o ILIKE em busca faz varredura das linhas do tipo na janela de datas (medido: ~0,6 s em 900 mil linhas).
 -- Índice gin_trgm_ops NÃO ajuda aqui: sob RLS o Postgres só usa no índice operador leakproof, e o ILIKE não é (o plano
 -- ignora o índice). Por isso a busca com palavra passou para a função security definer buscar_prospeccao (v5, abaixo).

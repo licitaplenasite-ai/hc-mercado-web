@@ -33,7 +33,10 @@ jobs:
         with:
           node-version: "20"
       - run: npm ci
+      # CGU sem arquivo publicado na janela (JANELA_DIAS): o robô sai 0 com ::warning:: e indisponivel=1, a base
+      # anterior continua valendo e o batimento abaixo não é gravado. Falha real (layout, banco, rede) continua vermelha.
       - name: Coletar CEIS e CNEP
+        id: coletar
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           DATA_ARQUIVO: ${{ github.event.inputs.data_arquivo }}
@@ -44,7 +47,7 @@ jobs:
         run: node scripts/coletar_sancoes_cgu.js
 
       - name: Registrar sucesso na Saúde do sistema (admin)
-        if: success()
+        if: success() && steps.coletar.outputs.indisponivel != '1'
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: node scripts/registrar_robo.js sancoes
