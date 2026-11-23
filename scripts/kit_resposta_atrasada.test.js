@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 const source = fs.readFileSync(path.join(__dirname, '../kit-documentos-ui.js'), 'utf8');
-const operation = source.slice(source.indexOf('    async function executar(acao)'), source.indexOf('    async function prepararCadastro()'));
+const operation = source.slice(source.indexOf('    async function executar(acao, opcoes = {})'), source.indexOf('    async function prepararCadastro()'));
 
 for (const action of ['exportar', 'confirmarRevisao', 'preparar']) {
   test(`resposta de ${action} anterior à edição do item é descartada e libera ocupado`, async () => {

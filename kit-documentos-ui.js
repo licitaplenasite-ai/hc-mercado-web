@@ -53,6 +53,48 @@
     for (const n of ['validade', 'prazoEntrega', 'pagamento']) if (!saida[n] && typeof padrao?.[n] === 'string') saida[n] = padrao[n];
     return saida;
   }
+  // Pedido do dono (23/11): validade, prazo e pagamento vêm do edital lido; sem dado no edital, da Proposta padrão do perfil.
+  const CAMPOS_PROPOSTA = { validade: 'Validade', prazoEntrega: 'Prazo de entrega', pagamento: 'Pagamento' };
+  function sugestaoProposta(edital, padrao) {
+    const valores = {}, origem = {};
+    for (const n of Object.keys(CAMPOS_PROPOSTA)) {
+      const e = typeof edital?.[n] === 'string' ? edital[n].trim() : '', p = typeof padrao?.[n] === 'string' ? padrao[n].trim() : '';
+      valores[n] = e || p; origem[n] = e ? 'edital' : p ? 'perfil' : '';
+    }
+    return { valores, origem };
+  }
+  function textoOrigemProposta(sugestao, modelo) {
+    const de = (o) => Object.keys(CAMPOS_PROPOSTA).filter((n) => sugestao.origem[n] === o).map((n) => CAMPOS_PROPOSTA[n].toLowerCase());
+    const partes = [modelo?.fonte || 'Modelo LicitaPlena'];
+    if (de('edital').length) partes.push(`Do edital: ${de('edital').join(', ')}`);
+    if (de('perfil').length) partes.push(`Da Proposta padrão do perfil: ${de('perfil').join(', ')}`);
+    if (de('').length) partes.push(`Preencha: ${de('').join(', ')}`);
+    return partes.join(' · ') + '. Você pode editar antes de salvar.';
+  }
+  // Marcadas por padrão: as usuais de pregão. ME/EPP pelo porte do perfil (enquadramento x não enquadramento); sem porte,
+  // nenhuma das duas. Desempate, vistoria e as demais ficam desmarcadas: só declara quem pode provar.
+  const PADRAO_DECLARACOES = ['HAB_ART63_I', 'HAB_FATO_IMPEDITIVO', 'TRAB_MENOR', 'HAB_RESERVA_PCD', 'PROP_CUSTOS_TRABALHISTAS', 'TRAB_DEGRADANTE', 'PROP_INDEPENDENTE', 'EXEC_CIENCIA_CONDICOES'];
+  function declaracoesMarcadas(porte) {
+    const meEpp = ['mei', 'me', 'epp'].includes(porte) ? ['ME_EPP_ENQUADRAMENTO'] : porte === 'demais' ? ['ME_EPP_NAO_ENQUADRAMENTO'] : [];
+    return [...PADRAO_DECLARACOES, ...meEpp];
+  }
+  const MIME_DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  const nomeSeguro = (nome, padrao) => String(nome || padrao).replace(/[^\p{L}\p{N}._ -]/gu, '_').replace(/^\.+/, '') || padrao;
+  function salvarBlob(bytes, mime, nome, doc) {
+    const url = global.URL.createObjectURL(new global.Blob([bytes], { type: mime }));
+    const a = doc.createElement('a'); a.href = url; a.download = nome;
+    try { doc.body.append(a); a.click(); } finally { a.remove(); global.setTimeout(() => global.URL.revokeObjectURL(url), 1000); }
+  }
+  // Word chega pronto; PDF chega como documento estruturado e vira PDF aqui (documento-pdf.js).
+  async function bytesDoArquivo(r) {
+    if (r.mime === 'application/pdf' && r.documento && global.LicitaDocumentoPdf) {
+      const PDFLib = await global.LicitaDocumentoPdf.carregarPdfLib();
+      return global.LicitaDocumentoPdf.gerarPdf(PDFLib, r.documento, r.logo);
+    }
+    if (!r.arquivoBase64 || r.mime !== MIME_DOCX) throw new Error('Arquivo inválido. Prepare novamente.');
+    return Uint8Array.from(global.atob(r.arquivoBase64), c => c.charCodeAt(0));
+  }
+  async function baixarArquivo(r, doc) { salvarBlob(await bytesDoArquivo(r), r.mime, nomeSeguro(r.nome, r.mime === 'application/pdf' ? 'documento.pdf' : 'documento.docx'), doc); }
   function montar({ alvo, contexto, obterSessao, requisitar = global.fetch.bind(global), canalLeitura = null, aoConferirIdentificacao = null }) {
     const controle = criarControle(), escopo = { empresaId: contexto.empresaId, processoId: contexto.processoId };
     let dados = null, ocupado = false, usuario = null, documentos = [], peca, alterado = true, tentativa = null, cadastroAberto = false;
@@ -81,16 +123,25 @@
       <p>Confira as exigências do edital. Sem assinatura, envio ou protocolo automático.</p><div data-requisitos></div>
       <section class="kit-lista" aria-label="Documentos salvos"><h4>Documentos salvos</h4><div data-lista></div>
       <div class="kit-acoes"><button type="button" class="btn" data-novo="declaracao">Nova declaração</button><button type="button" class="btn" data-novo="proposta">Nova proposta</button><button type="button" class="btn" data-listar>Atualizar lista</button></div></section>
+      <section class="kit-prontas" aria-labelledby="kit-prontas-titulo"><h4 id="kit-prontas-titulo">Declarações prontas</h4>
+      <p>Marque as declarações que este edital pede. O sistema preenche com os dados da empresa e do edital; você confere o texto e baixa tudo junto.</p>
+      <p class="kit-aviso-juridico">Modelos da Equipe LicitaPlena, com base na Lei 14.133/2021 e na LC 123/2006. Confira com o edital antes de assinar: o edital pode pedir texto próprio.</p>
+      <fieldset class="kit-modelos" data-modelos><legend>Modelos</legend></fieldset>
+      <div class="kit-acoes"><button type="button" class="btn primario" data-gerar-prontas disabled>Preencher e conferir as marcadas</button></div>
+      <p role="status" aria-live="polite" data-aviso-prontas></p>
+      <div data-conferir-prontas hidden><h5 tabindex="-1" data-titulo-prontas>Confira o texto das declarações</h5><div class="kit-previa-prontas" data-previa-prontas></div>
+      <label class="kit-revisao"><input type="checkbox" data-revisado-prontas> Conferi todas as declarações acima para este edital</label>
+      <div class="kit-acoes"><button type="button" class="btn primario" data-baixar-prontas="docx" disabled>Baixar Word (um arquivo)</button><button type="button" class="btn" data-baixar-prontas="pdf" disabled>Baixar PDF</button><button type="button" class="btn" data-baixar-prontas="zip" disabled>Baixar .zip (um Word por declaração)</button></div></div></section>
       <p role="status" aria-live="polite" data-aviso></p><div data-pendencias></div>
       <div class="kit-alerta" data-descarte hidden><p>Há alterações não salvas nesta peça. Salve antes de sair para preservá-las.</p><button type="button" class="btn" data-cancelar-troca>Continuar editando</button><button type="button" class="btn" data-descartar>Descartar alterações e continuar</button></div>
       <form novalidate><h4 tabindex="-1" data-peca>Nova declaração</h4><p class="kit-estado" data-estado></p><p data-historico></p>
       <label>Tipo de documento<select name="tipo"><option value="declaracao">Declaração com texto informado</option><option value="proposta">Proposta de materiais</option></select></label>
       <div data-declaracao>${campo('titulo', 'Título da declaração', 'maxlength="180"')}<label>Texto do modelo (até 20.000 caracteres)<textarea name="texto" maxlength="20000" rows="6"></textarea></label>${campo('fonte', 'De onde veio este modelo (opcional)', 'maxlength="1000"')}<p>Campos que o sistema preenche sozinho (escreva igual, com as chaves): {{razao_social}}, {{cnpj}}, {{endereco}}, {{representante}}, {{cargo}}, {{numero_edital}}, {{orgao}}. Para o CPF do representante, escreva [CPF do representante]: o número só entra no arquivo exportado.</p></div>
-      <div data-proposta hidden><p>Selecione os itens (limite técnico e tamanho total serão conferidos). Quantidade, preço ofertado, marca e modelo vêm do cadastro. A unidade vem do edital quando disponível; confira e ajuste.</p><p data-contagem-itens></p><button type="button" class="btn" data-ver-selecionados>Ver selecionados</button><div data-itens></div><button type="button" class="btn" data-itens-anterior>Itens anteriores</button><button type="button" class="btn" data-itens-proxima>Próximos itens</button><div data-itens-ausentes></div>${campo('validade', 'Validade da proposta', 'maxlength="500"')}${campo('prazoEntrega', 'Prazo de entrega', 'maxlength="500"')}${campo('pagamento', 'Condições de pagamento', 'maxlength="500"')}</div>
+      <div data-proposta hidden><p>Selecione os itens (limite técnico e tamanho total serão conferidos). Quantidade, preço ofertado, marca e modelo vêm do cadastro. A unidade vem do edital quando disponível; confira e ajuste.</p><p data-contagem-itens></p><button type="button" class="btn" data-ver-selecionados>Ver selecionados</button><div data-itens></div><button type="button" class="btn" data-itens-anterior>Itens anteriores</button><button type="button" class="btn" data-itens-proxima>Próximos itens</button><div data-itens-ausentes></div><p class="kit-origem" data-origem-proposta></p>${campo('validade', 'Validade da proposta', 'maxlength="500"')}${campo('prazoEntrega', 'Prazo de entrega', 'maxlength="500"')}${campo('pagamento', 'Condições de pagamento', 'maxlength="500"')}</div>
       <div class="kit-acoes"><button type="button" class="btn primario" data-salvar disabled>Salvar rascunho</button><button type="submit" class="btn" data-preparar disabled>Preparar prévia</button><button type="button" class="btn" data-recarregar hidden>Carregar versão do servidor</button></div></form>
       <section class="kit-previa" aria-label="Revisão da peça"><h4 tabindex="-1" data-titulo-previa>Prévia integral</h4><pre data-previa>Salve o rascunho e prepare a prévia para conferir todo o conteúdo.</pre><div data-fontes></div>
       <label class="kit-revisao"><input type="checkbox" data-revisado disabled> Conferi os dados e o conteúdo para este edital</label>
-      <div class="kit-acoes"><button type="button" class="btn primario" data-exportar disabled>Baixar DOCX</button><button type="button" class="btn" data-cancelar-previa disabled>Cancelar revisão</button><button type="button" class="btn" data-preparar-operacao hidden disabled>Preparar cadastro</button></div><div data-leitura hidden><div class="kit-acoes"><button type="button" class="btn" data-iniciar-leitura disabled>Conferir página com extensão</button><button type="button" class="btn" data-cancelar-leitura disabled>Cancelar leitura</button></div><section aria-label="Correspondências dos relatos"><h4>Conferir itens observados</h4><p>Relatos parciais, separados por recibo. Grupo, exigências e completude desconhecidos. Não autoriza cadastro.</p><button type="button" class="btn" data-carregar-relatos disabled>Carregar relatos desta revisão</button><button type="button" class="btn" data-mais-relatos disabled>Recibos anteriores</button><label>Recibo observado<select data-recibo><option value="">Selecione um recibo</option></select></label><div data-pares></div><label><input type="checkbox" data-pares-revisados> Conferi cada correspondência selecionada</label><button type="button" class="btn" data-salvar-pares disabled>Salvar correspondências revisadas</button><p data-pares-status role="status" aria-live="polite"></p></section><p data-canal-status>Canal de leitura indisponível: requer configuração e homologação da extensão.</p></div><pre data-operacao role="status" aria-live="polite" hidden></pre></section></section>`;
+      <div class="kit-acoes"><button type="button" class="btn primario" data-exportar disabled>Baixar Word</button><button type="button" class="btn" data-exportar-pdf disabled>Baixar PDF</button><button type="button" class="btn" data-exportar-ficha hidden disabled>Ficha técnica (Word)</button><button type="button" class="btn" data-exportar-ficha-pdf hidden disabled>Ficha técnica (PDF)</button><button type="button" class="btn" data-cancelar-previa disabled>Cancelar revisão</button><button type="button" class="btn" data-preparar-operacao hidden disabled>Preparar cadastro</button></div><div data-leitura hidden><div class="kit-acoes"><button type="button" class="btn" data-iniciar-leitura disabled>Conferir página com extensão</button><button type="button" class="btn" data-cancelar-leitura disabled>Cancelar leitura</button></div><section aria-label="Correspondências dos relatos"><h4>Conferir itens observados</h4><p>Relatos parciais, separados por recibo. Grupo, exigências e completude desconhecidos. Não autoriza cadastro.</p><button type="button" class="btn" data-carregar-relatos disabled>Carregar relatos desta revisão</button><button type="button" class="btn" data-mais-relatos disabled>Recibos anteriores</button><label>Recibo observado<select data-recibo><option value="">Selecione um recibo</option></select></label><div data-pares></div><label><input type="checkbox" data-pares-revisados> Conferi cada correspondência selecionada</label><button type="button" class="btn" data-salvar-pares disabled>Salvar correspondências revisadas</button><p data-pares-status role="status" aria-live="polite"></p></section><p data-canal-status>Canal de leitura indisponível: requer configuração e homologação da extensão.</p></div><pre data-operacao role="status" aria-live="polite" hidden></pre></section></section>`;
     const el = s => alvo.querySelector(s), form = el('form');
     const cadastro = alvoCadastro(escopo, aoConferirIdentificacao), linkCadastro = el('[data-cadastro]');
     linkCadastro.href = cadastro.href;
@@ -122,6 +173,9 @@
       el('[data-preparar]').disabled = ocupado || !dados || cadastroAberto || alterado || !peca?.versao || Boolean(tentativa) || Boolean(dados.pendencias?.length);
       el('[data-revisado]').disabled = ocupado || !controle.hash;
       el('[data-exportar]').disabled = ocupado || !controle.podeExportar() || itensPendentes;
+      for (const s of ['[data-exportar-pdf]', '[data-exportar-ficha]', '[data-exportar-ficha-pdf]']) el(s).disabled = el('[data-exportar]').disabled;
+      el('[data-exportar-ficha]').hidden = el('[data-exportar-ficha-pdf]').hidden = !proposta;
+      el('[data-origem-proposta]').textContent = proposta && dados ? textoOrigemProposta(sugestaoProposta(dados.propostaEdital, dados.propostaPadrao), dados.propostaEdital?.modelo) : '';
       // Extensão de leitura desligada por padrão (nenhuma tela passa canalLeitura): o bloco técnico não aparece ao usuário.
       el('[data-leitura]').hidden = !canalDisponivel();
       el('[data-iniciar-leitura]').disabled = !canalDisponivel()||ocupado||!proposta||!controle.podeExportar()||alterado||Boolean(leituraAtiva);
@@ -167,7 +221,7 @@
       if (selecionados) { paginaSelecao = Math.max(0, paginaSelecao + direcao); renderItens(); return; }
       const proxima = pagina + direcao; if (proxima < 0 || (direcao > 0 && !maisItens)) return;
       const g = controle.geracao; ocupado = true; atualizar();
-      try { const r = await enviar({ ...escopo, acao: 'listarItens', ...(cursores[proxima] ? { afterId: cursores[proxima] } : {}) }, g);
+      try { const r = await enviar({ ...escopo, acao: 'listarItens', soParticipar: true, ...(cursores[proxima] ? { afterId: cursores[proxima] } : {}) }, g);
         if (!r || !vivo(g)) return;
         if (!Array.isArray(r.itens) || !r.paginacaoItens || r.itens.length > 100 || (r.paginacaoItens.hasMore && !r.paginacaoItens.nextCursor)) throw new Error('Página incompleta. Tente novamente.');
         pagina = proxima; dados.itens = r.itens; maisItens = r.paginacaoItens.hasMore; cursores[pagina + 1] = r.paginacaoItens.nextCursor;
@@ -198,14 +252,15 @@
     function nova(tipo, focar = true) {
       peca = { id: global.crypto.randomUUID(), tipo, versao: 0 }; controle.abrir({ documentoId: peca.id, versao: 0 });
       tentativa = null; alterado = true; ocupado = false; estado = 'Novo · não salvo'; preencher(peca); limparPrevia(); pendencias(dados?.pendencias || []);
-      if (tipo === 'proposta') { const p = aplicarPadraoProposta({}, dados?.propostaPadrao); for (const n of ['validade', 'prazoEntrega', 'pagamento']) form.elements[n].value = p[n] || ''; }
+      if (tipo === 'proposta') { const s = sugestaoProposta(dados?.propostaEdital, dados?.propostaPadrao); for (const n of ['validade', 'prazoEntrega', 'pagamento']) form.elements[n].value = s.valores[n] || ''; }
       el('[data-peca]').textContent = tipo === 'proposta' ? 'Nova proposta' : 'Nova declaração'; el('[data-recarregar]').hidden = true;
       aviso('Novo rascunho. Salve para preservar seu trabalho.'); atualizar(); renderLista();
       if (focar) (tipo === 'declaracao' ? form.elements.titulo : el('[data-proposta] input'))?.focus();
     }
     // Unidade e condições sugeridas (PNCP / Proposta padrão) não contam como trabalho do usuário; a seleção de itens conta.
     function algoPreenchido() {
-      const sugerido = e => e.name?.startsWith('unidade-') || (typeof dados?.propostaPadrao?.[e.name] === 'string' && e.value === dados.propostaPadrao[e.name]);
+      const sugestao = sugestaoProposta(dados?.propostaEdital, dados?.propostaPadrao).valores;
+      const sugerido = e => e.name?.startsWith('unidade-') || (typeof sugestao[e.name] === 'string' && sugestao[e.name] !== '' && e.value === sugestao[e.name]);
       return [...form.querySelectorAll('input,textarea')].some(e => !e.disabled && (e.type === 'checkbox' ? e.checked : Boolean(e.value) && !sugerido(e)));
     }
     function pedirTroca(acao) {
@@ -262,14 +317,8 @@
         el('[data-peca]').textContent = peca.titulo || 'Documento salvo'; el('[data-recarregar]').hidden = true; atualizarLista(peca); atualizar(); aviso(r.itensNaoVerificados ? 'Documento aberto; não foi possível conferir todos os itens selecionados. O rascunho foi preservado. Confira o cadastro e prepare novamente antes de revisar ou exportar.' : 'Documento aberto. Confira uma nova prévia integral antes de baixar.'); form.elements[peca.tipo === 'declaracao' ? 'titulo' : 'validade'].focus();
       } catch (e) { if (vivo(g)) falhar(e, 'abrir'); }
     }
-    function baixar(r) {
-      if (!r.arquivoBase64 || r.mime !== 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') throw new Error('Arquivo DOCX inválido. Prepare novamente.');
-      const bytes = Uint8Array.from(global.atob(r.arquivoBase64), c => c.charCodeAt(0));
-      const url = global.URL.createObjectURL(new global.Blob([bytes], { type: r.mime }));
-      const a = doc.createElement('a'); a.href = url; a.download = String(r.nome || 'documento.docx').replace(/[^\p{L}\p{N}._ -]/gu, '_').replace(/^\.+/, '') || 'documento.docx';
-      try { doc.body.append(a); a.click(); } finally { a.remove(); global.setTimeout(() => global.URL.revokeObjectURL(url), 1000); }
-    }
-    async function executar(acao) {
+    const baixar = r => baixarArquivo(r, doc);
+    async function executar(acao, opcoes = {}) {
       if (ocupado || !dados || (acao === 'exportar' && !controle.podeExportar())) return;
       if (itensPendentes && (acao === 'exportar' || acao === 'confirmarRevisao')) return; // revisao antiga nao vale com itens mudados
       if (acao !== 'salvar' && (!peca.versao || alterado || tentativa)) return;
@@ -278,7 +327,8 @@
       let body = { ...escopo, acao, documentoId: id, versaoEsperada: versao };
       if (acao === 'salvar') { tentativa ||= { ...body, tipo: peca.tipo, ...lerCampos() }; body = tentativa; }
       if (acao === 'confirmarRevisao' || acao === 'exportar') Object.assign(body, { revisado: true, revisaoHash: controle.hash });
-      ocupado = true; estado = { salvar: 'Salvando…', preparar: 'Preparando prévia…', confirmarRevisao: 'Confirmando revisão…', exportar: 'Exportando DOCX…' }[acao]; atualizar(); aviso(estado);
+      if (acao === 'exportar') Object.assign(body, opcoes);
+      ocupado = true; estado = { salvar: 'Salvando…', preparar: 'Preparando prévia…', confirmarRevisao: 'Confirmando revisão…', exportar: 'Exportando DOCX…' }[acao]; atualizar(); aviso(acao === 'exportar' ? 'Gerando o arquivo…' : estado);
       try {
         const r = await enviar(body, g); if (!r || !vivo(g)) return;
         if (itensPendentes && acao !== 'salvar') return; // resultado anterior a edicao do item nao libera revisao nem download
@@ -296,7 +346,7 @@
         } else if (acao === 'confirmarRevisao') {
           const d = validarDocumento(r.documento, id); if (!controle.confirmada(d, g)) throw new Error('A confirmação não corresponde à peça e versão atuais. Prepare novamente.');
           peca = d; atualizarLista(d); estado = 'Revisão confirmada nesta abertura'; aviso('Revisão registrada. DOCX disponível para esta peça.');
-        } else { baixar(r); estado = 'Revisão confirmada nesta abertura'; aviso('DOCX baixado. Alterações posteriores exigem nova geração.'); }
+        } else { await baixar(r); estado = 'Revisão confirmada nesta abertura'; aviso(`${r.mime === 'application/pdf' ? 'PDF' : 'Word'} baixado: ${r.nome}. Alterações posteriores exigem nova geração.${r.logoAplicada === false ? ' Sem logo: envie a logo no Perfil da empresa para sair no cabeçalho.' : ''}`); }
       } catch (e) { if (vivo(g)) falhar(e, acao); }
       finally { if (vivo(g)) { ocupado = false; atualizar(); if (acao === 'confirmarRevisao' && controle.podeExportar()) el('[data-exportar]').focus(); } }
     }
@@ -394,6 +444,9 @@
     el('[data-salvar]').addEventListener('click', () => void executar('salvar'));
     el('[data-revisado]').addEventListener('change', e => { if (e.target.checked) void executar('confirmarRevisao'); else { controle.alterar(); limparPrevia('Confirmação cancelada. Prepare uma nova prévia.'); estado = 'Salvo · pendente de revisão'; atualizar(); } });
     el('[data-exportar]').addEventListener('click', () => void executar('exportar'));
+    el('[data-exportar-pdf]').addEventListener('click', () => void executar('exportar', { saida: 'pdf' }));
+    el('[data-exportar-ficha]').addEventListener('click', () => void executar('exportar', { peca: 'ficha' }));
+    el('[data-exportar-ficha-pdf]').addEventListener('click', () => void executar('exportar', { peca: 'ficha', saida: 'pdf' }));
     el('[data-preparar-operacao]').addEventListener('click', () => void prepararCadastro());
     el('[data-carregar-relatos]').addEventListener('click',()=>void carregarRelatos());
     el('[data-mais-relatos]').addEventListener('click',()=>void carregarRelatos(cursorRelatos));
@@ -428,14 +481,14 @@
       const g = controle.geracao; ocupado = true; atualizar(); aviso('Consultando identificação e itens…');
       const rascunho = dados ? { tipo: form.elements.tipo.value, dados: lerCampos() } : null;
       try {
-        const r = await enviar({ ...escopo, acao: 'consultar', itensPaginados: true }, g); if (!r || !vivo(g)) return;
+        const r = await enviar({ ...escopo, acao: 'consultar', itensPaginados: true, soParticipar: true }, g); if (!r || !vivo(g)) return;
         dados = r;
         el('[data-contexto]').textContent = [r.empresa.razaoSocial, `CNPJ ${cnpjTexto(r.empresa.cnpj)}`, r.processo.numero ? `Processo ${r.processo.numero}` : 'Processo sem número', r.processo.orgao].filter(Boolean).join(' · ');
         el('[data-requisitos]').innerHTML = `<strong>Requisitos registrados — confira com o edital</strong><ul>${(r.requisitos || []).map(v => `<li>${esc(v)}</li>`).join('') || '<li>Nenhum requisito registrado; confira o edital.</li>'}</ul>`;
         pendencias(r.pendencias || []);
         cursores = [undefined, r.paginacaoItens?.nextCursor]; pagina = 0; maisItens = r.paginacaoItens?.hasMore === true; for (const item of r.itens || []) conhecidos.set(item.id, item); renderItens();
         if (rascunho) preencher(rascunho);
-        cadastroAberto = false; ocupado = false; atualizar(); aviso('Dados carregados. Crie ou abra uma peça.'); await listar();
+        renderModelos(); cadastroAberto = false; ocupado = false; atualizar(); aviso('Dados carregados. Crie ou abra uma peça.'); await listar();
       } catch (e) { if (vivo(g)) { listaEstado = 'erro'; listaErro = e.message; renderLista(); aviso(e.message); ocupado = false; atualizar(); } }
     }
     // Leitura para a casca: mesma regra de pedirTroca (não salva nem envia nada).
@@ -452,9 +505,89 @@
       if (ocupado) aviso('Itens atualizados. A revis\u00e3o anterior fica bloqueada at\u00e9 a opera\u00e7\u00e3o atual terminar.');
       atualizar(); // se livre, drena agora (invalida e consulta)
     }
+    // Declarações prontas: gerar o lote -> preparar cada uma -> o usuário lê todas de uma vez -> confirma cada revisão -> baixa.
+    // A conferência continua do usuário (o servidor só exporta peça revisada por quem exporta); aqui só se junta tudo numa tela.
+    let prontas = [], ocupadoProntas = false;
+    const avisoProntas = t => { el('[data-aviso-prontas]').textContent = t; };
+    const chamar = body => enviar({ ...escopo, ...body }, null, () => alvo.isConnected);
+    const comPendencia = p => p.texto.includes('[PREENCHER:');
+    function atualizarProntas() {
+      const marcados = alvo.querySelectorAll('[data-modelo]:checked').length;
+      const gerar = el('[data-gerar-prontas]');
+      gerar.disabled = ocupadoProntas || !dados || !marcados || Boolean(dados?.pendencias?.length);
+      gerar.textContent = marcados ? `Preencher e conferir ${marcados} ${marcados === 1 ? 'declaração' : 'declarações'}` : 'Marque ao menos uma declaração';
+      for (const b of alvo.querySelectorAll('[data-baixar-prontas]')) b.disabled = ocupadoProntas || !prontas.some(p => p.revisada);
+      el('[data-revisado-prontas]').disabled = ocupadoProntas || !prontas.some(p => !comPendencia(p));
+    }
+    function renderModelos() {
+      const D = global.LicitaDeclaracoes, box = el('[data-modelos]');
+      if (!D) { box.hidden = true; return; }
+      const marcadas = new Set(declaracoesMarcadas(dados?.porte));
+      box.innerHTML = '<legend>Modelos (marcados: os usuais de pregão; ME/EPP conforme o porte do Perfil)</legend>' + D.listarModelos().map(m => `<label class="kit-modelo"><input type="checkbox" data-modelo value="${esc(m.codigo)}" ${marcadas.has(m.codigo) ? 'checked' : ''}> ${esc(m.titulo)} <small>${esc(m.baseLegal)}</small></label>`).join('');
+      atualizarProntas();
+    }
+    async function gerarProntas() {
+      const codigos = [...alvo.querySelectorAll('[data-modelo]:checked')].map(i => i.value);
+      if (!codigos.length || ocupadoProntas) return;
+      ocupadoProntas = true; prontas = []; el('[data-revisado-prontas]').checked = false; el('[data-conferir-prontas]').hidden = true; atualizarProntas(); avisoProntas('Preenchendo as declarações com os dados da empresa e do edital…');
+      try {
+        const lote = await chamar({ acao: 'gerarDeclaracoesLote', declaracoes: codigos.map(modeloCodigo => ({ modeloCodigo })) }); if (!lote) return;
+        const lista = await chamar({ acao: 'listar' }); if (!lista) return;
+        const porId = new Map((lista.documentos || []).map(d => [d.id, d]));
+        const pecas = [...(lote.criados || []).map(d => ({ id: d.id, modeloCodigo: d.modeloCodigo })), ...(lote.existentes || []).map(d => ({ id: d.documentoId, modeloCodigo: d.modeloCodigo }))]
+          .sort((a, b) => codigos.indexOf(a.modeloCodigo) - codigos.indexOf(b.modeloCodigo));
+        for (const { id } of pecas) {
+          const d = porId.get(id); if (!d) continue;
+          const p = await chamar({ acao: 'preparar', documentoId: id, versaoEsperada: d.versao }); if (!p) return;
+          prontas.push({ documentoId: id, versao: d.versao, hash: p.revisaoHash, texto: p.previa.texto, revisada: false });
+        }
+        el('[data-previa-prontas]').innerHTML = prontas.map(p => `<article class="kit-pronta${comPendencia(p) ? ' kit-pronta-pendente' : ''}"><pre>${esc(textoParaTela(p.texto))}</pre>${comPendencia(p) ? '<p class="kit-pendente"><strong>Atenção:</strong> falta dado ([PREENCHER]). Complete o Perfil da empresa ou edite esta peça em Documentos salvos; ela fica fora do download.</p>' : ''}</article>`).join('');
+        el('[data-conferir-prontas]').hidden = false; el('[data-titulo-prontas]').focus();
+        const pend = prontas.filter(comPendencia).length;
+        avisoProntas(`${prontas.length} ${prontas.length === 1 ? 'declaração pronta' : 'declarações prontas'}${pend ? `, ${pend} com dado faltando` : ''}. Leia o texto e marque a conferência para liberar o download.`);
+        void listar();
+      } catch (e) { avisoProntas(e.message); } finally { ocupadoProntas = false; atualizarProntas(); }
+    }
+    async function confirmarProntas() {
+      ocupadoProntas = true; atualizarProntas(); avisoProntas('Registrando a sua conferência…');
+      try {
+        for (const p of prontas) {
+          if (p.revisada || comPendencia(p)) continue;
+          const r = await chamar({ acao: 'confirmarRevisao', documentoId: p.documentoId, versaoEsperada: p.versao, revisado: true, revisaoHash: p.hash }); if (!r) return;
+          p.revisada = true;
+        }
+        const fora = prontas.filter(p => !p.revisada).length;
+        avisoProntas(`Conferência registrada. Escolha o formato para baixar.${fora ? ` ${fora} com dado faltando ficam de fora.` : ''}`);
+        void listar();
+      } catch (e) { el('[data-revisado-prontas]').checked = false; avisoProntas(`${e.message} Preencha e confira de novo.`); }
+      finally { ocupadoProntas = false; atualizarProntas(); }
+    }
+    async function baixarProntas(formato) {
+      const ids = prontas.filter(p => p.revisada).map(p => p.documentoId); if (!ids.length || ocupadoProntas) return;
+      ocupadoProntas = true; atualizarProntas(); avisoProntas('Gerando o arquivo…');
+      try {
+        if (formato === 'zip') {
+          if (!global.LicitaZip) throw new Error('Gerador de .zip indisponível. Baixe o Word único.');
+          const arquivos = [];
+          for (const id of ids) { const r = await chamar({ acao: 'exportarDeclaracoes', documentoIds: [id] }); if (!r) return; arquivos.push({ nome: nomeSeguro(r.nome, 'declaracao.docx'), bytes: await bytesDoArquivo(r) }); }
+          // "Declaração X - HCM LTDA - Pregão 012-2026 - Órgão.docx" -> "Declarações - HCM LTDA - Pregão 012-2026 - Órgão.zip"
+          const resto = arquivos[0].nome.replace(/\.docx$/, '').split(' - ').slice(1).join(' - ');
+          salvarBlob(global.LicitaZip.montarZip(arquivos), 'application/zip', nomeSeguro(`Declarações${resto ? ' - ' + resto : ''}.zip`, 'declaracoes.zip'), doc);
+          avisoProntas(`.zip baixado com ${arquivos.length} ${arquivos.length === 1 ? 'arquivo' : 'arquivos'} do Word.`);
+        } else {
+          const r = await chamar({ acao: 'exportarDeclaracoes', documentoIds: ids, ...(formato === 'pdf' ? { saida: 'pdf' } : {}) }); if (!r) return;
+          await baixarArquivo(r, doc);
+          avisoProntas(`${formato === 'pdf' ? 'PDF' : 'Word'} baixado: ${r.nome} (${(r.incluidas || []).length} ${(r.incluidas || []).length === 1 ? 'declaração' : 'declarações'}). Assine à mão ou com certificado digital/gov.br.`);
+        }
+      } catch (e) { avisoProntas(e.message); } finally { ocupadoProntas = false; atualizarProntas(); }
+    }
+    el('[data-modelos]').addEventListener('change', atualizarProntas);
+    el('[data-gerar-prontas]').addEventListener('click', () => void gerarProntas());
+    el('[data-revisado-prontas]').addEventListener('change', e => { if (e.target.checked) void confirmarProntas(); else atualizarProntas(); });
+    for (const b of alvo.querySelectorAll('[data-baixar-prontas]')) b.addEventListener('click', () => void baixarProntas(b.dataset.baixarProntas));
     nova('declaracao', false); void consultar();
     return { fechar() { void cancelarLeitura();controle.fechar(); alvo.replaceChildren(); }, temAlteracoesNaoSalvas, atualizarItens };
   }
-  global.LicitaKitDocumentos = { quantidadeTexto, aplicarPadraoProposta, textoParaTela, textoParaSalvar, criarControle, criarSelecao, montar, mensagemFalha, alvoCadastro, textosCadastro };
+  global.LicitaKitDocumentos = { quantidadeTexto, aplicarPadraoProposta, sugestaoProposta, textoOrigemProposta, declaracoesMarcadas, textoParaTela, textoParaSalvar, criarControle, criarSelecao, montar, mensagemFalha, alvoCadastro, textosCadastro };
 })(globalThis);
 

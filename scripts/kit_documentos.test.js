@@ -14,7 +14,7 @@ test('decimal exato rejeita formatos e precisão inválidos; arredonda cada item
 });
 test('declaração mantém texto literal e recusa variáveis desconhecidas/XML inválido',()=>{
  const r=preparar(contexto,{tipo:'declaracao',declaracao:{titulo:'Declaração',texto:'{{razao_social}}\n\n{{cnpj}}',fonte:'Usuário'}});
- assert.match(r.previa.texto,/Empresa & Filhos\n\n11222333000181/);
+ assert.match(r.previa.texto,/Empresa & Filhos\n\n11\.222\.333\/0001-81/);
  assert.match(r.previa.fontes.join(' '),/informada pelo usuário/i);
  for(const texto of ['{{regularidade}}','x\u0000','{{ cnpj }}'])assert.throws(()=>preparar(contexto,{tipo:'declaracao',declaracao:{titulo:'A',texto}}));
 });
@@ -36,7 +36,7 @@ test('quantidade apresentada em pt-BR conserva valor e total exato',()=>{
 test('DOCX reutilizado contém texto literal escapado e título',async()=>{
  const r=preparar(contexto,proposta);const zip=new AdmZip(docx(r));
  assert.match(zip.readAsText('word/document.xml'),/Material &lt;A&gt;/);
- assert.match(zip.readAsText('docProps/core.xml'),/Proposta de materiais/);
+ assert.match(zip.readAsText('docProps/core.xml'),/Proposta de preços/);
  assert.ok(zip.getEntry('[Content_Types].xml'));
  const leitura=await require('mammoth').extractRawText({buffer:docx(r)});
  assert.match(leitura.value,/Material <A>/);
@@ -45,9 +45,10 @@ test('DOCX reutilizado contém texto literal escapado e título',async()=>{
 });
 test('DOCX da declaração preserva linhas vazias e não altera minuta legada',()=>{
  const {montarDocx}=require('../netlify/functions/gerar-checklist');
- const a=docx({titulo:'Livre',previa:{texto:'Livre\n\nA\n\nB'}});
- assert.match(new AdmZip(a).readAsText('word/document.xml'),/<w:jc w:val="center"\/><\/w:pPr><w:r><w:rPr>[^]*?<w:b\/><\/w:rPr><w:t xml:space="preserve">Livre</);
- assert.equal((new AdmZip(a).readAsText('word/document.xml').match(/<w:br\/>/g)||[]).length,2);
+ const a=new AdmZip(docx(preparar(contexto,{tipo:'declaracao',declaracao:{titulo:'Livre',texto:'A\n\nB'}}))).readAsText('word/document.xml');
+ assert.match(a,/<w:jc w:val="center"\/><\/w:pPr><w:r><w:rPr>[^<]*<w:rFonts[^>]*\/><w:b\/>[^]*?<w:t xml:space="preserve">Livre</);
+ // Parágrafos separados por linha vazia viram parágrafos justificados próprios.
+ assert.match(a,/<w:jc w:val="both"\/><\/w:pPr><w:r>[^]*?>A<\/w:t>[^]*?<w:jc w:val="both"\/><\/w:pPr><w:r>[^]*?>B<\/w:t>/);
  const b=montarDocx({}, {}, {texto:'A\n\nB'});
  assert.equal((new AdmZip(b).readAsText('word/document.xml').match(/<w:br\/>/g)||[]).length,1);
  assert.match(new AdmZip(b).readAsText('docProps/core.xml'),/Checklist de Licitação/);
@@ -62,8 +63,15 @@ test('reais com milhar e DOCX com settings.xml (compatibilityMode 15) referencia
  assert.match(zip.readAsText('word/_rels/document.xml.rels'),/Type="[^"]+\/settings" Target="settings.xml"/);
  assert.doesNotMatch(zip.readAsText('word/document.xml'),/defaultTabStop/);
 });
-test('formato 2: só o título vai em negrito; rodapé com total segue texto comum',()=>{
+test('formato 2: A4 com margens, cabeçalho da empresa, rodapé com página, tabela com total, extenso e assinatura',()=>{
  const zip=new AdmZip(docx(preparar(contexto,proposta),{formato:2}));const xml=zip.readAsText('word/document.xml');
- assert.equal((xml.match(/<w:jc w:val="center"\/>/g)||[]).length,1);
- assert.doesNotMatch(xml,/<w:b\/><\/w:rPr><w:t xml:space="preserve">Total da proposta/);
+ assert.match(xml,/<w:pgSz w:w="11906" w:h="16838"\/><w:pgMar w:top="1418" w:right="1134" w:bottom="1134" w:left="1304"/);
+ assert.match(zip.readAsText('word/header1.xml'),/Empresa &amp; Filhos[^]*CNPJ 11\.222\.333\/0001-81/);
+ assert.match(zip.readAsText('word/footer1.xml'),/ PAGE [^]* NUMPAGES /);
+ assert.match(xml,/À Órgão[^]*Pregão Eletrônico nº 1\/2026[^]*Agente de Contratação/);
+ assert.match(xml,/<w:tblHeader\/>[^]*Unitário \(R\$\)[^]*>Valor total da proposta<[^]*>0,01</);
+ assert.match(xml,/Valor total por extenso: um centavo\./);
+ assert.match(xml,/\[CPF do representante\]/);assert.match(xml,/Validade da proposta[^]*30 dias/);
+ // Sem logo: cabeçalho só com os dados, sem mídia.
+ assert.equal(zip.getEntry('word/media/logo.png'),null);
 });

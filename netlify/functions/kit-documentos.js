@@ -10,7 +10,9 @@ const {cabecalhosPadrao,exigirUsuarioLogado,verificarLimiteDiario}=require('./_a
 const {createHash}=require('node:crypto');
 const {falhar,validarConfirmacao}=require('./_empresa_identificacao');
 const {carregarContextoIdentificacao}=require('./_empresa_identificacao_contexto');
-const {uuid,preparar,docx,pendente,textoFinal}=require('./_kit_documentos');
+const {uuid,preparar,docx,pendente}=require('./_kit_documentos');
+const {docxDosBlocos,dataPorExtenso}=require('./_kit_proposta_doc');
+const {carregarExtra,lerBanco,condicoesPublicas}=require('./_kit_extra');
 const {validarRascunho,documentoPublico,persistencia}=require('./_kit_documentos_persistencia');
 const {LOTE_MAX,MARCADOR,gerarLote,lerLogo,lerCpf,lerPropostaPadrao}=require('./_kit_declaracoes');
 const SEM_CPF='Preencha o CPF do representante no Perfil da empresa antes de exportar.';
@@ -19,7 +21,7 @@ async function carregarEscopo(event,userId,body){
  if(empresa.id!==body.empresaId||!uuid(empresa.organizacao_id))falhar('Empresa indisponível.',404);
  const membros=await rest(`operacao_membros?usuario_id=eq.${userId}&organizacao_id=eq.${empresa.organizacao_id}&select=usuario_id,organizacao_id,empresa_id,papel`);
  if(!membros.some(m=>m.usuario_id===userId&&m.organizacao_id===empresa.organizacao_id&&['gestor','operador'].includes(m.papel)&&(m.empresa_id===null||m.empresa_id===empresa.id)))falhar('Acesso não autorizado.',403);
- const processos=await rest(`operacao_processos?id=eq.${body.processoId}&empresa_id=eq.${empresa.id}&organizacao_id=eq.${empresa.organizacao_id}&select=id,empresa_id,organizacao_id,numero,orgao,sistema,url_origem,documentos_exigidos,atualizado_em`);
+ const processos=await rest(`operacao_processos?id=eq.${body.processoId}&empresa_id=eq.${empresa.id}&organizacao_id=eq.${empresa.organizacao_id}&select=id,empresa_id,organizacao_id,numero,orgao,sistema,url_origem,documentos_exigidos,atualizado_em,objeto,modalidade,origem_externa_id`);
  const processo=processos[0];if(!processo||processo.id!==body.processoId||processo.empresa_id!==empresa.id||processo.organizacao_id!==empresa.organizacao_id)falhar('Processo indisponível.',404);
  return {c,empresa,processo};
 }
@@ -52,7 +54,7 @@ async function exportarDeclaracoes({c,store,ctx,body,pendencias}){
  const todas=(await store.listar()).filter(d=>d.tipo==='declaracao');
  if(ids&&ids.some(id=>!todas.some(d=>d.id===id)))falhar('Documento indisponível.',404);
  const alvo=ids?todas.filter(d=>ids.includes(d.id)):todas;if(alvo.length>LOTE_MAX)falhar(`Selecione até ${LOTE_MAX} declarações.`,400);
- const paginas=[],incluidas=[],ignoradas=[];let cpf;
+ const blocos=[],incluidas=[],ignoradas=[];let cpf,base=null;const data=dataPorExtenso();
  for(const d of alvo){
   let r=null;
   if(d.revisado_por===ctx.userId&&d.revisao_versao===d.versao){try{r=prepararPeca(ctx,{tipo:d.tipo,...d.dados},d);}catch(e){if(e.status!==422)throw e;}}
@@ -60,13 +62,26 @@ async function exportarDeclaracoes({c,store,ctx,body,pendencias}){
   else if(r.previa.texto.includes(MARCADOR))ignoradas.push({documentoId:d.id,motivo:'campos_pendentes'});
   else{
    // CPF lido uma vez, só se alguma peça revisada pede; sem CPF no perfil a peça fica de fora.
-   if(r.textoComCpf&&cpf===undefined)cpf=await lerCpf(c,ctx.empresa);
-   const final=textoFinal(r,cpf);if(final===null)ignoradas.push({documentoId:d.id,motivo:'campos_pendentes'});else{paginas.push(final);incluidas.push(d.id);}
+   if(r.precisaCpf&&cpf===undefined)cpf=await lerCpf(c,ctx.empresa);
+   const final=r.documento({cpf,data});
+   if(!final)ignoradas.push({documentoId:d.id,motivo:'campos_pendentes'});
+   else{if(blocos.length)blocos.push({t:'quebra'});blocos.push(...final.blocos);base||={...final,nome:r.nome};incluidas.push(d.id);}
   }
  }
- if(!paginas.length){const e=new Error('Nenhuma declaração revisada para exportar. Prepare e confirme a revisão antes.');e.status=422;e.ignoradas=ignoradas;throw e;}
- const logo=await lerLogo(c,ctx.empresa);
- return {arquivoBase64:docx({previa:{texto:paginas.join('\n\n')},titulo:'Declarações'},{logo,paginas}).toString('base64'),nome:`declaracoes-${ctx.processo.id}.docx`,mime:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',incluidas,ignoradas,logoAplicada:Boolean(logo)};
+ if(!incluidas.length){const e=new Error('Nenhuma declaração revisada para exportar. Prepare e confirme a revisão antes.');e.status=422;e.ignoradas=ignoradas;throw e;}
+ // Uma só: o arquivo leva o título dela; várias: "Declarações - HCM LTDA - Pregão 012-2026 - <órgão>".
+ const titulo=incluidas.length>1?'Declarações':base.titulo;
+ return {...await saidaArquivo(c,ctx.empresa,body,{titulo,emitente:base.emitente,rodape:base.rodape,blocos},ext=>base.nome(titulo.slice(0,70),ext)),incluidas,ignoradas};
+}
+const MIME_DOCX='application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+// Word sai pronto daqui; o PDF sai como documento estruturado + logo e é desenhado no navegador (documento-pdf.js):
+// gerar PDF no servidor estouraria o limite de CPU do Cloudflare e exigiria embutir fonte.
+async function saidaArquivo(c,empresa,body,documento,nome,docxAntigo=null){
+ if(!documento)falhar(SEM_CPF,409);
+ const logo=await lerLogo(c,empresa);
+ if(body.saida==='pdf')return {documento,logo:logo?{base64:Buffer.from(logo.bytes).toString('base64'),tipo:logo.tipo,largura:logo.largura,altura:logo.altura}:null,nome:nome('pdf'),mime:'application/pdf',logoAplicada:Boolean(logo)};
+ const arquivo=docxAntigo?docxAntigo(logo):docxDosBlocos(documento,logo);
+ return {arquivoBase64:arquivo.toString('base64'),nome:nome('docx'),mime:MIME_DOCX,logoAplicada:Boolean(logo)};
 }
 function erroKit(e,body){
  if(e.status===422&&body?.acao==='exportar'&&(body.documentoId||body.revisado===true&&/^[a-f0-9]{64}$/.test(body.revisaoHash||'')))return [409,{erro:'Dados alterados ou indisponíveis. Prepare e confira uma nova prévia.',...(e.pendencias?{pendencias:e.pendencias}:{})}];
@@ -111,7 +126,7 @@ function criarHandler({carregarEvidenciaPortal=async()=>null,ponteLeitura=null}=
  return responder(200,{documento:documentoPublico(await store.gravar(body,dados))});
  }
  if(body.acao==='gerarDeclaracoesLote'){const {perfil}=await identificacaoKit(c);return responder(200,await gerarLote({c,empresa,processo,perfil,store,body}));}
- if(body.acao==='exportarDeclaracoes'){const {perfil,pendencias}=await identificacaoKit(c);return responder(200,await exportarDeclaracoes({c,store,body,pendencias,ctx:{userId:auth.userId,empresa,processo,perfil,itens:[]}}));}
+ if(body.acao==='exportarDeclaracoes'){const {perfil,pendencias}=await identificacaoKit(c);return responder(200,await exportarDeclaracoes({c,store,body,pendencias,ctx:{userId:auth.userId,empresa,processo,perfil,itens:[],extra:await carregarExtra(c,empresa,processo)}}));}
  let documento;
  if(body.documentoId!==undefined||['abrir','confirmarRevisao'].includes(body.acao)){
  documento=await store.abrir(body);
@@ -119,14 +134,14 @@ function criarHandler({carregarEvidenciaPortal=async()=>null,ponteLeitura=null}=
  }
  const {perfil,pendencias}=await identificacaoKit(c);
  if(['consultar','listarItens'].includes(body.acao)){
- const pagina=await listarPaginaItens({request:requestBruto(event),organizacaoId:empresa.organizacao_id,processoId:processo.id,afterId:body.afterId,limit:body.itensPaginados===true||body.acao==='listarItens'?100:50});
+ const pagina=await listarPaginaItens({request:requestBruto(event),organizacaoId:empresa.organizacao_id,processoId:processo.id,afterId:body.afterId,soParticipar:body.soParticipar===true,limit:body.itensPaginados===true||body.acao==='listarItens'?100:50});
  if(body.acao==='consultar'&&body.itensPaginados!==true&&pagina.hasMore)falhar('Atualize a interface para selecionar todos os itens por página.',409);
- return responder(200,{...consulta(empresa,processo,perfil,pagina.itens,pendencias),...(body.acao==='consultar'?{propostaPadrao:await lerPropostaPadrao(c,empresa)}:{}),paginacaoItens:{hasMore:pagina.hasMore,nextCursor:pagina.nextCursor},precoDisponivel:pagina.precoDisponivel,limitesProposta:LIMITES});
+ return responder(200,{...consulta(empresa,processo,perfil,pagina.itens,pendencias),...(body.acao==='consultar'?{propostaPadrao:await lerPropostaPadrao(c,empresa),...condicoesPublicas(await carregarExtra(c,empresa,processo))}:{}),paginacaoItens:{hasMore:pagina.hasMore,nextCursor:pagina.nextCursor},precoDisponivel:pagina.precoDisponivel,limitesProposta:LIMITES});
  }
  const payload=documento?{tipo:documento.tipo,...documento.dados}:body;
  let itens=[],itensNaoVerificados=false;
  try{itens=await carregarItensSelecionados({rest:c.rest,organizacaoId:empresa.organizacao_id,processoId:processo.id,itemIds:payload.tipo==='proposta'?payload.proposta?.itemIds:[]});}catch(e){if(body.acao!=='abrir'||e.status!==404)throw e;itensNaoVerificados=true;}
- const ctx={userId:auth.userId,empresa,processo,perfil,itens};
+ const ctx={userId:auth.userId,empresa,processo,perfil,itens,extra:await carregarExtra(c,empresa,processo,payload.tipo==='proposta')};
  if(body.acao==='abrir'){
  let revisaoVigente=false;
  if(documento.revisado_por===auth.userId&&documento.revisao_versao===documento.versao&&!pendencias.length){
@@ -150,22 +165,27 @@ function criarHandler({carregarEvidenciaPortal=async()=>null,ponteLeitura=null}=
  const perfilAtual=await identificacaoKit(atual.c);if(perfilAtual.pendencias.length)pendente(perfilAtual.pendencias.join(' '));
  const itensAtuais=await carregarItensSelecionados({rest:atual.c.rest,organizacaoId:atual.empresa.organizacao_id,processoId:atual.processo.id,itemIds:docAtual.dados.proposta?.itemIds||[]});
  await verificarOrigemSelecionada({request:atual.c.request,organizacaoId:atual.empresa.organizacao_id,processoId:atual.processo.id,itemIds:docAtual.dados.proposta?.itemIds||[]});
- const ctxAtual={userId:authAtual.userId,empresa:atual.empresa,processo:atual.processo,perfil:perfilAtual.perfil,itens:itensAtuais};
+ const ctxAtual={userId:authAtual.userId,empresa:atual.empresa,processo:atual.processo,perfil:perfilAtual.perfil,itens:itensAtuais,extra:await carregarExtra(atual.c,atual.empresa,atual.processo,true)};
  if(docAtual.tipo!=='proposta'||docAtual.revisado_por!==authAtual.userId||docAtual.revisao_versao!==docAtual.versao||docAtual.revisao_hash!==resultado.revisaoHash||prepararPeca(ctxAtual,{tipo:docAtual.tipo,...docAtual.dados},docAtual).revisaoHash!==resultado.revisaoHash)falhar('Proposta alterada durante a preparação.',409);
  if(acaoLeitura){const leitura=await ponteLeitura({event,body,c:atual.c,documento:docAtual,resultado});return responder(leitura.status||200,leitura);}
  const operacao=await prepararOperacao({documento:documentoPublico(docAtual),revisaoVigente:true},ctxAtual,evidencia);
  return responder(operacao.valido?200:409,operacao);
  }
- if(body.acao==='preparar')return responder(200,{previa:resultado.previa,revisaoHash:resultado.revisaoHash});
+ // estrutura: proposta em dados (certame, itens, condições, declarações, avisos) para o conferidor comparar com o edital; sem CPF nem banco.
+ if(body.acao==='preparar')return responder(200,{previa:resultado.previa,revisaoHash:resultado.revisaoHash,...(resultado.estrutura?{estrutura:resultado.estrutura}:{})});
  // Marcador [PREENCHER: campo] aparece na prévia, mas bloqueia revisão e exportação.
  if(resultado.previa.texto.includes(MARCADOR))pendente('Preencha os campos marcados [PREENCHER] antes de revisar ou exportar.');
  if(body.revisado!==true)pendente('Confirme a revisão dos dados e do conteúdo para este edital.');
  if(typeof body.revisaoHash!=='string'||body.revisaoHash!==resultado.revisaoHash)falhar('Dados alterados. Prepare e confira uma nova prévia.',409);
  if(body.acao==='confirmarRevisao')return responder(200,{documento:documentoPublico(await store.gravar({...body,tipo:documento.tipo},documento.dados,resultado))});
  if(documento&&(documento.revisado_por!==auth.userId||documento.revisao_versao!==documento.versao||documento.revisao_hash!==resultado.revisaoHash))falhar('Prepare e confirme sua revisão desta peça antes de exportar.',409);
- const final=textoFinal(resultado,resultado.textoComCpf?await lerCpf(c,empresa):null);if(final===null)falhar(SEM_CPF,409);
- const logo=await lerLogo(c,empresa);
- return responder(200,{arquivoBase64:docx({...resultado,previa:{...resultado.previa,texto:final}},{formato:documento?.formato===2?2:1,logo}).toString('base64'),nome:`${payload.tipo}-${processo.id}.docx`,mime:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',logoAplicada:Boolean(logo)});
+ // Proposta: CPF e banco entram sempre (sem CPF no perfil, a linha sai em branco para preencher). Declaração: só se pedir CPF.
+ const proposta=payload.tipo==='proposta',qual=proposta&&body.peca==='ficha'?'ficha':'principal';
+ if(body.peca!==undefined&&!(proposta&&['proposta','ficha'].includes(body.peca)))falhar('Solicitação inválida.',400);
+ const sens={cpf:proposta||resultado.precisaCpf?await lerCpf(c,empresa):null,data:dataPorExtenso(),banco:proposta&&qual==='principal'?await lerBanco(c,empresa):null};
+ const formato=documento?.formato===2?2:1;
+ return responder(200,await saidaArquivo(c,empresa,body,resultado.documento(sens,qual),ext=>resultado.nome(qual==='ficha'?'Ficha técnica':proposta?'Proposta':resultado.titulo.slice(0,70),ext),
+  proposta&&formato!==2&&qual==='principal'?logo=>docx(resultado,{formato,logo,sens}):null));
  }catch(e){return responder(...erroKit(e,body));}
 };
 }

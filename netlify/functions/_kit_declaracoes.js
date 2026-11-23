@@ -6,6 +6,7 @@ const {falhar,tipoCaminhoLogo,validarLogo,lerAte,LOGO}=require('./_empresa_ident
 const {obterModelo}=require('../../declaracoes-modelos.js');
 const {validarRascunho,documentoPublico}=require('./_kit_documentos_persistencia');
 const {lerCpfRepresentante}=require('./_empresa_identificacao_contexto');
+const {numeroEdital,localDoEndereco}=require('./_kit_proposta_doc');
 const LOTE_MAX=30;
 const MARCADOR='[PREENCHER:';
 // Toda variável conhecida; a que ficar sem valor vira marcador visível, nunca some do texto.
@@ -24,13 +25,14 @@ const escaparChaves=t=>t.replace(/\{(?=\{)/g,'{ ').replace(/\}(?=\})/g,'} ');
 
 function variaveis({empresa,processo,identificacao,perfilEmpresa,objeto}){
  const p=perfilEmpresa||{},d=identificacao||{};
- // cidade e data ficam para o usuário: a data de geração não é a de assinatura.
+ // Cidade sai do endereço (sem cidade reconhecível, lacuna "____/UF" para escrever à mão); a data fica marcador {{data}}
+ // e vira a data do download na exportação: a data de geração não é a de assinatura.
  return {razao_social:empresa.razao_social,cnpj:cnpj(empresa.cnpj),endereco:d.endereco,representante:d.representante,cargo:d.cargo,
-  numero_edital:processo.numero,orgao:processo.orgao,objeto,porte:PORTES[p.porte],
+  numero_edital:numeroEdital(processo.numero),orgao:processo.orgao,objeto:typeof objeto==='string'?objeto.replace(/[\s.;]+$/,''):objeto,porte:PORTES[p.porte],cidade:d.endereco?localDoEndereco(d.endereco,p.uf_sede):'',
   nome_fantasia:p.nome_fantasia,telefone:p.telefone,email:p.email,inscricao_estadual:p.inscricao_estadual,inscricao_municipal:p.inscricao_municipal};
 }
 function preencherVariaveis(texto,vars){
- return texto.replace(/\{\{\s*([a-z_]+)\s*\}\}/g,(todo,nome)=>{if(!Object.hasOwn(ROTULOS,nome))return todo;if(nome==='cpf_representante')return MARCA_CPF;return limpar(vars[nome])||`[PREENCHER: ${ROTULOS[nome]}]`;});
+ return texto.replace(/\{\{\s*([a-z_]+)\s*\}\}/g,(todo,nome)=>{if(!Object.hasOwn(ROTULOS,nome))return todo;if(nome==='cpf_representante')return MARCA_CPF;if(nome==='data')return '{{data}}';return limpar(vars[nome])||`[PREENCHER: ${ROTULOS[nome]}]`;});
 }
 // Lacunas típicas do modelo do edital (já escapado): só vira variável quando o rótulo é inequívoco, o resto de "___"
 // vira [PREENCHER: campo] (bloqueia a revisão). Linha só de "___" ou com "assinatura" é para assinar e fica.

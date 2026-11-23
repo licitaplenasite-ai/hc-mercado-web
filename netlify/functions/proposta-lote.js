@@ -49,7 +49,7 @@ exports.handler = async (event) => {
     const itens = [];
     let afterId;
     do {
-      const pagina = await listarPaginaItens({ request, organizacaoId: escolhido.organizacao_id, processoId: escolhido.id, afterId, limit: 100 });
+      const pagina = await listarPaginaItens({ request, organizacaoId: escolhido.organizacao_id, processoId: escolhido.id, afterId, limit: 100, soParticipar: true });
       itens.push(...pagina.itens);
       afterId = pagina.hasMore ? pagina.nextCursor : null;
     } while (afterId && itens.length < MAX_ITENS);
