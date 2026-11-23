@@ -211,14 +211,20 @@ begin
  exception when raise_exception then if sqlerrm not like 'Limite de 2 usuários%' then raise; end if; end;
 end $$;
 
--- Vencida há mais de 5 dias = Grátis; dentro da tolerância continua.
+-- 22/11: carência da cobrança (padrão 3 dias, config_cobranca). Dentro dela tudo continua, com aviso; depois, só boletim.
 do $$
-declare a uuid:='e2000000-0000-4000-8000-000000000002';
+declare a uuid:='e2000000-0000-4000-8000-000000000002'; v jsonb;
 begin
- update public.assinaturas set vence_em=current_date-5 where usuario_id=a;
- if public.plano_efetivo_titular(a)->>'plano'<>'assessoria' then raise exception 'tolerância de 5 dias'; end if;
- update public.assinaturas set vence_em=current_date-6 where usuario_id=a;
- if public.plano_efetivo_titular(a)->>'plano'<>'gratis' then raise exception 'vencida não caiu para Grátis'; end if;
+ if public.carencia_cobranca()<>3 then raise exception 'carência padrão: %',public.carencia_cobranca(); end if;
+ update public.assinaturas set vence_em=current_date-3 where usuario_id=a;
+ v:=public.plano_efetivo_titular(a);
+ if v->>'plano'<>'assessoria' or not (v->>'em_carencia')::boolean or (v->>'carencia_ate')::date<>current_date then raise exception 'carência de 3 dias: %',v; end if;
+ update public.assinaturas set vence_em=current_date-4 where usuario_id=a;
+ v:=public.plano_efetivo_titular(a);
+ if v->>'plano'<>'gratis' or not (v->>'bloqueado')::boolean or (v->>'em_carencia')::boolean then raise exception 'vencida não caiu para Teste encerrado: %',v; end if;
+ -- Em dia: sem aviso de carência.
+ update public.assinaturas set vence_em=current_date where usuario_id=a;
+ if (public.plano_efetivo_titular(a)->>'em_carencia')::boolean then raise exception 'em dia marcou carência'; end if;
 end $$;
 -- 22/11: ciclo semestral, pedido de compra com Pix manual, liberação só pelo dono com 2 fatores, vencimento e
 -- isolamento (o cliente só vê os pedidos dele). P = titular novo (Empresa), Q = outro titular, D = dono.
@@ -359,5 +365,67 @@ begin
  perform set_config('request.jwt.claims',json_build_object('sub','e2000000-0000-4000-8000-000000000005','aal','aal2')::text,true);
  perform public.admin_registrar_pagamento(p,'{"plano":"essencial","ciclo":"semestral"}');
  if not exists (select 1 from public.pagamentos where usuario_id=p and situacao='pendente' and valor_centavos=68600 and ciclo='semestral') then raise exception 'cobrança semestral manual'; end if;
+end $$;
+-- 22/11: Cobrança. R = titular Essencial mensal; o robô bloqueia depois da carência, a trava vale nas rotas
+-- (consumir_uso_plano) e nos limites; renovar volta tudo; só o dono com 2 fatores vê e mexe; nada é apagado.
+insert into auth.users(id,email) values ('e2000000-0000-4000-8000-000000000031','pl-r@qa.invalid');
+insert into public.clientes(id,nome,email,status,plano,telefone) values ('e2000000-0000-4000-8000-000000000031','QA R','pl-r@qa.invalid','aprovado','essencial','92999990000');
+do $$
+declare r uuid:='e2000000-0000-4000-8000-000000000031'; d uuid:='e2000000-0000-4000-8000-000000000005'; v jsonb; n integer;
+begin
+ update public.assinaturas set plano='essencial', situacao='ativa', ciclo='mensal', valor_centavos=12700, vence_em=current_date-2 where usuario_id=r;
+ -- Na carência: rota de IA continua liberada.
+ if not (public.consumir_uso_plano(r,'ia-edital',10)->>'permitido')::boolean then raise exception 'carência travou a rota'; end if;
+ -- Cliente não chama o robô nem a lista do admin.
+ perform set_config('request.jwt.claim.sub',r::text,true);
+ perform set_config('request.jwt.claims',json_build_object('sub',r,'aal','aal1')::text,true);
+ set local role authenticated;
+ begin perform public.cobranca_rodar_diario(); raise exception 'cliente rodou o robô'; exception when insufficient_privilege then null; end;
+ begin perform public.admin_cobranca(); raise exception 'cliente viu a cobrança'; exception when insufficient_privilege then null; end;
+ begin perform public.admin_definir_carencia(10); raise exception 'cliente mudou a carência'; exception when insufficient_privilege then null; end;
+ reset role;
+ -- Dono com 2 fatores: R aparece em atraso, há 2 dias, valor R$ 127.
+ perform set_config('request.jwt.claim.sub',d::text,true);
+ perform set_config('request.jwt.claims',json_build_object('sub',d,'aal','aal2')::text,true);
+ set local role authenticated;
+ v:=public.admin_cobranca();
+ reset role;
+ if not exists (select 1 from jsonb_array_elements(v->'em_atraso') x where x->>'usuario_id'=r::text and (x->>'dias_atraso')::int=2
+   and (x->>'valor_centavos')::int=12700 and x->>'plano_nome'='Essencial' and x->>'telefone'='92999990000') then raise exception 'em atraso: %',v->'em_atraso'; end if;
+ if (v->>'em_atraso_centavos')::int<12700 then raise exception 'total em atraso: %',v; end if;
+ -- Robô: dentro da carência não bloqueia.
+ v:=public.cobranca_rodar_diario();
+ if (select situacao from public.assinaturas where usuario_id=r)<>'ativa' then raise exception 'robô bloqueou na carência'; end if;
+ -- Passou da carência: robô marca vencida uma vez, a rota recusa e os dados continuam.
+ update public.assinaturas set vence_em=current_date-4 where usuario_id=r;
+ v:=public.cobranca_rodar_diario();
+ if not exists (select 1 from jsonb_array_elements(v->'bloqueados') x where x->>'usuario_id'=r::text and x->>'email'='pl-r@qa.invalid') then raise exception 'robô não bloqueou: %',v; end if;
+ if (select situacao from public.assinaturas where usuario_id=r)<>'vencida' then raise exception 'situação depois do robô'; end if;
+ if exists (select 1 from jsonb_array_elements(public.cobranca_rodar_diario()->'bloqueados') x where x->>'usuario_id'=r::text) then raise exception 'bloqueou duas vezes'; end if;
+ if (public.consumir_uso_plano(r,'ia-edital',10)->>'permitido')::boolean then raise exception 'bloqueado usou a rota'; end if;
+ if public.plano_efetivo_titular(r)->>'plano'<>'gratis' or public.plano_efetivo_titular(r)->>'situacao'<>'vencida' then raise exception 'bloqueado: %',public.plano_efetivo_titular(r); end if;
+ if not exists (select 1 from public.clientes where id=r) then raise exception 'apagou o cliente'; end if;
+ select count(*) into n from public.assinaturas_historico where usuario_id=r and acao='bloqueio_por_atraso';
+ if n<>1 then raise exception 'histórico do bloqueio: %',n; end if;
+ -- Lembretes: vence em 3 dias e vence hoje.
+ update public.assinaturas set situacao='ativa', vence_em=current_date+3 where usuario_id=r;
+ if not exists (select 1 from jsonb_array_elements(public.cobranca_rodar_diario()->'lembretes') x where x->>'usuario_id'=r::text and x->>'tipo'='vence_em_3_dias') then raise exception 'lembrete 3 dias'; end if;
+ update public.assinaturas set vence_em=current_date where usuario_id=r;
+ if not exists (select 1 from jsonb_array_elements(public.cobranca_rodar_diario()->'lembretes') x where x->>'usuario_id'=r::text and x->>'tipo'='vence_hoje') then raise exception 'lembrete hoje'; end if;
+ -- Dono muda a carência para 7: vencida há 5 dias volta a usar (na carência).
+ update public.assinaturas set situacao='ativa', vence_em=current_date-5 where usuario_id=r;
+ set local role authenticated;
+ begin perform public.admin_definir_carencia(31); raise exception 'aceitou 31 dias'; exception when raise_exception then if sqlerrm not like 'A carência vai de 0 a 30%' then raise; end if; end;
+ perform public.admin_definir_carencia(7);
+ reset role;
+ if public.plano_efetivo_titular(r)->>'plano'<>'essencial' then raise exception 'carência de 7 dias não valeu'; end if;
+ -- Bloqueado + Recebi: renovar = ativa por 1 mês a partir de hoje, pelo mesmo ponto único do pagamento.
+ update public.assinaturas set situacao='vencida', vence_em=current_date-20 where usuario_id=r;
+ set local role authenticated;
+ v:=public.admin_renovar_assinatura(r);
+ reset role;
+ if (select situacao||'/'||plano||'/'||vence_em from public.assinaturas where usuario_id=r)<>'ativa/essencial/'||(current_date+interval '1 month')::date then raise exception 'renovar: %',(select to_jsonb(a) from public.assinaturas a where usuario_id=r); end if;
+ if not exists (select 1 from public.pagamentos where usuario_id=r and situacao='pago' and valor_centavos=12700 and referencia='Renovação') then raise exception 'pagamento da renovação'; end if;
+ if public.plano_efetivo_titular(r)->>'plano'<>'essencial' then raise exception 'renovado continua travado'; end if;
 end $$;
 rollback;

@@ -253,6 +253,28 @@ drop policy if exists pagamentos_select_proprio on public.pagamentos;
 create policy pagamentos_select_proprio on public.pagamentos for select to authenticated using (usuario_id = (select auth.uid()));
 -- assinaturas_historico: sem policy = só funções security definer e service_role.
 
+-- 22/11: carência da cobrança. Depois do vencimento a conta continua com tudo por N dias (padrão 3, o dono muda no
+-- admin, aba Cobrança) com aviso fixo; passou disso, plano_efetivo_titular cai para "Teste encerrado" (só boletim).
+-- Nada é apagado. Linha única; leitura liberada a quem está logado (é só um número); escrita só por admin_definir_carencia.
+create table if not exists public.config_cobranca (
+  id integer primary key default 1 check (id = 1),
+  carencia_dias integer not null default 3 check (carencia_dias between 0 and 30),
+  atualizado_em timestamptz not null default now(),
+  atualizado_por text
+);
+insert into public.config_cobranca (id) values (1) on conflict (id) do nothing;
+alter table public.config_cobranca enable row level security;
+revoke all on public.config_cobranca from anon, authenticated;
+grant select on public.config_cobranca to authenticated;
+drop policy if exists config_cobranca_select_autenticado on public.config_cobranca;
+create policy config_cobranca_select_autenticado on public.config_cobranca for select to authenticated using (true);
+create or replace function public.carencia_cobranca() returns integer
+language sql stable security definer set search_path = public as $$
+  select coalesce((select carencia_dias from public.config_cobranca where id = 1), 3)
+$$;
+revoke all on function public.carencia_cobranca() from public, anon;
+grant execute on function public.carencia_cobranca() to authenticated, service_role;
+
 -- ---------------------------------------------------------------------------------------------------------------
 -- 3) O cálculo do plano: uma função só, usada por triggers, RLS, rotas /api e telas.
 -- ---------------------------------------------------------------------------------------------------------------
@@ -292,7 +314,7 @@ begin
       -- Vencimento com 5 dias de tolerância; teste vencido, vencida, suspensa e cancelada caem para "Teste encerrado"
       -- (código gratis): só o boletim por e-mail continua; nada é apagado.
       v_efetivo := case
-        when a.situacao = 'ativa' and (a.vence_em is null or a.vence_em + 5 >= current_date) then a.plano
+        when a.situacao = 'ativa' and (a.vence_em is null or a.vence_em + public.carencia_cobranca() >= current_date) then a.plano
         when a.situacao = 'teste' and (a.teste_ate is null or a.teste_ate > now()) then a.plano
         else 'gratis' end;
       v_teste := a.situacao = 'teste' and v_efetivo = a.plano;
@@ -330,7 +352,9 @@ begin
   return jsonb_build_object('plano', v_efetivo, 'nome', p.nome, 'plano_contratado', v_contratado,
     'nome_contratado', (select nome from public.planos where codigo = v_contratado),
     'situacao', v_situacao, 'em_teste', v_teste, 'teste_ate', a.teste_ate, 'vence_em', a.vence_em,
-    'plano_solicitado', a.plano_solicitado, 'bloqueado', v_efetivo = 'gratis', 'extras', coalesce(to_jsonb(a.extras), '[]'::jsonb),
+    'plano_solicitado', a.plano_solicitado, 'bloqueado', v_efetivo = 'gratis',
+    'em_carencia', coalesce(a.situacao = 'ativa' and a.vence_em < current_date and v_efetivo <> 'gratis', false),
+    'carencia_ate', case when a.situacao in ('ativa', 'vencida') and a.vence_em is not null then a.vence_em + public.carencia_cobranca() end, 'extras', coalesce(to_jsonb(a.extras), '[]'::jsonb),
     'max_cnpjs', v_max_c, 'max_usuarios', v_max_u, 'max_processos', v_max_p, 'ia_mes', v_ia_mes, 'recursos', v_rec);
 end $$;
 
@@ -1036,6 +1060,106 @@ begin
       from public.assinaturas a join public.clientes c on c.id = a.usuario_id left join public.planos p on p.codigo = a.plano
       where a.situacao = 'ativa' and a.vence_em between current_date and current_date + 7));
 end $$;
+-- ---------------------------------------------------------------------------------------------------------------
+-- 10) Cobrança (22/11): o dono acompanha todo dia no admin (aba Cobrança). Vencendo em 7 dias, vence hoje, em atraso
+--     (na carência) e bloqueados; totais do mês; "Recebi: renovar" usa o mesmo caminho da liberação de pedido.
+--     O robô diário (scripts/cobranca_diaria.py) marca como vencida quem passou da carência e manda os lembretes.
+-- ---------------------------------------------------------------------------------------------------------------
+-- Valor de referência da conta: o último pago (valor_centavos) ou, sem ele, o preço do plano no ciclo.
+create or replace function public.valor_cobranca(a public.assinaturas) returns integer
+language sql stable security definer set search_path = public as $$
+  select coalesce(a.valor_centavos, (select case coalesce(a.ciclo, 'mensal') when 'anual' then preco_anual_centavos
+    when 'semestral' then preco_semestral_centavos else preco_mensal_centavos end from public.planos where codigo = a.plano))
+$$;
+revoke all on function public.valor_cobranca(public.assinaturas) from public, anon, authenticated;
+
+create or replace function public.admin_cobranca() returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare v_car integer := public.carencia_cobranca(); v_mes date := date_trunc('month', current_date)::date; v jsonb;
+begin
+  if not public.admin_planos_autorizado() then raise exception 'Cobrança exige o proprietário com 2 fatores' using errcode = '42501'; end if;
+  with contas as (
+      select a.usuario_id, c.nome, c.email, c.telefone, c.empresa, a.plano, p.nome as plano_nome, a.ciclo,
+        public.valor_cobranca(a) as valor_centavos, a.vence_em, a.situacao, current_date - a.vence_em as dias_atraso,
+        a.vence_em + v_car as carencia_ate,
+        case when a.situacao = 'vencida' or a.vence_em + v_car < current_date then 'bloqueado'
+          when a.vence_em = current_date then 'vence_hoje'
+          when a.vence_em > current_date and a.vence_em <= current_date + 7 then 'vencendo'
+          when a.vence_em < current_date then 'em_atraso' end as grupo
+      from public.assinaturas a join public.clientes c on c.id = a.usuario_id left join public.planos p on p.codigo = a.plano
+      where a.situacao in ('ativa', 'vencida') and a.vence_em is not null and not public.eh_owner_admin_operacao(a.usuario_id))
+  select jsonb_build_object('carencia_dias', v_car, 'hoje', current_date,
+      'vencendo', (select coalesce(jsonb_agg(to_jsonb(x) order by x.vence_em), '[]') from contas x where x.grupo = 'vencendo'),
+      'vence_hoje', (select coalesce(jsonb_agg(to_jsonb(x) order by x.nome), '[]') from contas x where x.grupo = 'vence_hoje'),
+      'em_atraso', (select coalesce(jsonb_agg(to_jsonb(x) order by x.vence_em), '[]') from contas x where x.grupo = 'em_atraso'),
+      'bloqueados', (select coalesce(jsonb_agg(to_jsonb(x) order by x.vence_em desc), '[]') from contas x where x.grupo = 'bloqueado'),
+      -- A receber: vence de hoje até o fim do mês. Em atraso: na carência ou bloqueado por falta de pagamento.
+      'a_receber_centavos', (select coalesce(sum(x.valor_centavos), 0) from contas x where x.vence_em >= current_date
+        and x.vence_em < (v_mes + interval '1 month')::date),
+      'recebido_centavos', (select coalesce(sum(g.valor_centavos), 0) from public.pagamentos g where g.situacao = 'pago'
+        and g.pago_em >= v_mes and g.pago_em < v_mes + interval '1 month'),
+      'em_atraso_centavos', (select coalesce(sum(x.valor_centavos), 0) from contas x where x.grupo in ('em_atraso', 'bloqueado')))
+    into v from (select 1) um;
+  return v;
+end $$;
+
+create or replace function public.admin_definir_carencia(p_dias integer) returns integer
+language plpgsql security definer set search_path = public as $$
+begin
+  if not public.admin_planos_autorizado() then raise exception 'Cobrança exige o proprietário com 2 fatores' using errcode = '42501'; end if;
+  if p_dias is null or p_dias < 0 or p_dias > 30 then raise exception 'A carência vai de 0 a 30 dias'; end if;
+  update public.config_cobranca set carencia_dias = p_dias, atualizado_em = now(), atualizado_por = public.admin_email_atual() where id = 1;
+  return p_dias;
+end $$;
+
+-- "Recebi: renovar": com pedido em aberto, libera o pedido (extras e ciclo dele); sem pedido, renova o mesmo plano,
+-- ciclo e valor pelo ponto único aplicar_pagamento_confirmado (atraso ou bloqueado renova a partir de hoje).
+create or replace function public.admin_renovar_assinatura(p_usuario uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare a public.assinaturas%rowtype; v_pedido uuid; v_pag uuid; v_valor integer;
+begin
+  if not public.admin_planos_autorizado() then raise exception 'Renovar exige o proprietário com 2 fatores' using errcode = '42501'; end if;
+  select id into v_pedido from public.pedidos where usuario_id = p_usuario and situacao in ('aguardando', 'correcao') order by criado_em desc limit 1;
+  if v_pedido is not null then return public.admin_decidir_pedido(v_pedido, 'liberar'); end if;
+  select * into a from public.assinaturas where usuario_id = p_usuario;
+  if not found or a.situacao not in ('ativa', 'vencida') then raise exception 'Conta sem assinatura paga para renovar'; end if;
+  v_valor := public.valor_cobranca(a);
+  if coalesce(v_valor, 0) <= 0 then raise exception 'Conta sem valor de cobrança'; end if;
+  insert into public.pagamentos (usuario_id, cliente_email, plano, ciclo, valor_centavos, metodo, vencimento, referencia, gateway, observacoes, criado_por)
+    values (a.usuario_id, (select email from public.clientes where id = a.usuario_id), a.plano, coalesce(a.ciclo, 'mensal'), v_valor, 'pix',
+      current_date, 'Renovação', 'pix_manual', 'Renovação conferida pelo dono (Cobrança)', public.admin_email_atual())
+    returning id into v_pag;
+  return public.aplicar_pagamento_confirmado(v_pag, public.admin_email_atual());
+end $$;
+revoke all on function public.admin_cobranca(), public.admin_definir_carencia(integer), public.admin_renovar_assinatura(uuid) from public, anon;
+grant execute on function public.admin_cobranca(), public.admin_definir_carencia(integer), public.admin_renovar_assinatura(uuid) to authenticated;
+
+-- Robô diário (chave de serviço): marca "vencida" quem passou da carência e devolve quem recebe lembrete hoje
+-- (vence em 3 dias, vence hoje, bloqueado agora). Rodar duas vezes no dia não bloqueia nem lista o bloqueio de novo.
+create or replace function public.cobranca_rodar_diario() returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare v_car integer := public.carencia_cobranca(); v_bloq jsonb;
+begin
+  with b as (
+    update public.assinaturas a set situacao = 'vencida', atualizado_em = now(), atualizado_por = 'robo-cobranca'
+      where a.situacao = 'ativa' and a.vence_em is not null and a.vence_em + v_car < current_date
+        and not public.eh_owner_admin_operacao(a.usuario_id)
+      returning a.*),
+  h as (insert into public.assinaturas_historico (usuario_id, acao, depois, feito_por)
+      select b.usuario_id, 'bloqueio_por_atraso', jsonb_build_object('vence_em', b.vence_em, 'carencia_dias', v_car), 'robo-cobranca' from b returning 1)
+  select coalesce(jsonb_agg(jsonb_build_object('usuario_id', b.usuario_id, 'email', c.email, 'nome', c.nome, 'plano_nome', p.nome,
+      'valor_centavos', public.valor_cobranca(b), 'vence_em', b.vence_em, 'tipo', 'bloqueado')), '[]') into v_bloq
+    from b join public.clientes c on c.id = b.usuario_id left join public.planos p on p.codigo = b.plano;
+  return jsonb_build_object('carencia_dias', v_car, 'bloqueados', v_bloq,
+    'lembretes', (select coalesce(jsonb_agg(jsonb_build_object('usuario_id', a.usuario_id, 'email', c.email, 'nome', c.nome, 'plano_nome', p.nome,
+        'valor_centavos', public.valor_cobranca(a), 'vence_em', a.vence_em, 'carencia_ate', a.vence_em + v_car,
+        'tipo', case when a.vence_em = current_date then 'vence_hoje' else 'vence_em_3_dias' end)), '[]')
+      from public.assinaturas a join public.clientes c on c.id = a.usuario_id left join public.planos p on p.codigo = a.plano
+      where a.situacao = 'ativa' and a.vence_em in (current_date, current_date + 3) and not public.eh_owner_admin_operacao(a.usuario_id)));
+end $$;
+revoke all on function public.cobranca_rodar_diario() from public, anon, authenticated;
+grant execute on function public.cobranca_rodar_diario() to service_role;
+
 revoke all on function public.admin_decidir_pedido(uuid, text, text), public.admin_listar_pedidos() from public, anon;
 grant execute on function public.admin_decidir_pedido(uuid, text, text), public.admin_listar_pedidos() to authenticated;
 
