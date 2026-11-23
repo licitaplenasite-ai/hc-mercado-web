@@ -648,8 +648,8 @@
   .dash-card-num { color: var(--marca-titulo); font-weight: 700; }
 
   .btn-buscar, .btn-buscar:hover:not(:disabled) {
-    background-color: var(--action-strong); background-image: var(--grad-marca); color: var(--marca-on);
-    border-radius: 8px; font-weight: 600; box-shadow: 0 6px 16px rgba(34, 85, 224, 0.24);
+    background-color: var(--destaque); background-image: none; color: var(--destaque-texto);
+    border-radius: 999px; font-weight: 700; box-shadow: 0 8px 18px -8px rgba(var(--destaque-rgb), 0.6);
   }
   .btn-buscar:hover:not(:disabled) { filter: brightness(1.08); }
   .btn-buscar:disabled { background-image: none; box-shadow: none; }
@@ -666,7 +666,7 @@
     content: ""; position: absolute; z-index: -1; top: 0; bottom: 0; left: -80%; width: 45%; pointer-events: none;
     background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.5), transparent); transform: skewX(-20deg);
   }
-  .btn-buscar:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 14px 26px -12px rgba(34, 85, 224, 0.75); }
+  .btn-buscar:hover:not(:disabled) { transform: translateY(-2px); background-color: var(--destaque-forte); box-shadow: 0 14px 26px -12px rgba(var(--destaque-rgb), 0.85); }
   .btn-buscar:hover:not(:disabled)::after { animation: painel-brilho 0.85s ease; }
   @keyframes painel-brilho { from { left: -80%; } to { left: 130%; } }
   .dash-card, .dash-atalho, .angulo-card, .hc-acao-explorar { transition: transform 0.3s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.3s ease, border-color 0.3s ease; }

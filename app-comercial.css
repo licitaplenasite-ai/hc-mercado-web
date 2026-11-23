@@ -297,11 +297,11 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .app-marca-placa img{width:28px;height:28px}
 .app-titulo{color:var(--marca-titulo);font-weight:700;letter-spacing:-.01em}
 .app-cartao{box-shadow:var(--sombra-cartao)}
-.app-primario,.app-primario:hover{background-color:var(--action-strong);background-image:var(--grad-marca);border-color:transparent;color:var(--marca-on);box-shadow:0 6px 16px rgba(34,85,224,.24)}
+.app-primario,.app-primario:hover{background-color:var(--destaque);background-image:none;border-color:transparent;color:var(--destaque-texto);border-radius:999px;box-shadow:0 8px 18px -8px rgba(var(--destaque-rgb),.6)}
 .app-primario:hover{filter:brightness(1.08)}/* Rodada 2 (23/11): botão principal sobe com brilho. */
 .app-primario{position:relative;overflow:hidden;isolation:isolate;transition:transform .25s ease,box-shadow .25s ease,filter .2s ease}
 .app-primario::after{content:"";position:absolute;z-index:-1;top:0;bottom:0;left:-80%;width:45%;pointer-events:none;background:linear-gradient(100deg,transparent,rgba(255,255,255,.5),transparent);transform:skewX(-20deg)}
-.app-primario:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 14px 26px -12px rgba(34,85,224,.75)}
+.app-primario:hover:not(:disabled){transform:translateY(-2px);background-color:var(--destaque-forte);box-shadow:0 14px 26px -12px rgba(var(--destaque-rgb),.85)}
 .app-primario:hover:not(:disabled)::after{animation:app-brilho .85s ease}
 @keyframes app-brilho{from{left:-80%}to{left:130%}}
 @media (prefers-reduced-motion:reduce){.app-primario{transition:none}.app-primario:hover:not(:disabled){transform:none}.app-primario::after{display:none}}
