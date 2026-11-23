@@ -243,3 +243,27 @@ test('exigirAprovadoComLimite: sem token 401, pendente 403, aprovado acima do ri
     if (chaveAnterior === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY; else process.env.SUPABASE_SERVICE_ROLE_KEY = chaveAnterior;
   }
 });
+
+test('exigirAprovadoComLimite: depois do login, cadastro, ritmo e IP vão juntos (2 etapas, não 4)', async () => {
+  const { exigirAprovadoComLimite } = require('../_auth');
+  const fetchAnterior = global.fetch, chaveAnterior = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  let abertas = 0, maximo = 0;
+  try {
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'teste-local';
+    global.fetch = async (url) => {
+      abertas += 1; maximo = Math.max(maximo, abertas);
+      await new Promise((ok) => setTimeout(ok, 20));
+      abertas -= 1;
+      const u = String(url);
+      if (u.includes('/auth/v1/user')) return Response.json({ id: '00000000-0000-4000-8000-000000000001' });
+      if (u.includes('/rest/v1/clientes?')) return Response.json([{ status: 'aprovado' }]);
+      return Response.json(1);
+    };
+    const evento = { headers: { authorization: 'Bearer teste', 'x-nf-client-connection-ip': '203.0.113.5' } };
+    assert.equal((await exigirAprovadoComLimite(evento, 'pncp-proxy')).ok, true);
+    assert.equal(maximo, 3);
+  } finally {
+    global.fetch = fetchAnterior;
+    if (chaveAnterior === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY; else process.env.SUPABASE_SERVICE_ROLE_KEY = chaveAnterior;
+  }
+});

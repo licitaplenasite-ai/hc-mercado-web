@@ -243,12 +243,18 @@ async function limitarContaPorMinuto(userId, nomeFuncao, limite = LIMITE_POR_MIN
 
 // Login aprovado + teto por minuto da conta + o teto diário por IP que já existia: o que os proxies do governo
 // exigem desde 20/11 (antes eram públicos).
+// Medido 23/11: cada ida ao Supabase custa ~0,25 s e eram 4 em série antes de cada consulta ao portal.
+// Depois do login (sem login nada é contado), cadastro, ritmo e IP saem juntos: 2 etapas em vez de 4.
 async function exigirAprovadoComLimite(event, nomeFuncao) {
-  const usuario = await exigirUsuarioAprovado(event);
+  const usuario = await exigirUsuarioLogado(event);
   if (!usuario.ok) return usuario;
-  const ritmo = await limitarContaPorMinuto(usuario.userId, nomeFuncao, LIMITE_PROXY_POR_MINUTO_CONTA);
+  const [cadastro, ritmo, rede] = await Promise.all([
+    exigirClienteAprovado(event, usuario.userId),
+    limitarContaPorMinuto(usuario.userId, nomeFuncao, LIMITE_PROXY_POR_MINUTO_CONTA),
+    limitarPorIp(event, nomeFuncao),
+  ]);
+  if (!cadastro.ok) return cadastro;
   if (!ritmo.ok) return ritmo;
-  const rede = await limitarPorIp(event, nomeFuncao);
   return rede.ok ? usuario : rede;
 }
 
