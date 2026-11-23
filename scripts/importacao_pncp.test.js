@@ -4,7 +4,7 @@ const emp='11111111-1111-1111-1111-111111111111',org='22222222-2222-2222-2222-22
 function setup(options={}){const calls=[];const c={empresa:{id:emp,organizacao_id:org},rest:async path=>path.startsWith('operacao_membros')?[{usuario_id:'qa',organizacao_id:org,empresa_id:emp,papel:'operador'}]:[{id:proc,empresa_id:emp,organizacao_id:org,url_origem:'https://pncp.gov.br/app/editais/11222333000181/2026/41',origem_externa_id:null,numero:'41'}],request:async(path,op)=>{calls.push({path,op});return new Response(JSON.stringify(path.includes('reservar')?true:{itemId:'internal',estado:options.estado||'importado',versao:1}));}};
 const handler=criarHandler({enabled:()=>true,serviceKey:()=> 'FAKE_SERVICE',auth:options.auth||(async()=>({ok:true,userId:'qa'})),contexto:async()=>c,timeoutMs:options.timeoutMs||10000,fetchImpl:async(url,op)=>{calls.push({url,op});if(options.fetch) return options.fetch(url,op);return new Response(JSON.stringify({numeroItem:98,descricao:'Material oficial',quantidade:2,unidadeMedida:'UN',...options.item}),{headers:{'content-type':'application/json'}});}});
 const run=async patch=>handler({httpMethod:'POST',headers:{authorization:'Bearer FAKE_USER'},body:JSON.stringify({empresaId:emp,processoId:proc,numeroItem:98,...patch})});return{run,calls,c};}
-test('importação usa URLfixa somente seletores, sem preço ofertado e com proveniência',async()=>{const f=setup(),r=await f.run();assert.equal(r.statusCode,200);const source=f.calls.find(x=>x.url);assert.equal(source.url,'https://pncp.gov.br/api/pncp/v1/orgaos/11222333000181/compras/2026/41/itens/98');assert.equal(source.op.redirect,'error');const body=JSON.parse(f.calls.at(-1).op.body);assert.match(body.p_hash,/^[a-f0-9]{64}$/);assert.equal(body.p_item.quantidade,'2');assert.equal(body.p_item.valor_unitario_proposta,undefined);});
+test('importação usa URLfixa somente seletores, sem preço ofertado e com proveniência',async()=>{const f=setup(),r=await f.run();assert.equal(r.statusCode,200);const source=f.calls.find(x=>x.url);assert.equal(source.url,'https://pncp.gov.br/api/pncp/v1/orgaos/11222333000181/compras/2026/41/itens/98');assert.equal(source.op.redirect,'manual');const body=JSON.parse(f.calls.at(-1).op.body);assert.match(body.p_hash,/^[a-f0-9]{64}$/);assert.equal(body.p_item.quantidade,'2');assert.equal(body.p_item.valor_unitario_proposta,undefined);});
 test('cliente não fornece objeto oficial ou URL, item divergente não persiste',async()=>{const f=setup();assert.equal((await f.run({item:{descricao:'forjado'}})).statusCode,400);assert.equal(f.calls.length,0);const g=setup({item:{numeroItem:99}});assert.equal((await g.run()).statusCode,502);assert.equal(g.calls.some(x=>x.path?.includes('gravar')),false);});
 test('processo estrangeiro e cadência recusada não acessam PNCP',async()=>{const f=setup();f.c.rest=async path=>path.startsWith('operacao_membros')?[]:[];assert.equal((await f.run()).statusCode,403);assert.equal(f.calls.length,0);const g=setup();g.c.request=async()=>new Response(JSON.stringify(false));assert.equal((await g.run()).statusCode,429);assert.equal(g.calls.length,0);});
 test('fonte malformada ou quantidade incompatível não persiste; conteúdo não altera origem',async()=>{
@@ -70,4 +70,43 @@ test('hash normalizado mantém identidade legada e distingue mudança real',asyn
   if(q==='2.000')assert.equal(p.p_hash,previous);
   if(q==='123456789012.125')assert.notEqual(p.p_hash,previous);
  }
+});
+
+// Edital por lote (ALEPA 012/2026): itens 10001, 10002… Fonte simulada responde lista paginada e item a item.
+function pncpPorLote(numeros){
+ const corpo=n=>({numeroItem:n,descricao:'Item '+n,quantidade:2,unidadeMedida:'UN'});
+ return async url=>{const u=new URL(url),m=/\/itens\/(\d+)$/.exec(u.pathname);
+  if(m)return numeros.includes(Number(m[1]))?new Response(JSON.stringify(corpo(Number(m[1])))):new Response('{"message":"Item da compra não cadastrado."}',{status:404});
+  const p=Number(u.searchParams.get('pagina')),t=Number(u.searchParams.get('tamanhoPagina'));return new Response(JSON.stringify(numeros.slice((p-1)*t,p*t).map(corpo)));};
+}
+test('item válido de edital por lote é importado com redirect manual (Cloudflare recusa "error")',async()=>{
+ const f=setup({fetch:pncpPorLote([10001,10002])}),r=await f.run({numeroItem:10001});assert.equal(r.statusCode,200);
+ const fonte=f.calls.find(x=>x.url);assert.equal(fonte.op.redirect,'manual');assert.match(fonte.url,/\/itens\/10001$/);
+ assert.equal(JSON.parse(f.calls.at(-1).op.body).p_numero,10001);
+});
+test('item inexistente responde 404 com a faixa real e não grava',async()=>{
+ const f=setup({fetch:pncpPorLote([10001,10002,10192])}),r=await f.run({numeroItem:1});assert.equal(r.statusCode,404);
+ assert.equal(JSON.parse(r.body).erro,'O item 1 não existe neste edital. Os itens vão de 10001 a 10192.');
+ assert.equal(f.calls.some(x=>x.path?.includes('gravar')),false);
+});
+test('falha inesperada continua genérica na resposta, mas a causa vai para o log do servidor',async()=>{
+ const erros=[],original=console.error;console.error=(...a)=>erros.push(a.join(' '));
+ try{const f=setup({fetch:async()=>{throw new TypeError('Invalid redirect value SECRET');}}),r=await f.run();assert.equal(r.statusCode,503);assert.equal(r.body.includes('SECRET'),false);}
+ finally{console.error=original;}
+ assert.ok(erros.some(e=>e.includes('Invalid redirect value')));
+});
+test('importar todos: páginas de 15 com uma reserva por página, contagem e fim da lista',async()=>{
+ const numeros=Array.from({length:17},(_,i)=>10001+i),f=setup({fetch:pncpPorLote(numeros)});
+ const r1=JSON.parse((await f.run({numeroItem:undefined,pagina:1})).body);
+ assert.deepEqual([r1.lote,r1.lidos,r1.fim,r1.primeiro,r1.ultimo,r1.importados],[true,15,false,10001,10015,15]);
+ assert.equal(f.calls.filter(x=>x.path?.includes('reservar')).length,1);assert.equal(f.calls.filter(x=>x.path?.includes('gravar')).length,15);
+ assert.ok(f.calls.length<=50-12,'subrequisições por chamada dentro do limite do Cloudflare');
+ const r2=JSON.parse((await f.run({numeroItem:undefined,pagina:2})).body);assert.deepEqual([r2.lidos,r2.fim,r2.ultimo],[2,true,10017]);
+ const r3=JSON.parse((await f.run({numeroItem:undefined,pagina:3})).body);assert.deepEqual([r3.lidos,r3.fim,r3.importados],[0,true,0]);
+});
+test('importar todos: cadência recusada, seletor duplo e item manual em colisão',async()=>{
+ const g=setup({fetch:pncpPorLote([10001])});g.c.request=async()=>new Response('false');assert.equal((await g.run({numeroItem:undefined,pagina:1})).statusCode,429);
+ assert.equal((await setup().run({pagina:1})).statusCode,400);
+ const r=JSON.parse((await setup({fetch:pncpPorLote([10001,10002]),estado:'colisao_manual'}).run({numeroItem:undefined,pagina:1})).body);
+ assert.deepEqual(r.colisoes,[10001,10002]);assert.equal(r.importados,0);
 });

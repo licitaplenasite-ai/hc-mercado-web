@@ -32,7 +32,10 @@ const urlItem=(ref,numeroItem)=>`${BASE}/${ref.cnpj}/compras/${ref.ano}/${ref.se
 async function buscarFonteItem(ref,numeroItem,{fetchImpl=(...a)=>fetch(...a),timeoutMs=10000}={}){
  const url=urlItem(ref,numeroItem);
  const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),timeoutMs);let fonte;
- try{fonte=await lerJsonLimitado(await fetchImpl(url,{method:'GET',redirect:'error',cache:'no-store',signal:ctrl.signal,headers:{Accept:'application/json'}}));}finally{clearTimeout(timer);}
+ // redirect:'manual' (não 'error'): o fetch do Cloudflare Workers recusa 'error' com TypeError; um 3xx aqui chega !ok e falha em lerJsonLimitado.
+ try{const r=await fetchImpl(url,{method:'GET',redirect:'manual',cache:'no-store',signal:ctrl.signal,headers:{Accept:'application/json'}});
+  if(r.status===404)throw Object.assign(Error(`O item ${numeroItem} não existe neste edital.`),{status:404,itemInexistente:true});
+  fonte=await lerJsonLimitado(r);}finally{clearTimeout(timer);}
  const {raw}=fonte;
  const compra=`${ref.cnpj}-1-${ref.seq}/${ref.ano}`;
  if(!raw||Array.isArray(raw)||raw.numeroItem!==numeroItem||typeof raw.descricao!=='string'||!raw.descricao.trim()||raw.descricao.length>10000||typeof raw.unidadeMedida!=='string'||!raw.unidadeMedida.trim()||raw.unidadeMedida.length>100)falhar('Identidade ou conteúdo do item PNCP divergente.',502);
@@ -44,22 +47,27 @@ async function buscarFonteItem(ref,numeroItem,{fetchImpl=(...a)=>fetch(...a),tim
  const conteudo={compra,item,raw};const hash=createHash('sha256').update(JSON.stringify(conteudo)).digest('hex');
  return {url,compra,item,hash,snapshot:{...conteudo,textoOriginal:fonte.texto}};
 }
+// Números de UMA página de /compras/{ano}/{seq}/itens ([] no fim da lista).
+async function numerosDaPagina(cnpj,ano,seq,p,tamanho,{fetch:fetchImpl=(...a)=>fetch(...a),timeoutMs=10000}={}){
+ if(!/^\d{14}$/.test(cnpj)||!/^\d{4}$/.test(String(ano))||!/^\d{1,12}$/.test(String(seq)))falhar('Referência PNCP inválida.',409);
+ const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),timeoutMs);let lista;
+ try{
+  const r=await fetchImpl(`${BASE}/${cnpj}/compras/${ano}/${Number(seq)}/itens?pagina=${p}&tamanhoPagina=${tamanho}`,{method:'GET',redirect:'manual',cache:'no-store',signal:ctrl.signal,headers:{Accept:'application/json'}});
+  if(r.status===204)return [];
+  if(!r.ok)falhar('Fonte PNCP indisponível.',502);
+  lista=await r.json();
+ }catch(e){if(e.status)throw e;falhar('Fonte PNCP indisponível.',502);}finally{clearTimeout(timer);}
+ if(!Array.isArray(lista))falhar('Resposta PNCP inválida.',502);
+ return lista.map(it=>{if(!Number.isSafeInteger(it?.numeroItem)||it.numeroItem<1)falhar('Resposta PNCP inválida.',502);return it.numeroItem;});
+}
 // Pagina /compras/{ano}/{seq}/itens e devolve só os números. Estourar o teto é erro: lote truncado esconderia itens.
 async function listarNumerosItens(cnpj,ano,seq,{fetch:fetchImpl=(...a)=>fetch(...a),pagina=500,maxPaginas=20,timeoutMs=10000}={}){
- if(!/^\d{14}$/.test(cnpj)||!/^\d{4}$/.test(String(ano))||!/^\d{1,12}$/.test(String(seq)))falhar('Referência PNCP inválida.',409);
  const numeros=[];
  for(let p=1;p<=maxPaginas;p++){
-  const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),timeoutMs);let lista;
-  try{
-   const r=await fetchImpl(`${BASE}/${cnpj}/compras/${ano}/${Number(seq)}/itens?pagina=${p}&tamanhoPagina=${pagina}`,{method:'GET',redirect:'error',cache:'no-store',signal:ctrl.signal,headers:{Accept:'application/json'}});
-   if(r.status===204)return numeros;
-   if(!r.ok)falhar('Fonte PNCP indisponível.',502);
-   lista=await r.json();
-  }catch(e){if(e.status)throw e;falhar('Fonte PNCP indisponível.',502);}finally{clearTimeout(timer);}
-  if(!Array.isArray(lista))falhar('Resposta PNCP inválida.',502);
-  for(const it of lista){if(!Number.isSafeInteger(it?.numeroItem)||it.numeroItem<1)falhar('Resposta PNCP inválida.',502);numeros.push(it.numeroItem);}
+  const lista=await numerosDaPagina(cnpj,ano,seq,p,pagina,{fetch:fetchImpl,timeoutMs});
+  numeros.push(...lista);
   if(lista.length<pagina)return numeros;
  }
  falhar('Lista de itens PNCP excede o teto de páginas.',502);
 }
-module.exports={quantidadeOriginal,lerJsonLimitado,urlItem,buscarFonteItem,listarNumerosItens};
+module.exports={quantidadeOriginal,lerJsonLimitado,urlItem,buscarFonteItem,numerosDaPagina,listarNumerosItens};

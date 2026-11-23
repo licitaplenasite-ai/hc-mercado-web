@@ -2,6 +2,30 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const I = require('./itens-processo-ui');
 
+test('importar todos: percorre as páginas, espera entre elas, repete a página após 429 e soma o resultado', async () => {
+  const respostas = [
+    { status: 200, j: { lote: true, lidos: 15, fim: false, ultimo: 10015, importados: 15, inalterados: 0, alterados: 0, colisoes: [], recusados: [] } },
+    { status: 429, j: { erro: 'Aguarde sete segundos antes de consultar outro item.' } },
+    { status: 200, j: { lote: true, lidos: 2, fim: true, ultimo: 10017, importados: 1, inalterados: 0, alterados: 0, colisoes: [10016], recusados: [] } },
+  ];
+  const paginas = [], esperas = [], progresso = [];
+  const r = await I.importarTodosItens({ enviar: async (p) => { paginas.push(p); return respostas.shift(); }, esperar: async (ms) => { esperas.push(ms); },
+    aoProgresso: (s) => progresso.push(s.lidos) });
+  assert.deepEqual(paginas, [1, 2, 2]);
+  assert.equal(esperas.length, 2);
+  assert.deepEqual(progresso, [15, 17]);
+  assert.equal(r.ok, true);
+  assert.equal(r.texto, '17 itens lidos do PNCP: 16 importados, 0 já estavam importados; 1 já existiam como item manual e não foram ligados (10016).');
+});
+
+test('importar todos: erro do servidor para na hora e mostra a mensagem dele', async () => {
+  const r = await I.importarTodosItens({ enviar: async () => ({ status: 502, j: { erro: 'Fonte PNCP indisponível.' } }), esperar: async () => {} });
+  assert.equal(r.ok, false);
+  assert.equal(r.texto, 'Fonte PNCP indisponível.');
+  const vazio = await I.importarTodosItens({ enviar: async () => ({ status: 200, j: { lote: true, lidos: 0, fim: true, colisoes: [], recusados: [] } }), esperar: async () => {} });
+  assert.equal(vazio.texto, 'O PNCP não lista itens para este edital.');
+});
+
 test('editar item: valor ofertado abaixo do preço mínimo gravado é recusado antes de enviar', () => {
   const item = { valorUnitarioMinimo: '36.15' };
   assert.equal(I.abaixoDoMinimo(item, '35.90'), 'O valor ofertado R$ 35,90 está abaixo do seu preço mínimo R$ 36,15. Ajuste o valor ou o mínimo.');

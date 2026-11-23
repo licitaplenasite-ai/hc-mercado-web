@@ -23,6 +23,7 @@
     inalterado: 'Este item já estava importado e não mudou no PNCP. Nada foi alterado.',
     desligada: 'A importação de itens do PNCP ainda não está ligada. Cadastre o item pelo formulário acima.',
     erroImportar: 'Não foi possível importar o item. Tente de novo em instantes.',
+    importandoTodos: 'Importando todos os itens do PNCP… Não feche esta tela.',
     semReferencia: 'Sem referência automática',
     semPrecos: 'Sem preços para esta unidade. Tente outra unidade na Pesquisa de Preços.',
     erroReferencia: 'A Pesquisa de Preços não respondeu agora. Use Buscar de novo em instantes.',
@@ -53,6 +54,34 @@
     }
     if (status === 503 && j?.erro === ERRO_DESLIGADA) return { ok: false, texto: MSG.desligada };
     return { ok: false, texto: msg(j?.erro) || MSG.erroImportar };
+  }
+
+  // "Importar todos": o servidor importa 15 itens por página e aceita uma consulta a cada 7 s (reservar_importacao_pncp).
+  // enviar(pagina) -> { status, j }. 429 (outra consulta no mesmo intervalo) espera e repete a mesma página, até 5 vezes.
+  const ESPERA_LOTE_MS = 7500;
+  async function importarTodosItens({ enviar, esperar, aoProgresso = () => {}, ativo = () => true }) {
+    const soma = { lidos: 0, importados: 0, inalterados: 0, alterados: 0, colisoes: [], recusados: [], ultimo: null };
+    for (let pagina = 1, recusas = 0; pagina <= 200 && ativo();) {
+      const r = await enviar(pagina);
+      if (r?.status === 429 && recusas < 5) { recusas++; await esperar(ESPERA_LOTE_MS); continue; }
+      if (r?.status !== 200 || !r.j?.lote) return { ok: false, soma, texto: respostaImportacao(r?.status, r?.j).texto };
+      recusas = 0;
+      for (const k of ['lidos', 'importados', 'inalterados', 'alterados']) soma[k] += Number(r.j[k]) || 0;
+      soma.colisoes.push(...(r.j.colisoes || [])); soma.recusados.push(...(r.j.recusados || []));
+      if (r.j.ultimo != null) soma.ultimo = r.j.ultimo;
+      aoProgresso(soma);
+      if (r.j.fim) return { ok: true, soma, texto: resumoImportacaoLote(soma) };
+      pagina++; await esperar(ESPERA_LOTE_MS);
+    }
+    return { ok: false, soma, texto: `Importação interrompida. ${resumoImportacaoLote(soma)}` };
+  }
+  function resumoImportacaoLote(s) {
+    if (!s.lidos) return 'O PNCP não lista itens para este edital.';
+    const partes = [`${s.lidos} itens lidos do PNCP: ${s.importados} importados, ${s.inalterados} já estavam importados`];
+    if (s.alterados) partes.push(`${s.alterados} mudaram no PNCP (oferta preservada; confira)`);
+    if (s.colisoes.length) partes.push(`${s.colisoes.length} já existiam como item manual e não foram ligados (${s.colisoes.slice(0, 10).join(', ')})`);
+    if (s.recusados.length) partes.push(`${s.recusados.length} com quantidade que o sistema não representa (${s.recusados.slice(0, 10).join(', ')})`);
+    return partes.join('; ') + '.';
   }
 
   // Decimal canônico, positivo e dentro do limite. Retorna BigInt escalado ou null.
@@ -354,9 +383,9 @@
       </section>
       <form data-item-importar id="itens-importar" class="itens-importar" hidden novalidate>
         <label>Número do item no edital <input name="numeroItem" inputmode="numeric" pattern="[0-9]*" maxlength="7" autocomplete="off" placeholder="Ex.: 3"></label>
-        <p class="itens-importar-ajuda">Um item por vez, direto do PNCP. Aguarde alguns segundos entre uma importação e outra.</p>
+        <p class="itens-importar-ajuda">Um item pelo número, ou todos de uma vez (leva cerca de 1 minuto a cada 100 itens). Direto do PNCP.</p>
         <p data-item-importar-estado role="status" aria-live="polite"></p>
-        <div class="itens-acoes"><button type="submit" class="app-primario" data-item-importar-enviar>Importar este item</button></div>
+        <div class="itens-acoes"><button type="submit" class="app-primario" data-item-importar-enviar>Importar este item</button><button type="button" data-item-importar-todos>Importar todos os itens do edital</button></div>
       </form>
       <div data-item-lista></div>
       <button type="button" data-item-mais hidden>Carregar mais itens</button>
@@ -402,7 +431,7 @@
       const c = campos(), t = totalCentavos(c.quantidade, c.valorUnitario);
       el('[data-item-total]').textContent = t === null ? 'Total do item: informe quantidade e valor válidos.' : `Total do item: ${reais(t)}`;
     }
-    function bloquear(v) { ocupado = v; for (const s of ['[data-item-salvar]', '[data-item-atualizar]', '[data-item-mais]', '[data-item-importar-enviar]', '[data-planilha-baixar]', '[data-portal-baixar]', '[data-planilha-importar]']) el(s).disabled = v; }
+    function bloquear(v) { ocupado = v; for (const s of ['[data-item-salvar]', '[data-item-atualizar]', '[data-item-mais]', '[data-item-importar-enviar]', '[data-item-importar-todos]', '[data-planilha-baixar]', '[data-portal-baixar]', '[data-planilha-importar]']) el(s).disabled = v; }
 
     // ---------- premissas ----------
     function montarPremissas() {
@@ -920,6 +949,26 @@
       if (typeof aoSalvar === 'function') { try { aoSalvar(); } catch { /* sem efeito na importação */ } }
       await carregar({ reiniciar: true });
     }
+    async function importarTodos() {
+      if (ocupado || !vivo) return;
+      const g = geracao; bloquear(true); avisoImportar(MSG.importandoTodos, 'carregando');
+      const enviar = async (pagina) => {
+        try {
+          const r = await requisitar('/api/importar-item-pncp', { method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'same-origin',
+            body: JSON.stringify({ empresaId: contexto.empresaId, processoId: contexto.processoId, pagina }) });
+          return { status: r.status, j: await r.json().catch(() => null) };
+        } catch { return null; }
+      };
+      const resultado = await importarTodosItens({ enviar, esperar: (ms) => new Promise((ok) => global.setTimeout(ok, ms)), ativo: () => vivo && g === geracao,
+        aoProgresso: (s) => avisoImportar(`${MSG.importandoTodos} ${s.lidos} itens processados (até o item ${s.ultimo}).`, 'carregando') });
+      if (!vivo || g !== geracao) return;
+      bloquear(false);
+      avisoImportar(resultado.texto, resultado.ok ? 'ok' : 'erro');
+      if (resultado.soma.importados || resultado.soma.alterados) {
+        if (typeof aoSalvar === 'function') { try { aoSalvar(); } catch { /* sem efeito na importação */ } }
+        await carregar({ reiniciar: true });
+      }
+    }
     function cancelarEdicao() { edicao = null; tentativa = null; form.reset(); el('[data-item-cancelar]').hidden = true; atualizarTotal(); estado('', ''); }
 
     form.addEventListener('submit', salvar);
@@ -934,6 +983,7 @@
       if (!formImportar.hidden) formImportar.elements.numeroItem.focus?.();
     });
     formImportar.addEventListener('submit', importar);
+    el('[data-item-importar-todos]').addEventListener('click', () => { void importarTodos(); });
     el('[data-planilha-baixar]').addEventListener('click', () => { void baixarPlanilha(); });
     el('[data-portal-baixar]').addEventListener('click', () => { void baixarPlanilha(true); });
     el('[data-planilha-importar]').addEventListener('click', () => { const a = el('[data-planilha-arquivo]'); a.value = ''; a.click(); });
@@ -977,7 +1027,7 @@
     };
   }
 
-  const api = { montar, validarItemCampos, abaixoDoMinimo, totalCentavos, reais, linhaQuantidade, decimalPositivo, numeroItemImportacao, respostaImportacao, MSG,
+  const api = { montar, validarItemCampos, abaixoDoMinimo, totalCentavos, reais, linhaQuantidade, decimalPositivo, numeroItemImportacao, respostaImportacao, importarTodosItens, resumoImportacaoLote, MSG,
     premissaDoCampo, premissaParaCampo, precoSinapi, calcularPrecos, simularLance, cenariosMargem, linhaReforma, corpoUsarLimite, unidadeCompras, referenciaDeResposta, decodificarPlanilha, previaPlanilha, recursosPreco };
   global.LicitaItensProcesso = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
