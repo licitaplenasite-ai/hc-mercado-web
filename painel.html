@@ -1584,6 +1584,9 @@
   <button type="button" class="menu-conta-item" data-acao="lembretes"><svg class='icone-ph'><use href='#ph-bell'></use></svg> Meus lembretes</button>
   <button type="button" class="menu-conta-item" data-acao="planos">Planos e pre&ccedil;os</button>
   <button type="button" class="menu-conta-item" data-acao="feedback">Envie seu feedback</button>
+  <!-- No celular o topo não cabe tema e Sair ao lado do nome LicitaPlena: eles aparecem aqui (painel-design.css, max-width 480px). -->
+  <button type="button" class="menu-conta-item so-celular" data-acao="tema">Tema claro/escuro</button>
+  <button type="button" class="menu-conta-item so-celular" data-acao="sair">Sair</button>
 </div>
 <div id="header-bell-dropdown" class="header-flutuante" style="display:none;">
   <div class="header-flutuante-titulo">Notifica&ccedil;&otilde;es</div>
@@ -9550,6 +9553,10 @@ window.__preencherIdentidadeUsuario();
         }
       } else if (acao === "feedback") {
         abrirMensagemEquipe("Meu feedback sobre o LicitaPlena: ");
+      } else if (acao === "tema") {
+        document.getElementById("header-tema-btn")?.click();
+      } else if (acao === "sair") {
+        document.getElementById("btn-sair-painel")?.click();
       }
     });
   });

@@ -191,9 +191,22 @@
     .filtros-lateral, .conteudo-mercado { min-width: 0; }
     .campo select, .empresa-acompanhamento select { max-width: 100%; min-width: 0; }
   }
+  /* 23/11 (dono): no celular o nome LicitaPlena sumia e o logo ficava solto no meio. Agora logo + nome ficam colados ao
+     Menu, à esquerda; tema e Sair vão para o menu da conta (HC), e a ajuda "?" já tem o botão flutuante. */
+  .menu-conta-item.so-celular { display: none; }
   @media (max-width: 480px) {
-    #header-ajuda-btn, .header-nome { display: none; }
-    .header-sair { padding: 0 10px; }
+    #header-ajuda-btn, #header-tema-btn, .header-sair { display: none; }
+    .menu-conta-item.so-celular { display: block; }
+    .header-topo { justify-content: flex-start; }
+    .header-acoes { margin-left: auto; }
+    .header-nome { font-size: 15px; }
+  }
+  @media (max-width: 360px) {
+    header { padding: 8px; }
+    .header-topo, .header-acoes { gap: 4px; }
+    #nav-gaveta-btn { padding: 0 8px; }
+    .header-acoes .header-icone-btn { width: 36px; }
+    .header-nome { font-size: 14px; }
   }
   @media (prefers-reduced-motion: reduce) { nav { transition: none; } }
 
