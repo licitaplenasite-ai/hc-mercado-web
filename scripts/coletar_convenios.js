@@ -131,6 +131,8 @@ async function coletarConvenios() {
         const convenenteNome = (item.convenente && (item.convenente.nome || item.convenente.razaoSocialReceita)) || "";
         novos.push({
           id: item.id || null,
+          // Numero SIAFI do convenio: e ele que a pagina publica do Portal usa (/convenios/<numero>); o id da API da 404 la.
+          numero: (item.dimConvenio && item.dimConvenio.numero) || "",
           numeroProcesso: item.numeroProcesso || "",
           objeto: (item.dimConvenio && item.dimConvenio.objeto) || tipoInstrumentoDesc || "",
           situacao: item.situacao || "",

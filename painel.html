@@ -8686,8 +8686,17 @@
     return NOME_PARA_SIGLA_UF[normalizar(v)] || v.toUpperCase();
   }
 
+  // A página pública do Portal é /convenios/<número do convênio> (dimConvenio.numero na API);
+  // o id interno da API dá "Página não encontrada". Registro antigo, gravado sem o número, cai na
+  // consulta do Portal filtrada pelo nº do processo + UF (o Portal exige localidade junto) em vez do 404.
   function linkConvenio(r) {
-    return r && r.id ? `https://portaldatransparencia.gov.br/convenios/${r.id}` : null;
+    if (!r) return null;
+    const numero = String(r.numero || "").trim();
+    if (numero) return `https://portaldatransparencia.gov.br/convenios/${encodeURIComponent(numero)}`;
+    const processo = String(r.numeroProcesso || "").trim();
+    if (!processo) return null;
+    const uf = siglaUf(r.uf);
+    return `https://portaldatransparencia.gov.br/convenios/consulta?numeroProcesso=${encodeURIComponent(processo)}${uf.length === 2 ? `&uf=${uf}` : ""}`;
   }
 
   function formatarDataIso(s) {
