@@ -131,3 +131,54 @@ def test_corpo_das_mudancas_escapa_html_e_so_avisa_regra_com_esclarecimento():
     texto, html_corpo = lic.montar_corpo_mudancas("Empresa <A>", PROC, "E1", "P1", [_mudanca("m1")])
     assert "vira regra" not in texto and "&lt;b&gt;" in html_corpo and "Empresa &lt;A&gt;" in html_corpo
     assert "/sistema?empresa=E1&processo=P1" in texto
+
+
+# ---- Remetentes do ZeptoMail por tipo; respostas vão ao dono ----
+import io
+import json as _json
+import urllib.error
+import cobranca_diaria
+
+
+def _corpo_zepto(funcao, *args):
+    enviados = []
+
+    class _Resp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def urlopen(req, timeout=None):
+        enviados.append(_json.loads(req.data))
+        return _Resp()
+    with patch.object(lic.urllib.request, "urlopen", urlopen), patch.dict(lic.os.environ, {"ZEPTOMAIL_TOKEN": "token-falso"}):
+        funcao(*args)
+    return enviados[0]
+
+
+def test_lembrete_sai_de_avisos_com_resposta_para_o_dono():
+    corpo = _corpo_zepto(lic.enviar_mensagem, "a@b.c", "A", "Assunto", "texto", "<p>x</p>")
+    assert corpo["from"] == {"address": "avisos@licitaplena.com.br", "name": "LicitaPlena Avisos"}
+    assert corpo["reply_to"] == [{"address": "licitaplena.site@gmail.com", "name": "LicitaPlena"}]
+
+
+def test_cobranca_sai_de_financeiro():
+    def enviar_como_cobranca():
+        lic.enviar_mensagem("a@b.c", "A", "Assunto", "texto", "<p>x</p>", cobranca_diaria.REMETENTE_FINANCEIRO, cobranca_diaria.NOME_FINANCEIRO)
+    corpo = _corpo_zepto(enviar_como_cobranca)
+    assert corpo["from"] == {"address": "financeiro@licitaplena.com.br", "name": "LicitaPlena Financeiro"}
+    assert corpo["reply_to"][0]["address"] == "licitaplena.site@gmail.com"
+
+
+def test_remetente_recusado_diz_qual_endereco_confirmar():
+    def urlopen(req, timeout=None):
+        raise urllib.error.HTTPError(req.full_url, 400, "Bad Request", None,
+                                     io.BytesIO(b'{"error":{"details":[{"code":"SM_113","message":"Invalid from address"}]}}'))
+    with patch.object(lic.urllib.request, "urlopen", urlopen):
+        try:
+            lic.enviar_zeptomail("token-falso", "a@b.c", "A", "texto", "<p>x</p>")
+            raise AssertionError("não falhou")
+        except urllib.error.HTTPError as e:
+            assert "avisos@licitaplena.com.br" in str(e) and "confirme" in str(e)

@@ -14,6 +14,7 @@ import html
 import json
 import smtplib
 import urllib.request
+import urllib.error
 import urllib.parse
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -23,7 +24,12 @@ from datetime import datetime, timedelta, timezone
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL") or "https://lsqjamqvmrcyrvowndiu.supabase.co"
 ZEPTOMAIL_URL = "https://api.zeptomail.com/v1.1/email"
-REMETENTE_ZEPTO = "licitaplena@licitaplena.com.br"
+# Remetentes por tipo (domínio verificado no ZeptoMail; não precisam de caixa). Respostas vão ao dono (Reply-To).
+REMETENTE_ZEPTO = "avisos@licitaplena.com.br"
+NOME_ZEPTO = "LicitaPlena Avisos"
+REMETENTE_FINANCEIRO = "financeiro@licitaplena.com.br"
+NOME_FINANCEIRO = "LicitaPlena Financeiro"
+RESPONDER_PARA = "licitaplena.site@gmail.com"
 BRASILIA = timezone(timedelta(hours=-3))
 NOME_REMETENTE = "LicitaPlena - Lembretes de Licitação"
 SITE_URL = os.environ.get("SITE_URL") or "https://licitaplena.com.br"
@@ -153,10 +159,12 @@ def montar_corpo_email(nome_destinatario, lembrete):
     return texto, html_corpo
 
 
-def enviar_zeptomail(token, destino_email, nome_destinatario, texto, html_corpo, assunto=ASSUNTO_LEMBRETE):
+def enviar_zeptomail(token, destino_email, nome_destinatario, texto, html_corpo, assunto=ASSUNTO_LEMBRETE,
+                     remetente=REMETENTE_ZEPTO, nome_remetente=NOME_ZEPTO):
     token = re.sub(r"^Zoho-enczapikey\s+", "", token.strip()).strip("\"'").strip()
     corpo = {
-        "from": {"address": REMETENTE_ZEPTO, "name": "LicitaPlena"},
+        "from": {"address": remetente, "name": nome_remetente},
+        "reply_to": [{"address": RESPONDER_PARA, "name": "LicitaPlena"}],
         "to": [{"email_address": {"address": destino_email, "name": nome_destinatario}}],
         "subject": assunto,
         "textbody": texto,
@@ -166,8 +174,15 @@ def enviar_zeptomail(token, destino_email, nome_destinatario, texto, html_corpo,
         ZEPTOMAIL_URL, data=json.dumps(corpo).encode("utf-8"), method="POST",
         headers={"Accept": "application/json", "Content-Type": "application/json", "Authorization": "Zoho-enczapikey " + token},
     )
-    with urllib.request.urlopen(req, timeout=20):
-        pass
+    try:
+        with urllib.request.urlopen(req, timeout=20):
+            pass
+    except urllib.error.HTTPError as e:
+        # Remetente recusado (SM_111/SM_113 ou "from"/"sender"): a mensagem diz qual endereço confirmar no Agent.
+        corpo_erro = e.read().decode("utf-8", "replace")
+        if re.search(r"SM_11[13]|sender|from|domain", corpo_erro, re.I):
+            e.msg = "remetente recusado pelo ZeptoMail: confirme " + remetente + " como remetente verificado no Agent"
+        raise
 
 
 def enviar_email(destino_email, nome_destinatario, lembrete):
@@ -175,10 +190,10 @@ def enviar_email(destino_email, nome_destinatario, lembrete):
     enviar_mensagem(destino_email, nome_destinatario, ASSUNTO_LEMBRETE, texto, html_corpo)
 
 
-def enviar_mensagem(destino_email, nome_destinatario, assunto, texto, html_corpo):
+def enviar_mensagem(destino_email, nome_destinatario, assunto, texto, html_corpo, remetente=REMETENTE_ZEPTO, nome_remetente=NOME_ZEPTO):
     token = os.environ.get("ZEPTOMAIL_TOKEN")
     if token:
-        enviar_zeptomail(token, destino_email, nome_destinatario, texto, html_corpo, assunto)
+        enviar_zeptomail(token, destino_email, nome_destinatario, texto, html_corpo, assunto, remetente, nome_remetente)
         return
     remetente = os.environ["EMAIL_REMETENTE"]
     senha_app = os.environ["EMAIL_SENHA_APP"]
@@ -187,6 +202,7 @@ def enviar_mensagem(destino_email, nome_destinatario, assunto, texto, html_corpo
     msg["Subject"] = assunto
     msg["From"] = formataddr((str(Header(NOME_REMETENTE, "utf-8")), remetente))
     msg["To"] = destino_email
+    msg["Reply-To"] = RESPONDER_PARA
     msg.attach(MIMEText(texto, "plain", "utf-8"))
     msg.attach(MIMEText(html_corpo, "html", "utf-8"))
 

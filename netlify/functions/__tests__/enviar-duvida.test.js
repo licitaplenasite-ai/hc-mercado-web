@@ -70,6 +70,7 @@ test("envia ao destino padrão, com reply_to do cliente, limitando tamanho e rem
     const { corpo } = emails[0];
     assert.equal(corpo.to[0].email_address.address, "licitaplena@licitaplena.com.br");
     assert.equal(corpo.reply_to[0].address, "maria@empresa.com.br");
+    assert.equal(corpo.from.address, "licitaplena@licitaplena.com.br");
     assert.ok(!/[\r\n]/.test(corpo.subject));
     assert.ok(corpo.textbody.length < 5300);
   });

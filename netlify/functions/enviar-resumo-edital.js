@@ -7,6 +7,8 @@ const { criarSolicitacao, blocoDecisao, marcarEnvio } = require("./_decisao_opor
 const ZEPTOMAIL_URL = "https://api.zeptomail.com/v1.1/email";
 const REMETENTE_PADRAO = "licitaplena@licitaplena.com.br";
 const NOME_REMETENTE = "LicitaPlena";
+// Respostas do cliente vão para a caixa que o dono lê (o remetente do domínio não tem caixa de entrada).
+const RESPONDER_PARA = "licitaplena.site@gmail.com";
 const MAX_DESTINATARIOS_POR_ENVIO = 10;
 
 // Corpo HTML compartilhado com a impressão do painel (resumo-email.js): uma fonte só.
@@ -137,7 +139,7 @@ exports.handler = async (event) => {
         body: JSON.stringify({
           from: { address: remetente, name: NOME_REMETENTE },
           to: [{ email_address: { address: destino, ...(nomeDestino ? { name: nomeDestino } : {}) } }],
-          reply_to: [{ address: remetente, name: NOME_REMETENTE }],
+          reply_to: [{ address: RESPONDER_PARA, name: NOME_REMETENTE }],
           subject: assunto,
           htmlbody: montarHtml(texto, linkEdital, resumoEstruturado, edital, tokenDecisao),
           textbody: texto + (tokenDecisao ? `\n\nInforme se deseja participar: https://licitaplena.com.br/responder-oportunidade.html#token=${tokenDecisao}` : ""),
@@ -161,4 +163,4 @@ exports.handler = async (event) => {
 exports.__test = { emailValido, normalizarDestinatarios, linkPncpValido, montarHtml, montarConteudoEstruturado, mensagemErroZepto, normalizarTokenZepto, formatarDataHoraBR };
 
 // Reaproveitado por enviar-duvida.js: mesmo remetente verificado e mesma normalização do token.
-exports.compartilhado = { ZEPTOMAIL_URL, REMETENTE_PADRAO, NOME_REMETENTE, emailValido, normalizarTokenZepto, mensagemErroZepto };
+exports.compartilhado = { ZEPTOMAIL_URL, REMETENTE_PADRAO, NOME_REMETENTE, RESPONDER_PARA, emailValido, normalizarTokenZepto, mensagemErroZepto };

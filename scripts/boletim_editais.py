@@ -34,7 +34,10 @@ NOME_REMETENTE = "LicitaPlena - Alertas de Editais"
 # e-mails/dia (~100 clientes com 3 rodadas) e fica como reserva automatica: entra se o token faltar
 # ou se o ZeptoMail falhar naquele e-mail. Assunto, texto e HTML sao os mesmos nos dois caminhos.
 ZEPTOMAIL_URL = "https://api.zeptomail.com/v1.1/email"
-REMETENTE_ZEPTO = "licitaplena@licitaplena.com.br"
+# Remetente do boletim (domínio verificado no ZeptoMail; não precisa de caixa). Respostas vão ao dono (Reply-To).
+REMETENTE_ZEPTO = "boletim@licitaplena.com.br"
+NOME_ZEPTO = "LicitaPlena Boletim"
+RESPONDER_PARA = "licitaplena.site@gmail.com"
 
 TODAS_UFS = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB",
              "PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"]
@@ -776,7 +779,8 @@ def registrar_log_boletim(destinatario, status, quantidade, mensagem_erro=None):
 def enviar_zeptomail(token, destino_email, nome_destinatario, assunto, texto, html_corpo):
     token = re.sub(r"^Zoho-enczapikey\s+", "", token.strip()).strip("\"'").strip()
     corpo = {
-        "from": {"address": REMETENTE_ZEPTO, "name": NOME_REMETENTE},
+        "from": {"address": REMETENTE_ZEPTO, "name": NOME_ZEPTO},
+        "reply_to": [{"address": RESPONDER_PARA, "name": "LicitaPlena"}],
         "to": [{"email_address": {"address": destino_email, "name": nome_destinatario}}],
         "subject": assunto,
         "textbody": texto,
@@ -786,8 +790,15 @@ def enviar_zeptomail(token, destino_email, nome_destinatario, assunto, texto, ht
         ZEPTOMAIL_URL, data=json.dumps(corpo).encode("utf-8"), method="POST",
         headers={"Accept": "application/json", "Content-Type": "application/json", "Authorization": "Zoho-enczapikey " + token},
     )
-    with urllib.request.urlopen(req, timeout=20):
-        pass
+    try:
+        with urllib.request.urlopen(req, timeout=20):
+            pass
+    except urllib.error.HTTPError as e:
+        # Remetente recusado (SM_111/SM_113 ou "from"/"sender"): a mensagem diz qual endereço confirmar no Agent.
+        corpo_erro = e.read().decode("utf-8", "replace")
+        if re.search(r"SM_11[13]|sender|from|domain", corpo_erro, re.I):
+            e.msg = "remetente recusado pelo ZeptoMail: confirme " + REMETENTE_ZEPTO + " como remetente verificado no Agent"
+        raise
 
 
 def enviar_gmail(destino_email, assunto, texto, html_corpo):
@@ -797,6 +808,7 @@ def enviar_gmail(destino_email, assunto, texto, html_corpo):
     msg["Subject"] = assunto
     msg["From"] = formataddr((str(Header(NOME_REMETENTE, "utf-8")), remetente))
     msg["To"] = destino_email
+    msg["Reply-To"] = RESPONDER_PARA
     msg.attach(MIMEText(texto, "plain", "utf-8"))
     msg.attach(MIMEText(html_corpo, "html", "utf-8"))
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as servidor:
@@ -820,7 +832,7 @@ def enviar_email(destino_email, nome_destinatario, editais_novos, prefixo_assunt
             return
         except Exception as e:
             # So o tipo e o codigo HTTP: nunca o token nem o corpo da resposta.
-            log("ZeptoMail falhou (" + type(e).__name__ + " " + str(getattr(e, "code", "")) + "); enviando pelo Gmail")
+            log("ZeptoMail falhou (" + type(e).__name__ + " " + str(getattr(e, "code", "")) + " " + str(getattr(e, "msg", "")) + "); enviando pelo Gmail")
     enviar_gmail(destino_email, assunto, texto, html_corpo)
 
 

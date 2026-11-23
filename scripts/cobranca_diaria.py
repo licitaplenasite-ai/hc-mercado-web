@@ -3,14 +3,14 @@
 # Chama public.cobranca_rodar_diario() (supabase/planos_e_recursos.sql, secao 10): o banco marca como "vencida" quem
 # passou da carencia (so boletim, nada apagado) e devolve quem recebe lembrete hoje. Aqui so sai o e-mail:
 #   - 3 dias antes do vencimento, no dia do vencimento e quando a conta e bloqueada.
-# Envio pelo mesmo caminho dos lembretes de licitacao (ZeptoMail; sem o token, Gmail SMTP).
+# Envio pelo mesmo caminho dos lembretes de licitacao (ZeptoMail; sem o token, Gmail SMTP), remetente financeiro@licitaplena.com.br.
 # Uso: python scripts/cobranca_diaria.py. Env: SUPABASE_SERVICE_ROLE_KEY (obrigatoria), ZEPTOMAIL_TOKEN ou EMAIL_REMETENTE +
 # EMAIL_SENHA_APP, SITE_URL (padrao https://licitaplena.com.br), SUPABASE_URL (padrao producao).
 # Local/teste: COBRANCA_SO_REGISTRAR=1 nao envia e-mail, so registra no log (o bloqueio no banco acontece igual).
 import os
 import html
 
-from lembretes_licitacoes import SITE_URL, _requisicao_supabase, enviar_mensagem, log
+from lembretes_licitacoes import SITE_URL, _requisicao_supabase, enviar_mensagem, log, REMETENTE_FINANCEIRO, NOME_FINANCEIRO
 
 ASSUNTOS = {
     "vence_em_3_dias": "Sua assinatura do LicitaPlena vence em 3 dias",
@@ -67,7 +67,7 @@ def main():
             log("[SO REGISTRAR] enviaria '" + assunto + "' para " + email)
             continue
         try:
-            enviar_mensagem(email, item.get("nome") or "Cliente", assunto, texto, html_corpo)
+            enviar_mensagem(email, item.get("nome") or "Cliente", assunto, texto, html_corpo, REMETENTE_FINANCEIRO, NOME_FINANCEIRO)
             enviados += 1
         except Exception as e:  # um e-mail com erro não impede os outros; o bloqueio já foi gravado
             log("ERRO ao enviar cobrança para " + email + ": " + str(e))

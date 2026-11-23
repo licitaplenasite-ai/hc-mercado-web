@@ -219,3 +219,19 @@ def test_enviar_email_manda_so_aviso_com_link_do_filtro(monkeypatch):
     assunto, texto, html_corpo = envios[0]
     assert assunto == "[HCM] Chegaram 3 novas licitações no seu boletim"
     assert "filtro=empresa%3Ae1#boletim" in texto and "Papel" not in texto + html_corpo
+
+
+def test_boletim_sai_de_boletim_com_resposta_para_o_dono(monkeypatch):
+    import json as _json
+    enviados = []
+
+    class _Resp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+    monkeypatch.setattr(b.urllib.request, "urlopen", lambda req, timeout=None: enviados.append(_json.loads(req.data)) or _Resp())
+    b.enviar_zeptomail("token-falso", "a@b.c", "A", "Assunto", "texto", "<p>x</p>")
+    assert enviados[0]["from"] == {"address": "boletim@licitaplena.com.br", "name": "LicitaPlena Boletim"}
+    assert enviados[0]["reply_to"] == [{"address": "licitaplena.site@gmail.com", "name": "LicitaPlena"}]
