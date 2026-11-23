@@ -9350,7 +9350,7 @@ window.__preencherIdentidadeUsuario = function () {
     }
     const elBadgePlano = document.getElementById("header-badge-plano");
     if (elBadgePlano) {
-      elBadgePlano.textContent = nomePlano(c.plano);
+      elBadgePlano.textContent = window.__nomePlanoConta || nomePlano(c.plano); // plano-trava.js preenche com o plano vigente
     }
 
     // Banner de limite diário de visualizações (Boletim / Encontrar Licitações): ainda

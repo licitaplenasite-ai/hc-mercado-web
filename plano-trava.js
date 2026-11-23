@@ -64,6 +64,11 @@
 
   function aplicar(plano) {
     if (!plano || typeof plano !== "object") return;
+    // Selo do topo do painel: o plano que vale hoje (assinatura), não o campo antigo clientes.plano.
+    const selo = document.getElementById("header-badge-plano");
+    const nomeSelo = plano.bloqueado === true ? (plano.situacao === "teste" || plano.situacao === "sem_assinatura" ? "Teste encerrado" : "Assinatura vencida")
+      : plano.nome ? plano.nome + (plano.em_teste === true ? " (teste)" : "") : "";
+    if (nomeSelo) { window.__nomePlanoConta = nomeSelo; if (selo && selo.textContent !== nomeSelo) selo.textContent = nomeSelo; }
     const recursos = plano.recursos || {};
     document.querySelectorAll("[data-recurso-esconder]").forEach((el) => {
       const r = recursos[el.getAttribute("data-recurso-esconder")];
