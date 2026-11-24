@@ -205,6 +205,8 @@ function comSumario(corpo) {
   return { html, itens };
 }
 const ferramentaPorSlug = (s) => FERRAMENTAS.find((f) => f.slug === s);
+// Tela do sistema novo (prints com dados fictícios, scripts/gerar_vitrine.js); sem ela, fica o print da Central de ajuda.
+const telaVitrine = ([nome, largura, altura], alt) => `<img src="/img/vitrine/${nome}-${largura}.webp" srcset="/img/vitrine/${nome}-640.webp 640w, /img/vitrine/${nome}-${largura}.webp ${largura}w" sizes="(max-width: 800px) 92vw, 720px" alt="${esc(alt)}" width="${largura}" height="${altura}" loading="lazy" decoding="async">`;
 // Cartão ilustrado (index e /ferramentas/): mini-tela da ferramenta em cima e detalhe azul-escuro embaixo (marca.css).
 const cartaoFerramenta = (f, nivel = "h3") => `<li class="ferr"><span class="ferr-arte">${ICONES[f.slug]}</span><${nivel}><a href="/ferramentas/${f.slug}">${esc(f.nome)}</a></${nivel}><p>${esc(f.descricao)}</p><span class="ferr-mais" aria-hidden="true">Conhecer a ferramenta</span></li>`;
 
@@ -227,7 +229,7 @@ function paginasFerramentas(artigos) {
     corpo: `<div class="estreito"><p class="rotulo">Agente ${esc(f.agente)}</p><h1>${esc(f.h1)}</h1><p class="lead">${esc(f.dor)}</p>
 <h2>O que a ferramenta faz hoje</h2><ul class="texto">${f.faz.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
 <h2>Como usar</h2><ol class="texto">${f.passos.map((x) => `<li>${esc(x)}</li>`).join("")}</ol>
-<figure><img src="/ajuda/${f.print}.webp" alt="${esc(f.printAlt)}" width="1280" height="800" loading="lazy"><figcaption>${esc(f.printAlt)}.</figcaption></figure>
+<figure>${f.vitrine ? telaVitrine(f.vitrine, f.printAlt) : `<img src="/ajuda/${f.print}.webp" alt="${esc(f.printAlt)}" width="1280" height="800" loading="lazy">`}<figcaption>${esc(f.printAlt)}.</figcaption></figure>
 <p class="aviso"><strong>Importante:</strong> ${esc(f.cuidado)}</p>
 <p class="texto"><strong>Plano:</strong> ${esc(f.plano)} <a href="/#planos">Ver planos e preços</a>.${f.extra ? ` <a href="${f.extra.href}">${esc(f.extra.texto)}</a>.` : ""}</p>
 ${faqHtml(f.faq)}

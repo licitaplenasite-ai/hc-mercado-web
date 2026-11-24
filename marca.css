@@ -112,7 +112,6 @@ section.bloco.bloco-faixa { padding-bottom: 24px; }
 .passos3 li { border-top: 3px solid var(--marca-medio); }
 .passos3 li::before { color: var(--marca-texto); font-weight: 700; font-size: 14px; }
 .etapa-num { color: var(--marca-texto); font-weight: 700; }
-.barra i { background: var(--marca-medio); }
 .inclui li::before { color: var(--marca-texto); }
 .plano.destaque { position: relative; overflow: hidden; border: 2px solid var(--marca-medio); box-shadow: var(--sombra-cartao-forte); }
 .plano.destaque::before { content: ""; position: absolute; inset: 0 0 auto; height: 5px; background: var(--grad-linha); }
@@ -559,7 +558,6 @@ footer .mapa-titulo { color: var(--destaque-sobre-escuro); font-size: 13px; lett
 .etapa figure.tela::before { content: ""; position: absolute; z-index: -1; inset: 22px -22px 36px 22px; border-radius: 18px; background: repeating-linear-gradient(135deg, rgba(var(--escuro-rgb), 0.12) 0 1px, transparent 1px 12px), var(--marca-claro); transition: transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1); }
 .etapa figure.tela:hover::before { transform: translate(6px, 6px); }
 .tela-moldura { border-radius: 16px; box-shadow: var(--sombra-cartao-forte); }
-.tela-barra { background: var(--marca-claro-2); }
 
 /* 4. Exemplo do e-mail: botões das telas ilustradas em royal (o ciano fica para as chamadas reais). */
 /* Também os cartões de edital do exemplo (.ed). */
@@ -599,3 +597,8 @@ footer .mapa-titulo { color: var(--destaque-sobre-escuro); font-size: 13px; lett
   .etapa figure.tela::before { inset: 14px -14px 30px 14px; }
 }
 @media (prefers-reduced-motion: reduce) { .sugestao, .etapa figure.tela::before, .ciclos label { transition: none; } .hero .sugestao:hover { transform: none; } }
+/* Telas do sistema (prints com dados fictícios): versão escura aparece só no tema escuro. */
+.tela-print img { display: block; width: 100%; height: auto; }
+.so-escuro { display: none !important; }
+[data-theme="dark"] .so-escuro { display: block !important; }
+[data-theme="dark"] .so-claro { display: none !important; }

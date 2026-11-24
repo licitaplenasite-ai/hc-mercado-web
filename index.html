@@ -188,35 +188,7 @@
   /* Mini telas: ilustração em HTML no estilo do sistema, com dados fictícios. */
   figure.tela { margin: 0; }
   .tela-moldura { background: var(--surface-default); border: 1px solid var(--border-default); border-radius: var(--radius-card); overflow: hidden; }
-  .tela-barra { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--border-default); font: var(--text-label); color: var(--text-secondary); }
-  .tela-barra b { color: var(--text-primary); font-weight: 600; font-size: 13px; }
-  .tela-corpo { padding: 16px; display: grid; gap: 12px; font-size: 13px; line-height: 20px; }
   figure.tela figcaption { font: var(--text-label); color: var(--text-secondary); margin-top: 8px; }
-  .filtros { display: flex; gap: 6px; flex-wrap: wrap; }
-  .filtro { height: 26px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); display: inline-flex; align-items: center; font-size: 12px; }
-  .linhas-mini { border: 1px solid var(--border-default); border-radius: var(--radius-control); }
-  .linha-mini { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 12px; }
-  .linha-mini + .linha-mini { border-top: 1px solid var(--border-default); }
-  .linha-mini .t { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .linha-mini .m { color: var(--text-secondary); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .fatos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-  .fatos div { border-top: 1px solid var(--border-default); padding-top: 8px; min-width: 0; }
-  .fatos span { display: block; font-size: 11px; line-height: 16px; color: var(--text-secondary); }
-  .fatos b { font-weight: 600; font-variant-numeric: tabular-nums; }
-  .exig { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-  .exig li { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
-  .fonte-mini { font-size: 12px; color: var(--text-secondary); border-top: 1px dashed var(--border-default); padding-top: 8px; }
-  .barras { display: grid; gap: 8px; }
-  .barra { display: grid; grid-template-columns: 92px minmax(0, 1fr) 76px; gap: 8px; align-items: center; font-size: 12px; }
-  .barra i { display: block; height: 10px; border-radius: 3px; background: var(--brand-blue); }
-  .barra.voce i { background: var(--text-primary); }
-  .barra .v { text-align: right; font-variant-numeric: tabular-nums; }
-  .kanban { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-  .col { background: var(--surface-sunken); border-radius: var(--radius-control); padding: 8px; display: grid; gap: 6px; align-content: start; min-width: 0; }
-  .col > b { font-size: 11px; line-height: 16px; color: var(--text-secondary); font-weight: 500; }
-  .ficha { background: var(--surface-default); border: 1px solid var(--border-default); border-radius: 4px; padding: 6px 8px; font-size: 12px; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .docs { display: grid; gap: 6px; }
-  .doc { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 
   /* 5. Diferenciais: três colunas com fio superior forte */
   .difs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px; }
@@ -340,8 +312,6 @@
     .hero-acoes .btn, .cta-final .btn, .convite .btn { width: 100%; }
     .busca { padding: 16px; }
     .busca-form { grid-template-columns: minmax(0, 1fr) 96px; }
-    .fatos { grid-template-columns: 1fr 1fr; }
-    .barra { grid-template-columns: 76px minmax(0, 1fr) 68px; }
     .numeros dd { font-size: 24px; line-height: 32px; }
     .cv-preview-item { flex-direction: column; align-items: flex-start; gap: 4px; }
     .boletim-lado li { grid-template-columns: minmax(0, 1fr); gap: 2px; }
@@ -660,13 +630,13 @@
   </div>
 </section>
 
-<!-- 4. Quatro etapas, com ilustrações de dados fictícios -->
+<!-- 4. Quatro etapas, com telas do sistema (prints com dados fictícios, scripts/gerar_vitrine.js) -->
 <section class="bloco" id="como-funciona" aria-labelledby="etapas-titulo">
   <div class="container">
     <div class="cabeca-secao">
       <p class="sobretitulo">Como funciona</p>
       <h2 class="titulo" id="etapas-titulo">Do edital publicado à proposta organizada</h2>
-      <p class="intro">Quatro etapas, cada uma com uma ferramenta do sistema. As telas abaixo são ilustrações com dados fictícios.</p>
+      <p class="intro">Quatro etapas, cada uma com uma ferramenta do sistema. As telas abaixo são do sistema, com dados fictícios.</p>
     </div>
     <div class="etapas">
 
@@ -678,18 +648,8 @@
           <ul><li>Encontrar Licitações e Boletim</li><li>Licitações abertas do PNCP, de todas as UFs</li></ul>
         </div>
         <figure class="tela">
-          <div class="tela-moldura" aria-hidden="true">
-            <div class="tela-barra"><b>Encontrar Licitações</b><span>3 resultados</span></div>
-            <div class="tela-corpo">
-              <div class="filtros"><span class="filtro">uniformes</span><span class="filtro">AM</span><span class="filtro">Abertas</span></div>
-              <div class="linhas-mini">
-                <div class="linha-mini"><div style="min-width:0"><div class="t">Uniformes escolares para a rede municipal</div><div class="m">Prefeitura Exemplo · Município A/AM</div></div><span class="chip wa"><span class="g">!</span>Encerra em 2 dias</span></div>
-                <div class="linha-mini"><div style="min-width:0"><div class="t">Fardamento para agentes de trânsito</div><div class="m">Secretaria Exemplo · Município B/AM</div></div><span class="chip ne">Encerra 09/12</span></div>
-                <div class="linha-mini"><div style="min-width:0"><div class="t">Camisetas para campanha de vacinação</div><div class="m">Fundação Exemplo · Município C/AM</div></div><span class="chip ne">Encerra 15/12</span></div>
-              </div>
-            </div>
-          </div>
-          <figcaption>Ilustração com dados fictícios: lista de licitações abertas filtrada por palavra e UF.</figcaption>
+          <div class="tela-moldura tela-print"><img class="so-claro" src="img/vitrine/boletim-840.webp" srcset="img/vitrine/boletim-640.webp 640w, img/vitrine/boletim-840.webp 840w" sizes="(max-width: 1000px) 92vw, 560px" alt="Tela do Boletim do LicitaPlena com licitações do ramo e prazo de encerramento" width="840" height="480" loading="lazy" decoding="async"><img class="so-escuro" src="img/vitrine/boletim-escuro-840.webp" srcset="img/vitrine/boletim-escuro-640.webp 640w, img/vitrine/boletim-escuro-840.webp 840w" sizes="(max-width: 1000px) 92vw, 560px" alt="Tela do Boletim do LicitaPlena no tema escuro" width="840" height="480" loading="lazy" decoding="async"></div>
+          <figcaption>Tela do sistema com dados fictícios: boletim com as licitações do ramo e o prazo de cada uma.</figcaption>
         </figure>
       </article>
 
@@ -701,23 +661,8 @@
           <ul><li>Resumo de edital e perguntas ao edital</li><li>Jurídico e Dúvidas para o que ficar em aberto</li></ul>
         </div>
         <figure class="tela">
-          <div class="tela-moldura" aria-hidden="true">
-            <div class="tela-barra"><b>Resumo do edital</b><span>PE 000/2026 · exemplo</span></div>
-            <div class="tela-corpo">
-              <div class="fatos">
-                <div><span>Abertura</span><b>25/11 · 09:00</b></div>
-                <div><span>Valor estimado</span><b>R$ 240.000,00</b></div>
-                <div><span>Disputa</span><b>Aberto</b></div>
-              </div>
-              <ul class="exig">
-                <li><span>Atestado de capacidade técnica</span><span class="chip in"><span class="g">i</span>Exigido</span></li>
-                <li><span>Amostra em até 3 dias úteis</span><span class="chip wa"><span class="g">!</span>Atenção</span></li>
-                <li><span>Balanço patrimonial do último exercício</span><span class="chip in"><span class="g">i</span>Exigido</span></li>
-              </ul>
-              <div class="fonte-mini">Fonte: PDF do edital, item 8.2 e Termo de Referência, item 5.</div>
-            </div>
-          </div>
-          <figcaption>Ilustração com dados fictícios: resumo de edital com datas, exigências e fonte.</figcaption>
+          <div class="tela-moldura tela-print"><img src="img/vitrine/resumo-760.webp" srcset="img/vitrine/resumo-640.webp 640w, img/vitrine/resumo-760.webp 760w" sizes="(max-width: 1000px) 92vw, 560px" alt="Tela do processo no LicitaPlena com situação, sessão e próximos passos" width="760" height="520" loading="lazy" decoding="async"></div>
+          <figcaption>Tela do sistema com dados fictícios: resumo do processo com situação, sessão e próximos passos.</figcaption>
         </figure>
       </article>
 
@@ -729,22 +674,8 @@
           <ul><li>Inteligência de Mercado e Pesquisa de Preços</li><li>Analisar Empresa: histórico de um CNPJ concorrente</li></ul>
         </div>
         <figure class="tela">
-          <div class="tela-moldura" aria-hidden="true">
-            <div class="tela-barra"><b>Pesquisa de Preços</b><span>Item exemplo · unidade</span></div>
-            <div class="tela-corpo">
-              <div class="barras">
-                <div class="barra"><span>Menor preço</span><i style="width:58%"></i><span class="v">R$ 31,90</span></div>
-                <div class="barra"><span>Mediana</span><i style="width:74%"></i><span class="v">R$ 40,50</span></div>
-                <div class="barra"><span>Maior preço</span><i style="width:100%"></i><span class="v">R$ 54,80</span></div>
-                <div class="barra voce"><span>Seu preço</span><i style="width:70%"></i><span class="v">R$ 38,00</span></div>
-              </div>
-              <div class="linhas-mini">
-                <div class="linha-mini"><span class="t">Fornecedor A</span><span class="m tn">12 contratos</span></div>
-                <div class="linha-mini"><span class="t">Fornecedor B</span><span class="m tn">7 contratos</span></div>
-              </div>
-            </div>
-          </div>
-          <figcaption>Ilustração com dados fictícios: faixa de preços pagos e fornecedores que mais vendem o item.</figcaption>
+          <div class="tela-moldura tela-print"><img src="img/vitrine/precos-770.webp" srcset="img/vitrine/precos-640.webp 640w, img/vitrine/precos-770.webp 770w" sizes="(max-width: 1000px) 92vw, 560px" alt="Tela da Pesquisa de Preços com mediana, faixa de preço, último preço e quem ganhou" width="770" height="470" loading="lazy" decoding="async"></div>
+          <figcaption>Tela do sistema com dados fictícios: preços pagos, mediana e quem ganhou cada compra.</figcaption>
         </figure>
       </article>
 
@@ -756,22 +687,8 @@
           <ul><li>Kanban de acompanhamento</li><li>Documentos, certidões e agenda por empresa</li></ul>
         </div>
         <figure class="tela">
-          <div class="tela-moldura" aria-hidden="true">
-            <div class="tela-barra"><b>Central Operacional</b><span>Empresa Exemplo</span></div>
-            <div class="tela-corpo">
-              <div class="kanban">
-                <div class="col"><b>Analisando</b><div class="ficha">Uniformes · Mun. A</div><div class="ficha">Limpeza · Mun. D</div></div>
-                <div class="col"><b>Proposta</b><div class="ficha">Fardamento · Mun. B</div></div>
-                <div class="col"><b>Enviada</b><div class="ficha">Camisetas · Mun. C</div></div>
-              </div>
-              <div class="docs">
-                <div class="doc"><span>Certidão Federal</span><span class="chip ok"><span class="g">&#10003;</span>Válida</span></div>
-                <div class="doc"><span>CNDT</span><span class="chip wa"><span class="g">!</span>Vence em 9 dias</span></div>
-                <div class="doc"><span>Certidão Municipal</span><span class="chip er"><span class="g">&#10005;</span>Vencida</span></div>
-              </div>
-            </div>
-          </div>
-          <figcaption>Ilustração com dados fictícios: Kanban de processos e situação das certidões.</figcaption>
+          <div class="tela-moldura tela-print"><img src="img/vitrine/documentos-840.webp" srcset="img/vitrine/documentos-640.webp 640w, img/vitrine/documentos-840.webp 840w" sizes="(max-width: 1000px) 92vw, 560px" alt="Tela Minhas empresas e documentos com certidões válidas, a vencer e vencidas" width="840" height="480" loading="lazy" decoding="async"></div>
+          <figcaption>Tela do sistema com dados fictícios: documentos da empresa com o vencimento à vista.</figcaption>
         </figure>
       </article>
 
