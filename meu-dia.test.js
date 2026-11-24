@@ -155,3 +155,14 @@ test('prazo corrigido à mão que ficou depois da sessão avisa para conferir', 
   assert.equal(prazo.detalhes[0], 'Confira esta data: a sessão mudou e este prazo ficou depois dela');
   assert.equal(prazo.situacao, 'atencao');
 });
+
+test('item de processo leva o órgão do catálogo para o link da ficha; sem órgão, nada muda', () => {
+  const comOrgao = { ...ctx(PA, EA, '2026-11-25T13:00:00Z'), orgao: ' Prefeitura de Manaus ', controle: '12345678000190-1-000083/2026' };
+  const itens = M.montarItens({ contextos: [comOrgao, ctx(PB, EB, '2026-11-26T13:00:00Z')],
+    certidoes: [{ empresaId: EA, tipo: 'CND', vencimento: '2026-11-30', dias: 6 }] }, AGORA, JuridicoPrazos);
+  const porTipo = (t, p) => itens.find((i) => i.tipo === t && (!p || i.processoId === p));
+  assert.equal(porTipo('sessao', PA).orgao, 'Prefeitura de Manaus');
+  assert.equal(porTipo('sessao', PA).controle, '12345678000190-1-000083/2026');
+  assert.equal('orgao' in porTipo('sessao', PB), false);
+  assert.equal('orgao' in porTipo('certidao'), false);
+});

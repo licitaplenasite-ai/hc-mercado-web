@@ -247,6 +247,12 @@
     // Nome clicável que filtra a tela por uma empresa ou um órgão (o mesmo jeito do clique na marca).
     const botaoFoco = (tipo, chave, texto, titulo) => h('button', { type: 'button', classe: 'mercado-marca-nome mercado-foco-nome', 'data-mercado-foco': tipo, 'data-chave': chave,
       'aria-pressed': String(estado.filtro[tipo] === chave), title: titulo, texto });
+    // Ficha do órgão (orgao.html) ao lado do nome, que continua filtrando a tela. Sem ficha-orgao.js na página, nada aparece.
+    const fichaOrgao = (orgao) => {
+      const a = globalThis.LicitaFichaOrgao?.linkFichaElemento(doc, { nome: orgao }, 'Ver ficha', 'mercado-ficha-orgao');
+      a?.setAttribute('aria-label', `Ver ficha do órgão ${orgao}`);
+      return a || null;
+    };
     const ultimoTexto = (i) => (i ? `${brl(i.valorUnitarioCentavos)} em ${dataBr(i.dataResultado)}` : '—');
 
     // Uma compra: quem ganhou, onde, quando, quanto. mediana = da unidade da compra, para o selo "fora da curva" (null nas recolhidas).
@@ -260,7 +266,7 @@
         // O Compras.gov não abre direto no item: o nº do item vai em destaque para o usuário achar na página da compra.
         td('Data', dataBr(i.dataResultado), nItem ? h('span', { classe: 'mercado-item-num', title: 'Número do item dentro desta compra', texto: `Item nº ${nItem}` }) : null,
           i.link ? h('a', { classe: 'mercado-desc', href: i.link, target: '_blank', rel: 'noopener noreferrer', title: nItem ? `Abre a compra no Compras.gov (nova aba). Procure o item ${nItem}.` : 'Abre a compra no Compras.gov (nova aba).', texto: 'Ver compra' }) : null),
-        td('Órgão', i.orgao ? botaoFoco('orgao', chaveOrgao(i), `${i.orgao}${i.uf ? `/${i.uf}` : ''}`, 'Ver só as compras deste órgão') : 'Órgão não informado', i.esfera ? h('span', { classe: 'mercado-desc', texto: ESFERAS[i.esfera] || i.esfera }) : null),
+        td('Órgão', i.orgao ? botaoFoco('orgao', chaveOrgao(i), `${i.orgao}${i.uf ? `/${i.uf}` : ''}`, 'Ver só as compras deste órgão') : 'Órgão não informado', i.orgao ? fichaOrgao(i.orgao) : null, i.esfera ? h('span', { classe: 'mercado-desc', texto: ESFERAS[i.esfera] || i.esfera }) : null),
         td('Marca e modelo', h('strong', { texto: marcaTexto(i) }), h('span', { classe: 'mercado-desc', texto: String(i.descricaoItem || '').slice(0, 110) })),
         td('Vencedor', i.fornecedor || i.documentoFornecedor ? botaoFoco('fornecedor', chaveFornecedor(i), i.fornecedor || cnpj(i.documentoFornecedor), 'Ver todas as vitórias desta empresa') : 'Não informado',
           i.fornecedor && i.documentoFornecedor ? h('span', { classe: 'mercado-desc', texto: cnpj(i.documentoFornecedor) }) : null),

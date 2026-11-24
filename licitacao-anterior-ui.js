@@ -888,6 +888,8 @@
         for (const u of g.uasgs.slice(0, 4)) acoes.append(botao(`Usar UASG ${u}`, () => escolherUnidade(u, rotulo)));
         // Unidade sem código no padrão do Compras.gov: o CNPJ do órgão lista as unidades dele no PNCP.
         if (!g.uasgs.length && g.cnpj) acoes.append(botao('Ver unidades deste órgão', () => { orgao.value = g.cnpj; void procurarOrgao(); }));
+        const ficha = global.LicitaFichaOrgao?.linkFichaElemento(document, { cnpj: g.cnpj, nome: g.orgao }, 'Ver ficha do órgão', 'la-ficha-orgao');
+        if (ficha) { ficha.setAttribute('aria-label', `Ver ficha do órgão ${rotulo}`); acoes.append(ficha); }
         item.append(info, acoes);
         return item;
       }));

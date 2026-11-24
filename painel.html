@@ -892,7 +892,7 @@
   .kanban-card.arrastando { opacity: .4; }
   .kanban-card-objeto { font-size: 13px; font-weight: 700; line-height: 1.35; margin: 0 0 8px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
   .kanban-card-meta { font-size: 11.5px; color: var(--texto-fraco); margin: 0 0 3px; display: flex; gap: 6px; align-items: center; }
-  .kanban-card-orgao { color: inherit; text-decoration: underline dotted; text-underline-offset: 2px; } .kanban-card-orgao:hover { color: var(--azul); text-decoration-style: solid; }
+  .kanban-card-orgao { min-width: 0; }
   .kanban-card-prazo { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px; margin-top: 8px; }
   .kanban-card-prazo.ok { background: rgba(52,193,124,0.15); color: var(--verde-texto); }
   .kanban-card-prazo.perto { background: rgba(242,137,26,0.18); color: var(--laranja-forte-texto); }
@@ -1629,6 +1629,7 @@
   <button data-alvo="diagnostico" title="Inteligência de Mercado"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-chart-bar'></use></svg></span><span class="nav-label">Inteligência de Mercado</span></button>
   <a href="prospeccao.html" title="Prospecção"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-target'></use></svg></span><span class="nav-label">Prospecção</span></a>
   <button data-alvo="empresa" title="Analisar concorrente"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-buildings'></use></svg></span><span class="nav-label">Analisar concorrente</span></button>
+  <a href="orgao.html" title="Órgãos"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-bank'></use></svg></span><span class="nav-label">Órgãos</span></a>
   <button data-alvo="transparencia" title="Convênios e Emendas Federais"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-handshake'></use></svg></span><span class="nav-label">Convênios e Emendas Federais</span></button>
   <button data-alvo="precos" title="Pesquisa de Preços"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-coins'></use></svg></span><span class="nav-label">Pesquisa de Preços</span></button>
   <a href="orcamento-obra.html" title="Orçamento de obra"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-toolbox'></use></svg></span><span class="nav-label">Orçamento de obra</span></a>
@@ -5384,7 +5385,7 @@
     const classePrazo = classePrazoKanban(edital.encerramento);
     const linkSistema = linkSistemaProcesso(empresaOperacionalId, edital.processoId);
     // CRM fase 2: o nome do órgão abre a ficha do órgão (orgao.html, ficha-orgao.js).
-    const linkOrgao = window.LicitaFichaOrgao?.linkFicha({ controle: edital.numeroControlePNCP || id, nome: edital.orgao });
+    const linkOrgao = window.LicitaFichaOrgao?.linkFichaHtml({ controle: edital.numeroControlePNCP || id, nome: edital.orgao }, { texto: edital.orgao || "Ver ficha do órgão", classe: "kanban-card-orgao" });
     const selo = SELOS_ESTEIRA[esteiraPorProcesso[edital.processoId]];
     const seloHtml = selo ? `<span class="kanban-card-prazo kanban-card-esteira ${selo[0]}">${selo[1]}</span>` : "";
     const prazoHtml = edital.encerramento
@@ -5408,7 +5409,7 @@
           <p class="kanban-card-objeto">${escapeHtml(edital.objeto || "Licitação sem título")}</p>
           <button class="kanban-card-remover" type="button" title="Arquivar (sai do Funil e fica em Arquivados)" aria-label="Arquivar" data-id="${escapeHtml(id)}">✕</button>
         </div>
-        <p class="kanban-card-meta"><svg class='icone-ph'><use href='#ph-bank'></use></svg> ${linkOrgao ? `<a class="kanban-card-orgao" href="${escapeHtml(linkOrgao)}" draggable="false" title="Abrir a ficha do órgão: licitações, contratos, contatos e o seu histórico">${escapeHtml(edital.orgao || "Ver ficha do órgão")}</a>` : escapeHtml(edital.orgao || "Órgão não informado")}</p>
+        <p class="kanban-card-meta"><svg class='icone-ph'><use href='#ph-bank'></use></svg> ${linkOrgao ? linkOrgao.replace("<a ", '<a draggable="false" ') : escapeHtml(edital.orgao || "Órgão não informado")}</p>
         <p class="kanban-card-meta"><svg class='icone-ph'><use href='#ph-map-pin'></use></svg> ${escapeHtml([edital.municipio, edital.uf].filter(Boolean).join(" / ") || "Não informado")}</p>
         ${prazoHtml}${seloHtml}${LicitaFunilCrm.htmlSeloParado(parado)}
         ${motivoHtml}
@@ -6672,7 +6673,7 @@
           <p class="boletim-objeto">${escapeHtml(r.objeto || "-")}${r.fonte ? ` <span class="fonte-badge">${escapeHtml(r.fonte)}</span>` : ""}</p>
           ${tagsObjetoHtml}
           <dl class="boletim-meta boletim-meta-principal">
-            <div><dt>Órgão</dt><dd>${escapeHtml(r.orgao || "-")}</dd></div>
+            <div><dt>Órgão</dt><dd>${(!r.fonte && r.orgao && window.LicitaFichaOrgao?.linkFichaHtml({ controle: r.numeroControlePNCP, nome: r.orgao }, { texto: r.orgao })) || escapeHtml(r.orgao || "-")}</dd></div>
             <div><dt>Município/UF</dt><dd>${escapeHtml(r.municipio ? (r.municipio + (r.uf ? " / " + r.uf : "")) : (r.uf || "-"))}</dd></div>
             <div><dt>${r.fonte ? "Abertura" : "Data fim de recebimento de propostas"}</dt><dd>${escapeHtml(formatarPrazoPropostas(r.encerramento))}</dd></div>
             ${r.fonte ? "" : campoBoletimMeta("Valor total estimado", formatarMoedaItem(r.valorTotalEstimado), "valorTotalEstimado")}

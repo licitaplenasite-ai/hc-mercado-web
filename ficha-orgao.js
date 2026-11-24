@@ -36,6 +36,32 @@
     if (String(nome || '').trim()) p.set('nome', String(nome).trim().slice(0, 300));
     return p.toString() ? `orgao.html?${p}` : null;
   }
+  // Link pronto (HTML) para as telas que mostram o nome do órgão: azul de link + ícone "abrir". Sem dado, string vazia.
+  // A última palavra vai junto com o ícone (nowrap): sem isso, o ícone quebrava sozinho para a linha de baixo.
+  const partirFim = (texto) => { const t = String(texto), i = t.lastIndexOf(' ') + 1; return [t.slice(0, i), t.slice(i)]; };
+  const escHtml = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  function linkFichaHtml(dados, { texto = 'Ver ficha do órgão', classe = '' } = {}) {
+    const href = linkFicha(dados);
+    if (!href) return '';
+    return `<a class="link-ficha-orgao${classe ? ' ' + classe : ''}" href="${escHtml(href)}" title="Ver ficha do órgão">${escHtml(partirFim(texto)[0])}<span class="link-ficha-fim">${escHtml(partirFim(texto)[1])}<svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-arrow-square-out"></use></svg></span></a>`;
+  }
+  // O mesmo link como elemento, para as telas montadas com createElement (Pesquisa de Preços, Meu dia, Licitação anterior).
+  function linkFichaElemento(doc, dados, texto = 'Ver ficha do órgão', classe = '') {
+    const href = linkFicha(dados);
+    if (!href) return null;
+    const a = doc.createElement('a');
+    a.className = 'link-ficha-orgao' + (classe ? ' ' + classe : '');
+    a.href = href;
+    a.title = 'Ver ficha do órgão';
+    const [inicio, fim] = partirFim(texto), span = doc.createElement('span');
+    span.className = 'link-ficha-fim';
+    span.textContent = fim;
+    a.textContent = inicio;
+    const svg = doc.createElementNS('http://www.w3.org/2000/svg', 'svg'), uso = doc.createElementNS('http://www.w3.org/2000/svg', 'use');
+    svg.setAttribute('class', 'icone-ph'); svg.setAttribute('aria-hidden', 'true'); uso.setAttribute('href', 'menu-icones.svg#ph-arrow-square-out');
+    svg.append(uso); span.append(svg); a.append(span);
+    return a;
+  }
   function lerParametros(busca) {
     const p = new URLSearchParams(busca || '');
     const cnpj = digitos(p.get('cnpj'));
@@ -116,7 +142,7 @@
   const padraoIlike = (nome) => String(nome || '').trim().replace(/[\\%_]/g, (c) => `\\${c}`);
 
   const api = {
-    cnpjDeControle, normalizarNome, chaveOrgao, linkFicha, lerParametros, formatarCnpj,
+    cnpjDeControle, normalizarNome, chaveOrgao, linkFicha, linkFichaHtml, linkFichaElemento, lerParametros, formatarCnpj,
     situacaoProcesso, resumirRelacionamento, prazoAberta, validarContato, validarAnotacao, padraoIlike, linkPncp,
   };
   raiz.LicitaFichaOrgao = api;

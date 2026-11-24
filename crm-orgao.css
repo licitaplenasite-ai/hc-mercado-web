@@ -27,7 +27,7 @@
 .lt-resultado .lt-icone{border-color:var(--marca-titulo);background:var(--marca-titulo);color:#fff}
 [data-theme="dark"] .lt-resultado .lt-icone{background:var(--destaque);border-color:var(--destaque);color:var(--destaque-texto)}
 .lt-mais{margin:8px 0 0 44px}
-.link-ficha-orgao{display:inline-block;margin-top:4px;color:var(--action-text);font-weight:600;font-size:13px;text-decoration:underline;text-underline-offset:2px}
+.link-ficha-orgao{display:inline-block;margin-top:4px;font-size:13px}
 .dado .link-ficha-orgao{display:table}
 
 /* ---------- Ficha do órgão ---------- */

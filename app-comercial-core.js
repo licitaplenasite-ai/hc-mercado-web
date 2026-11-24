@@ -46,7 +46,7 @@
       const razao = razoes.get(c.empresaId);
       const numero = txt(c.numero);
       const processoRotulo = numero ? 'Processo ' + numero : 'Processo sem número';
-      lista.push({ empresaId: c.empresaId, processoId: c.processoId, empresaRotulo: razao, processoRotulo, rotulo: razao + ' · ' + processoRotulo, objeto: txt(c.objeto), status: txt(c.status), prazo: txt(c.prazo) });
+      lista.push({ empresaId: c.empresaId, processoId: c.processoId, empresaRotulo: razao, processoRotulo, rotulo: razao + ' · ' + processoRotulo, objeto: txt(c.objeto), status: txt(c.status), prazo: txt(c.prazo), orgao: txt(c.orgao), controle: txt(c.controle) });
     }
     return lista;
   }

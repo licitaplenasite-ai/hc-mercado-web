@@ -104,7 +104,7 @@ test('contextosDoCatalogo monta o Hoje só com empresas do catálogo, sem repeti
   const core = carregarCore();
   const empresas = [{ empresaId: 'a', razaoSocial: ' Empresa A ' }, { empresaId: 'b', razaoSocial: 7 }];
   const lista = core.contextosDoCatalogo([
-    { empresaId: 'a', processoId: 'pa', numero: '10/2026', objeto: 'Papel', status: 'triagem', prazo: '2026-12-01T13:00:00+00:00' },
+    { empresaId: 'a', processoId: 'pa', numero: '10/2026', objeto: 'Papel', status: 'triagem', prazo: '2026-12-01T13:00:00+00:00', orgao: ' Prefeitura X ', controle: '12345678000190-1-000083/2026' },
     { empresaId: 'a', processoId: 'pa' },
     { empresaId: 'b', processoId: 'pb', numero: 5, objeto: { x: 1 } },
     { empresaId: 'fora', processoId: 'px', numero: '1' },
@@ -112,8 +112,8 @@ test('contextosDoCatalogo monta o Hoje só com empresas do catálogo, sem repeti
     null,
   ], empresas);
   assert.deepEqual(JSON.parse(JSON.stringify(lista)), [
-    { empresaId: 'a', processoId: 'pa', empresaRotulo: 'Empresa A', processoRotulo: 'Processo 10/2026', rotulo: 'Empresa A · Processo 10/2026', objeto: 'Papel', status: 'triagem', prazo: '2026-12-01T13:00:00+00:00' },
-    { empresaId: 'b', processoId: 'pb', empresaRotulo: 'Empresa', processoRotulo: 'Processo sem número', rotulo: 'Empresa · Processo sem número', objeto: '', status: '', prazo: '' },
+    { empresaId: 'a', processoId: 'pa', empresaRotulo: 'Empresa A', processoRotulo: 'Processo 10/2026', rotulo: 'Empresa A · Processo 10/2026', objeto: 'Papel', status: 'triagem', prazo: '2026-12-01T13:00:00+00:00', orgao: 'Prefeitura X', controle: '12345678000190-1-000083/2026' },
+    { empresaId: 'b', processoId: 'pb', empresaRotulo: 'Empresa', processoRotulo: 'Processo sem número', rotulo: 'Empresa · Processo sem número', objeto: '', status: '', prazo: '', orgao: '', controle: '' },
   ]);
   assert.equal(core.contextosDoCatalogo(null, null).length, 0);
 });

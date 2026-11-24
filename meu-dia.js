@@ -129,7 +129,11 @@
         detalhes: ['Sem movimento além do limite da etapa (' + plural(p.limite, 'dia', 'dias') + '). Defina o próximo passo.'],
         empresaId: p.empresaId, processoId: p.processoId, acao: abrirFunil(p.empresaId, p.processoId) });
     }
-    return itens;
+    // Órgão do processo (catálogo contextos-operacao) para o link da ficha do órgão em cada linha.
+    return itens.map((i) => {
+      const c = porProcesso.get(i.processoId);
+      return c?.orgao ? { ...i, orgao: txt(c.orgao, 300), controle: c.controle || '' } : i;
+    });
   }
 
   // Empresa escolhida (plano Assessoria): itens dela + os da organização inteira (agenda sem empresa). '' = todas.
@@ -166,6 +170,12 @@
     corpo.append(criar(doc, 'p', 'md-item-titulo', item.titulo));
     const detalhe = item.detalhes.filter(Boolean).join(' · ');
     if (detalhe) corpo.append(criar(doc, 'p', 'md-item-detalhe', detalhe));
+    const ficha = item.orgao && global.LicitaFichaOrgao?.linkFichaElemento(doc, { controle: item.controle, nome: item.orgao }, item.orgao);
+    if (ficha) {
+      const p = criar(doc, 'p', 'md-item-detalhe', 'Órgão: ');
+      p.append(ficha);
+      corpo.append(p);
+    }
     const acoes = criar(doc, 'div', 'md-acoes');
     if (item.acao?.tipo === 'processo') {
       const b = criar(doc, 'button', 'app-primario md-abrir', item.acao.texto);

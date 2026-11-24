@@ -246,3 +246,11 @@
   :is(.btn-buscar, .app-primario, .btn.primario, .pp-mercado .btn.primario, .btn-baixar)::after { display: none; }
   .carregando::before, .cl-carregando::before { animation-duration: 2.4s; }
 }
+
+/* 24/11 (dono): nome do órgão que abre a ficha (orgao.html) com cara de link — royal, ícone "abrir", sublinha no hover.
+   Montado por LicitaFichaOrgao.linkFichaHtml (ficha-orgao.js) no Funil, Boletim, Pesquisa de Preços, Meu dia e Processos. */
+.link-ficha-orgao { color: var(--action-text); font-weight: 600; text-decoration: none; overflow-wrap: anywhere; border-radius: 3px; }
+.link-ficha-orgao:hover { text-decoration: underline; text-underline-offset: 2px; }
+.link-ficha-orgao:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.link-ficha-fim { white-space: nowrap; }
+.link-ficha-orgao .icone-ph { width: 0.85em; height: 0.85em; margin-left: 0.25em; vertical-align: -0.05em; }

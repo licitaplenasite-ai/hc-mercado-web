@@ -84,9 +84,22 @@ test('cada item do menu tem ícone próprio, e o tema usa lua/sol do sprite', ()
 test('ícones novos do menu existem nos dois sprites', () => {
   const sprite = fs.readFileSync('menu-icones.svg', 'utf8');
   const painel = fs.readFileSync('painel.html', 'utf8');
-  for (const id of ['ph-calendar', 'ph-clock-counter-clockwise', 'ph-puzzle-piece', 'ph-clipboard-text', 'ph-handshake', 'ph-toolbox']) {
+  for (const id of ['ph-calendar', 'ph-clock-counter-clockwise', 'ph-puzzle-piece', 'ph-clipboard-text', 'ph-handshake', 'ph-toolbox', 'ph-bank']) {
     assert.match(sprite, new RegExp(`<symbol id="${id}"`), id);
     assert.match(painel, new RegExp(`<symbol id="${id}"`), id);
+  }
+});
+
+// 24/11 (dono): a ficha do órgão (orgao.html) não tinha item no menu e o dono não achava o caminho de volta.
+test('Órgãos no menu de todas as páginas, logo depois de Analisar concorrente, com o ícone do banco', () => {
+  for (const p of paginas) {
+    const nav = fs.readFileSync(`${p}.html`, 'utf8').match(/<nav id="menu-principal"[\s\S]*?<\/nav>/)[0];
+    const lista = rotulos(p);
+    assert.equal(lista[lista.indexOf('Analisar concorrente') + 1], 'Órgãos', p);
+    const ativo = p === 'orgao' ? ' class="ativo" aria-current="page"' : '';
+    const link = nav.match(/<a href="orgao\.html"[\s\S]*?<\/a>/)[0];
+    assert.ok(link.startsWith(`<a href="orgao.html"${ativo} title="Órgãos">`), p);
+    assert.match(link, /#ph-bank['"]/, `${p}: ícone do banco`);
   }
 });
 

@@ -98,3 +98,6 @@
 .mercado-campo label{margin-bottom:4px}
 @media(max-width:640px){.mercado-numeros{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .mercado-linha .btn{min-height:40px}
+
+/* 24/11: atalho para a ficha do órgão, abaixo do nome (o nome segue filtrando as compras). */
+.mercado-ficha-orgao { display: block; width: max-content; margin-top: 2px; font-size: 12px; }

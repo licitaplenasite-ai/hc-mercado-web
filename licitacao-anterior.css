@@ -132,3 +132,4 @@
 .la-tabela .la-desc { display: block; font-size: .82rem; color: var(--texto-suave, var(--text-secondary, #58657a)); }
 .la-tabela .la-num { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .la-linha-ruim td:first-child { border-left: 3px solid var(--erro, #c0392b); }
+.la-orgao-acoes .la-ficha-orgao { align-self: center; font-size: 13px; }

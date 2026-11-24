@@ -82,7 +82,7 @@ test("devolve só a empresa do vínculo e seus processos, lendo com o token do u
   assert.equal(r.statusCode, 200);
   assert.equal(r.headers["Cache-Control"], "no-store");
   const corpo = JSON.parse(r.body);
-  assert.deepEqual(corpo, { userId: U, empresas: [{ empresaId: EMP_A, razaoSocial: "A" }], contextos: [{ empresaId: EMP_A, processoId: PROC_A, numero: "10/2026", objeto: "Papel A4", status: "triagem", prazo: "2026-12-01T13:00:00+00:00" }], certidoes: [], prazos: [], sancoes: [], contratos: [], tarefas: [], parados: [] });
+  assert.deepEqual(corpo, { userId: U, empresas: [{ empresaId: EMP_A, razaoSocial: "A" }], contextos: [{ empresaId: EMP_A, processoId: PROC_A, numero: "10/2026", objeto: "Papel A4", status: "triagem", prazo: "2026-12-01T13:00:00+00:00", orgao: "", controle: "" }], certidoes: [], prazos: [], sancoes: [], contratos: [], tarefas: [], parados: [] });
   for (const c of chamadas.filter((x) => x.caminho.startsWith("/rest/"))) {
     assert.equal(c.auth, "Bearer TOKEN-U");
     assert.match(c.apikey, /^sb_publishable_/);
@@ -149,7 +149,7 @@ test("campos de exibição são sempre string e com tamanho limitado", () => com
   Object.assign(b.operacao_processos[0], { numero: 123, objeto: "x".repeat(900), status: { a: 1 }, data_sessao: undefined });
   instalarFetch(b);
   const [c] = JSON.parse((await handler(evento())).body).contextos;
-  assert.deepEqual({ ...c, objeto: c.objeto.length }, { empresaId: EMP_A, processoId: PROC_A, numero: "", objeto: 500, status: "", prazo: "" });
+  assert.deepEqual({ ...c, objeto: c.objeto.length }, { empresaId: EMP_A, processoId: PROC_A, numero: "", objeto: 500, status: "", prazo: "", orgao: "", controle: "" });
 }));
 
 // ---- Certidões vencendo e próximos prazos ----

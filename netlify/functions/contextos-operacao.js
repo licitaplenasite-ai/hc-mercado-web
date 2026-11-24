@@ -157,10 +157,10 @@ exports.handler=async event=>{
   if(!empresas.length)return resposta(200,vazio);
   const porId=new Map(empresas.map(e=>[e.id,e]));
 
-  const processos=await ler(`operacao_processos?empresa_id=in.${emLista([...porId.keys()])}&status=neq.arquivado&select=id,empresa_id,organizacao_id,numero,objeto,status,data_sessao&order=criado_em.desc`);
+  const processos=await ler(`operacao_processos?empresa_id=in.${emLista([...porId.keys()])}&status=neq.arquivado&select=id,empresa_id,organizacao_id,numero,objeto,status,data_sessao,orgao,origem_externa_id&order=criado_em.desc`);
   // Processo só entra se a empresa autorizada e a organização baterem; linha extra da fonte nunca entra.
   const contextos=processos.filter(p=>p&&uuid(p.id)&&p.status!=='arquivado'&&porId.get(p.empresa_id)?.organizacao_id===p.organizacao_id)
-   .map(p=>({empresaId:p.empresa_id,processoId:p.id,numero:texto(p.numero,60),objeto:texto(p.objeto,500),status:texto(p.status,40),prazo:texto(p.data_sessao,40)}));
+   .map(p=>({empresaId:p.empresa_id,processoId:p.id,numero:texto(p.numero,60),objeto:texto(p.objeto,500),status:texto(p.status,40),prazo:texto(p.data_sessao,40),orgao:texto(p.orgao,300),controle:texto(p.origem_externa_id,80)}));
   const hoje=diaBrasilia(Date.now());
   const inicio=new Date((hoje-DIAS_ATRASO)*MS_DIA-FUSO_BR).toISOString(),fim=new Date((hoje+DIAS_PRAZO+1)*MS_DIA-FUSO_BR).toISOString();
   const limiteCertidao=new Date((hoje+DIAS_CERTIDAO)*MS_DIA).toISOString().slice(0,10);

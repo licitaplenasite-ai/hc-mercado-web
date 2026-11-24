@@ -21,6 +21,11 @@ test('link da ficha e leitura dos parâmetros', () => {
   assert.equal(F.linkFicha({ controle: '12345678000190-1-000083/2026', nome: 'Prefeitura X' }), 'orgao.html?cnpj=12345678000190&nome=Prefeitura+X');
   assert.equal(F.linkFicha({ nome: 'Órgão & Cia' }), 'orgao.html?nome=%C3%93rg%C3%A3o+%26+Cia');
   assert.equal(F.linkFicha({}), null);
+  // Link pronto das telas (Boletim, Pesquisa de Preços, Meu dia...): nome escapado, title e ícone "abrir".
+  const h = F.linkFichaHtml({ nome: 'Pref <x>' }, { texto: 'Pref <x>', classe: 'extra' });
+  assert.match(h, /^<a class="link-ficha-orgao extra" href="orgao\.html\?nome=Pref\+%3Cx%3E" title="Ver ficha do órgão">Pref <span class="link-ficha-fim">&lt;x&gt;<svg/);
+  assert.match(h, /ph-arrow-square-out/);
+  assert.equal(F.linkFichaHtml({}), '');
   assert.deepEqual(F.lerParametros('?cnpj=12.345.678/0001-90&nome=Prefeitura'), { cnpj: '12345678000190', nome: 'Prefeitura' });
   assert.deepEqual(F.lerParametros('?controle=12345678000190-1-000083/2026'), { cnpj: '12345678000190', nome: '' });
   assert.deepEqual(F.lerParametros('?cnpj=123'), { cnpj: null, nome: '' });
