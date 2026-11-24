@@ -10,8 +10,14 @@
 import os
 import html
 
-from lembretes_licitacoes import SITE_URL, _requisicao_supabase, enviar_mensagem, log, REMETENTE_FINANCEIRO, NOME_FINANCEIRO
+from lembretes_licitacoes import (SITE_URL, _requisicao_supabase, enviar_mensagem, log, REMETENTE_FINANCEIRO, NOME_FINANCEIRO,
+                                  moldura_email, email_paragrafo, email_destaque, email_botao)
 
+TITULOS = {
+    "vence_em_3_dias": "Sua assinatura vence em 3 dias",
+    "vence_hoje": "Sua assinatura vence hoje",
+    "bloqueado": "Seu acesso foi pausado",
+}
 ASSUNTOS = {
     "vence_em_3_dias": "Sua assinatura do LicitaPlena vence em 3 dias",
     "vence_hoje": "Sua assinatura do LicitaPlena vence hoje",
@@ -45,9 +51,12 @@ def montar_mensagem(item):
         corpo = (f"A assinatura do plano {plano} venceu em {vence} e não foi renovada. Você continua recebendo o boletim por "
                  "e-mail e tudo o que salvou continua guardado. Renove pelo Pix para voltar a usar tudo.")
     texto = f"Olá, {nome}!\n\n{corpo}\n\nRenovar: {link}\n\nJá pagou? Desconsidere este e-mail.\n\nEquipe LicitaPlena"
-    html_corpo = (f"<p>Olá, {html.escape(nome)}!</p><p>{html.escape(corpo)}</p>"
-                  f"<p><a href=\"{html.escape(link)}\">Renovar a assinatura</a></p><p>Já pagou? Desconsidere este e-mail.</p>"
-                  "<p>Equipe LicitaPlena</p>")
+    corpo_html = (email_paragrafo(f"Olá, {html.escape(nome)}!") + email_paragrafo(html.escape(corpo))
+                  + email_destaque(f"<strong>Plano {html.escape(plano)}</strong> · {html.escape(valor)}<br>Vencimento: <strong>{vence}</strong>")
+                  + email_botao(link, "Renovar a assinatura") + email_paragrafo("Já pagou? Desconsidere este e-mail.")
+                  + email_paragrafo("Equipe LicitaPlena"))
+    html_corpo = moldura_email("Assinatura", TITULOS[tipo], corpo_html,
+                               "Você recebe este aviso porque tem uma assinatura do LicitaPlena.")
     return ASSUNTOS[tipo], texto, html_corpo
 
 
