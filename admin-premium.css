@@ -1,0 +1,150 @@
+/* Painel Admin no visual premium (24/11, dono aprovou): mesmo padrão da área interna (interno-premium.css), que vem antes.
+   Só aparência e só tokens de ds-tokens.css: menu marinho com ativo ciano, marca no topo, números em Fraunces com fio
+   royal→ciano, robôs e fontes com selo de estado (cor + texto), botões, tabelas, campos e janelas no padrão.
+   Nenhum id ou classe usada pelo JS foi trocada; as regras só leem o que o admin.html e o status-ferramentas.js já escrevem. */
+@media screen {
+  /* ---- Topo: marca livre + "Painel Admin" ---- */
+  #painel > header {
+    position: sticky; top: 0; z-index: 50; padding: 12px 32px;
+    background-color: color-mix(in srgb, var(--surface-default) 90%, transparent); -webkit-backdrop-filter: saturate(1.4) blur(10px); backdrop-filter: saturate(1.4) blur(10px);
+    background-image: var(--grad-linha); background-size: 100% 3px; background-repeat: no-repeat; background-position: top left;
+  }
+  #painel > header .titulo { gap: 10px; }
+  .admin-marca { font-weight: 700; font-size: 16px; line-height: 24px; letter-spacing: -0.01em; color: var(--marca-titulo); }
+  .admin-separador { width: 1px; height: 20px; background: var(--border-strong); opacity: 0.6; }
+  #painel > header h1 { font-family: var(--fonte-titulo); font-weight: 600; font-size: 20px; line-height: 28px; letter-spacing: -0.01em; color: var(--marca-titulo); }
+  #painel > header > div:last-child { display: flex; gap: 8px; align-items: center; }
+  #painel > header button, #btn-mfa-config { border-radius: 999px; border: 1px solid var(--border-strong); background: var(--surface-default); color: var(--text-primary);
+    font-weight: 600; padding: 8px 14px; transition: border-color 0.2s ease, background-color 0.2s ease; }
+  #painel > header button:hover, #btn-mfa-config:hover { border-color: var(--marca-medio); background: var(--marca-claro-2); }
+
+  /* ---- Menu lateral marinho, ativo em ciano (igual ao #menu-principal do sistema) ---- */
+  @media (min-width: 881px) { .admin-corpo { grid-template-columns: 236px minmax(0, 1fr); gap: 28px; } }
+  .tabs {
+    top: 84px; gap: 2px; padding: 12px 8px; border-radius: var(--radius-modal);
+    background: var(--fundo-escuro); background-image: var(--menu-fundo); box-shadow: var(--sombra-cartao);
+  }
+  .tabs button {
+    color: var(--menu-texto); font-weight: 500; border: 0; border-radius: 10px; padding: 10px 12px;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+  .tabs button:hover { background: rgba(255, 255, 255, 0.07); color: #ffffff; }
+  .tabs button.ativo { background: linear-gradient(90deg, rgba(var(--destaque-rgb), 0.2), rgba(var(--destaque-rgb), 0.04)); color: #ffffff; font-weight: 600; box-shadow: inset 3px 0 0 var(--destaque); }
+  .tabs button:focus-visible { outline-color: var(--destaque); }
+  /* Contador ("está esperando por você"): ciano com texto marinho, 9:1. */
+  .tabs .contador { background: var(--destaque); color: var(--destaque-texto); border: 0; font-weight: 700; font-family: var(--font-sans); }
+
+  /* ---- Títulos ---- */
+  .titulo-tela { font-family: var(--fonte-titulo); font-weight: 600; font-size: 30px; line-height: 38px; letter-spacing: -0.01em; color: var(--marca-titulo); }
+  #painel main h3, .bloco-detalhe h4, .pedido-cartao h4, .modal-detalhe h3 { font-family: var(--fonte-titulo); font-weight: 600; letter-spacing: -0.005em; color: var(--marca-titulo); }
+  #painel main h3 { font-size: 20px; line-height: 28px; }
+
+  /* ---- Hoje: faixa de boas-vindas marinha (como o Dashboard do cliente) ---- */
+  .admin-boas-vindas {
+    position: relative; isolation: isolate; overflow: hidden; margin: 0 0 20px; padding: 26px 30px; border-radius: var(--radius-modal);
+    background-color: var(--fundo-escuro); background-image: radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1.3px), var(--degrade-escuro);
+    background-size: 22px 22px, auto, auto, auto; background-repeat: repeat, no-repeat, no-repeat, no-repeat; box-shadow: var(--sombra-cartao);
+  }
+  .admin-boas-vindas::after { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background-image: var(--grao); opacity: 0.14; mix-blend-mode: overlay; }
+  .admin-boas-vindas .titulo-tela { color: #ffffff; }
+  .admin-boas-vindas .frase-tela { margin: 0; color: var(--claro-sobre-escuro); }
+
+  /* ---- Cartões de número: Fraunces + fio royal→ciano que cresce no hover ---- */
+  .card-num {
+    position: relative; overflow: hidden; border-radius: var(--radius-card); box-shadow: var(--sombra-cartao);
+    transition: transform 0.3s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.3s ease, border-color 0.3s ease;
+  }
+  .card-num strong { font-family: var(--fonte-titulo); font-weight: 600; font-size: clamp(22px, 2vw, 30px); line-height: 1.25; letter-spacing: -0.01em; color: var(--marca-titulo); overflow-wrap: anywhere; }
+  .card-num::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--grad-linha);
+    transform: scaleX(0.22); transform-origin: left; transition: transform 0.45s cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  .card-num:hover { transform: translateY(-3px); border-color: rgba(var(--medio-rgb), 0.45); box-shadow: var(--sombra-cartao-forte); }
+  .card-num:hover::after { transform: scaleX(1); }
+
+  /* ---- Superfícies ---- */
+  .cartao-lista, .pedido-cartao, .robo, .cartao-fonte { border-radius: var(--radius-card); border-color: var(--border-default); box-shadow: var(--sombra-cartao); }
+  .bloco-detalhe { border-radius: var(--radius-card); }
+  .aviso-item { padding: 12px 8px; margin: 0 -8px; border-radius: 10px; transition: background-color 0.2s ease; }
+  .aviso-item:hover { background: var(--marca-claro-2); }
+  .nota-equipe { border-left: 3px solid var(--info-text); border-radius: 10px; }
+  .alarme-saude { border-radius: 10px; background: var(--error-bg); color: var(--error-text); border-left-color: var(--error-text); }
+
+  /* O JS troca o "Carregando..." pela tabela no mesmo contêiner, que guarda a classe: a tabela não herda o recuo do aviso. */
+  #painel .carregando:not(:has(*)) { justify-content: center; }
+  #painel .carregando:has(table) { padding: 0; text-align: left; }
+
+  /* ---- Robôs e fontes: o fio colorido em cima vira selo de estado (cor + texto) ---- */
+  .robo, .cartao-fonte { border-top: 1px solid var(--border-default) !important; padding: 16px 18px; }
+  .robo .estado, .cartao-fonte .valor {
+    display: inline-flex; align-items: baseline; gap: 6px; margin: 6px 0 2px; padding: 4px 12px; border: 1px solid; border-radius: 12px;
+    font-size: 12.5px; line-height: 18px; font-weight: 600;
+  }
+  .robo .estado::before { content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; background: currentColor; transform: translateY(-1px); }
+  .robo[data-nivel="ok"] .estado { background: var(--success-bg); border-color: var(--success-border); color: var(--success-text); }
+  .robo[data-nivel="atencao"] .estado { background: var(--attention-bg); border-color: var(--attention-border); color: var(--attention-text); }
+  .robo[data-nivel="parado"] .estado { background: var(--error-bg); border-color: var(--error-border); color: var(--error-text); }
+  .robo[data-nivel="sem_registro"] .estado { background: var(--surface-sunken); border-color: var(--border-default); color: var(--text-secondary); }
+  .robo[data-nivel="parado"] { border-color: var(--error-border); }
+  /* status-ferramentas.js escreve a cor no style (verde/laranja/vermelho): o selo lê dali, sem mexer no JS. */
+  .cartao-fonte[style*="verde"] .valor { background: var(--success-bg); border-color: var(--success-border); }
+  .cartao-fonte[style*="laranja"] .valor { background: var(--attention-bg); border-color: var(--attention-border); }
+  .cartao-fonte[style*="vermelho"] .valor { background: var(--error-bg); border-color: var(--error-border); }
+  .cartao-fonte .icone-ph { fill: var(--marca-texto); }
+
+  /* ---- Botões ---- */
+  :is(#painel, .modal-detalhe-fundo) :is(.btn-detalhe, .btn-secundario, .btn-reverter) {
+    border-radius: 999px; border: 1px solid var(--border-strong) !important; background: var(--surface-default); color: var(--text-primary); font-weight: 600;
+  }
+  :is(#painel, .modal-detalhe-fundo) :is(.btn-detalhe, .btn-secundario, .btn-reverter):hover:not(:disabled) { border-color: var(--marca-medio) !important; background: var(--marca-claro-2); color: var(--marca-titulo); }
+  /* Perigo em contorno: o fundo vermelho cheio com texto vermelho (regra da área interna) deixava o texto invisível. */
+  :is(#painel, .modal-detalhe-fundo) :is(.btn-rejeitar, .btn-remover) {
+    border-radius: 999px; border: 1px solid var(--error-border) !important; background: var(--surface-default); color: var(--error-text); font-weight: 600;
+  }
+  :is(#painel, .modal-detalhe-fundo) :is(.btn-rejeitar, .btn-remover):hover:not(:disabled) { background: var(--error-bg); border-color: var(--error-text) !important; }
+  .btn-salvar-cliente { background: var(--destaque); color: var(--destaque-texto); border-radius: 999px; box-shadow: 0 8px 18px -8px rgba(var(--destaque-rgb), 0.6); }
+  .btn-salvar-cliente:hover:not(:disabled) { background: var(--destaque-forte); transform: translateY(-1px); }
+  .acoes button { padding: 7px 14px; }
+  .switch-aprovacao { transition: background-color 0.2s ease, color 0.2s ease; }
+  .btn-tema { border-radius: 999px; }
+
+  /* ---- Filtros de clientes: chips; marcado = marinho cheio ---- */
+  .filtros button { border-color: var(--border-strong); color: var(--text-primary); transition: background-color 0.2s ease, border-color 0.2s ease; }
+  .filtros button:hover { border-color: var(--marca-medio); background: var(--marca-claro-2); }
+  .filtros button.ativo { background: var(--marca-escuro); border-color: var(--marca-escuro); color: #ffffff; }
+  [data-theme="dark"] .filtros button.ativo { background: var(--marca-claro); border-color: var(--marca-texto); color: var(--text-primary); }
+
+  /* ---- Campos ---- */
+  #painel :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea), .modal-detalhe :is(input:not([type="checkbox"]), select, textarea) { border-radius: 10px; }
+
+  /* ---- Janela do cliente ---- */
+  .modal-detalhe-fundo { background: rgba(var(--escuro-fundo-rgb), 0.5); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
+  .modal-detalhe { border-radius: var(--radius-modal); background-color: var(--surface-raised); background-image: var(--grad-linha); background-size: 100% 3px; background-repeat: no-repeat; }
+  /* Data de teste/vencimento ficava sem o mesmo campo dos outros (só texto, e-mail e lista tinham estilo). */
+  .modal-detalhe input[type="date"] { width: 100%; min-height: 40px; padding: 8px 12px; background: var(--campo); border: 1px solid var(--border-strong); color: var(--texto); font: inherit; font-size: 14px; }
+  [data-theme="dark"] .modal-detalhe input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.85); }
+  .modal-detalhe-topo button { border-radius: 999px; width: 36px; height: 36px; }
+  .modal-detalhe-topo button:hover { background: var(--surface-sunken); color: var(--text-primary); }
+
+  /* ---- Entrar (login, 2 etapas) ---- */
+  .tela-auth .caixa { border-radius: var(--radius-modal); box-shadow: var(--sombra-cartao-forte); background-image: var(--grad-linha); background-size: 100% 3px; background-repeat: no-repeat; }
+  .tela-auth h2 { font-family: var(--fonte-titulo); font-weight: 600; letter-spacing: -0.01em; color: var(--marca-titulo); }
+  .tela-auth input { border-radius: 10px; }
+
+  /* ---- Celular e tablet: o menu vira faixa marinha que rola de lado ---- */
+  @media (max-width: 880px) {
+    #painel > header { padding: 10px 16px; position: static; }
+    .tabs { position: static; flex-direction: row; padding: 6px; border-radius: 14px; }
+    .tabs button { background: transparent; border: 0; padding: 8px 12px; }
+    .tabs button.ativo { box-shadow: inset 0 -3px 0 var(--destaque); }
+    .admin-boas-vindas { padding: 20px; }
+    .titulo-tela { font-size: 24px; line-height: 32px; }
+  }
+  @media (max-width: 480px) {
+    .admin-separador, .admin-marca { display: none; }
+  }
+}
+@media screen and (prefers-reduced-motion: reduce) {
+  .card-num, .card-num::after, .aviso-item, .tabs button { transition: none; }
+  .card-num:hover, .btn-salvar-cliente:hover { transform: none; }
+}
