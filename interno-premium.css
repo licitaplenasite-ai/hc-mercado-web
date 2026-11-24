@@ -38,6 +38,8 @@
   .header-icone-btn, .header-sair, header .tema-icone { border-radius: 999px; transition: background-color 0.2s ease, border-color 0.2s ease; }
   .header-icone-btn:hover, .header-sair:hover { border-color: var(--marca-medio); background: var(--marca-claro-2); }
   .header-badge, .header-badge-plano { border-radius: 999px; }
+  /* Ícone do celular (avisos-celular.js) saía mais alto que o "?" ao lado nas páginas do CRM: centraliza o desenho. */
+  #celular-btn, #ajuda-btn { display: inline-flex; align-items: center; justify-content: center; align-self: center; vertical-align: middle; }
 
   /* ---- Menu lateral marinho (painel e páginas do CRM usam o mesmo #menu-principal) ---- */
   #menu-principal { background: var(--fundo-escuro); background-image: var(--menu-fundo); border-right: 0; scrollbar-color: rgba(255, 255, 255, 0.18) transparent; }
@@ -148,7 +150,7 @@
   .dash-card-num, .metrica b, .fase b, .cartao .valor, .contador { font-family: var(--fonte-titulo); font-weight: 600; letter-spacing: -0.01em; color: var(--marca-titulo); }
   .dash-card-num { font-size: 32px; line-height: 40px; }
   /* A serifa é mais larga que a Inter: valor em reais não pode vazar o cartão estreito. */
-  .metrica b, .fase b { font-size: clamp(20px, 1.9vw, 28px); line-height: 1.25; overflow-wrap: anywhere; }
+  .metrica b, .fase b { font-size: clamp(18px, 1.55vw, 28px); line-height: 1.25; overflow-wrap: anywhere; }
   .dash-card::after, .metrica::after {
     content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--grad-linha);
     transform: scaleX(0.22); transform-origin: left; transition: transform 0.45s cubic-bezier(0.2, 0.7, 0.2, 1);
