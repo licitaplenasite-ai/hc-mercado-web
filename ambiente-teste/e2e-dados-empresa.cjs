@@ -1,4 +1,4 @@
-/* global document, window, Image -- usado só dentro de p.evaluate (roda no navegador) */
+/* global document, window -- usado só dentro de p.evaluate (roda no navegador) */
 // Dados da empresa (operacao.html, aba Dados da empresa): tudo o que é digitado salva num botão só e volta ao recarregar.
 // Regressão do problema real de 23/11: endereço/representante/cargo sumiam e a logo PNG 2000 px "não era aceita".
 //   PORTA_TESTE=8814 node ambiente-teste/servidor.cjs   (outro terminal; subir.cjs antes)

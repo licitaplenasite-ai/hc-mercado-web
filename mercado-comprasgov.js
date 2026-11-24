@@ -46,9 +46,21 @@
     return [...grupos.values()].map((g) => ({ chave: g.chave, nome: nome(g), quantidade: g.quantidade }))
       .sort((a, b) => (a.chave === SEM_MARCA) - (b.chave === SEM_MARCA) || b.quantidade - a.quantidade || a.nome.localeCompare(b.nome, 'pt-BR'));
   }
-  // Filtros em cascata: produto do catálogo > unidade > marca. Preço só se compara dentro da mesma unidade (UN ≠ CX).
-  function filtrar(itens, { produto = '', unidade = '', marca = '' } = {}) {
-    return (itens || []).filter((i) => (!produto || String(i.codigoPdm) === String(produto)) && (!unidade || i.unidade === unidade) && (!marca || chaveMarca(i.marca) === marca));
+  // Vencedor e órgão viram filtro ao clicar (23/11, dono: "a empresa não é clicável"). CNPJ junta grafias do nome.
+  const chaveFornecedor = (i) => String(i.documentoFornecedor || i.fornecedor || '').replace(/\D/g, '') || String(i.fornecedor || '').trim();
+  const chaveOrgao = (i) => [chaveMarca(i.orgao), i.uf || ''].join('|');
+  // Filtros em cascata: produto do catálogo > unidade > marca > empresa > órgão. Preço só se compara dentro da mesma unidade (UN ≠ CX).
+  function filtrar(itens, { produto = '', unidade = '', marca = '', fornecedor = '', orgao = '' } = {}) {
+    return (itens || []).filter((i) => (!produto || String(i.codigoPdm) === String(produto)) && (!unidade || i.unidade === unidade) && (!marca || chaveMarca(i.marca) === marca)
+      && (!fornecedor || chaveFornecedor(i) === fornecedor) && (!orgao || chaveOrgao(i) === orgao));
+  }
+  // Nº do item dentro da compra: a página da compra pode ter 1.000 itens e o usuário não sabe qual é. O servidor manda
+  // numeroItem; resposta guardada antes dele sai do idCompraItem (17 dígitos da compra + 5 do item).
+  function numeroDoItem(i) {
+    const n = Number(i && i.numeroItem);
+    if (Number.isSafeInteger(n) && n > 0) return n;
+    const m = /^\d{17}(\d{5})$/.exec(String((i && i.itemCompra) || ''));
+    return m && Number(m[1]) > 0 ? Number(m[1]) : null;
   }
   // O servidor marca cada compra: especificacao false = a descrição não tem o atributo do termo (A4, 500 ml, azul).
   // Havendo compras que conferem, só elas entram nas contas; as demais ficam recolhidas. Nenhuma confere: valem todas.
@@ -134,7 +146,7 @@
   }
   const resumoModelos = (itens) => agrupar(itens.filter((i) => i.marca && i.modelo), (i) => `${chaveMarca(i.marca)}|${chaveMarca(i.modelo)}`, (i) => `${String(i.marca).toLocaleUpperCase('pt-BR')} ${i.modelo}`);
   // Vencedor = fornecedor que ganhou o item (a Pesquisa de Preços só traz preço homologado). CNPJ junta grafias do nome.
-  const resumoFornecedores = (itens) => agrupar(itens, (i) => String(i.documentoFornecedor || i.fornecedor || '').replace(/\D/g, '') || String(i.fornecedor || '').trim(), (i) => i.fornecedor || i.documentoFornecedor || 'Não informado')
+  const resumoFornecedores = (itens) => agrupar(itens, chaveFornecedor, (i) => i.fornecedor || i.documentoFornecedor || 'Não informado')
     .map((g) => ({ ...g, marcas: marcasDe(g.itens).filter((m) => m.chave !== SEM_MARCA).slice(0, 3).map((m) => m.nome) }));
   const cnpj = (d) => (/^\d{14}$/.test(String(d || '')) ? String(d).replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') : String(d || ''));
   // Total da compra em centavos sem float: quantidade inteira vai em BigInt; fracionária (kg, litro) arredonda o produto.
@@ -159,9 +171,9 @@
   // Planilha das compras na tela: valores em reais como número (Excel soma), vindo de centavos inteiros.
   function linhasPlanilha(itens) {
     const reaisNum = (c) => (c === null || c === undefined ? '' : Number(reais(c)));
-    return [['Data', 'Órgão', 'UF', 'Município', 'Esfera', 'Produto do catálogo', 'Descrição', 'Marca', 'Modelo', 'Fornecedor vencedor', 'CNPJ', 'Quantidade', 'Unidade', 'Valor unitário (R$)', 'Valor total (R$)', 'Link da compra'],
+    return [['Data', 'Órgão', 'UF', 'Município', 'Esfera', 'Produto do catálogo', 'Descrição', 'Marca', 'Modelo', 'Fornecedor vencedor', 'CNPJ', 'Quantidade', 'Unidade', 'Valor unitário (R$)', 'Valor total (R$)', 'Link da compra', 'Nº do item na compra'],
       ...(itens || []).map((i) => [dataBr(i.dataResultado), i.orgao, i.uf, i.municipio, ESFERAS[i.esfera] || '', i.produtoCatalogo, i.descricaoItem, i.marca, i.modelo, i.fornecedor, cnpj(i.documentoFornecedor),
-        Number(i.quantidade) || '', i.unidadeNome || i.unidade, reaisNum(i.valorUnitarioCentavos), reaisNum(totalCentavos(i)), i.link].map((c) => (typeof c === 'number' ? c : celulaSegura(c))))];
+        Number(i.quantidade) || '', i.unidadeNome || i.unidade, reaisNum(i.valorUnitarioCentavos), reaisNum(totalCentavos(i)), i.link, numeroDoItem(i) || ''].map((c) => (typeof c === 'number' ? c : celulaSegura(c))))];
   }
 
   // Zero compras com consulta que falhou não é "nenhuma compra": a fonte não respondeu (visto no E2E de 19/11/2026).
@@ -191,9 +203,9 @@
 
   // Uma caixa de busca: termo -> produtos do catálogo (chips, o mais provável já escolhido) -> marcas, modelos,
   // vencedores e compras. alvo: elemento vazio. aoUsar(item, resumo) recebe o resultado escolhido e o resumo do filtro atual.
-  function montar({ alvo, doc = global.document, requisitar = (...a) => (global.fetchComSessao || global.fetch)(...a), termo = '', rotuloUsar = 'Usar', aoUsar, hoje = hojeLocal }) {
+  function montar({ alvo, doc = global.document, requisitar = (...a) => (global.fetchComSessao || global.fetch)(...a), termo = '', rotuloUsar = 'Usar', aoUsar, aoAnalisarEmpresa, hoje = hojeLocal }) {
     const estado = { termo: '', uf: '', catalogos: [], pdm: '', porPdm: new Map(), atributos: [], cartoes: [], mostrar: MOSTRAR,
-      filtro: { unidade: '', marca: '', meses: '', esfera: '', qtdMin: '', qtdMax: '' }, buscando: false, geracao: 0, falhas: 0 };
+      filtro: { unidade: '', marca: '', fornecedor: '', orgao: '', meses: '', esfera: '', qtdMin: '', qtdMax: '' }, buscando: false, geracao: 0, falhas: 0 };
     Object.defineProperty(estado, 'itens', { get: () => estado.porPdm.get(estado.pdm)?.itens || [] });
     const h = (tag, attrs = {}, ...filhos) => {
       const e = doc.createElement(tag);
@@ -232,7 +244,9 @@
     const tabela = (classe, cabecalho, linhas) => h('div', { classe: 'mercado-tabela' }, h('table', { classe: `mercado-marcas ${classe}`.trim() },
       h('thead', {}, h('tr', {}, ...cabecalho.map((t) => h('th', { scope: 'col', texto: t })))), h('tbody', {}, ...linhas)));
     const marcaTexto = (i) => (i.marca ? [String(i.marca).toLocaleUpperCase('pt-BR'), i.modelo].filter(Boolean).join(' · ') : 'Marca não informada');
-    const vencedorTexto = (i) => [i.fornecedor || 'Não informado', i.documentoFornecedor ? cnpj(i.documentoFornecedor) : ''].filter(Boolean).join(' · ');
+    // Nome clicável que filtra a tela por uma empresa ou um órgão (o mesmo jeito do clique na marca).
+    const botaoFoco = (tipo, chave, texto, titulo) => h('button', { type: 'button', classe: 'mercado-marca-nome mercado-foco-nome', 'data-mercado-foco': tipo, 'data-chave': chave,
+      'aria-pressed': String(estado.filtro[tipo] === chave), title: titulo, texto });
     const ultimoTexto = (i) => (i ? `${brl(i.valorUnitarioCentavos)} em ${dataBr(i.dataResultado)}` : '—');
 
     // Uma compra: quem ganhou, onde, quando, quanto. mediana = da unidade da compra, para o selo "fora da curva" (null nas recolhidas).
@@ -240,12 +254,16 @@
       const k = estado.cartoes.push(i) - 1;
       const curva = foraDaCurva(i.valorUnitarioCentavos, mediana);
       const total = totalCentavos(i);
+      const nItem = numeroDoItem(i);
       return h('tr', {},
         // Link na célula da data: sem coluna só para ele, a tabela cabe nos 1280 px do painel.
-        td('Data', dataBr(i.dataResultado), i.link ? h('a', { classe: 'mercado-desc', href: i.link, target: '_blank', rel: 'noopener noreferrer', texto: 'Ver compra' }) : null),
-        td('Órgão', `${i.orgao || 'Órgão não informado'}${i.uf ? `/${i.uf}` : ''}`, i.esfera ? h('span', { classe: 'mercado-desc', texto: ESFERAS[i.esfera] || i.esfera }) : null),
+        // O Compras.gov não abre direto no item: o nº do item vai em destaque para o usuário achar na página da compra.
+        td('Data', dataBr(i.dataResultado), nItem ? h('span', { classe: 'mercado-item-num', title: 'Número do item dentro desta compra', texto: `Item nº ${nItem}` }) : null,
+          i.link ? h('a', { classe: 'mercado-desc', href: i.link, target: '_blank', rel: 'noopener noreferrer', title: nItem ? `Abre a compra no Compras.gov (nova aba). Procure o item ${nItem}.` : 'Abre a compra no Compras.gov (nova aba).', texto: 'Ver compra' }) : null),
+        td('Órgão', i.orgao ? botaoFoco('orgao', chaveOrgao(i), `${i.orgao}${i.uf ? `/${i.uf}` : ''}`, 'Ver só as compras deste órgão') : 'Órgão não informado', i.esfera ? h('span', { classe: 'mercado-desc', texto: ESFERAS[i.esfera] || i.esfera }) : null),
         td('Marca e modelo', h('strong', { texto: marcaTexto(i) }), h('span', { classe: 'mercado-desc', texto: String(i.descricaoItem || '').slice(0, 110) })),
-        td('Vencedor', vencedorTexto(i)),
+        td('Vencedor', i.fornecedor || i.documentoFornecedor ? botaoFoco('fornecedor', chaveFornecedor(i), i.fornecedor || cnpj(i.documentoFornecedor), 'Ver todas as vitórias desta empresa') : 'Não informado',
+          i.fornecedor && i.documentoFornecedor ? h('span', { classe: 'mercado-desc', texto: cnpj(i.documentoFornecedor) }) : null),
         td('Qtd.', `${i.quantidade ? milhar(i.quantidade) : '—'} ${i.unidade || ''}${i.embalagem ? ` (${i.embalagem})` : ''}`),
         td('Valor unitário', h('strong', { texto: brl(i.valorUnitarioCentavos) }), curva ? h('span', { classe: 'mercado-selo', texto: curva === 'acima' ? 'Fora da curva: mais de 3× a mediana' : 'Fora da curva: menos de 1/3 da mediana' }) : null),
         td('Total', total === null ? '—' : brl(total)),
@@ -262,7 +280,7 @@
       const fatias = new Map(marcas.map((m) => [m.chave, fatiaDoMercado(filtrar(base, { marca: m.chave }), base)]));
       const linhas = mostrar.map((m) => {
         const mods = modelos.filter((x) => x.chave.startsWith(`${m.chave}|`)).slice(0, 3).map((x) => x.itens[0].modelo);
-        const venc = resumoFornecedores(filtrar(base, { marca: m.chave })).slice(0, 2).map((v) => `${v.nome} (${v.quantidade})`);
+        const venc = resumoFornecedores(filtrar(base, { marca: m.chave })).slice(0, 2);
         return h('tr', { classe: m.chave === estado.filtro.marca ? 'ativa' : null },
           td('Marca', h('button', { type: 'button', classe: 'mercado-marca-nome', 'data-mercado-marca': m.chave, 'aria-pressed': String(m.chave === estado.filtro.marca), texto: m.nome })),
           td('Compras', String(m.quantidade)),
@@ -271,7 +289,7 @@
           td('Faixa', m.resumo.quantidade > 1 ? `${brl(m.resumo.minimo)} – ${brl(m.resumo.maximo)}` : '—'),
           td('Último preço', ultimoTexto(m.representante)),
           td('Modelos', mods.join('; ') || '—'),
-          td('Quem ganhou', venc.join('; ') || '—'),
+          td('Quem ganhou', ...(venc.length ? venc.map((v) => h('span', { classe: 'mercado-desc-linha' }, botaoFoco('fornecedor', v.chave, v.nome, 'Ver todas as vitórias desta empresa'), ` (${v.quantidade})`)) : ['—'])),
           typeof aoUsar !== 'function' ? null : td('', m.chave !== SEM_MARCA ? h('button', { type: 'button', classe: 'btn', 'data-mercado-marca-usar': String(marcas.indexOf(m)), texto: rotuloUsar }) : null));
       });
       const escondidas = marcas.length - mostrar.length;
@@ -287,15 +305,16 @@
         escondidas > 0 || estado.todasMarcas ? h('button', { type: 'button', classe: 'btn', 'data-mercado-todas': '1', texto: estado.todasMarcas ? 'Mostrar só as principais' : `Ver todas as marcas (+${escondidas})` }) : null];
       if (modelos.length) blocos.push(h('h3', { classe: 'mercado-subtitulo', texto: 'Modelos mais vendidos' }),
         tabela('', ['Marca e modelo', 'Compras', 'Mediana', 'Último preço'], modelos.slice(0, 10).map((x) => h('tr', {},
-          td('Marca e modelo', h('strong', { texto: x.nome })), td('Compras', String(x.quantidade)),
+          td('Marca e modelo', h('button', { type: 'button', classe: 'mercado-marca-nome', 'data-mercado-marca': x.chave.split('|')[0], 'aria-pressed': String(x.chave.split('|')[0] === estado.filtro.marca), title: 'Ver só as compras desta marca', texto: x.nome })), td('Compras', String(x.quantidade)),
           td('Mediana', `${brl(x.resumo.mediana)}${x.unidade ? ` / ${x.unidade}` : ''}`), td('Último preço', ultimoTexto(x.ultimo))))));
       const fatiaVenc = (v) => fatiaDoMercado(v.itens, base);
       if (vencedores.length) blocos.push(h('h3', { classe: 'mercado-subtitulo', texto: 'Empresas vencedoras' }),
         estado.grafico ? barras(vencedores.map((v) => ({ nome: v.nome, fatia: fatiaVenc(v) }))) : tabela('', ['Empresa', 'Vitórias', '% do mercado', 'Marcas', 'Mediana', 'Última vitória'], vencedores.slice(0, 10).map((v) => h('tr', {},
-          td('Empresa', h('strong', { texto: v.nome }), v.ultimo.documentoFornecedor ? h('span', { classe: 'mercado-desc', texto: cnpj(v.ultimo.documentoFornecedor) }) : null),
+          td('Empresa', botaoFoco('fornecedor', v.chave, v.nome, 'Ver todas as vitórias desta empresa'), v.ultimo.documentoFornecedor ? h('span', { classe: 'mercado-desc', texto: cnpj(v.ultimo.documentoFornecedor) }) : null),
           td('Vitórias', String(v.quantidade)), td('% do mercado', `${pctTexto(fatiaVenc(v).compras)} das compras · ${pctTexto(fatiaVenc(v).valor)} do valor`), td('Marcas', v.marcas.join('; ') || '—'),
           td('Mediana', `${brl(v.resumo.mediana)}${v.unidade ? ` / ${v.unidade}` : ''}`),
-          td('Última vitória', `${dataBr(v.ultimo.dataResultado)} · ${v.ultimo.orgao || ''}${v.ultimo.uf ? `/${v.ultimo.uf}` : ''}`)))));
+          td('Última vitória', `${dataBr(v.ultimo.dataResultado)} · ${v.ultimo.orgao || ''}${v.ultimo.uf ? `/${v.ultimo.uf}` : ''}`)))),
+        h('p', { classe: 'nota', texto: 'Clique no nome da empresa para ver todas as vitórias dela: itens, órgãos, valores, datas e o link de cada compra.' }));
       return blocos.filter(Boolean);
     }
 
@@ -304,6 +323,36 @@
       chipsEl.replaceChildren(h('span', { classe: 'mercado-chips-rotulo', texto: 'Produto do catálogo (nº de compras):' }), ...estado.catalogos.map((c) => h('button', {
         type: 'button', classe: 'mercado-chip', 'data-mercado-pdm': String(c.codigo), 'aria-pressed': String(String(c.codigo) === estado.pdm),
         texto: `${c.descricao}${Number.isSafeInteger(c.total) ? ` · ${milhar(c.total)}` : ''}` })));
+    }
+    // Detalhe da empresa ou do órgão clicado: quantas vitórias, valor, onde, e o atalho para o raio-X do concorrente.
+    function quadroFoco(base) {
+      const tipo = estado.filtro.fornecedor ? 'fornecedor' : estado.filtro.orgao ? 'orgao' : '';
+      if (!tipo) return null;
+      const doFoco = filtrar(base, { [tipo]: estado.filtro[tipo] });
+      const exemplo = doFoco[0] || estado.itens.find((i) => (tipo === 'fornecedor' ? chaveFornecedor(i) : chaveOrgao(i)) === estado.filtro[tipo]) || {};
+      const fatia = fatiaDoMercado(doFoco, base);
+      const soma = doFoco.reduce((t, i) => { const c = totalCentavos(i); return c === null ? t : t + c; }, 0);
+      const outros = [...new Set(doFoco.map((i) => (tipo === 'fornecedor' ? [i.orgao, i.uf].filter(Boolean).join('/') : i.fornecedor)).filter(Boolean))];
+      const datas = doFoco.map((i) => i.dataResultado).filter(Boolean).sort();
+      const doc = String(exemplo.documentoFornecedor || '').replace(/\D/g, '');
+      const titulo = tipo === 'fornecedor' ? (exemplo.fornecedor || cnpj(doc) || 'Empresa') : `${exemplo.orgao || 'Órgão'}${exemplo.uf ? `/${exemplo.uf}` : ''}`;
+      return h('section', { classe: 'mercado-foco', 'aria-label': tipo === 'fornecedor' ? 'Vitórias da empresa' : 'Compras do órgão', tabindex: '-1' },
+        h('div', { classe: 'mercado-foco-topo' },
+          h('div', {}, h('span', { classe: 'mercado-foco-rotulo', texto: tipo === 'fornecedor' ? 'Empresa vencedora' : 'Órgão comprador' }),
+            h('h3', { classe: 'mercado-foco-titulo', texto: titulo }),
+            tipo === 'fornecedor' && /^\d{14}$/.test(doc) ? h('span', { classe: 'mercado-desc', texto: `CNPJ ${cnpj(doc)}` }) : null),
+          h('div', { classe: 'mercado-foco-acoes' },
+            tipo === 'fornecedor' && /^\d{14}$/.test(doc) && typeof aoAnalisarEmpresa === 'function' ? h('button', { type: 'button', classe: 'btn primario', 'data-mercado-analisar': doc, texto: 'Analisar concorrente (raio-X)' }) : null,
+            h('button', { type: 'button', classe: 'btn', 'data-mercado-foco-limpar': tipo, texto: 'Voltar para todas as compras' }))),
+        h('dl', { classe: 'mercado-numeros' }, ...[
+          [tipo === 'fornecedor' ? 'Vitórias' : 'Compras', milhar(doFoco.length)],
+          ['Fatia das compras', pctTexto(fatia.compras)],
+          ['Valor somado', brl(soma)],
+          [tipo === 'fornecedor' ? 'Órgãos atendidos' : 'Empresas que venceram', milhar(outros.length)],
+          ['Período', datas.length ? `${dataBr(datas[0])} a ${dataBr(datas.at(-1))}` : '—'],
+        ].map(([t, v]) => h('div', {}, h('dt', { texto: t }), h('dd', { texto: v })))),
+        outros.length ? h('p', { classe: 'nota', texto: `${tipo === 'fornecedor' ? 'Onde venceu' : 'Quem venceu'}: ${outros.slice(0, 8).join('; ')}${outros.length > 8 ? ` e mais ${outros.length - 8}` : ''}.` }) : null,
+        h('p', { classe: 'nota', texto: 'A lista de compras abaixo mostra só estas, com o nº do item e o link de cada uma. Os números contam só as compras carregadas e os filtros acima.' }));
     }
     function desenharResumo(grupo, base, diferente, visiveis, unidades, marcas, medianas) {
       const r = resumoPrecos(visiveis);
@@ -316,6 +365,8 @@
       if (atributos) resumoEl.append(h('p', { classe: 'nota mercado-especificacao', texto: diferente.length || base.some((i) => i.especificacao)
         ? `Especificação do termo: ${atributos}. Contas e marcas usam só as compras cuja descrição tem isso; ${diferente.length} com especificação diferente estão recolhidas no fim.`
         : `Nenhuma compra traz "${atributos}" na descrição: as contas usam todas. Confira a especificação antes de usar o preço.` }));
+      const focoEl = quadroFoco(base);
+      if (focoEl) resumoEl.append(focoEl);
       resumoEl.append(h('p', { texto: r.quantidade ? `${r.quantidade} compra(s)${estado.filtro.unidade ? ` por ${estado.filtro.unidade}` : ''}${marcaNome ? ` da marca ${marcaNome}` : ''}:` : 'Nenhuma compra com estes filtros.' }));
       if (r.quantidade) resumoEl.append(h('dl', { classe: 'mercado-numeros' }, ...[['Mediana (referência)', r.mediana, 'destaque'], ['Mínimo', r.minimo], ['Máximo', r.maximo], ['Média', r.media], ['Último preço', visiveis[0]?.valorUnitarioCentavos]]
         .map(([t, c, classe]) => h('div', { classe }, h('dt', { texto: t }), h('dd', { texto: brl(c) })))));
@@ -328,8 +379,9 @@
       const grupo = estado.porPdm.get(estado.pdm);
       const { base: baseEsp, diferente: difEsp } = porEspecificacao(filtrarCompras(estado.itens, estado.filtro, hoje()));
       const base = filtrar(baseEsp, { unidade: estado.filtro.unidade }), diferente = filtrar(difEsp, { unidade: estado.filtro.unidade });
-      const visiveis = filtrar(base, { marca: estado.filtro.marca });
-      const recolhidas = filtrar(diferente, { marca: estado.filtro.marca });
+      const foco = { marca: estado.filtro.marca, fornecedor: estado.filtro.fornecedor, orgao: estado.filtro.orgao };
+      const visiveis = filtrar(base, foco);
+      const recolhidas = filtrar(diferente, foco);
       const unidades = contar(baseEsp, 'unidade').map(([u, n]) => [u, `${u} (${n})`]);
       const marcas = resumoMarcas(base);
       const medianas = medianasPorUnidade(base);
@@ -399,7 +451,7 @@
     }
     function escolherProduto(codigo) {
       estado.pdm = String(codigo); estado.todasMarcas = false; estado.mostrar = MOSTRAR;
-      estado.filtro = { ...estado.filtro, unidade: '', marca: '' };
+      estado.filtro = { ...estado.filtro, unidade: '', marca: '', fornecedor: '', orgao: '' };
       estado.filtro.unidade = unidadePrincipal();
       return carregarProduto(estado.pdm);
     }
@@ -443,6 +495,25 @@
       const a = Object.assign(doc.createElement('a'), { href: url, download: `${nome}.csv` }); a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
     form.addEventListener('submit', (ev) => { ev.preventDefault(); void buscar(campo.value); });
+    // Empresa ou órgão clicado em qualquer tabela: filtra a tela e leva ao quadro do detalhe.
+    alvo.addEventListener('click', (ev) => {
+      const foco = ev.target?.closest?.('[data-mercado-foco]');
+      const limpar = ev.target?.closest?.('[data-mercado-foco-limpar]');
+      const analisar = ev.target?.closest?.('[data-mercado-analisar]');
+      if (analisar) { aoAnalisarEmpresa(analisar.dataset.mercadoAnalisar); return; }
+      if (!foco && !limpar) return;
+      if (limpar) estado.filtro[limpar.dataset.mercadoFocoLimpar] = '';
+      else {
+        const tipo = foco.dataset.mercadoFoco, outro = tipo === 'fornecedor' ? 'orgao' : 'fornecedor';
+        estado.filtro[tipo] = estado.filtro[tipo] === foco.dataset.chave ? '' : foco.dataset.chave;
+        estado.filtro[outro] = '';
+      }
+      estado.mostrar = MOSTRAR;
+      desenhar();
+      const quadro = resumoEl.querySelector('.mercado-foco') || resumoEl;
+      quadro.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+      if (quadro.focus) quadro.focus({ preventScroll: true });
+    });
     chipsEl.addEventListener('click', (ev) => {
       const b = ev.target?.closest?.('[data-mercado-pdm]');
       if (b && b.dataset.mercadoPdm !== estado.pdm) void escolherProduto(b.dataset.mercadoPdm);
@@ -477,7 +548,7 @@
   }
 
   const api = { termoDoItem, mensagemBusca, resumoPrecos, marcasDe, filtrar, porEspecificacao, foraDaCurva, resumoMarcas, SEM_MARCA, produtoParaCatalogo, brl, montar,
-    marcaModelo, filtrarCompras, fatiaDoMercado, resumoModelos, resumoFornecedores, totalCentavos, linhasPlanilha, reais, dataBr, cnpj };
+    marcaModelo, filtrarCompras, fatiaDoMercado, numeroDoItem, chaveFornecedor, resumoModelos, resumoFornecedores, totalCentavos, linhasPlanilha, reais, dataBr, cnpj };
   global.MercadoComprasGov = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(globalThis);

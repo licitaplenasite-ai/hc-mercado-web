@@ -71,7 +71,7 @@
     if (/^[=+\-@\t]/.test(t)) t = `'${t}`;
     return /[";]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
   };
-  const csv = (linhas) => `﻿${linhas.map((l) => l.map(celula).join(';')).join('\r\n')}\r\n`;
+  const csv = (linhas) => `\uFEFF${linhas.map((l) => l.map(celula).join(';')).join('\r\n')}\r\n`;
   const regime = (d) => (d ? 'Desonerado' : 'Não desonerado');
   const rotuloTipo = (t) => (t === 'composicao' ? 'Composição' : 'Insumo');
   const FONTE = 'SINAPI/CAIXA';

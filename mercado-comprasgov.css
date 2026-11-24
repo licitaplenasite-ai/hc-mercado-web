@@ -45,9 +45,10 @@
 .mercado-compras-tabela td{overflow-wrap:break-word}
 .mercado-compras-tabela td[data-rotulo="Data"]{white-space:nowrap}
 .mercado-compras-tabela td[data-rotulo="Vencedor"]{min-width:130px}
-.mercado-compras-tabela td[data-rotulo="Órgão"]{max-width:190px}
+/* 23/11: Órgão quebrava em 4-5 linhas; ganha largura mínima e a Marca e modelo cede espaço. */
+.mercado-compras-tabela td[data-rotulo="Órgão"]{min-width:210px;max-width:280px}
 .mercado-compras-tabela td[data-rotulo="Data"] a{color:var(--action-text);font-size:13px;padding:4px 0}
-.mercado-compras-tabela td[data-rotulo="Marca e modelo"]{min-width:180px}
+.mercado-compras-tabela td[data-rotulo="Marca e modelo"]{min-width:170px;max-width:240px}
 .mercado-compras-tabela .mercado-selo{display:block;margin:4px 0 0;white-space:normal;max-width:140px;border-radius:var(--radius-control)}
 .mercado-compras-tabela td[data-rotulo="Valor unitário"],.mercado-compras-tabela td[data-rotulo="Total"]{white-space:nowrap;font-variant-numeric:tabular-nums}
 .mercado-compras>.btn,.mercado-marcas-caixa>.btn{margin-top:8px}
@@ -74,3 +75,26 @@
 .mercado-barra-cheia{display:block;height:100%;background:var(--action-strong,#1c63c7)}
 .mercado-barra-valor{color:var(--text-secondary);white-space:nowrap}
 @media(max-width:640px){.mercado-barra{grid-template-columns:minmax(0,1fr)}.mercado-barra-valor{white-space:normal}}
+/* Empresa e órgão clicáveis + quadro do detalhe e nº do item (23/11/2026, aguarda aprovação). */
+.mercado-foco-nome{font-weight:600;text-align:left;overflow-wrap:anywhere}
+.mercado-foco-nome[aria-pressed="true"]{text-decoration-thickness:2px}
+.mercado-desc-linha{display:block}
+/* "Quem ganhou": nome longo quebra dentro do botão e a contagem "(24)" fica colada à direita, nunca sozinha na linha de baixo. */
+.mercado-desc-linha:has(> .mercado-foco-nome){display:flex;align-items:baseline;gap:4px;white-space:nowrap}
+.mercado-desc-linha>.mercado-foco-nome{white-space:normal;min-width:0;flex:0 1 auto}
+.mercado-item-num{display:inline-block;margin:4px 0 2px;padding:1px 8px;border-radius:999px;border:1px solid var(--info-border,#b9ccf5);background:var(--info-bg,#eaf1fe);color:var(--info-text,#1f4fb8);font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.mercado-compras-tabela td[data-rotulo="Data"] .mercado-item-num{display:block;width:max-content}
+.mercado-foco{margin:10px 0 12px;padding:14px 16px;border:1px solid var(--border-strong);border-left:4px solid var(--destaque,#22d3ee);border-radius:var(--radius-card,14px);background:var(--surface-default);display:grid;gap:8px;scroll-margin-top:120px}
+.mercado-foco:focus{outline:none}
+.mercado-foco-topo{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:flex-start;justify-content:space-between}
+.mercado-foco-rotulo{display:block;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--text-secondary)}
+.mercado-foco-titulo{margin:2px 0;font-family:var(--fonte-titulo,inherit);font-size:20px;line-height:1.25;overflow-wrap:anywhere}
+.mercado-foco-acoes{display:flex;flex-wrap:wrap;gap:8px}
+@media(max-width:640px){.mercado-foco-acoes{width:100%}.mercado-foco-acoes .btn{flex:1 1 100%}}
+/* Campos da busca e dos filtros no padrão dos campos do painel (40 px, borda de campo, canto do DS); antes ficavam no estilo do navegador. */
+.mercado-linha input,.mercado-campo select,.mercado-campo input{box-sizing:border-box;min-height:40px;padding:8px 12px;border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--surface-default);color:var(--text-primary);font:inherit}
+.mercado-linha{align-items:center}
+.mercado-busca label,.mercado-campo label{color:var(--text-primary);font-weight:600}
+.mercado-campo label{margin-bottom:4px}
+@media(max-width:640px){.mercado-numeros{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.mercado-linha .btn{min-height:40px}

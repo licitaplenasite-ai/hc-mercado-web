@@ -424,25 +424,25 @@
   }
   .seletor-ufs { position: relative; width: 100%; }
   .seletor-ufs-controle {
-    width: 100%; min-height: 48px; padding: 7px 40px 7px 9px;
-    display: flex; flex-wrap: wrap; align-content: center; gap: 6px;
+    width: 100%; box-sizing: border-box; min-height: 40px; padding: 10px 40px 10px 12px;
+    display: flex; align-items: center;
     background: var(--fundo-fraco); border: 1px solid var(--input-borda);
     color: var(--texto); border-radius: 6px; cursor: pointer; text-align: left;
     font: inherit;
   }
   .seletor-ufs-controle:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
-  .seletor-ufs-placeholder { color: var(--texto-fraco); }
-  .seletor-ufs-chip {
-    display: inline-flex; align-items: center; gap: 5px; max-width: 100%;
-    background: color-mix(in srgb, var(--azul) 14%, var(--fundo-fraco));
-    border: 1px solid color-mix(in srgb, var(--azul) 35%, var(--input-borda));
-    color: var(--texto); border-radius: 4px; padding: 3px 7px; font-size: 12px;
+  .seletor-ufs-valor { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .seletor-ufs-busca {
+    width: 100%; box-sizing: border-box; margin: 0 0 4px; padding: 8px 10px; font: inherit; font-size: 14px;
+    background: var(--fundo-fraco); border: 1px solid var(--input-borda); border-radius: 6px; color: var(--texto);
   }
-  .seletor-ufs-chip-remover {
-    appearance: none; border: 0; padding: 0 1px; background: transparent;
-    color: inherit; cursor: pointer; font-size: 16px; line-height: 1;
+  .seletor-ufs-opcao[hidden] { display: none; }
+  /* Seta desenhada em CSS (o caractere ⌄ saía pequeno e baixo, diferente da seta dos outros selects). */
+  .seletor-ufs-icone {
+    position: absolute; right: 15px; top: 50%; width: 7px; height: 7px; margin-top: -6px; pointer-events: none;
+    border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); color: var(--texto);
   }
-  .seletor-ufs-icone { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--texto-fraco); }
+  .seletor-ufs.aberto .seletor-ufs-icone { transform: rotate(-135deg); margin-top: -2px; }
   .seletor-ufs-menu {
     display: none; position: absolute; z-index: 30; top: calc(100% + 5px); left: 0; right: 0;
     max-height: 274px; overflow: auto; padding: 6px; background: var(--cartao);
@@ -1109,7 +1109,7 @@
   .mk-busca { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 20px; }
   .mk-busca .campo { margin: 0; }
   .mk-campo-termo { flex: 1 1 280px; }
-  .mk-busca .btn-buscar { height: 42px; min-width: 140px; }
+  .mk-busca .btn-buscar { height: 40px; min-width: 140px; } /* 40 px: mesma altura dos campos ao lado (painel-design.css). */
   .mk-recorte { margin: 0 0 14px; color: var(--texto-fraco); }
   .mk-bloco { margin: 26px 0; }
   .mk-bloco h3 { margin: 0 0 4px; font-size: 16px; }
@@ -1535,6 +1535,11 @@
 <symbol id="ph-warning" viewBox="0 0 256 256"><path d="M236.8,188.09,149.35,36.22h0a24.76,24.76,0,0,0-42.7,0L19.2,188.09a23.51,23.51,0,0,0,0,23.72A24.35,24.35,0,0,0,40.55,224h174.9a24.35,24.35,0,0,0,21.33-12.19A23.51,23.51,0,0,0,236.8,188.09ZM120,104a8,8,0,0,1,16,0v40a8,8,0,0,1-16,0Zm8,88a12,12,0,1,1,12-12A12,12,0,0,1,128,192Z"/></symbol>
 <symbol id="ph-x-circle" viewBox="0 0 256 256"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm37.66,130.34a8,8,0,0,1-11.32,11.32L128,139.31l-26.34,26.35a8,8,0,0,1-11.32-11.32L116.69,128,90.34,101.66a8,8,0,0,1,11.32-11.32L128,116.69l26.34-26.35a8,8,0,0,1,11.32,11.32L139.31,128Z"/></symbol>
 <symbol id="ph-x" viewBox="0 0 256 256"><path d="M208,32H48A16,16,0,0,0,32,48V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V48A16,16,0,0,0,208,32ZM181.66,170.34a8,8,0,0,1-11.32,11.32L128,139.31,85.66,181.66a8,8,0,0,1-11.32-11.32L116.69,128,74.34,85.66A8,8,0,0,1,85.66,74.34L128,116.69l42.34-42.35a8,8,0,0,1,11.32,11.32L139.31,128Z"/></symbol>
+<!-- Menu (23/11): um ícone por item (Dashboard, Prospecção, Funil e Quadros não repetem Hoje, Mercado e Processos). -->
+<symbol id="ph-squares-four" viewBox="0 0 256 256"><path d="M104,40H56A16,16,0,0,0,40,56v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V56A16,16,0,0,0,104,40Zm96,0H152a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V56A16,16,0,0,0,200,40ZM104,136H56a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V152A16,16,0,0,0,104,136Zm96,0H152a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V152A16,16,0,0,0,200,136Z"/></symbol>
+<symbol id="ph-target" viewBox="0 0 256 256"><path fill-rule="evenodd" d="M128,24a104,104,0,1,0,104,104A104,104,0,0,0,128,24Zm0,184a80,80,0,1,1,80-80A80,80,0,0,1,128,208Zm0-136a56,56,0,1,0,56,56A56,56,0,0,0,128,72Zm0,88a32,32,0,1,1,32-32A32,32,0,0,1,128,160Zm0-48a16,16,0,1,0,16,16A16,16,0,0,0,128,112Z"/></symbol>
+<symbol id="ph-funnel" viewBox="0 0 256 256"><path d="M227.81,52.19A16,16,0,0,0,216,40H40A16,16,0,0,0,28.19,66.76l.08.09L96,139.17V216a16,16,0,0,0,24.87,13.32l32-21.34A16,16,0,0,0,160,194.66V139.17l67.74-72.32.08-.09A16,16,0,0,0,227.81,52.19Z"/></symbol>
+<symbol id="ph-kanban" viewBox="0 0 256 256"><path d="M40,40H80a8,8,0,0,1,8,8V200a8,8,0,0,1-8,8H40a8,8,0,0,1-8-8V48A8,8,0,0,1,40,40Zm68,0h40a8,8,0,0,1,8,8V144a8,8,0,0,1-8,8H108a8,8,0,0,1-8-8V48A8,8,0,0,1,108,40Zm68,0h40a8,8,0,0,1,8,8V176a8,8,0,0,1-8,8H176a8,8,0,0,1-8-8V48A8,8,0,0,1,176,40Z"/></symbol>
 </svg>
 
   
@@ -1611,29 +1616,28 @@
 </div>
 
 <div class="shell">
-<!-- Itens Hoje, Calendário, Licitação anterior, Processos e Extensão adicionados em 19/11/2026: aguarda aprovação. -->
+<!-- Itens Hoje, Calendário, Processos e Extensão adicionados em 19/11/2026. 23/11 (dono): Licitação anterior saiu do menu e fica só como aba da Inteligência de Mercado (o link painel.html#licitacao-anterior continua abrindo a aba). -->
 <nav id="menu-principal" aria-label="Menu principal">
   <button id="nav-colapsar-btn" type="button" title="Recolher menu">
     <span class="nav-ico">&#171;</span><span class="nav-label">Recolher</span>
   </button>
   <a href="/sistema" title="Hoje"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-house'></use></svg></span><span class="nav-label">Hoje</span></a>
-  <button class="ativo" data-alvo="dashboard" title="Dashboard"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-house'></use></svg></span><span class="nav-label">Dashboard</span></button>
+  <button class="ativo" data-alvo="dashboard" title="Dashboard"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-squares-four'></use></svg></span><span class="nav-label">Dashboard</span></button>
   <button data-alvo="boletim" title="Boletim"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-clipboard-text'></use></svg></span><span class="nav-label">Boletim</span></button>
   <button data-alvo="oportunidades" title="Encontrar Licitações"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-magnifying-glass'></use></svg></span><span class="nav-label">Encontrar Licitações</span></button>
   <button data-alvo="diagnostico" title="Inteligência de Mercado"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-chart-bar'></use></svg></span><span class="nav-label">Inteligência de Mercado</span></button>
-  <a href="prospeccao.html" title="Prospecção"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-chart-bar'></use></svg></span><span class="nav-label">Prospecção</span></a>
-  <a href="#licitacao-anterior" title="Licitação anterior"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-clock-counter-clockwise'></use></svg></span><span class="nav-label">Licitação anterior</span></a>
+  <a href="prospeccao.html" title="Prospecção"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-target'></use></svg></span><span class="nav-label">Prospecção</span></a>
   <button data-alvo="empresa" title="Analisar concorrente"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-buildings'></use></svg></span><span class="nav-label">Analisar concorrente</span></button>
   <button data-alvo="transparencia" title="Convênios e Emendas Federais"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-handshake'></use></svg></span><span class="nav-label">Convênios e Emendas Federais</span></button>
   <button data-alvo="precos" title="Pesquisa de Preços"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-coins'></use></svg></span><span class="nav-label">Pesquisa de Preços</span></button>
   <a href="orcamento-obra.html" title="Orçamento de obra"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-toolbox'></use></svg></span><span class="nav-label">Orçamento de obra</span></a>
-  <button data-alvo="kanban" title="Funil"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-folders'></use></svg></span><span class="nav-label">Funil</span></button>
-  <a href="quadros.html" title="Quadros"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-folders'></use></svg></span><span class="nav-label">Quadros</span></a>
+  <button data-alvo="kanban" title="Funil"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-funnel'></use></svg></span><span class="nav-label">Funil</span></button>
+  <a href="quadros.html" title="Quadros"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-kanban'></use></svg></span><span class="nav-label">Quadros</span></a>
   <a href="processos.html" title="Processos"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-folder-open'></use></svg></span><span class="nav-label">Processos</span></a>
   <a href="operacao.html" class="nav-externo" title="Minhas empresas e documentos (abre outra página)"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-files'></use></svg></span><span class="nav-label">Minhas empresas e documentos</span><svg class='icone-ph nav-externo-ico' aria-hidden="true"><use href='#ph-arrow-square-out'></use></svg></a>
   <a href="extensao.html" title="Extensão"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-puzzle-piece'></use></svg></span><span class="nav-label">Extensão</span></a>
   <button data-alvo="juridico" title="Jurídico &amp; Dúvidas"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-scales'></use></svg></span><span class="nav-label">Jurídico &amp; Dúvidas</span></button>
-  <a href="hc.html" target="_blank" rel="noopener" data-hc-site title="Consultoria"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-handshake'></use></svg></span><span class="nav-label">Consultoria</span></a>
+  <a href="hc.html" target="_blank" rel="noopener" data-hc-site title="Consultoria"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-briefcase'></use></svg></span><span class="nav-label">Consultoria</span></a>
 </nav>
 
 <script>
@@ -1822,7 +1826,7 @@
       </div>
       <div class="campo" style="flex:2">
         <label for="bol-palavras">Palavras-chave (separadas por vírgula)</label>
-        <input id="bol-palavras" placeholder="Ex: hospitalar, limpeza, informatica" aria-describedby="bol-palavras-erro">
+        <input id="bol-palavras" placeholder="Ex: hospitalar, limpeza, informática" aria-describedby="bol-palavras-erro">
         <p id="bol-palavras-erro" class="erro-campo" hidden>Escreva pelo menos uma palavra do que você vende, por exemplo: limpeza.</p>
       </div>
       <p class="dica-clique" id="bol-filtro-empresa" style="flex-basis:100%;margin:0;"></p>
@@ -1867,7 +1871,7 @@
       </div>
       <div class="campo" style="flex:2">
         <label for="op-palavras">Palavras-chave (separadas por vírgula)</label>
-        <input id="op-palavras" placeholder="Ex: hospitalar, limpeza, informatica" aria-describedby="op-palavras-erro">
+        <input id="op-palavras" placeholder="Ex: hospitalar, limpeza, informática" aria-describedby="op-palavras-erro">
         <p id="op-palavras-erro" class="erro-campo" hidden>Para receber no Boletim, escreva pelo menos uma palavra do que você vende.</p>
         <div id="op-sugestoes" class="op-sugestoes" aria-label="Sugestões de palavras" hidden></div>
       </div>
@@ -2141,6 +2145,20 @@
     window.LicitaLicitacaoAnterior.montarPesquisa({
       alvo,
       cliente: window.__sbClient, // pregões gravados (RLS) e selo de sanção em lote
+      // "Não sabe o nome?": órgãos com licitação aberta no estado (mesma leitura de "Órgãos compradores" em busca-extra-ui.js).
+      listarOrgaos: async (uf) => {
+        const linhas = [];
+        // shortcut: até 5.000 licitações abertas por UF (5 páginas de 1.000); subir se algum estado passar disso.
+        for (let i = 0; i < 5000; i += 1000) {
+          const { data, error } = await window.__sbClient.from("oportunidades_abertas")
+            .select("uf, numero_controle_pncp, orgao:dado->>orgao, municipio:dado->>municipio, codigoUnidade:dado->>codigoUnidade, esferaId:dado->>esferaId")
+            .eq("uf", uf).order("chave").range(i, i + 999);
+          if (error) throw error;
+          linhas.push(...(data || []));
+          if (!data || data.length < 1000) break;
+        }
+        return linhas;
+      },
       requisitar: async (corpo) => {
         const { data } = await window.__sbClient.auth.getSession();
         const token = data && data.session && data.session.access_token;
@@ -4238,15 +4256,14 @@
     componente.querySelectorAll("input[type=checkbox]").forEach((caixa) => {
       caixa.checked = selecionadas.includes(caixa.value);
     });
+    // Fechado, o campo tem a altura dos outros: "Todos os estados" ou "AM, PA +2". A lista
+    // completa fica no menu (caixas marcadas) e no title/aria-label.
     const controle = componente.querySelector(".seletor-ufs-controle");
-    const texto = selecionadas.length
-      ? selecionadas.map((uf) => {
-          const nome = ESTADOS_BR.find(([sigla]) => sigla === uf)?.[1] || uf;
-          return `<span class="seletor-ufs-chip">${escapeHtml(uf)} — ${escapeHtml(nome)}<button type="button" class="seletor-ufs-chip-remover" data-remove-uf="${escapeHtml(uf)}" aria-label="Remover ${escapeHtml(nome)}">×</button></span>`;
-        }).join("")
-      : '<span class="seletor-ufs-placeholder">Selecione um ou mais estados</span>';
-    controle.innerHTML = texto;
-    controle.setAttribute("aria-label", selecionadas.length ? `Estados selecionados: ${textoUfs(selecionadas)}` : "Selecionar estados");
+    const resumo = window.BuscaAvancada.resumoUfs(selecionadas);
+    controle.querySelector(".seletor-ufs-valor").textContent = resumo;
+    controle.title = selecionadas.length ? textoUfs(selecionadas) : "Todos os estados";
+    const rotulo = select.labels?.[0]?.textContent.trim() || "Estados";
+    controle.setAttribute("aria-label", `${rotulo}: ${selecionadas.length ? textoUfs(selecionadas) : "todos os estados"}`);
   }
 
   function criarSeletorUfs(select) {
@@ -4254,30 +4271,30 @@
     const componente = document.createElement("div");
     componente.className = "seletor-ufs";
     componente.innerHTML = `
-      <div class="seletor-ufs-controle" role="button" tabindex="0" aria-expanded="false"></div>
-      <span class="seletor-ufs-icone" aria-hidden="true">⌄</span>
-      <div class="seletor-ufs-menu" role="listbox" aria-multiselectable="true">
+      <div class="seletor-ufs-controle" role="button" tabindex="0" aria-expanded="false"><span class="seletor-ufs-valor"></span></div>
+      <span class="seletor-ufs-icone" aria-hidden="true"></span>
+      <div class="seletor-ufs-menu">
+        <input type="search" class="seletor-ufs-busca" placeholder="Buscar estado" aria-label="Buscar estado" autocomplete="off">
         ${ESTADOS_BR.map(([sigla, nome]) => `<label class="seletor-ufs-opcao"><input type="checkbox" value="${sigla}"><span>${sigla} — ${escapeHtml(nome)}</span></label>`).join("")}
         <div class="seletor-ufs-acoes"><button type="button" data-ufs="todos">Selecionar todos</button><button type="button" data-ufs="limpar">Limpar seleção</button></div>
       </div>`;
     select.insertAdjacentElement("afterend", componente);
     select._seletorUfs = componente;
 
+    const busca = componente.querySelector(".seletor-ufs-busca");
     const abrir = (aberto) => {
+      if (aberto === componente.classList.contains("aberto")) return;
       componente.classList.toggle("aberto", aberto);
       componente.querySelector(".seletor-ufs-controle").setAttribute("aria-expanded", String(aberto));
+      if (aberto) busca.focus();
     };
     const controle = componente.querySelector(".seletor-ufs-controle");
-    controle.addEventListener("click", (evento) => {
-      const uf = evento.target?.dataset?.removeUf;
-      if (uf) {
-        const opcao = Array.from(select.options).find((item) => item.value === uf);
-        if (opcao) opcao.selected = false;
-        atualizarSeletorUfs(select);
-        select.dispatchEvent(new Event("change", { bubbles: true }));
-        return;
-      }
-      abrir(!componente.classList.contains("aberto"));
+    controle.addEventListener("click", () => abrir(!componente.classList.contains("aberto")));
+    busca.addEventListener("input", () => {
+      const termo = window.BuscaAvancada.norm(busca.value);
+      componente.querySelectorAll(".seletor-ufs-opcao").forEach((opcao) => {
+        opcao.hidden = !!termo && !window.BuscaAvancada.norm(opcao.textContent).includes(termo);
+      });
     });
     controle.addEventListener("keydown", (evento) => {
       if (evento.key === "Enter" || evento.key === " ") {
@@ -4305,7 +4322,9 @@
       if (!componente.contains(evento.target)) abrir(false);
     });
     document.addEventListener("keydown", (evento) => {
-      if (evento.key === "Escape") abrir(false);
+      if (evento.key !== "Escape" || !componente.classList.contains("aberto")) return;
+      abrir(false);
+      controle.focus();
     });
     atualizarSeletorUfs(select);
   }
@@ -7341,13 +7360,22 @@
     gerarBoletim({ atualizarAoVivo: true });
   });
 
+  // UF de cadastro (clientes.estados_interesse) só vira padrão quando é uma só; várias ou nenhuma = sem padrão.
+  function ufUnicaDoPerfil(cliente) {
+    const estados = Array.isArray(cliente && cliente.estados_interesse)
+      ? cliente.estados_interesse.map((uf) => String(uf || "").trim().toUpperCase()).filter((uf) => /^[A-Z]{2}$/.test(uf))
+      : [];
+    const unicos = [...new Set(estados)];
+    return unicos.length === 1 ? unicos[0] : null;
+  }
   function preencherConfigBoletim() {
     let filtro = lerFiltroBoletim();
     // O filtro antigo não tinha dono: só é importado para a conta após clicar Salvar.
     if (!filtro) {
       try { filtro = JSON.parse(localStorage.getItem("hc_boletim_filtro")); } catch (e) { /* sem filtro antigo */ }
     }
-    definirUfsNoSelect(document.getElementById("bol-uf"), filtro && (filtro.ufs || filtro.uf));
+    // Sem filtro salvo, o Boletim começa pela UF do cadastro (quando há uma só); filtro salvo sempre manda.
+    definirUfsNoSelect(document.getElementById("bol-uf"), filtro ? (filtro.ufs || filtro.uf) : ufUnicaDoPerfil(window.__clienteAtual));
     document.getElementById("bol-palavras").value = (filtro && filtro.palavrasRaw) || "";
     // Filtro por empresa: diz de quem é e, se esta empresa ainda não tem, oferece copiar de outra.
     const nome = window.__filtroBoletimEmpresaNome, outras = filtro ? [] : (window.__filtrosBoletimOutras || []);
@@ -8101,7 +8129,9 @@
     document.getElementById("op-regiao").value = filtro.regiao || "";
     document.getElementById("op-raio-km").value = filtro.raio ? filtro.raio.km : "";
     document.getElementById("op-raio-cidade").value = filtro.raio ? `${filtro.raio.municipio} - ${filtro.raio.uf}` : "";
-    definirUfsNoSelect(document.getElementById("op-uf"), filtro.ufs || filtro.uf);
+    // Só os estados que o usuário marcou: os do raio não voltam marcados (ver ufsParaRestaurar).
+    const ufsRestauradas = BA.ufsParaRestaurar(filtro);
+    definirUfsNoSelect(document.getElementById("op-uf"), ufsRestauradas);
     document.getElementById("op-data-de").value = filtro.dataDe || "";
     document.getElementById("op-data-ate").value = filtro.dataAte || "";
     document.getElementById("op-palavras").value = filtro.palavrasRaw || "";
@@ -8120,7 +8150,7 @@
     if (filtro.municipio) {
       try {
         const municipios = await carregarTodosMunicipios();
-        renderOpcoesMunicipio(document.getElementById("op-municipio"), filtro.ufs || filtro.uf, municipios);
+        renderOpcoesMunicipio(document.getElementById("op-municipio"), ufsRestauradas, municipios);
         document.getElementById("op-municipio").value = filtro.municipio;
       } catch (e) { /* segue sem restaurar o município se a lista não carregar a tempo */ }    } else if (explicito) {
       document.getElementById("op-municipio").value = "";
@@ -8128,6 +8158,8 @@
     // Antes da busca: com resultado salvo, a lista aparece na hora e a conferência ao
     // vivo pode levar até um minuto; os chips não podem esperar por ela.
     atualizarSeletorUfs(document.getElementById("op-uf"));
+    // O resumo de "Filtros de busca" só escuta "change": sem isso ficava "Nenhum filtro preenchido".
+    document.getElementById("op-palavras").dispatchEvent(new Event("change"));
     await buscarOportunidades({ restauracao: !explicito });
   }
   document.querySelector('nav button[data-alvo="oportunidades"]').addEventListener("click", () => {
@@ -8953,7 +8985,12 @@
     try { const b = localStorage.getItem("hc_precos_filtro"); return b ? JSON.parse(b) : null; } catch (e) { return null; }
   }
   let ppJaBuscado = false;
-  const ppMercado = window.MercadoComprasGov ? window.MercadoComprasGov.montar({ alvo: document.getElementById("pp-mercado") }) : null;
+  // Empresa vencedora clicada: "Analisar concorrente" abre o raio-X já com o CNPJ (mesmo caminho do "Analisar empresa" da Inteligência de Mercado).
+  const ppMercado = window.MercadoComprasGov ? window.MercadoComprasGov.montar({ alvo: document.getElementById("pp-mercado"), aoAnalisarEmpresa: (cnpj) => {
+    document.getElementById("emp-cnpj").value = cnpj;
+    document.querySelector('nav button[data-alvo="empresa"]').click();
+    document.getElementById("emp-buscar").click();
+  } }) : null;
   ppMercado?.campo.form.addEventListener("submit", () => { ppJaBuscado = true; salvarFiltroPrecos(ppMercado.campo.value.trim()); });
 
   // ---------- Restaura o último filtro de cada ferramenta ao carregar a página ----------
@@ -8976,12 +9013,11 @@
   // do usuário sempre prevalece. Perfis multiestado ficam sem escolha automática para não
   // enviesar a análise para uma UF arbitrária.
   function aplicarUfPadraoDoPerfil(cliente) {
-    const estados = Array.isArray(cliente && cliente.estados_interesse)
-      ? cliente.estados_interesse.map((uf) => String(uf || "").trim().toUpperCase()).filter((uf) => /^[A-Z]{2}$/.test(uf))
-      : [];
-    const unicos = [...new Set(estados)];
-    if (unicos.length !== 1) return;
-    const uf = unicos[0];
+    const uf = ufUnicaDoPerfil(cliente);
+    if (!uf) return;
+    // Boletim: só sem filtro salvo e sem UF escolhida (preencherConfigBoletim repõe o filtro salvo quando ele chega).
+    const bolUf = document.getElementById("bol-uf");
+    if (bolUf && !lerFiltroBoletim() && !ufsDoSelect(bolUf).length) definirUfsNoSelect(bolUf, [uf]);
     const definicoes = [
       { seletor: "op-uf", temFiltro: () => !!lerFiltroOportunidades() },
       { seletor: "mk-uf", temFiltro: () => !!lerFiltroDiagnostico() },
@@ -8990,6 +9026,8 @@
     definicoes.forEach(({ seletor, temFiltro }) => {
       const campo = document.getElementById(seletor);
       if (campo && !temFiltro() && !campo.value) campo.value = uf;
+      // O campo múltiplo (op-uf) mostra o resumo, não o select nativo: sem isso o filtro valia sem aparecer.
+      if (campo && campo.multiple) atualizarSeletorUfs(campo);
     });
   }
   if (window.__clientePronto) window.__clientePronto.then(aplicarUfPadraoDoPerfil);

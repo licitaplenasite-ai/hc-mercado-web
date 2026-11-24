@@ -86,7 +86,12 @@
     linhas.push({ rotulo: 'PIS + COFINS', valor: piscofins, faixa: [PIS_COFINS_CUMULATIVO, null, PIS_COFINS_CUMULATIVO], estado: piscofins === PIS_COFINS_CUMULATIVO ? 'verde' : 'amarelo', posicao: piscofins === PIS_COFINS_CUMULATIVO ? 'dentro' : (piscofins < PIS_COFINS_CUMULATIVO ? 'abaixo' : 'acima'), ref: 'referência: 3,65% (regime cumulativo)' });
     linhas.push({ rotulo: 'CPRB (desoneração)', valor: cprb, faixa: [0, null, CPRB_MAXIMA], ...classificar(cprb, [0, 0, CPRB_MAXIMA]), ref: 'até 4,50% (Lei 12.546/2011)' });
     const total = { rotulo: 'BDI', valor: calc.bdi, faixa: tipo.bdi, ...classificar(calc.bdi, tipo.bdi) };
-    return { tipo: tipo.nome, i: I, issEfetivo, linhas, total, bdi: calc.bdi, avisos: avisos(e, issEfetivo, I) };
+    const lista = avisos(e, issEfetivo, I);
+    // Parcelas todas na faixa e total fora: quem empurra são os tributos (o quartil do TCU veio de obras com I menor).
+    if (total.estado !== 'verde' && linhas.slice(0, 5).every((l) => l.estado === 'verde')) {
+      lista.unshift({ nivel: 'atencao', texto: `Cada parcela está dentro da faixa, mas os tributos (I = ${fmtPct(I)}) levam o BDI para ${total.posicao === 'acima' ? 'acima' : 'abaixo'} da faixa do TCU. Isso acontece com ISS alto ou Lucro Real. Não é erro: guarde a lei do ISS do município e o regime da empresa para justificar ao órgão.` });
+    }
+    return { tipo: tipo.nome, i: I, issEfetivo, linhas, total, bdi: calc.bdi, avisos: lista };
   }
 
   function avisos(e, issEfetivo, I) {

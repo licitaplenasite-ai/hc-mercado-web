@@ -54,6 +54,11 @@ test("normalizarResultado recusa marca que repete o nome do produto e monta link
   // O número JSON perde precisão (…025 -> …024); o idCompraItem em texto preserva.
   assert.match(item.link, /compra=15303805900452025$/);
   assert.equal(item.compra, "15303805900452025");
+  // Nº do item na compra: do numeroItemCompra; sem ele, dos 5 últimos dígitos do idCompraItem; sem nenhum, null.
+  assert.equal(item.numeroItem, 21);
+  assert.equal(normalizarResultado({ marca: "Ypê", descricaoItem: "X", numeroItemCompra: 107, idCompraItem: "1530380590045202500021" }, pdm).numeroItem, 107);
+  assert.equal(normalizarResultado({ marca: "Ypê", descricaoItem: "X", idCompra: "15303805900452025" }, pdm).numeroItem, null);
+  assert.equal(normalizarResultado({ marca: "Ypê", descricaoItem: "X", idCompraItem: "1530380590045202500000" }, pdm).numeroItem, null);
   assert.equal(normalizarResultado({ marca: "Ypê", descricaoItem: "X", idCompra: idCompraFonte }, pdm).link, null);
   assert.equal(normalizarResultado({ marca: "Ypê", descricaoItem: "X", idCompra: "../x" }, pdm).link, null);
 });

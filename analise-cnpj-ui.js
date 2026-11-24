@@ -350,12 +350,12 @@
     caixa.append(rolavel(doc, el(doc, 'table', {},
       el(doc, 'tr', {}, ['Situação', 'Órgão', 'O que foi contratado', 'Valor', 'Vigência', 'Ver'].map((t) => el(doc, 'th', { texto: t }))),
       c.lista.slice(0, MAX_LINHAS).map((x) => {
-        const gov = Number(x.contratos_gov_id);
         return el(doc, 'tr', {}, el(doc, 'td', { texto: situacaoContrato(x, hoje) }),
           el(doc, 'td', { texto: [x.unidade_nome || x.orgao_nome, x.uf].filter(Boolean).join(' / ') || '—' }),
           el(doc, 'td', { texto: x.objeto || 'Não informado' }), el(doc, 'td', { texto: moeda(num(x.valor_global)) }),
           el(doc, 'td', { texto: `${dataBr(x.vigencia_inicio || x.data_assinatura)} a ${dataBr(x.vigencia_fim)}` }),
-          el(doc, 'td', {}, link(doc, x.link_pncp, 'PNCP'), gov > 0 ? ' · ' : null, gov > 0 ? link(doc, `https://contratos.comprasnet.gov.br/api/contrato/id/${gov}`, 'Contratos.gov.br') : null));
+          // Sem link para o Contratos.gov.br: o endereço por id é da API (mostra JSON cru), não uma página para pessoas.
+          el(doc, 'td', {}, link(doc, x.link_pncp, 'PNCP')));
       }))));
     if (c.total > MAX_LINHAS) caixa.append(dica(doc, `Mostrando os ${MAX_LINHAS} mais recentes de ${c.total}; os totais contam todos.`));
     caixa.append(dica(doc, 'Fonte: PNCP. "Já pago" só existe para contrato federal registrado no Contratos.gov.br.'));

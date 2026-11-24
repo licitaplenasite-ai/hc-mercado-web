@@ -186,3 +186,28 @@ test("participação no mercado: % das compras e % do valor (unitário × quanti
   assert.deepEqual(M.fatiaDoMercado([], []), { compras: null, valor: null });
   assert.equal(M.fatiaDoMercado([c(1, 1)], [c(1, 1), c(1, 1), c(1, 1)]).compras, 33.3, "arredonda para 1 casa");
 });
+
+test('numeroDoItem: campo do servidor; resposta antiga sai do idCompraItem; sem dado, null', () => {
+  assert.equal(M.numeroDoItem({ numeroItem: 107 }), 107);
+  assert.equal(M.numeroDoItem({ itemCompra: '1530380590045202500021' }), 21);
+  assert.equal(M.numeroDoItem({ numeroItem: 0, itemCompra: '1530380590045202500000' }), null);
+  assert.equal(M.numeroDoItem({ itemCompra: '123' }), null);
+  assert.equal(M.numeroDoItem(null), null);
+  // A planilha leva o nº do item na última coluna.
+  const [cab, linha] = M.linhasPlanilha([item(100, { itemCompra: '1530380590045202500021' })]);
+  assert.deepEqual([cab.at(-1), linha.at(-1)], ['Nº do item na compra', 21]);
+});
+
+test('filtrar por empresa (CNPJ junta grafias do nome) e por órgão (sem diferença de caixa, por UF)', () => {
+  const lista = [
+    item(100, { fornecedor: 'HD COMERCIO', documentoFornecedor: '12.345.678/0001-90', orgao: 'UFAM', uf: 'AM' }),
+    item(110, { fornecedor: 'Hd Comércio Ltda', documentoFornecedor: '12345678000190', orgao: 'ufam', uf: 'AM' }),
+    item(120, { fornecedor: 'SEM CNPJ', orgao: 'UFAM', uf: 'SP' }),
+  ];
+  const hd = M.chaveFornecedor(lista[0]);
+  assert.equal(hd, '12345678000190');
+  assert.equal(M.filtrar(lista, { fornecedor: hd }).length, 2);
+  assert.equal(M.filtrar(lista, { fornecedor: M.chaveFornecedor(lista[2]) }).length, 1);
+  assert.equal(M.filtrar(lista, { orgao: 'ufam|AM' }).length, 2);
+  assert.equal(M.filtrar(lista, { orgao: 'ufam|AM', fornecedor: M.chaveFornecedor(lista[2]) }).length, 0);
+});

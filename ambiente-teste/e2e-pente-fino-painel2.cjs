@@ -1,4 +1,4 @@
-/* global document, window -- usados só dentro de p.evaluate (rodam no navegador) */
+/* global document -- usados só dentro de p.evaluate (rodam no navegador) */
 // Pente fino (20/11/2026) das telas do painel: Inteligência de Mercado (7 abas, mapa, Tabela/Gráfico, G, Trazer mais,
 // Baixa concorrência, Licitação anterior, fornecedor com IA), Analisar concorrente, Convênios e Emendas Federais
 // (com o Raio-X Financeiro), Pesquisa de Preços e o chat com IA. Cliente aprovado do seed, 1280 e 375 px, console limpo,

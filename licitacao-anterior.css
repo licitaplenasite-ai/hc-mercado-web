@@ -25,13 +25,45 @@
 .la-sem { font-style: italic; font-weight: 400; }
 .la-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .la-lista { margin: 6px 0 0; padding-left: 20px; font-size: .85rem; display: grid; gap: 2px; }
-.la-form { display: grid; gap: 10px; max-width: 720px; }
-.la-linha { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
+.la-form { display: grid; gap: 14px; max-width: 880px; }
+.la-linha { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: flex-end; }
 .la-linha .la-campo { flex: 1 1 240px; }
-.la-campo { display: grid; gap: 4px; font-size: .9rem; }
-.la-campo input, .la-campo select { width: 100%; min-width: 0; box-sizing: border-box; padding: 8px; }
-.la-botao { padding: 8px 14px; cursor: pointer; }
-@media (max-width: 600px) { .la-compra { padding: 10px; } .la-linha { display: grid; } }
+.la-campo { display: grid; gap: 4px; font-size: .9rem; min-width: 0; }
+/* Campo no padrão do painel (painel-design.css .campo): 40 px, borda de campo, canto do DS; vale também no sistema.html. */
+.la-campo > label { font-weight: 600; color: var(--text-primary, inherit); }
+.la-campo input, .la-campo select {
+  width: 100%; min-width: 0; box-sizing: border-box; min-height: 40px; padding: 8px 12px;
+  border: 1px solid var(--border-strong, #7a879b); border-radius: var(--radius-control, 8px);
+  background: var(--surface-default, #fff); color: var(--text-primary, inherit); font: inherit;
+}
+.la-dica { font-size: .8rem; line-height: 1.35; color: var(--text-secondary, var(--texto-suave, #5b6472)); }
+/* Botões da tela: mesma altura dos campos, alinhados pela base deles (a dica não empurra o botão). */
+.la-form .la-acao { min-height: 40px; padding: 0 18px; white-space: nowrap; }
+.la-linha > .la-acao { margin-bottom: 0; }
+.la-linha:has(.la-dica) > .la-acao { margin-bottom: calc(.8rem * 1.35 + 4px); }
+.la-bloco { margin: 0; padding: 14px 16px 16px; border: 1px solid var(--border-default, #d9dee7); border-radius: var(--radius-card, 14px); background: var(--surface-default, #fff); display: grid; gap: 12px; min-width: 0; }
+.la-bloco-titulo { display: inline-flex; align-items: center; gap: 8px; padding: 0 6px; margin-left: -6px; font-family: var(--fonte-titulo, inherit); font-size: 1.05rem; font-weight: 600; color: var(--marca-titulo, var(--text-primary, inherit)); }
+.la-passo { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 999px; background: var(--marca-escuro, #0a1b4f); color: #fff; font-family: var(--font-sans, inherit); font-size: .8rem; font-weight: 700; }
+[data-theme="dark"] .la-passo { background: var(--destaque, #22d3ee); color: var(--destaque-texto, #0a1b4f); }
+.la-ou { align-self: center; padding-top: 22px; font-size: .85rem; font-weight: 600; color: var(--text-secondary, #5b6472); }
+.la-fim { justify-content: space-between; }
+.la-fim .la-campo { flex: 0 1 220px; }
+/* "Não sabe o nome?": filtros por estado/cidade/esfera/tipo e a lista de órgãos para escolher. */
+.la-achar { border: 1px dashed var(--border-default, #d9dee7); border-radius: var(--radius-control, 8px); padding: 8px 12px; }
+.la-achar > summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; font-weight: 600; font-size: .9rem; color: var(--action-text, #1f4fd8); }
+.la-achar[open] { display: grid; gap: 10px; padding-bottom: 12px; }
+.la-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px 12px; align-items: end; }
+.la-orgaos { display: grid; gap: 8px; max-height: 420px; overflow-y: auto; }
+.la-orgao { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; padding: 10px 12px; border: 1px solid var(--border-default, #d9dee7); border-radius: var(--radius-control, 8px); background: var(--surface-default, #fff); }
+.la-orgao-info { display: grid; gap: 2px; min-width: 0; flex: 1 1 260px; overflow-wrap: anywhere; }
+.la-orgao-acoes { display: flex; flex-wrap: wrap; gap: 6px; }
+/* Botão antigo do cartão (Atualizar, Ver tudo do pregão): contorno no padrão dos secundários; interno-premium.css dá a pílula. */
+.la-botao { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; padding: 0 14px; cursor: pointer; border: 1px solid var(--border-strong, #7a879b); border-radius: var(--radius-control, 8px); background: var(--surface-default, #fff); color: var(--text-primary, inherit); font: inherit; font-size: .9rem; font-weight: 600; }
+@media (max-width: 600px) {
+  .la-compra { padding: 10px; } .la-linha { display: grid; } .la-ou { padding-top: 0; justify-self: center; }
+  .la-linha:has(.la-dica) > .la-acao { margin-bottom: 0; } .la-form .la-acao, .la-fim .la-campo { width: 100%; }
+  .la-bloco { padding: 12px; } .la-orgao-acoes, .la-orgao-acoes .btn-imprimir { width: 100%; }
+}
 .la-itens > summary { cursor: pointer; font-weight: 600; font-size: .9rem; }
 .la-itens[open] > summary { margin-bottom: 4px; }
 .la-produtos { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }

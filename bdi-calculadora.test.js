@@ -78,6 +78,11 @@ test("avaliar: parcelas do TCU para edifícios dão BDI dentro da faixa do tipo"
   const r = B.avaliar({ ...base, ac: 400, s: 80, r: 127, df: 123, l: 740, pis: 65, cofins: 300, issAliquota: 300 });
   assert.equal(r.bdi, 2354); // 1,0607 × 1,0123 × 1,074 / (1 − 0,0665) − 1 = 23,54%
   assert.equal(r.total.estado, "verde");
+  assert.ok(!r.avisos.some((a) => /Cada parcela está dentro/.test(a.texto)));
+  // Mesmas parcelas com ISS 5%: total 26,24% sai da faixa e a tela explica que são os tributos.
+  const iss5 = B.avaliar({ ...base, ac: 400, s: 80, r: 127, df: 123, l: 740, pis: 65, cofins: 300, issAliquota: 500 });
+  assert.equal(iss5.total.posicao, "acima");
+  assert.match(iss5.avisos[0].texto, /Cada parcela está dentro da faixa, mas os tributos \(I = 8,65%\)/);
 });
 
 test("S+G compara a soma de S e G com a faixa única do TCU", () => {

@@ -309,9 +309,13 @@
   .campo input::placeholder, .modal-ia-consideracoes::placeholder { color: var(--text-secondary); opacity: 1; }
   .campo input[type="date"]::-webkit-calendar-picker-indicator { filter: none; }
   [data-theme="dark"] .campo input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.85); }
-  .seletor-ufs-chip { background: var(--info-bg); border-color: var(--info-border); color: var(--info-text); border-radius: var(--radius-control); }
+  .seletor-ufs-busca { border-color: var(--border-strong); border-radius: var(--radius-control); background: var(--surface-default); color: var(--text-primary); }
+  .seletor-ufs-busca:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
   .seletor-ufs-menu { background: var(--surface-raised); border-color: var(--border-default); border-radius: var(--radius-card); box-shadow: var(--shadow-overlay); }
   .seletor-ufs-opcao:hover { background: var(--surface-sunken); }
+  /* As caixas ficam dentro de .campo: sem isto herdavam altura/padding de campo de texto e cada estado ocupava 56px. */
+  .campo .seletor-ufs-opcao input { min-height: 0; padding: 0; width: 16px; height: 16px; flex: none; }
+  .campo .seletor-ufs-opcao { font: var(--text-body); color: var(--text-primary); }
   .seletor-ufs-opcao input, .defesa-revisao input { accent-color: var(--action-strong); }
 
   /* ---- 8. Tabelas (DataTable): rolagem dentro do próprio quadro ---- */

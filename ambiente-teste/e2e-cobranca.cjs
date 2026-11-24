@@ -9,7 +9,6 @@ process.env.PRINTS = process.env.PRINTS || 'C:/Users/harre/Desktop/LICITAPLENA/_
 const { passo, exigir, novaPagina, entrar, chaves, SITE, PRINTS, resultados } = require('./e2e.cjs');
 const { chromium } = require(process.env.PLAYWRIGHT_CORE || 'C:/Users/harre/AppData/Local/npm-cache/_npx/e41f203b7505f1fb/node_modules/playwright-core');
 const SEED = path.join(__dirname, 'seed.local.json');
-const PIX = { LICITAPLENA_PIX_CHAVE: 'pagamentos@teste-licitaplena.example.com', LICITAPLENA_PIX_NOME: 'LicitaPlena Teste', LICITAPLENA_PIX_CIDADE: 'Manaus', LICITAPLENA_WHATSAPP_PAGAMENTO: '5592000000000' };
 
 async function servico(metodo, caminho, corpo) {
   const r = await fetch(chaves.API_URL + caminho, { method: metodo, body: corpo === undefined ? undefined : JSON.stringify(corpo),

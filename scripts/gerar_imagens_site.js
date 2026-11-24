@@ -1,3 +1,4 @@
+/* global document, Image -- usados só dentro de page.evaluate (roda no navegador) */
 // Imagens do site público (rodada 2 do visual, 23/11): recorta e otimiza as fotos de scripts/site-publico/capas.js.
 // Uso: node scripts/gerar_imagens_site.js <pasta-com-as-fotos-originais.jpg>
 //   (originais geradas no Google Flow, nomes em img/CREDITOS.md; não ficam no repositório para não pesar o git)

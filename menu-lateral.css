@@ -67,4 +67,24 @@
 /* Marca premium (23/11): item ativo no azul da marca, com barra mais forte. */
 #menu-principal button:hover, #menu-principal a:hover { background: var(--marca-claro-2); }
 #menu-principal a.ativo { background: var(--marca-claro); color: var(--marca-titulo); font-weight: 700; box-shadow: inset 3px 0 0 var(--marca-medio); }
-#menu-principal a.ativo .nav-ico { color: var(--marca-texto); }
+#menu-principal a.ativo .nav-ico { color: var(--marca-texto); }/* Topo igual ao do painel (menu-lateral.js monta): empresa, plano, nome do usuário e Sair. */
+header > .acoes { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.topo-conta { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.topo-conta .header-badge {
+  display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 999px; max-width: 220px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  border: 1px solid var(--border-default); background: var(--surface-sunken); color: var(--text-secondary); font: 500 12px/16px var(--font-sans);
+}
+.topo-conta .header-badge-plano { background: var(--marca-claro, var(--action-tint)); color: var(--marca-titulo, var(--text-primary)); border-color: transparent; }
+.topo-conta .header-badge:empty, .topo-conta .header-usuario-nome:empty { display: none; }
+.topo-conta .header-usuario-nome { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-primary); font: 500 14px/20px var(--font-sans); }
+header .acoes .header-icone-btn, header .app-controles .header-icone-btn {
+  display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; min-height: 40px; padding: 0; flex-shrink: 0;
+  border-radius: 999px; border: 1px solid var(--border-strong); background: var(--surface-default); color: var(--text-primary); font-size: 18px; cursor: pointer;
+}
+header .header-sair {
+  height: 40px; padding: 0 14px; border-radius: 999px; cursor: pointer; white-space: nowrap;
+  border: 1px solid var(--border-strong); background: var(--surface-default); color: var(--text-primary); font: 500 14px/16px var(--font-sans);
+}
+header .header-icone-btn:focus-visible, header .header-sair:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+@media (max-width: 768px) { .topo-conta { display: none; } }

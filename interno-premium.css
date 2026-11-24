@@ -59,18 +59,18 @@
   /* Secundário: pílula de contorno; no hover sobe 1px e ganha o royal. */
   .btn, .btn-imprimir, .btn-ia-edital, .bol-cal-filtro-ativo button, main button:not([class]):not([style]):not([role="tab"]), .pp-mercado .btn,
   .defesa-botao, #identificacao .defesa-botao, :where(#area, #hoje, .app-topo, .novo-processo) button, .modal-ia-acoes-rodape button, #contatos-resumo-lista button,
-  .btn-secundario, .btn-detalhe, .btn-mostrar, .btn-reverter, .btn-aprovar, .btn-adicionar, .btn-salvar, .btn-rejeitar, .btn-remover, .tela-auth button[type="submit"] {
+  .btn-secundario, .btn-detalhe, .btn-mostrar, .btn-reverter, .btn-aprovar, .btn-adicionar, .btn-salvar, .btn-rejeitar, .btn-remover, .tela-auth button[type="submit"], .la-botao {
     border-radius: 999px; font-weight: 600;
     transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
   }
-  :is(.btn, .btn-imprimir, .btn-ia-edital, .pp-mercado .btn, .defesa-botao, .modal-ia-acoes-rodape button, .btn-secundario, .btn-detalhe, .btn-mostrar, .btn-reverter):hover:not(:disabled),
+  :is(.btn, .btn-imprimir, .btn-ia-edital, .pp-mercado .btn, .defesa-botao, .modal-ia-acoes-rodape button, .btn-secundario, .btn-detalhe, .btn-mostrar, .btn-reverter, .la-botao):hover:not(:disabled),
   main button:not([class]):not([style]):not([role="tab"]):hover:not(:disabled), :where(#area, #hoje, .app-topo, .novo-processo) button:hover:not(:disabled) {
     border-color: var(--marca-medio); background-color: var(--marca-claro-2); color: var(--marca-titulo);
     transform: translateY(-1px); box-shadow: 0 8px 18px -12px rgba(var(--escuro-rgb), 0.55);
   }
   /* Primário: ciano com texto marinho (9:1), brilho que atravessa no hover — o mesmo do site. */
   .btn-buscar, .app-primario, :is(html, html.tema-claro) .btn.primario, .pp-mercado .btn.primario, .btn-baixar, #bell-ver-boletim,
-  .btn-aprovar, .btn-adicionar, .btn-salvar, .tela-auth button[type="submit"] {
+  .btn-aprovar, .btn-adicionar, .btn-salvar, .tela-auth button[type="submit"], .la-botao.la-primario {
     position: relative; overflow: hidden; isolation: isolate;
     background-color: var(--destaque) !important; background-image: none; border-color: transparent; color: var(--destaque-texto) !important;
     border-radius: 999px !important; font-weight: 700; box-shadow: 0 8px 18px -8px rgba(var(--destaque-rgb), 0.6);
@@ -189,7 +189,7 @@
 
   /* ---- Selos e etiquetas: pílula, texto + cor (nunca só cor) ---- */
   .chip, .tag, .proc-selo, .badge-modalidade, .fonte-badge, .boletim-prazo, .situacao-ativa, .situacao-outra, .mural-tag, .kanban-card-prazo,
-  .item-licitacao-tipo, .marca-kpi, .kanban-coluna-contagem, .acc-contagem, .app-badge, .seletor-ufs-chip {
+  .item-licitacao-tipo, .marca-kpi, .kanban-coluna-contagem, .acc-contagem, .app-badge {
     border-radius: 999px; padding-left: 10px; padding-right: 10px; font-weight: 600;
   }
   /* "Não enviada" / "Sem vencimento": a regra antiga (#cad5e3 sobre claro, 1,4:1) ainda vencia a do DS. */

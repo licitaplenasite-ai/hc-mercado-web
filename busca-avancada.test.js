@@ -91,3 +91,19 @@ test("limparFiltro guarda os campos da busca v2 e só aceita true nas chaves", (
   assert.deepEqual(f, { palavrasRaw: "café", modalidade: "pregao", portal: "BLL", limitar: "torrado", periodoPor: "abertura", mePp: true, jornal: true });
   assert.equal(B.limparFiltro({ palavrasRaw: "x", periodoPor: "outro" }).periodoPor, undefined);
 });
+test("ufsParaRestaurar: busca com raio não volta com os estados do raio marcados no campo UF", () => {
+  // Regressão: o filtro salvo trazia em ufs os estados alcançados pelo raio e o campo reabria com todos marcados.
+  assert.deepEqual(B.ufsParaRestaurar({ ufs: ["DF", "GO", "MG"], raio: { municipio: "Brasília", uf: "DF", km: 200 } }), []);
+  assert.deepEqual(B.ufsParaRestaurar({ ufs: ["AM", "PA"], palavrasRaw: "x" }), ["AM", "PA"]);
+  assert.deepEqual(B.ufsParaRestaurar({ uf: "AM" }), ["AM"], "filtro antigo com uma UF só");
+  assert.deepEqual(B.ufsParaRestaurar({ palavrasRaw: "x" }), []);
+  assert.deepEqual(B.ufsParaRestaurar(null), []);
+});
+test("resumoUfs: campo UF fechado mostra Todos, até 2 siglas ou 'AM, PA +2'", () => {
+  assert.equal(B.resumoUfs([]), "Todos os estados");
+  assert.equal(B.resumoUfs(undefined), "Todos os estados");
+  assert.equal(B.resumoUfs(["AM"]), "AM");
+  assert.equal(B.resumoUfs(["AM", "PA"]), "AM, PA");
+  assert.equal(B.resumoUfs(["AM", "PA", "RR", "AC"]), "AM, PA +2");
+  assert.equal(B.resumoUfs(Array.from({ length: 27 }, (_, i) => `U${i}`)), "Todos os estados");
+});

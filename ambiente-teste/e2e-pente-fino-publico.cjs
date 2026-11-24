@@ -1,4 +1,4 @@
-/* global document, window, getComputedStyle -- usados só dentro de p.evaluate (roda no navegador) */
+/* global document, window -- usados só dentro de p.evaluate (roda no navegador) */
 // Pente fino da parte pública e das ferramentas: página de venda, login (com "Esqueci minha senha"), cadastro,
 // Central de Ajuda, HC, extensão, SINAPI, BDI e Mão de obra, em 1280 e 375 px, deslogado e logado.
 //   PORTA_TESTE=8815 node ambiente-teste/servidor.cjs   e depois   PORTA_TESTE=8815 node ambiente-teste/e2e-pente-fino-publico.cjs

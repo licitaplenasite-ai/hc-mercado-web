@@ -271,6 +271,8 @@ legend{font:var(--text-section);margin:0 0 12px;padding:0}
       if (p.eh_titular === false) mostrarErro("Só o titular da conta pode assinar. Peça para quem convidou você.");
     }
     desenharPlanos();
+    // Nenhum plano com preço cadastrado: o formulário não tem o que pedir (antes ficava vazio e o botão ativo).
+    if (!estado.planos.length) { mostrarErro("Nenhum plano está disponível para assinatura agora. Fale com a equipe pelo WhatsApp que liberamos para você."); $("btn-assinar").disabled = true; }
     await carregarPedidos();
   }
 
@@ -286,7 +288,8 @@ legend{font:var(--text-section);margin:0 0 12px;padding:0}
     btn.disabled = true; btn.textContent = "Enviando...";
     const { error } = await sb.rpc("pedir_assinatura", { p_plano: planoEscolhido(), p_ciclo: ciclo(), p_extras: extrasEscolhidos(), p_cnpjs_extras: cnpjsExtras() });
     btn.disabled = false; btn.textContent = "Quero assinar";
-    if (error) { mostrarErro("Não foi possível fazer o pedido: " + (error.message || "tente de novo.")); return; }
+    // Só as frases escritas para o cliente em pedir_assinatura (planos_e_recursos.sql) passam; o resto fica no console.
+    if (error) { console.warn("Assinar: pedido recusado", error); const proprio = /Muitos pedidos|Só o titular|Plano indisponível|Preço do plano|CNPJ extra|Escolha mensal/.test(error.message || ""); mostrarErro("Não foi possível fazer o pedido: " + (proprio ? error.message.replace(/\.?$/, ".") : "tente de novo em instantes. Se continuar, fale com a equipe.")); return; }
     await carregarPedidos();
     $("como-pagar").scrollIntoView({ behavior: "smooth", block: "start" });
   });

@@ -1,6 +1,6 @@
 'use strict';
 // Todas as páginas com menu lateral precisam trazer os mesmos itens, na mesma ordem (Prospecção, Orçamento de obra, Hoje,
-// Processos, Calendário, Licitação anterior, Extensão e Consultoria incluídos).
+// Processos, Extensão e Consultoria incluídos; Calendário e Licitação anterior viraram atalhos de hash, fora do menu).
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
@@ -28,7 +28,7 @@ for (const p of paginas) {
       const barra = html.match(/<nav class="abas-obra"[\s\S]*?<\/nav>/)?.[0] || '';
       for (const h of ['sinapi.html', 'bdi.html', 'mao-de-obra.html']) assert.ok(barra.includes(`<a href="${h}"`), `${p}: atalho ${h} na barra do Orçamento de obra`);
       if (p !== 'orcamento-obra') {
-        assert.ok(barra.includes('<a href="orcamento-obra.html">Montar meu orçamento</a>') && barra.includes('<a href="orcamento-obra.html#concorrente">Analisar concorrente</a>'), `${p}: volta ao Orçamento de obra`);
+        assert.ok(barra.includes('<a href="orcamento-obra.html">Montar meu orçamento</a>') && barra.includes('<a href="orcamento-obra.html#concorrente">Conferir planilha do concorrente</a>'), `${p}: volta ao Orçamento de obra`);
         assert.ok(barra.includes(`<a href="${p}.html" aria-current="page">`), `${p}: ferramenta atual marcada`);
       }
       assert.match(html, /<link rel="stylesheet" href="obra-abas\.css">/);
@@ -41,13 +41,15 @@ const rotulos = (p) => {
   return [...nav.matchAll(/<span class="nav-label">([^<]+)<\/span>/g)].map((m) => m[1]).filter((r) => r !== 'Recolher');
 };
 
-test('todas as páginas têm o mesmo conjunto e ordem de itens no menu (o painel só soma o Dashboard)', () => {
+test('todas as páginas têm o mesmo conjunto e ordem de itens no menu (Dashboard incluído)', () => {
   const referencia = rotulos('sistema');
-  for (const item of ['Hoje', 'Licitação anterior', 'Processos', 'Extensão', 'Orçamento de obra', 'Consultoria']) assert.ok(referencia.includes(item), item);
+  for (const item of ['Hoje', 'Dashboard', 'Processos', 'Extensão', 'Orçamento de obra', 'Consultoria']) assert.ok(referencia.includes(item), item);
   // 23/11 (dono): Calendário abria a mesma tela do Boletim; sai do menu (o link antigo painel.html#calendario continua abrindo o Boletim).
   assert.ok(!referencia.includes('Calendário'), 'menu sem Calendário duplicado');
+  // 23/11 (dono): Licitação anterior aparecia no menu e dentro da Inteligência de Mercado; fica só como aba de lá.
+  assert.ok(!referencia.includes('Licitação anterior'), 'menu sem Licitação anterior duplicada');
   for (const p of paginas) {
-    const lista = rotulos(p).filter((r) => r !== 'Dashboard');
+    const lista = rotulos(p);
     // Status das Ferramentas é controle interno desde 23/11: fica só na aba Saúde do sistema do admin.
     assert.ok(!lista.some((r) => /^Status/.test(r)), `${p}: menu do cliente sem Status`);
     assert.deepEqual(lista, referencia, p);
@@ -56,13 +58,27 @@ test('todas as páginas têm o mesmo conjunto e ordem de itens no menu (o painel
 
 test('painel leva Hoje, Processos e Extensão para as páginas certas e Calendário/Licitação anterior para atalhos do próprio painel', () => {
   const nav = fs.readFileSync('painel.html', 'utf8').match(/<nav id="menu-principal"[\s\S]*?<\/nav>/)[0];
-  for (const [href, rotulo] of [['/sistema', 'Hoje'], ['processos.html', 'Processos'], ['extensao.html', 'Extensão'], ['#licitacao-anterior', 'Licitação anterior']]) {
+  for (const [href, rotulo] of [['/sistema', 'Hoje'], ['processos.html', 'Processos'], ['extensao.html', 'Extensão']]) {
     assert.ok(nav.includes(`<a href="${href}" title="${rotulo}">`), rotulo);
   }
   const html = fs.readFileSync('painel.html', 'utf8');
   assert.match(html, /ATALHOS_DO_HASH = \{ calendario: "boletim", "licitacao-anterior": "diagnostico" \}/);
   assert.match(html, /data-subaba="licitacao-anterior"/);
   assert.match(html, /id="bol-calendario"/);
+});
+
+test('cada item do menu tem ícone próprio, e o tema usa lua/sol do sprite', () => {
+  for (const p of paginas) {
+    const nav = fs.readFileSync(`${p}.html`, 'utf8').match(/<nav id="menu-principal"[\s\S]*?<\/nav>/)[0];
+    const icones = [...nav.matchAll(/<use href=['"](?:menu-icones\.svg)?#(ph-[a-z-]+)['"]/g)].map((m) => m[1]).filter((i) => i !== 'ph-arrow-square-out');
+    assert.equal(new Set(icones).size, icones.length, `${p}: ícone repetido no menu (${icones.join(', ')})`);
+  }
+  const sprite = fs.readFileSync('menu-icones.svg', 'utf8');
+  for (const id of ['ph-squares-four', 'ph-target', 'ph-funnel', 'ph-kanban', 'ph-briefcase', 'ph-moon', 'ph-sun']) assert.match(sprite, new RegExp(`<symbol id="${id}"`), id);
+  // Topo igual ao do painel: menu-lateral.js monta empresa/plano/nome e o Sair que encerra a sessão.
+  const js = fs.readFileSync('menu-lateral.js', 'utf8');
+  assert.match(js, /auth\.signOut\(\)/);
+  assert.match(js, /login\.html/);
 });
 
 test('ícones novos do menu existem nos dois sprites', () => {

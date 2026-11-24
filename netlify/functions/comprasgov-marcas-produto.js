@@ -181,6 +181,13 @@ function ordenarPorVolume(pdms) {
   return [...pdms].sort((a, b) => b.principal - a.principal || (b.total || 0) - (a.total || 0) || a.ordem - b.ordem);
 }
 
+// Nº do item na compra: numeroItemCompra da fonte; sem ele, os 5 últimos dígitos do idCompraItem (17 da compra + 5 do item).
+function numeroDoItem(numero, itemCompra) {
+  const n = Number(numero);
+  if (Number.isSafeInteger(n) && n > 0) return n;
+  return /^\d{22}$/.test(itemCompra) && Number(itemCompra.slice(-5)) > 0 ? Number(itemCompra.slice(-5)) : null;
+}
+
 function normalizarResultado(linha, pdm) {
   const descricaoItem = textoSeguro(linha.descricaoItem || linha.descricaoDetalhadaItem, 500);
   // "Notebook ASUS Vivobook 15": o fornecedor pôs o nome do produto antes da marca e do modelo; tira o nome e fica o resto.
@@ -224,6 +231,8 @@ function normalizarResultado(linha, pdm) {
     orgao: textoSeguro(linha.nomeUasg || linha.nomeOrgao, 240),
     compra,
     itemCompra,
+    // Nº do item na compra: a tela mostra ao lado do "Ver compra" (a página da compra pode ter centenas de itens).
+    numeroItem: numeroDoItem(linha.numeroItemCompra, itemCompra),
     catalogoCodigo: textoSeguro(linha.codigoItemCatalogo, 20),
     link: /^\d{8,25}$/.test(compra) ? LINK_COMPRA + compra : null,
   };

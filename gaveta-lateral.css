@@ -43,6 +43,11 @@
 .lp-ajuda-flutuante:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .lp-ajuda-flutuante.so-celular { display: none; }
 @media (max-width: 480px) { .lp-ajuda-flutuante.so-celular { display: block; } }
+/* Celular (23/11): "?" menor e folga no fim da página para não cobrir o último campo. */
+@media (max-width: 768px) {
+  .lp-ajuda-flutuante { right: 12px; bottom: 12px; width: 40px; height: 40px; font-size: 18px; }
+  body:has(.lp-ajuda-flutuante) { padding-bottom: 72px; }
+}
 @media (max-width: 600px) {
   .lp-gaveta { border-radius: 0; }
   .lp-gaveta-topo, .lp-gaveta-corpo, .lp-gaveta-rodape, .lp-uso { padding-left: var(--space-16); padding-right: var(--space-16); }

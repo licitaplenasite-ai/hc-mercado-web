@@ -75,7 +75,8 @@
     const alvo = document.getElementById("resumo");
     const q = new URLSearchParams(location.search);
     const empresaId = q.get("empresa") || "", processoId = q.get("processo") || "";
-    const falhar = (t) => alvo.replaceChildren(criar("p", { className: "vazio", textContent: t }));
+    // Sem resumo não há o que imprimir: o botão fica desligado junto com a mensagem.
+    const falhar = (t) => { alvo.replaceChildren(criar("p", { className: "vazio", textContent: t })); const b = document.getElementById("imprimir"); if (b) b.disabled = true; };
     if (!UUID.test(empresaId) || !UUID.test(processoId)) return falhar("Link incompleto. Abra o resumo pelo processo no sistema.");
     const voltar = document.getElementById("voltar"); // volta ao mesmo processo, não à tela inicial do sistema
     if (voltar) voltar.href = `sistema?empresa=${encodeURIComponent(empresaId)}&processo=${encodeURIComponent(processoId)}`;
@@ -103,7 +104,7 @@
   global.LicitaResumoProcesso = api;
   if (typeof document !== "undefined" && document.getElementById?.("resumo")) {
     document.getElementById("imprimir")?.addEventListener("click", () => global.print());
-    iniciar().catch(() => { document.getElementById("resumo").textContent = "Não foi possível montar o resumo agora."; });
+    iniciar().catch(() => { document.getElementById("resumo").textContent = "Não foi possível montar o resumo agora."; const b = document.getElementById("imprimir"); if (b) b.disabled = true; });
   }
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);

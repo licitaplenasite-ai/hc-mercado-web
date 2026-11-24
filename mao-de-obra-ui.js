@@ -38,6 +38,7 @@
   const TODOS = Object.values(CAMPOS).flat();
   const mostrar = (v) => (typeof v === 'number' ? String(v).replace('.', ',') : String(v ?? ''));
   let uid = null;
+  let interagiu = false;
 
   for (const [grupo, campos] of Object.entries(CAMPOS)) {
     document.querySelector(`[data-grupo="${grupo}"]`).innerHTML = campos.map(([k, rotulo, dica, ops]) => {
@@ -56,6 +57,8 @@
     for (const [k] of TODOS) $(`f-${k}`).removeAttribute('aria-invalid');
     const r = R.calcular(e);
     if (r.erro) {
+      // Tela recém-aberta com o salário vazio: sem erro vermelho antes de o usuário digitar (só esconde o resultado).
+      if (!interagiu) { aviso(''); $('resultado').hidden = true; return null; }
       for (const [k] of TODOS) if (r.erro.includes(k)) $(`f-${k}`).setAttribute('aria-invalid', 'true');
       aviso(r.erro.replace(/[a-zA-Z]+Pct|[a-z]+[A-Z][a-zA-Z]+/g, (k) => (TODOS.find((c) => c[0] === k) || [k, k])[1]));
       $('resultado').hidden = true; return null;
@@ -87,16 +90,16 @@
     const id = ev.target.id;
     if (id === 'f-escala') { const s = R.ESCALAS[ev.target.value]; $('f-empregadosPorPosto').value = mostrar(s.empregados); $('f-diasMes').value = mostrar(s.dias); }
     if (id === 'f-regime') for (const [k, v] of Object.entries(R.padroesRegime(ev.target.value))) $(`f-${k}`).value = mostrar(v);
-    if (id.startsWith('f-')) { desenhar(); salvar(); }
+    if (id.startsWith('f-')) { interagiu = true; desenhar(); salvar(); }
   });
-  document.querySelector('main').addEventListener('input', (ev) => { if (ev.target.tagName === 'INPUT') { desenhar(); salvar(); } });
+  document.querySelector('main').addEventListener('input', (ev) => { if (ev.target.tagName === 'INPUT') { interagiu = true; desenhar(); salvar(); } });
   $('btn-padroes').addEventListener('click', () => {
     const manter = Object.fromEntries(['servico', 'funcao', 'escala', 'salarioBase', 'postos', 'meses', 'empregadosPorPosto', 'diasMes', 'vtValorPassagem', 'vaValorDia', 'uniformes', 'materiais', 'equipamentos', 'regime'].map((k) => [k, $(`f-${k}`).value]));
     preencher({ ...R.padroesRegime(manter.regime) }); for (const [k, v] of Object.entries(manter)) $(`f-${k}`).value = v;
     desenhar(); salvar();
   });
   $('btn-csv').addEventListener('click', () => {
-    const x = desenhar(); if (!x) return;
+    interagiu = true; const x = desenhar(); if (!x) return;
     const url = URL.createObjectURL(new Blob([R.csv(x.e, x.r)], { type: 'text/csv;charset=utf-8' }));
     const a = document.createElement('a'); a.href = url; a.download = `planilha-custos-mao-de-obra-${x.e.servico}.csv`; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);

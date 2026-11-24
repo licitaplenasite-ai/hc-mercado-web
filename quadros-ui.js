@@ -107,12 +107,18 @@ ${prazo || proc ? `<div class="q-tags">${prazo}${proc}</div>` : ''}</article>`;
 
     async function carregarEmpresas() {
       const { data, error } = await sb.from('operacao_empresas').select('id,razao_social,cnpj').eq('organizacao_id', estado.orgId).eq('ativo', true).order('razao_social');
-      if (error) { aviso('Não foi possível carregar as empresas: ' + error.message, 'erro'); return; }
+      if (error) { console.warn('Quadros: falha ao ler empresas', error); aviso('Não foi possível carregar as empresas agora. Recarregue a página em instantes; se continuar, fale com o suporte.', 'erro'); return; }
       $('empresa-atual').innerHTML = (data || []).map((e) => `<option value="${esc(e.id)}">${esc(e.razao_social)}${e.cnpj ? ` · ${esc(String(e.cnpj).replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5'))}` : ''}</option>`).join('');
       let preferida = ''; try { preferida = localStorage.getItem(CHAVE_EMPRESA) || ''; } catch { /* sem armazenamento: usa a primeira */ }
       estado.empresaId = (data || []).some((e) => e.id === preferida) ? preferida : data?.[0]?.id || null;
       $('empresa-atual').value = estado.empresaId || '';
-      if (!estado.empresaId) { aviso('Cadastre uma empresa em “Minhas empresas e documentos” para usar os quadros.', 'info'); return; }
+      if (!estado.empresaId) {
+        // Sem empresa o quadro ficava em "Carregando…" para sempre: convite com link e botões do quadro desligados.
+        for (const b of ['btn-novo-quadro', 'btn-renomear-quadro', 'btn-apagar-quadro', 'btn-nova-coluna', 'quadro-atual']) $(b).disabled = true;
+        aviso('');
+        $('quadro').innerHTML = '<div class="vazio"><p>Para usar os quadros, cadastre sua empresa primeiro.</p><a class="btn primario" href="operacao.html">Cadastrar em Minhas empresas e documentos</a></div>';
+        return;
+      }
       await carregarQuadros();
     }
     async function carregarQuadros(escolher) {

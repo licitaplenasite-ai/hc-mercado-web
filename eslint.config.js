@@ -10,6 +10,8 @@
 // vibe-coding-toolkit (06-eslint-biome-quality-gates.md) pro raciocínio completo.
 
 const js = require("@eslint/js");
+// Lista oficial de globais do navegador (vem com o próprio ESLint: @eslint/eslintrc -> globals).
+const { browser } = require("globals");
 
 // Globals extras de Node >= 18 que os blocos .mjs/.cjs abaixo usam (testes, handlers ESM, QA).
 const nodeGlobals = {
@@ -47,13 +49,33 @@ module.exports = [
   },
   js.configs.recommended,
   {
-    // Ambiente de teste local (Supabase CLI + site + E2E): scripts Node CommonJS, fora do deploy.
-    files: ["ambiente-teste/**/*.cjs"],
+    // Scripts de tela na raiz (carregados por <script src> nas páginas): rodam no navegador, com as globais da
+    // página (supabase-config.js). Vários também exportam para os testes em Node (module.exports opcional).
+    // catch (e) sem usar o "e" é o padrão de fail-open do projeto (mesma regra de netlify/ e scripts/).
+    files: ["*.js"],
+    ignores: ["*.test.js", "eslint.config.js"],
     languageOptions: {
       ecmaVersion: 2022,
-      sourceType: "commonjs",
-      globals: { ...nodeGlobals, require: "readonly", module: "writable", __dirname: "readonly", AbortSignal: "readonly" },
+      sourceType: "script",
+      globals: { ...browser, module: "readonly", SUPABASE_URL: "readonly", SUPABASE_ANON_KEY: "readonly" },
     },
+    rules: {
+      "no-unused-vars": ["error", { args: "none", varsIgnorePattern: "^_", caughtErrors: "none" }],
+      // O comentário /* global window, document */ do topo de cada arquivo continua como documentação; só não
+      // conta como redeclaração da global do navegador. Redeclarar variável do próprio código segue sendo erro.
+      "no-redeclare": ["error", { builtinGlobals: false }],
+    },
+  },
+  {
+    // Ambiente de teste local (Supabase CLI + site + E2E): scripts Node CommonJS, fora do deploy.
+    // O código dentro de page.evaluate roda na página: por isso as globais do navegador.
+    files: ["ambiente-teste/**/*.cjs"],
+    languageOptions: {
+      ecmaVersion: "latest", // regex com modificador (?-i:...) no pente fino de empresas
+      sourceType: "commonjs",
+      globals: { ...nodeGlobals, ...browserGlobals, localStorage: "readonly", require: "readonly", module: "writable", __dirname: "readonly", AbortSignal: "readonly" },
+    },
+    rules: { "no-redeclare": ["error", { builtinGlobals: false }] },
   },
   {
     // O próprio arquivo de config também é lido pelo ESLint (roda em Node, CommonJS) —

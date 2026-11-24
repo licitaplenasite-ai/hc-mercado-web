@@ -56,7 +56,7 @@
     if (b.length >= 8 && [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].every((v, i) => b[i] === v)) return 'png';
     if (b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'jpg';
     if (b.length >= 12 && String.fromCharCode(...b.subarray(0, 4)) === 'RIFF' && String.fromCharCode(...b.subarray(8, 12)) === 'WEBP') return 'webp';
-    const inicio = String.fromCharCode(...b.subarray(0, 2048)).replace(/^﻿|^\xEF\xBB\xBF/, '').trimStart();
+    const inicio = String.fromCharCode(...b.subarray(0, 2048)).replace(/^\uFEFF|^\xEF\xBB\xBF/, '').trimStart();
     return inicio.startsWith('<') && /<svg[\s>]/i.test(inicio) ? 'svg' : null;
   }
   // { usar, ext } quando já cabe nas regras do servidor; { reduzir: formato } quando dá para converter; { erro } quando não.

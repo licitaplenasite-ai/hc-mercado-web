@@ -58,6 +58,40 @@ test("cliente no limite não consegue abrir um quarto cadastro pela interface", 
   assert.equal(caso.botao.disabled, false);
 });
 
+// Regressão 23/11: com 0 empresas a regra antiga (usadas <= 1) escondia "+ Empresa" do plano de 1 CNPJ.
+function cota(limite, usadas) {
+  const i = operacao.indexOf("  function atualizarCotaEmpresas()");
+  const f = operacao.indexOf("  // Plano da conta (meu_plano", i);
+  const el = () => ({ style: {}, hidden: false, disabled: false, title: "", textContent: "" });
+  const els = {};
+  let abaClicada = null;
+  const ctx = {
+    estado: { empresas: Array.from({ length: usadas }, () => ({})), limiteCnpjs: limite, acessoEmpresaId: null, plano: null },
+    $: (id) => (els[id] ||= el()),
+    document: { querySelector: (s) => (s.includes("data-aba") ? { click: () => { abaClicada = s; } } : (els[s] ||= el())) },
+  };
+  vm.runInNewContext(`${operacao.slice(i, f)}\natualizarCotaEmpresas();`, ctx);
+  return { els, abaClicada };
+}
+
+test("plano de 1 CNPJ sem empresa mostra '+ Empresa', o convite e trava os botões de documento", () => {
+  const { els, abaClicada } = cota(1, 0);
+  assert.equal(els["btn-nova-empresa"].style.display, "");
+  assert.equal(els["sem-empresa"].hidden, false);
+  assert.equal(els["btn-novo-documento"].disabled, true);
+  assert.equal(els["btn-novo-documento-2"].disabled, true);
+  assert.match(abaClicada, /identificacao/);
+});
+
+test("plano de 1 CNPJ com a empresa cadastrada esconde seletor e '+ Empresa' e libera documentos", () => {
+  const { els, abaClicada } = cota(1, 1);
+  assert.equal(els["btn-nova-empresa"].style.display, "none");
+  assert.equal(els[".empresa-select"].style.display, "none");
+  assert.equal(els["sem-empresa"].hidden, true);
+  assert.equal(els["btn-novo-documento"].disabled, false);
+  assert.equal(abaClicada, null);
+});
+
 test("proprietário ilimitado continua podendo cadastrar empresa", async () => {
   const caso = preparar(null, [{}, {}, {}, {}]);
   await caso.salvar({ currentTarget: caso.formulario, preventDefault() {} });

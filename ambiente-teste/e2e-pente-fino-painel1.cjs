@@ -1,4 +1,4 @@
-/* global document, window, location, getComputedStyle, innerWidth */
+/* global document, window, location, getComputedStyle */
 // Pente fino da área "painel 1": topo, menu lateral, Início (Dashboard), Boletim, Encontrar Licitações e prospeccao.html.
 // Clica em cada botão/link da área como cliente aprovado (gestor do seed), em 1280 e 375 px, e falha com:
 // erro de JavaScript no console, rolagem lateral no celular, texto técnico na tela ou botão que não leva ao lugar certo.

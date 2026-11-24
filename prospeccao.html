@@ -33,7 +33,7 @@ main{max-width:1280px;margin:0 auto;padding:24px 24px 56px}
 .topo h1{font:var(--text-title);margin:0 0 4px}
 .topo p,.nota,.vazio{color:var(--text-secondary);line-height:1.5;margin:0}
 .card{background:var(--surface-default);border:1px solid var(--border-default);border-radius:var(--radius-card);padding:16px;margin:16px 0}
-.filtros{display:grid;grid-template-columns:110px 1fr 170px 150px auto;gap:12px;align-items:end}
+.filtros{display:grid;grid-template-columns:110px 1fr 170px minmax(190px,auto) auto;gap:12px;align-items:end}
 label{display:block;font:var(--text-label);color:var(--text-primary);margin:0 0 6px}
 select,input{width:100%;min-height:40px;padding:8px 12px;border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--surface-default);color:var(--text-primary);font:var(--text-body)}
 input::placeholder{color:var(--text-secondary);opacity:1}
@@ -92,22 +92,22 @@ input::placeholder{color:var(--text-secondary);opacity:1}
     <span class="nav-ico" aria-hidden="true">&#171;</span><span class="nav-label">Recolher</span>
   </button>
   <a href="/sistema" title="Hoje"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-house"></use></svg></span><span class="nav-label">Hoje</span></a>
+  <a href="painel.html#dashboard" title="Dashboard"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-squares-four"></use></svg></span><span class="nav-label">Dashboard</span></a>
   <a href="painel.html#boletim" title="Boletim"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-clipboard-text"></use></svg></span><span class="nav-label">Boletim</span></a>
   <a href="painel.html#oportunidades" title="Encontrar Licitações"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-magnifying-glass"></use></svg></span><span class="nav-label">Encontrar Licitações</span></a>
   <a href="painel.html#diagnostico" title="Inteligência de Mercado"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-chart-bar"></use></svg></span><span class="nav-label">Inteligência de Mercado</span></a>
-  <a href="prospeccao.html" class="ativo" aria-current="page" title="Prospecção"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-chart-bar"></use></svg></span><span class="nav-label">Prospecção</span></a>
-  <a href="painel.html#licitacao-anterior" title="Licitação anterior"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-clock-counter-clockwise"></use></svg></span><span class="nav-label">Licitação anterior</span></a>
+  <a href="prospeccao.html" class="ativo" aria-current="page" title="Prospecção"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-target"></use></svg></span><span class="nav-label">Prospecção</span></a>
   <a href="painel.html#empresa" title="Analisar concorrente"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-buildings"></use></svg></span><span class="nav-label">Analisar concorrente</span></a>
   <a href="painel.html#transparencia" title="Convênios e Emendas Federais"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-handshake"></use></svg></span><span class="nav-label">Convênios e Emendas Federais</span></a>
   <a href="painel.html#precos" title="Pesquisa de Preços"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-coins"></use></svg></span><span class="nav-label">Pesquisa de Preços</span></a>
   <a href="orcamento-obra.html" title="Orçamento de obra"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-toolbox"></use></svg></span><span class="nav-label">Orçamento de obra</span></a>
-  <a href="painel.html#kanban" title="Funil"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-folders"></use></svg></span><span class="nav-label">Funil</span></a>
-  <a href="quadros.html" title="Quadros"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-folders"></use></svg></span><span class="nav-label">Quadros</span></a>
+  <a href="painel.html#kanban" title="Funil"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-funnel"></use></svg></span><span class="nav-label">Funil</span></a>
+  <a href="quadros.html" title="Quadros"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-kanban"></use></svg></span><span class="nav-label">Quadros</span></a>
   <a href="processos.html" title="Processos"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-folder-open"></use></svg></span><span class="nav-label">Processos</span></a>
   <a href="operacao.html" title="Minhas empresas e documentos"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-files"></use></svg></span><span class="nav-label">Minhas empresas e documentos</span></a>
   <a href="extensao.html" title="Extensão"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-puzzle-piece"></use></svg></span><span class="nav-label">Extensão</span></a>
   <a href="painel.html#juridico" title="Jurídico &amp; Dúvidas"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-scales"></use></svg></span><span class="nav-label">Jurídico &amp; Dúvidas</span></a>
-  <a href="hc.html" target="_blank" rel="noopener" data-hc-site title="Consultoria"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-handshake"></use></svg></span><span class="nav-label">Consultoria</span></a>
+  <a href="hc.html" target="_blank" rel="noopener" data-hc-site title="Consultoria"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-briefcase"></use></svg></span><span class="nav-label">Consultoria</span></a>
 </nav>
 <div class="nav-gaveta-fundo" id="nav-gaveta-fundo" hidden></div>
 <main data-recurso="prospeccao">
@@ -129,7 +129,7 @@ input::placeholder{color:var(--text-secondary);opacity:1}
     <button class="aba" type="button" role="tab" aria-selected="false" data-aba="ata">Atas para adesão</button>
     <button class="aba" type="button" role="tab" aria-selected="false" data-aba="contrato">Contratos vencendo</button>
   </div>
-  <p class="nota explica">Confira sempre o documento oficial pelo link de cada linha. Atas: só as que permitem adesão e seguem vigentes por mais 30 dias; o período não se aplica a elas. Nas atas do Compras.gov, "já aderido" mostra as adesões informadas pelo portal (conferidas a cada poucos dias); nas demais atas o portal não informa saldo nem adesões. Com palavras na busca, o que só cita o termo na especificação do item fica recolhido.</p>
+  <p class="nota explica">Confira sempre o documento oficial pelo link de cada linha. Atas: só as que permitem adesão e seguem vigentes por mais de 30 dias; o período não se aplica a elas. Nas atas do Compras.gov, "já aderido" mostra as adesões informadas pelo portal (conferidas a cada poucos dias); nas demais atas o portal não informa saldo nem adesões. Com palavras na busca, o que só cita o termo na especificação do item fica recolhido.</p>
   <p id="contador"></p>
   <p class="nota" id="cobertura-texto"></p>
   <details id="cobertura" hidden></details>

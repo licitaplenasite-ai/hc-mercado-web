@@ -11,6 +11,13 @@
 /* Os outros flutuantes (ajuda "?" e celular) sobem para não ficar embaixo do chat. */
 body.lp-com-chat-ia .lp-ajuda-flutuante { bottom: 72px; }
 body.lp-com-chat-ia .lp-celular-flutuante { bottom: 128px; }
+/* Celular (23/11): botão menor e folga no fim da página para os flutuantes não cobrirem o último campo/cartão. */
+@media (max-width: 768px) {
+  .lp-chat-flutuante { right: 12px; bottom: 12px; min-height: 40px; padding: 0 12px; font-size: 14px; }
+  body.lp-com-chat-ia .lp-ajuda-flutuante { bottom: 60px; }
+  body.lp-com-chat-ia .lp-celular-flutuante { bottom: 108px; }
+  html body.lp-com-chat-ia { padding-bottom: 120px; } /* vence a folga só do "?" (gaveta-lateral.css) */
+}
 
 .lp-chat-aviso { margin: var(--space-12) var(--space-24) 0; font: var(--text-label); }
 .lp-chat-lista { display: flex; flex-direction: column; gap: var(--space-8); }

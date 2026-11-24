@@ -1,3 +1,4 @@
+/* global document, Image -- usados só dentro de page.evaluate (roda no navegador) */
 // Telas do sistema mostradas no site público (index "Do edital publicado à proposta organizada" e /ferramentas/*).
 // Fonte: prints 1280x800 do sistema novo com dados FICTÍCIOS (empresa "Horizonte Suprimentos Ltda").
 // Uso: node scripts/gerar_vitrine.js <pasta com vitrine-*.png>

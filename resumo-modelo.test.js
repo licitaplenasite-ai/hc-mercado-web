@@ -1,3 +1,4 @@
+/* global Buffer */
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { texto } = require("./resumo-modelo.js");

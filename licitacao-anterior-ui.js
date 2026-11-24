@@ -725,21 +725,108 @@
   }
 
   // ---------- tela avulsa ----------
-  function montarPesquisa({ alvo, requisitar, cliente, sancoes }) {
+  // Achar o órgão sem saber UASG, nome exato ou CNPJ (23/11, dono): estado + cidade + esfera + tipo + parte do nome,
+  // sobre os órgãos que têm licitação aberta (oportunidades_abertas, coletada do PNCP). Puro: testado em node.
+  const TIPOS_ORGAO = [
+    ['legislativo', 'Câmaras e assembleias', /\b(camara (municipal|de vereadores|dos deputados)|assembleia legislativa|senado)\b/],
+    ['justica', 'Justiça, Ministério Público e Defensoria', /\b(tribunal|justica|ministerio publico|defensoria|procuradoria)\b/],
+    ['consorcio', 'Consórcios públicos', /\bconsorcio\b/],
+    ['seguranca', 'Forças Armadas, polícias e bombeiros', /\b(comando|exercito|marinha|aeronautica|policia|bombeiros?|batalhao|militar|seguranca publica)\b/],
+    ['educacao', 'Educação (universidades, institutos, escolas)', /\b(universidade|instituto federal|escola|educacao|ensino|colegio|faculdade)\b/],
+    ['saude', 'Saúde (hospitais, fundos de saúde)', /\b(saude|hospital|hemocentro|maternidade|sanitari)/],
+    ['prefeitura', 'Prefeituras e secretarias municipais', /\b(prefeitura|municipio|municipal)\b/],
+    ['estadual', 'Governo e secretarias estaduais', /\b(governo do estado|secretaria (de estado|estadual)|estado d[aeo])\b/],
+    ['autarquia', 'Autarquias, fundações e empresas públicas', /\b(autarquia|fundacao|agencia|empresa|companhia|servico autonomo|departamento|conselho)\b/],
+  ];
+  const ESFERAS_ORGAO = { F: 'Federal', E: 'Estadual', M: 'Municipal' };
+  function tipoDeOrgao(nome) {
+    const n = semAcento(nome);
+    return (TIPOS_ORGAO.find(([, , re]) => re.test(n)) || ['outros'])[0];
+  }
+  // linhas = [{ uf, orgao, municipio, codigoUnidade, esferaId, numero_controle_pncp }] -> um item por órgão e cidade,
+  // com as UASGs válidas para a consulta (5 a 8 dígitos) e o CNPJ (14 primeiros dígitos do controle PNCP).
+  function filtrarOrgaos(linhas, { municipio = '', esfera = '', tipo = '', nome = '' } = {}) {
+    const cidade = semAcento(municipio).trim(), parte = semAcento(nome).replace(/\s+/g, ' ').trim();
+    const grupos = new Map();
+    for (const l of linhas || []) {
+      if (!l || !l.orgao) continue;
+      const bruta = String(l.esferaId || '').toUpperCase();
+      const esf = bruta === 'D' ? 'E' : bruta; // Distrito Federal conta como estadual, como no Pagômetro
+      if (esfera && esf !== esfera) continue;
+      if (cidade && !semAcento(l.municipio).includes(cidade)) continue;
+      if (parte && !semAcento(l.orgao).includes(parte) && !String(l.codigoUnidade || '').includes(parte)) continue;
+      const tipoLinha = tipoDeOrgao(l.orgao);
+      if (tipo && tipoLinha !== tipo) continue;
+      const k = `${semAcento(l.orgao)}|${semAcento(l.municipio)}|${l.uf || ''}`;
+      const g = grupos.get(k) || { orgao: l.orgao, municipio: l.municipio || '', uf: l.uf || '', esfera: ESFERAS_ORGAO[esf] || '', tipo: tipoLinha, uasgs: new Set(), cnpj: '', abertas: 0 };
+      g.abertas += 1;
+      if (/^\d{5,8}$/.test(String(l.codigoUnidade || ''))) g.uasgs.add(String(l.codigoUnidade));
+      const cnpj = /^(\d{14})-/.exec(String(l.numero_controle_pncp || ''));
+      if (cnpj && !g.cnpj) g.cnpj = cnpj[1];
+      grupos.set(k, g);
+    }
+    return [...grupos.values()].map((g) => ({ ...g, uasgs: [...g.uasgs].sort() }))
+      .sort((a, b) => b.abertas - a.abertas || a.orgao.localeCompare(b.orgao, 'pt-BR'));
+  }
+  const UFS = 'AC AL AM AP BA CE DF ES GO MA MG MS MT PA PB PE PI PR RJ RN RO RR RS SC SE SP TO'.split(' ');
+
+  // listarOrgaos(uf) (opcional, painel): linhas de oportunidades_abertas do estado. Sem ele, só a busca por nome/UASG/CNPJ.
+  function montarPesquisa({ alvo, requisitar, cliente, sancoes, listarOrgaos }) {
     const form = el('form', 'la-form');
     form.noValidate = true;
-    const campo = (rotulo, entrada) => { const l = el('label', 'la-campo', rotulo); l.append(entrada); return l; };
-    const orgao = el('input'); orgao.name = 'orgao'; orgao.placeholder = 'Código UASG, nome ou CNPJ do órgão'; orgao.maxLength = 80; orgao.autocomplete = 'off';
-    const buscarOrgao = el('button', 'la-botao', 'Buscar órgão'); buscarOrgao.type = 'button';
+    let seq = 0;
+    const base = `la-${Math.random().toString(36).slice(2, 7)}`;
+    // Campo no padrão do painel (.campo: rótulo em cima, entrada de 40 px) e id próprio para o rótulo apontar.
+    const campo = (rotulo, entrada, dica) => {
+      const c = el('div', 'campo la-campo'); entrada.id = `${base}-${seq++}`;
+      const l = el('label', null, rotulo); l.htmlFor = entrada.id; c.append(l, entrada);
+      if (dica) { const d = el('span', 'la-dica', dica); d.id = `${entrada.id}-dica`; entrada.setAttribute('aria-describedby', d.id); c.append(d); }
+      return c;
+    };
+    const opcoes = (s, lista) => { for (const [v, t] of lista) s.append(new global.Option(t, v)); return s; };
+    const bloco = (numero, titulo) => { const f = el('fieldset', 'la-bloco'); const lg = el('legend', 'la-bloco-titulo'); lg.append(el('span', 'la-passo', numero), titulo); f.append(lg); return f; };
+
+    const orgao = el('input'); orgao.name = 'orgao'; orgao.type = 'search'; orgao.placeholder = 'Ex.: prefeitura de manaus, 158465 ou o CNPJ'; orgao.maxLength = 80; orgao.autocomplete = 'off';
+    const buscarOrgao = el('button', 'btn-imprimir la-acao', 'Buscar órgão'); buscarOrgao.type = 'button';
     const unidade = el('select'); unidade.name = 'uasg';
-    unidade.append(new global.Option('Busque o órgão primeiro', ''));
-    const catmat = el('input'); catmat.name = 'catmat'; catmat.placeholder = 'Ex.: 463574'; catmat.inputMode = 'numeric'; catmat.maxLength = 12;
+    unidade.append(new global.Option('Busque o órgão acima', ''));
+    const linhaOrgao = el('div', 'la-linha'); linhaOrgao.append(campo('Nome, código UASG ou CNPJ do órgão', orgao, 'Digite parte do nome: as unidades aparecem sozinhas.'), buscarOrgao);
+
+    // "Não sabe o nome?": procurar por estado, cidade, esfera e tipo.
+    const achar = el('details', 'la-achar');
+    const uf = opcoes(el('select'), [['', 'Escolha o estado'], ...UFS.map((u) => [u, u])]); uf.name = 'uf';
+    const cidade = el('input'); cidade.name = 'municipio'; cidade.placeholder = 'Ex.: Manaus'; cidade.maxLength = 80; cidade.autocomplete = 'off';
+    const cidades = el('datalist'); cidades.id = `${base}-cidades`; cidade.setAttribute('list', cidades.id);
+    const esfera = opcoes(el('select'), [['', 'Todas'], ['F', 'Federal'], ['E', 'Estadual'], ['M', 'Municipal']]); esfera.name = 'esfera';
+    const tipo = opcoes(el('select'), [['', 'Todos os tipos'], ...TIPOS_ORGAO.map(([v, t]) => [v, t]), ['outros', 'Outros']]); tipo.name = 'tipo';
+    const parte = el('input'); parte.name = 'parte'; parte.placeholder = 'Ex.: saúde, educação'; parte.maxLength = 60; parte.autocomplete = 'off';
+    const listar = el('button', 'btn-imprimir la-acao', 'Listar órgãos'); listar.type = 'button';
+    const gradeAchar = el('div', 'la-grade');
+    gradeAchar.append(campo('Estado', uf), campo('Cidade (opcional)', cidade), campo('Esfera', esfera), campo('Tipo de órgão', tipo), campo('Parte do nome (opcional)', parte), listar);
+    const estadoAchar = el('p', 'la-apoio'); estadoAchar.setAttribute('role', 'status'); estadoAchar.setAttribute('aria-live', 'polite');
+    const listaAchar = el('div', 'la-orgaos');
+    achar.append(el('summary', null, 'Não sabe o nome nem o código? Procure por estado, cidade e tipo de órgão'),
+      el('p', 'la-apoio', 'Lista os órgãos com licitação aberta agora no PNCP. Escolha a unidade e siga para o produto.'), gradeAchar, cidades, estadoAchar, listaAchar);
+    achar.hidden = typeof listarOrgaos !== 'function';
+
+    const blocoOrgao = bloco('1', 'Órgão comprador');
+    blocoOrgao.append(linhaOrgao, achar, campo('Unidade compradora (UASG)', unidade));
+
+    const catmat = el('input'); catmat.name = 'catmat'; catmat.placeholder = 'Ex.: 463574'; catmat.inputMode = 'numeric'; catmat.maxLength = 12; catmat.autocomplete = 'off';
     const palavras = el('input'); palavras.name = 'palavras'; palavras.placeholder = 'Ex.: café torrado moído'; palavras.maxLength = 120;
+    const linhaProduto = el('div', 'la-linha la-produto-linha');
+    linhaProduto.append(campo('Palavras do produto', palavras, 'Como está escrito no edital.'), el('span', 'la-ou', 'ou'), campo('Código CATMAT', catmat, 'Número do item no catálogo, se souber.'));
+    const blocoProduto = bloco('2', 'Produto');
+    blocoProduto.append(el('p', 'la-apoio', 'Preencha um dos dois. Com o código CATMAT o resultado fica mais preciso.'), linhaProduto);
+
     const anos = el('select'); anos.name = 'anos';
     for (const n of [3, 2, 1]) anos.append(new global.Option(`Últimos ${n} ano${n > 1 ? 's' : ''}`, String(n)));
-    const consultar = el('button', 'la-botao la-primario', 'Consultar licitações anteriores'); consultar.type = 'submit';
-    const linhaOrgao = el('div', 'la-linha'); linhaOrgao.append(campo('Órgão', orgao), buscarOrgao);
-    form.append(linhaOrgao, campo('Unidade compradora (UASG)', unidade), campo('Produto: código CATMAT', catmat), campo('ou palavras do produto', palavras), campo('Período', anos), consultar);
+    const consultar = el('button', 'btn-buscar la-acao', 'Consultar licitações anteriores'); consultar.type = 'submit';
+    const linhaFim = el('div', 'la-linha la-fim'); linhaFim.append(campo('Período', anos), consultar);
+    // Período e botão no mesmo tipo de bloco dos passos 1 e 2 (antes ficavam soltos, colados na borda).
+    const blocoFim = bloco('3', 'Período e consulta');
+    blocoFim.append(linhaFim);
+    form.append(blocoOrgao, blocoProduto, blocoFim);
     const estado = el('p', 'la-apoio'); estado.setAttribute('role', 'status'); estado.setAttribute('aria-live', 'polite');
     const resultado = el('div');
     alvo.replaceChildren(form, estado, resultado);
@@ -747,21 +834,72 @@
     async function chamar(corpo) {
       try { return await requisitar(corpo); } catch (e) { return { erro: e && e.message ? e.message : 'Não foi possível consultar agora.' }; }
     }
-    buscarOrgao.addEventListener('click', async () => {
-      if (ocupado) return;
-      ocupado = true; estado.textContent = 'Buscando o órgão…';
-      const r = await chamar({ acao: 'orgaos', q: orgao.value });
-      ocupado = false;
+    function escolherUnidade(uasg, rotulo) {
+      unidade.replaceChildren(new global.Option(`${uasg} · ${rotulo}`, uasg));
+      unidade.value = uasg;
+      estado.textContent = `Unidade ${uasg} escolhida. Agora informe o produto.`;
+      palavras.focus();
+    }
+    let pedidoOrgao = 0;
+    async function procurarOrgao() {
+      const termo = orgao.value.trim();
+      if (termo.replace(/\D/g, '').length !== 14 && termo.length < 3) { estado.textContent = 'Digite ao menos 3 letras do nome, o código UASG ou o CNPJ.'; return; }
+      const meu = ++pedidoOrgao;
+      buscarOrgao.disabled = true; estado.textContent = 'Buscando o órgão…';
+      const r = await chamar({ acao: 'orgaos', q: termo });
+      if (meu !== pedidoOrgao) return; // digitação mais nova já pediu outra busca
+      buscarOrgao.disabled = false;
       unidade.replaceChildren();
       const lista = Array.isArray(r.orgaos) ? r.orgaos : [];
-      if (!lista.length) { unidade.append(new global.Option(r.erro || 'Nenhuma unidade encontrada', '')); estado.textContent = r.erro || 'Nenhuma unidade encontrada. Tente o código UASG.'; return; }
+      if (!lista.length) { unidade.append(new global.Option(r.erro || 'Nenhuma unidade encontrada', '')); estado.textContent = r.erro || 'Nenhuma unidade encontrada. Tente outra parte do nome, o código UASG ou procure por estado e cidade.'; return; }
       for (const o of lista) unidade.append(new global.Option(`${o.uasg} · ${o.nome}`, o.uasg));
-      estado.textContent = `${lista.length} unidade(s) encontrada(s).`;
+      estado.textContent = `${lista.length} unidade(s) encontrada(s). Confira a escolhida em "Unidade compradora".`;
+    }
+    buscarOrgao.addEventListener('click', () => { void procurarOrgao(); });
+    // Autocompletar: busca sozinha quando a digitação para (cota própria e cache de 1 dia no servidor).
+    let espera = null;
+    orgao.addEventListener('input', () => {
+      global.clearTimeout(espera);
+      if (orgao.value.trim().length >= 3) espera = global.setTimeout(() => { void procurarOrgao(); }, 600);
     });
+    orgao.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); global.clearTimeout(espera); void procurarOrgao(); } });
+
+    const linhasPorUf = new Map();
+    function botao(texto, aoClicar) { const b = el('button', 'btn-imprimir', texto); b.type = 'button'; b.addEventListener('click', aoClicar); return b; }
+    async function listarDoEstado() {
+      if (!uf.value) { estadoAchar.textContent = 'Escolha o estado.'; uf.focus(); return; }
+      listar.disabled = true; estadoAchar.textContent = `Carregando os órgãos de ${uf.value}…`;
+      try {
+        if (!linhasPorUf.has(uf.value)) linhasPorUf.set(uf.value, await listarOrgaos(uf.value));
+      } catch {
+        estadoAchar.textContent = 'Não foi possível carregar os órgãos agora. Tente de novo.'; return;
+      } finally { listar.disabled = false; }
+      const linhas = linhasPorUf.get(uf.value) || [];
+      cidades.replaceChildren(...[...new Set(linhas.map((l) => l.municipio).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR')).map((m) => new global.Option(m)));
+      const achados = filtrarOrgaos(linhas, { municipio: cidade.value, esfera: esfera.value, tipo: tipo.value, nome: parte.value });
+      estadoAchar.textContent = achados.length ? `${achados.length} órgão(s) em ${uf.value}${achados.length > 60 ? '. Mostrando os 60 com mais licitações; use cidade ou tipo para achar outro' : ''}.`
+        : 'Nenhum órgão com licitação aberta com esses filtros. Tire a cidade ou o tipo.';
+      listaAchar.replaceChildren(...achados.slice(0, 60).map((g) => {
+        const item = el('div', 'la-orgao');
+        const info = el('div', 'la-orgao-info');
+        info.append(el('strong', null, g.orgao), el('span', 'la-dica', [g.municipio && `${g.municipio}/${g.uf}`, g.esfera, `${g.abertas} licitação(ões) aberta(s)`].filter(Boolean).join(' · ')));
+        const acoes = el('div', 'la-orgao-acoes');
+        const rotulo = `${g.orgao}${g.municipio ? ` (${g.municipio}/${g.uf})` : ''}`;
+        for (const u of g.uasgs.slice(0, 4)) acoes.append(botao(`Usar UASG ${u}`, () => escolherUnidade(u, rotulo)));
+        // Unidade sem código no padrão do Compras.gov: o CNPJ do órgão lista as unidades dele no PNCP.
+        if (!g.uasgs.length && g.cnpj) acoes.append(botao('Ver unidades deste órgão', () => { orgao.value = g.cnpj; void procurarOrgao(); }));
+        item.append(info, acoes);
+        return item;
+      }));
+    }
+    listar.addEventListener('click', () => { void listarDoEstado(); });
     form.addEventListener('submit', async (ev) => {
       ev.preventDefault();
       if (ocupado) return;
-      if (!unidade.value) { estado.textContent = 'Escolha a unidade compradora.'; return; }
+      if (!unidade.value) { estado.textContent = 'Escolha a unidade compradora: busque o órgão pelo nome ou procure por estado e cidade.'; orgao.focus(); return; }
+      // Mesma regra do servidor (validarConsulta), dita antes de gastar a consulta.
+      if (catmat.value.trim() && !/^\d{1,12}$/.test(catmat.value.replace(/[\s.-]/g, ''))) { estado.textContent = 'O código CATMAT tem só números (ex.: 463574).'; catmat.focus(); return; }
+      if (!catmat.value.trim() && palavras.value.trim().length < 3) { estado.textContent = 'Informe as palavras do produto (ex.: café torrado) ou o código CATMAT.'; palavras.focus(); return; }
       ocupado = true; consultar.disabled = true;
       estado.textContent = 'Consultando as compras anteriores no PNCP e no Compras.gov… pode levar até um minuto.';
       const r = await chamar({ acao: 'consultar', uasg: unidade.value, catmat: catmat.value, palavras: palavras.value, anos: Number(anos.value) });
@@ -797,7 +935,7 @@
     try { global.document?.dispatchEvent(new global.CustomEvent('licitaplena:vencedores', { detail: detalhe })); } catch { /* sem DOM (testes) */ }
   }
 
-  const api = { textoDesconto, vencedoresDoProcesso, resultadoDe, itemPassa, linkGoogle, linkWhatsApp, textoCompartilhar, montarVisao, vencedorDe, variacao, chaveMarca, montar, montarPesquisa, desenhar, linkOficial, urlsVerTudo, PASSOS_VER_TUDO, indexarGravado, participantesDoItem, cnpjsDaVisao,
+  const api = { tipoDeOrgao, filtrarOrgaos, textoDesconto, vencedoresDoProcesso, resultadoDe, itemPassa, linkGoogle, linkWhatsApp, textoCompartilhar, montarVisao, vencedorDe, variacao, chaveMarca, montar, montarPesquisa, desenhar, linkOficial, urlsVerTudo, PASSOS_VER_TUDO, indexarGravado, participantesDoItem, cnpjsDaVisao,
     textoSelo, seloGravado, sancoesEmLote, lerGravados, carregarExtras, camadasDoPregao, completudeDoPregao, assinaturaGravado, recarregarSeMudou };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else global.LicitaLicitacaoAnterior = api;

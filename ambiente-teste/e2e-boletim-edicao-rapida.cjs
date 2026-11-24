@@ -1,4 +1,4 @@
-/* global document, window -- usado só dentro de p.evaluate (roda no navegador) */
+/* global window -- usado só dentro de p.evaluate (roda no navegador) */
 // E2E 23/11: o link "Acessar o boletim" tem de abrir a edição na hora, no computador (1280) e no celular (375).
 // Põe 200 mil oportunidades fictícias no banco LOCAL (tamanho parecido com produção) e mede, já logado:
 //   antes  = busca antiga por numero_controle_pncp (sem índice)

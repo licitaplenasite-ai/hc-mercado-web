@@ -105,6 +105,21 @@
     return p.join(" · ");
   }
 
+  // Estados que voltam marcados no campo UF ao reabrir a busca. Com raio, a busca salvava em "ufs" os estados
+  // que o raio alcança (não os que o usuário marcou) e eles reapareciam todos marcados no campo; com raio o
+  // campo é ignorado, então volta vazio (= todos). Sem raio, volta o que foi salvo (escolha do usuário ou região).
+  function ufsParaRestaurar(f) {
+    if (!f || typeof f !== "object" || f.raio) return [];
+    if (Array.isArray(f.ufs)) return f.ufs;
+    return f.uf ? [f.uf] : [];
+  }
+  // Texto curto do campo UF fechado: vazio ou os 27 = "Todos os estados"; até 2 siglas por extenso; depois "+N".
+  function resumoUfs(ufs) {
+    const lista = Array.isArray(ufs) ? ufs : [];
+    if (!lista.length || lista.length >= 27) return "Todos os estados";
+    return lista.length <= 2 ? lista.join(", ") : `${lista.slice(0, 2).join(", ")} +${lista.length - 2}`;
+  }
+
   // --- "Monte minha busca com IA" ---
   // Nada pessoal vai ao provedor: o texto do usuário perde e-mail, telefone, CPF/CNPJ, links e números longos.
   function limparDescricao(texto) {
@@ -151,7 +166,7 @@
     return dia + 3 * 36e5;
   }
 
-  const api = { REGIOES, LIMITES, norm, distanciaKm, criarIndice, coordenada, origemDoTexto, sugerirCidades, ufsNoRaio, dentroDoRaio, textoExcluido, limparFiltro, nomeValido, resumoFiltro, limparDescricao, sanitizarSugestao, extrairJson, momentoDoAviso };
+  const api = { REGIOES, LIMITES, norm, distanciaKm, criarIndice, coordenada, origemDoTexto, sugerirCidades, ufsNoRaio, dentroDoRaio, textoExcluido, limparFiltro, nomeValido, resumoFiltro, ufsParaRestaurar, resumoUfs, limparDescricao, sanitizarSugestao, extrairJson, momentoDoAviso };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else raiz.BuscaAvancada = api;
 })(globalThis);

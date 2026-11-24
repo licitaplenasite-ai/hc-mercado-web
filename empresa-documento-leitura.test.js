@@ -1,4 +1,3 @@
-/* global Buffer */
 // Leitura do contrato social / alteração contratual (sem IA). Regressão 23/11: alteração contratual real de 9+ páginas
 // respondia "documento excede 8 páginas" e nada era sugerido.
 const test = require('node:test');

@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { montarVisao, vencedorDe, variacao, linkOficial, textoDesconto } = require("./licitacao-anterior-ui.js");
+const { montarVisao, vencedorDe, variacao, linkOficial, textoDesconto, tipoDeOrgao, filtrarOrgaos } = require("./licitacao-anterior-ui.js");
 
 test("textoDesconto: abaixo, acima, igual e sem dado", () => {
   assert.equal(textoDesconto(-18), "18,0% abaixo");
@@ -98,4 +98,35 @@ test("ver tudo: ata completa do ComprasNet antigo e Acompanhar contratação do 
   assert.equal(PASSOS_VER_TUDO.length, 3);
   assert.match(PASSOS_VER_TUDO[1].texto, /Ler esta página e gravar/);
   assert.match(PASSOS_VER_TUDO[2].texto, /atualiza sozinho/);
+});
+
+test("tipoDeOrgao: câmara antes de prefeitura, saúde municipal é saúde, nome desconhecido é outros", () => {
+  assert.equal(tipoDeOrgao("CÂMARA MUNICIPAL DE PARINTINS"), "legislativo");
+  assert.equal(tipoDeOrgao("Prefeitura Municipal de Manaus"), "prefeitura");
+  assert.equal(tipoDeOrgao("FUNDO MUNICIPAL DE SAÚDE DE ITACOATIARA"), "saude");
+  assert.equal(tipoDeOrgao("UNIVERSIDADE FEDERAL DO AMAZONAS"), "educacao");
+  assert.equal(tipoDeOrgao("COMANDO MILITAR DA AMAZÔNIA"), "seguranca");
+  assert.equal(tipoDeOrgao("TRIBUNAL DE JUSTIÇA DO AMAZONAS"), "justica");
+  assert.equal(tipoDeOrgao("XPTO"), "outros");
+});
+
+test("filtrarOrgaos: agrupa por órgão e cidade, só UASG de 5 a 8 dígitos, CNPJ do controle PNCP e filtros combinados", () => {
+  const l = (orgao, municipio, codigoUnidade, esferaId, cnpj = "04312401000136") => ({ uf: "AM", orgao, municipio, codigoUnidade, esferaId, numero_controle_pncp: `${cnpj}-1-000001/2026` });
+  const linhas = [
+    l("PREFEITURA MUNICIPAL DE MANAUS", "Manaus", "927000", "M"), l("Prefeitura Municipal de Manaus", "MANAUS", "927010", "M"), l("PREFEITURA MUNICIPAL DE MANAUS", "Manaus", "927000", "M"),
+    l("CAMARA MUNICIPAL DE PARINTINS", "Parintins", "1", "M", "04329736000169"),
+    l("SECRETARIA DE ESTADO DE SAUDE", "Manaus", "925001", "D"),
+    l("UNIVERSIDADE FEDERAL DO AMAZONAS", "Manaus", "154039", "F"), null, { uf: "AM", orgao: "" },
+  ];
+  const todos = filtrarOrgaos(linhas);
+  assert.equal(todos.length, 4);
+  assert.deepEqual([todos[0].orgao, todos[0].abertas, todos[0].uasgs], ["PREFEITURA MUNICIPAL DE MANAUS", 3, ["927000", "927010"]]);
+  const camara = todos.find((g) => g.tipo === "legislativo");
+  assert.deepEqual([camara.uasgs, camara.cnpj], [[], "04329736000169"]); // UASG "1" não serve para a consulta: fica o CNPJ
+  assert.equal(filtrarOrgaos(linhas, { esfera: "E" })[0].esfera, "Estadual"); // DF/distrital conta como estadual
+  assert.equal(filtrarOrgaos(linhas, { municipio: "parin" }).length, 1);
+  assert.equal(filtrarOrgaos(linhas, { tipo: "saude" }).length, 1);
+  assert.equal(filtrarOrgaos(linhas, { nome: "universidade" })[0].uasgs[0], "154039");
+  assert.equal(filtrarOrgaos(linhas, { nome: "1540" }).length, 1); // parte do código também acha
+  assert.deepEqual(filtrarOrgaos(linhas, { esfera: "F", tipo: "prefeitura" }), []);
 });
