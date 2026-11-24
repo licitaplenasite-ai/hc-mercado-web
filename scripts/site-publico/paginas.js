@@ -48,8 +48,8 @@ const FERRAMENTAS = [
       "Depois de salvo, o edital abre uma trilha de passos: dados, custos e impostos, declarações e proposta.",
     ],
     passos: ["No cartão da licitação, clique em Resumir edital.", "Leia o resumo na gaveta do lado direito.", "Use Pergunte ao Edital para tirar dúvidas e confira o trecho citado."],
-    print: "r02-gaveta-resumo",
-    printAlt: "Gaveta com o resumo do edital e o campo Pergunte ao Edital (dados fictícios)",
+    vitrine: ["resumo-edital", 1048, 602],
+    printAlt: "Resumo do edital com valor estimado, modalidade, data da sessão e identificação da licitação (dados fictícios)",
     cuidado: "O resumo é um apoio de leitura. A IA pode errar: confira sempre no edital original antes de enviar proposta.",
     plano: "Incluso em todos os planos, com uso justo da IA.",
     faq: [
@@ -74,8 +74,8 @@ const FERRAMENTAS = [
       "Lance com 1 clique (extra Lance assistido): sugere o próximo lance a partir do valor mínimo que você cadastrou e só envia quando você clica.",
     ],
     passos: ["Instale a extensão pela página Extensão.", "Abra o pregão no Compras.gov e deixe a aba aberta.", "Receba o aviso quando o pregoeiro escrever e responda no prazo."],
-    print: "e01-pagina-extensao",
-    printAlt: "Página de instalação da extensão do LicitaPlena",
+    vitrine: ["vigia", 840, 640],
+    printAlt: "Extensão do LicitaPlena acompanhando o chat de um pregão aberto na aba (dados fictícios)",
     cuidado: "Hoje o vigia funciona com a aba do pregão aberta no navegador. Não há lance automático: a decisão de cada lance é sempre sua.",
     plano: "Extensão no plano Empresa. O monitor do chat é o extra Pacote Operação, e o Lance com 1 clique é o extra Lance assistido.",
     faq: [
@@ -129,8 +129,8 @@ const FERRAMENTAS = [
       "Salva o resumo no item, para usar na proposta.",
     ],
     passos: ["Abra o processo e o item em Itens do processo.", "Confirme o regime e informe o ICMS da sua UF.", "Preencha os custos, clique em Calcular e salve no item."],
-    print: "c16-contador",
-    printAlt: "Tela do Contador com regime, custos e preço mínimo do item (dados fictícios)",
+    vitrine: ["contador", 850, 520],
+    printAlt: "Quadro Preço com impostos do item: regime da empresa, NCM, classificação tributária e ano da entrega (dados fictícios)",
     cuidado: "É uma estimativa para formar preço, não um parecer contábil. Confirme com o seu contador.",
     plano: "Plano Empresa.",
     faq: [
@@ -181,8 +181,8 @@ const FERRAMENTAS = [
       "Confere sanções no CEIS e no CNEP.",
     ],
     passos: ["Menu, Analisar concorrente.", "Digite o CNPJ ou parte do nome e clique em Analisar empresa.", "Pelo nome, escolha a empresa na lista."],
-    print: "p09-concorrente",
-    printAlt: "Tela de análise de concorrente por CNPJ (dados fictícios)",
+    vitrine: ["concorrente", 1010, 580],
+    printAlt: "Análise de concorrente: itens disputados, vitórias, valor ganho e onde a empresa mais perde (dados fictícios)",
     cuidado: "Os dados vêm de fontes públicas oficiais e podem ter atraso de publicação.",
     plano: "Plano Empresa.",
     faq: [
