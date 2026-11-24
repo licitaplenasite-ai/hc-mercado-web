@@ -13,6 +13,7 @@ Disallow: /convite
 Disallow: /responder-oportunidade
 Disallow: /resumo-processo
 Disallow: /prospeccao
+Disallow: /orgao
 Disallow: /orcamento-obra
 Disallow: /assinar
 Disallow: /sinapi

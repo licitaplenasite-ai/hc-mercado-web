@@ -54,8 +54,9 @@
     // Processo perdido, contratado ou arquivado não pede mais nada: some do Meu dia (o arquivado nem vem no catálogo).
     const encerrado = (processoId) => Boolean(processoId) && FINAIS.includes(porProcesso.get(processoId)?.status);
     const comEmpresa = (empresaId) => (UUID.test(empresaId || '') ? 'empresa=' + empresaId : '');
-    // shortcut: o painel.html ainda não abre um cartão do Funil pela URL; o link leva só ao Funil.
-    const abrirFunil = { tipo: 'link', href: 'painel.html#kanban', texto: 'Abrir no Funil' };
+    // O painel.html escolhe a empresa e abre o cartão do processo; sem os dois IDs válidos, leva só ao Funil.
+    const abrirFunil = (empresaId, processoId) => ({ tipo: 'link', texto: 'Abrir no Funil', href: UUID.test(empresaId || '') && UUID.test(processoId || '')
+      ? 'painel.html?empresa=' + empresaId + '&processo=' + processoId + '#kanban' : 'painel.html#kanban' });
     const itens = [];
 
     // Sessões de hoje até 7 dias. A intenção de recurso é imediata (art. 165, § 1º, I); as razões, 3 dias úteis da ata.
@@ -116,7 +117,7 @@
       itens.push({ chave: 'tarefa:' + t.id, tipo: 'tarefa', rotuloTipo: 'Tarefa do Funil', dias: t.dias, ordem: Date.parse(t.inicio + ':00-03:00'),
         titulo: txt(t.titulo, 160) || 'Tarefa',
         detalhes: [rotuloProcesso(t.processoId), dataBr(t.inicio) + ' às ' + t.inicio.slice(11, 16) + ' (horário de Brasília)', t.responsavel ? 'Responsável: ' + txt(t.responsavel, 80) : ''],
-        empresaId: t.empresaId, processoId: t.processoId, acao: abrirFunil });
+        empresaId: t.empresaId, processoId: t.processoId, acao: abrirFunil(t.empresaId, t.processoId) });
     }
 
     // Cartão parado não tem vencimento: entra como atrasado (já passou do limite da etapa), ordenado pelos dias parado.
@@ -126,7 +127,7 @@
       itens.push({ chave: 'parado:' + p.processoId, tipo: 'parado', rotuloTipo: 'Funil parado', dias: -Math.max(1, p.dias), ordem: 0, seloTexto: 'Parado há ' + plural(p.dias, 'dia', 'dias'),
         titulo: rotuloProcesso(p.processoId) || 'Processo do Funil',
         detalhes: ['Sem movimento além do limite da etapa (' + plural(p.limite, 'dia', 'dias') + '). Defina o próximo passo.'],
-        empresaId: p.empresaId, processoId: p.processoId, acao: abrirFunil });
+        empresaId: p.empresaId, processoId: p.processoId, acao: abrirFunil(p.empresaId, p.processoId) });
     }
     return itens;
   }

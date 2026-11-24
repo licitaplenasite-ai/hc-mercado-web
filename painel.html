@@ -892,6 +892,7 @@
   .kanban-card.arrastando { opacity: .4; }
   .kanban-card-objeto { font-size: 13px; font-weight: 700; line-height: 1.35; margin: 0 0 8px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
   .kanban-card-meta { font-size: 11.5px; color: var(--texto-fraco); margin: 0 0 3px; display: flex; gap: 6px; align-items: center; }
+  .kanban-card-orgao { color: inherit; text-decoration: underline dotted; text-underline-offset: 2px; } .kanban-card-orgao:hover { color: var(--azul); text-decoration-style: solid; }
   .kanban-card-prazo { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px; margin-top: 8px; }
   .kanban-card-prazo.ok { background: rgba(52,193,124,0.15); color: var(--verde-texto); }
   .kanban-card-prazo.perto { background: rgba(242,137,26,0.18); color: var(--laranja-forte-texto); }
@@ -1752,6 +1753,10 @@
       </div>
     </div>
 
+    <!-- CRM fase 2: previsão de faturamento e "Por que eu perco?" (crm-relatorios-ui.js, supabase/funil_previsao.sql) -->
+    <link rel="stylesheet" href="crm-relatorios.css"><script src="contrato-publico.js"></script><script src="crm-relatorios-ui.js"></script>
+    <div id="dash-crm" class="dash-crm"></div>
+
     <div class="dash-grafico-linha">
       <div class="dash-painel-titulo">Oportunidades por dia &mdash; m&ecirc;s atual</div>
       <div id="dash-grafico-dias" class="dash-barras"></div>
@@ -2342,7 +2347,8 @@
     <script src="funil-checklist-ui.js"></script>
     <link rel="stylesheet" href="funil-v3.css"><link rel="stylesheet" href="agenda-ics.css">
     <script src="agenda-ics.js"></script><script src="funil-tarefas-ui.js"></script><script src="funil-metas-ui.js"></script>
-    <link rel="stylesheet" href="funil-crm.css"><script src="funil-crm-ui.js"></script>
+    <link rel="stylesheet" href="funil-crm.css"><script src="funil-crm-ui.js"></script><script src="ficha-orgao.js"></script>
+    <link rel="stylesheet" href="funil-exemplos.css"><script src="funil-exemplos-ui.js"></script>
     <div class="boletim-cabecalho">
       <div>
         <h2 style="margin:0;"><svg class='icone-ph'><use href='#ph-folders'></use></svg> Funil</h2>
@@ -2363,6 +2369,7 @@
     </div>
     <div id="funil-filtros" class="funil-filtros"></div>
     <div id="funil-salvos"></div>
+    <div id="funil-exemplos"></div>
     <div id="kanban-quadro" class="kanban-quadro"></div>
     <div id="funil-lista" hidden></div>
     <div id="funil-arquivados" hidden></div>
@@ -2374,7 +2381,7 @@
         <h3 id="etapas-titulo">Etapas do Funil</h3>
         <button type="button" class="btn-imprimir" id="etapas-fechar">Fechar</button>
       </div>
-      <p class="etapas-ajuda">Cada etapa é uma coluna do Funil, nesta ordem. "Conta como" é o estágio que o processo recebe no sistema. As 4 etapas do sistema podem ser renomeadas, coloridas e reordenadas, mas não excluídas. "Alerta de parado" é quantos dias o cartão pode ficar na etapa sem mudar nem ter tarefa concluída antes de ganhar o selo "Parado" (vazio usa o número sugerido; 0 desliga). Tudo é salvo na hora.</p>
+      <p class="etapas-ajuda">Cada etapa é uma coluna do Funil, nesta ordem. "Conta como" é o estágio que o processo recebe no sistema. As 4 etapas do sistema podem ser renomeadas, coloridas e reordenadas, mas não excluídas. "Alerta de parado" é quantos dias o cartão pode ficar na etapa sem mudar nem ter tarefa concluída antes de ganhar o selo "Parado" (vazio usa o número sugerido; 0 desliga). "Chance de ganhar" pesa cada licitação na previsão de faturamento do Dashboard (vazio usa o padrão do estágio). Tudo é salvo na hora.</p>
       <p id="etapas-aviso" class="erro-campo" role="alert" hidden></p>
       <ol id="etapas-lista" class="etapas-lista"></ol>
       <button type="button" class="btn-imprimir" id="etapas-nova">+ Nova etapa</button>
@@ -4532,19 +4539,19 @@
     // Datas do PNCP sem fuso (ou somente YYYY-MM-DD) representam o horário
     // informado pela fonte. Converter com Date nesse caso pode retroceder um dia
     // no Amazonas/Brasília; por isso formatamos os componentes literalmente.
-    const partes = String(iso).trim().match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}):(\d{2}))?/);
+    // Com fuso ("...Z", "...+00:00": timestamptz do banco) é um instante: vira horário de Brasília, senão 18h saía "21:00".
+    const texto = String(iso).trim();
+    const comFuso = /[T\s]\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}(:?\d{2})?)$/i.test(texto);
+    const partes = !comFuso && texto.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}):(\d{2}))?/);
     if (partes) {
       const [, ano, mes, dia, hora, minuto] = partes;
       return hora && minuto ? `${dia}/${mes}/${ano} ${hora}:${minuto} (horário de Brasília)` : `${dia}/${mes}/${ano}`;
     }
-    const d = new Date(iso);
+    const d = new Date(texto);
     if (isNaN(d.getTime())) return String(iso);
-    const dia = String(d.getDate()).padStart(2, "0");
-    const mes = String(d.getMonth() + 1).padStart(2, "0");
-    const ano = d.getFullYear();
-    const hora = String(d.getHours()).padStart(2, "0");
-    const min = String(d.getMinutes()).padStart(2, "0");
-    return `${dia}/${mes}/${ano} ${hora}:${min} (horário de Brasília)`;
+    const p = Object.fromEntries(new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit",
+      year: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(d).map((x) => [x.type, x.value]));
+    return `${p.day}/${p.month}/${p.year} ${p.hour}:${p.minute} (horário de Brasília)`;
   }
 
   function extrairUf(registro) {
@@ -4751,9 +4758,14 @@
   }
   function dataOperacional(valor, comHora) {
     if (!valor) return null;
-    const data = new Date(valor);
+    // Data e hora do PNCP sem fuso já são de Brasília: lidas no fuso do navegador, saíam 1 h erradas no Amazonas.
+    const texto = String(valor).trim();
+    const semFuso = /^\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(texto);
+    const data = new Date(semFuso ? texto.replace(" ", "T") + "-03:00" : valor);
     if (Number.isNaN(data.getTime())) return null;
-    return comHora ? data.toISOString() : data.toISOString().slice(0, 10);
+    if (comHora) return data.toISOString();
+    // Só a data: a do dia de Brasília (AAAA-MM-DD puro fica como veio).
+    return /^\d{4}-\d{2}-\d{2}$/.test(texto) ? texto : new Date(data.getTime() - 3 * 3600000).toISOString().slice(0, 10);
   }
   function dadosStatusOperacional(status) {
     return ({
@@ -5052,7 +5064,8 @@
         monitorItens: Array.isArray(processo.monitor_itens) ? processo.monitor_itens : [], dataResultado: processo.data_resultado || null,
         // Fase 1 de CRM: etapa_desde ausente = funil_crm.sql ainda não aplicado ou processo antigo (conta de atualizado_em).
         etapaDesde: processo.etapa_desde || null, atualizadoEm: processo.atualizado_em || null,
-        motivoPerda: processo.motivo_perda || null, precoProposta: processo.preco_proposta ?? null
+        motivoPerda: processo.motivo_perda || null, precoProposta: processo.preco_proposta ?? null,
+        exemplo: processo.exemplo === true // funil_exemplos.sql: cartão de exemplo do primeiro acesso
       };
     }
     const idsProcesso = processos.filter(p => status[p.origem_externa_id]).map(p => p.id);
@@ -5308,6 +5321,56 @@
   document.querySelectorAll(".seletor-empresa-acompanhamento").forEach(seletor => {
     seletor.addEventListener("change", () => { void selecionarEmpresaAcompanhamento(seletor.value); });
   });
+  // "Abrir no Funil" (meu-dia.js): painel.html?empresa=<id>&processo=<id>#kanban escolhe a empresa e abre o cartão, uma vez.
+  const UUID_LINK_FUNIL = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const parametrosLinkFunil = new URLSearchParams(location.search);
+  let cartaoDoLink = UUID_LINK_FUNIL.test(parametrosLinkFunil.get("processo") || "") ? parametrosLinkFunil.get("processo") : null;
+  if (cartaoDoLink && UUID_LINK_FUNIL.test(parametrosLinkFunil.get("empresa") || "")) {
+    localStorage.setItem("licitaplena_empresa_operacional_id", parametrosLinkFunil.get("empresa")); // a empresa só vale se estiver na lista do usuário
+  }
+  function abrirCartaoDoLink() {
+    if (!cartaoDoLink || location.hash !== "#kanban") return;
+    const editais = lerMapa("kanban-editais");
+    const id = Object.keys(editais).find((k) => editais[k]?.processoId === cartaoDoLink);
+    cartaoDoLink = null;
+    const card = id && [...document.querySelectorAll("#kanban-quadro .kanban-card")].find((c) => c.dataset.id === id);
+    if (!card) {
+      avisarSincronizacaoOperacional("Este processo não está no Funil desta empresa. Ele pode ter sido arquivado (veja em Arquivados) ou ter sido cadastrado só no sistema.");
+      return;
+    }
+    card.classList.add("fx-aberto");
+    card.tabIndex = -1;
+    card.title = "Cartão aberto pelo link do Meu dia";
+    card.scrollIntoView({ block: "center", inline: "center" });
+    card.focus({ preventScroll: true });
+  }
+  // Primeiro acesso (funil-exemplos-ui.js): convite com o Funil vazio; faixa "Apagar exemplos" enquanto houver exemplo.
+  function desenharExemplosFunil() {
+    const host = document.getElementById("funil-exemplos");
+    if (!host || !window.LicitaFunilExemplos) return;
+    host.innerHTML = semEmpresaCadastrada || !empresaAcompanhamentoPronta ? "" : LicitaFunilExemplos.htmlFaixa({
+      total: Object.keys(lerMapa("status-licitacao")).length + arquivadosFunil.length,
+      exemplos: Object.values(lerMapa("kanban-editais")).filter((e) => e?.exemplo).length + arquivadosFunil.filter((p) => p.exemplo).length });
+  }
+  document.getElementById("funil-exemplos").addEventListener("click", async (ev) => {
+    const botao = ev.target.closest("[data-fx]");
+    if (!botao || !empresaOperacionalId || botao.disabled) return;
+    const criar = botao.dataset.fx === "criar";
+    if (!criar && !confirm("Apagar todos os cartões de exemplo desta empresa? Seus processos reais não são tocados.")) return;
+    const empresaId = empresaOperacionalId;
+    botao.disabled = true;
+    botao.textContent = criar ? "Criando exemplos..." : "Apagando exemplos...";
+    try {
+      const { organizacaoId } = await empresaOperacionalParaDossie(empresaId);
+      if (criar) await LicitaFunilExemplos.criar(window.__sbClient, organizacaoId, empresaId);
+      else await LicitaFunilExemplos.apagar(window.__sbClient, organizacaoId, empresaId);
+      await carregarAcompanhamentosEmpresa(organizacaoId, empresaId);
+      avisarSincronizacaoOperacional(criar ? "Pronto: 4 licitações de exemplo no Funil. Apague quando quiser em \"Apagar exemplos\"." : "Exemplos apagados. Seu Funil está pronto para as licitações de verdade.");
+    } catch (erro) {
+      avisarSincronizacaoOperacional((criar ? "Não foi possível criar os exemplos: " : "Não foi possível apagar os exemplos: ") + (erro?.message || erro) + ". Tente de novo em instantes.", true);
+    }
+    if (empresaOperacionalId === empresaId) atualizarStatusAcompanhamentoNaTela();
+  });
   void carregarEmpresasAcompanhamento();
   let ultimaVerificacaoEmpresas = Date.now();
   window.addEventListener("focus", () => {
@@ -5320,6 +5383,8 @@
   function montarCardKanban(id, edital, valorStatus, anotacaoAtual) {
     const classePrazo = classePrazoKanban(edital.encerramento);
     const linkSistema = linkSistemaProcesso(empresaOperacionalId, edital.processoId);
+    // CRM fase 2: o nome do órgão abre a ficha do órgão (orgao.html, ficha-orgao.js).
+    const linkOrgao = window.LicitaFichaOrgao?.linkFicha({ controle: edital.numeroControlePNCP || id, nome: edital.orgao });
     const selo = SELOS_ESTEIRA[esteiraPorProcesso[edital.processoId]];
     const seloHtml = selo ? `<span class="kanban-card-prazo kanban-card-esteira ${selo[0]}">${selo[1]}</span>` : "";
     const prazoHtml = edital.encerramento
@@ -5343,7 +5408,7 @@
           <p class="kanban-card-objeto">${escapeHtml(edital.objeto || "Licitação sem título")}</p>
           <button class="kanban-card-remover" type="button" title="Arquivar (sai do Funil e fica em Arquivados)" aria-label="Arquivar" data-id="${escapeHtml(id)}">✕</button>
         </div>
-        <p class="kanban-card-meta"><svg class='icone-ph'><use href='#ph-bank'></use></svg> ${escapeHtml(edital.orgao || "Órgão não informado")}</p>
+        <p class="kanban-card-meta"><svg class='icone-ph'><use href='#ph-bank'></use></svg> ${linkOrgao ? `<a class="kanban-card-orgao" href="${escapeHtml(linkOrgao)}" draggable="false" title="Abrir a ficha do órgão: licitações, contratos, contatos e o seu histórico">${escapeHtml(edital.orgao || "Ver ficha do órgão")}</a>` : escapeHtml(edital.orgao || "Órgão não informado")}</p>
         <p class="kanban-card-meta"><svg class='icone-ph'><use href='#ph-map-pin'></use></svg> ${escapeHtml([edital.municipio, edital.uf].filter(Boolean).join(" / ") || "Não informado")}</p>
         ${prazoHtml}${seloHtml}${LicitaFunilCrm.htmlSeloParado(parado)}
         ${motivoHtml}
@@ -5365,6 +5430,7 @@
   function renderizarKanban() {
     const alvo = document.getElementById("kanban-quadro");
     if (!alvo) return;
+    desenharExemplosFunil();
     if (semEmpresaCadastrada || !empresaAcompanhamentoPronta) {
       mostrarVistaFunil("quadro");
       document.getElementById("funil-filtros").innerHTML = "";
@@ -5423,6 +5489,7 @@
     }).join("");
 
     ligarAcoesKanban();
+    abrirCartaoDoLink();
   }
 
   // ---- Funil: filtros, lista, Arquivados, favoritas e checklist (funil-checklist-ui.js) ----
@@ -5787,6 +5854,7 @@
         <label class="etapa-campo etapa-conta"><span>Conta como</span><select class="etapa-input-status" ${protegida ? 'disabled title="Etapa do sistema: o estágio não muda"' : ""}>${opcoes}</select></label>
         <label class="etapa-campo etapa-cor"><span>Cor</span><input type="color" class="etapa-input-cor" value="${escapeHtml(e.cor)}"></label>
         <label class="etapa-campo etapa-limite"><span>Alerta de parado (dias)</span><input type="number" class="etapa-input-limite" inputmode="numeric" min="0" max="365" step="1" aria-describedby="etapas-aviso" value="${Number.isInteger(e.limite_parado_dias) ? e.limite_parado_dias : ""}" placeholder="${LicitaFunilCrm.limiteDaEtapa(null, e.status_sistema) ?? "sem alerta"}" title="Vazio = padrão do estágio; 0 = sem alerta"></label>
+        ${campoChanceEtapa(e)}
         <div class="etapa-acoes">
           <button type="button" class="btn-imprimir etapa-mover" data-passo="-1" aria-label="Subir ${nome}" ${i === 0 ? "disabled" : ""}>↑</button>
           <button type="button" class="btn-imprimir etapa-mover" data-passo="1" aria-label="Descer ${nome}" ${i === etapas.length - 1 ? "disabled" : ""}>↓</button>
@@ -5794,6 +5862,13 @@
         </div>
       </li>`;
     }).join("");
+  }
+  // Chance de ganhar (%) da previsão (crm-relatorios-ui.js): só etapa em aberto e só com a coluna no banco
+  // (funil_previsao.sql; sem ela a linha nem traz "probabilidade"). Vazio = padrão do estágio.
+  function campoChanceEtapa(e) {
+    const padrao = window.LicitaCrmRelatorios?.CHANCE_PADRAO?.[e.status_sistema];
+    if (!("probabilidade" in e) || padrao === undefined) return "";
+    return `<label class="etapa-campo etapa-limite etapa-chance"><span>Chance de ganhar (%)</span><input type="number" class="etapa-input-chance" inputmode="numeric" min="0" max="100" step="1" aria-describedby="etapas-aviso" value="${Number.isInteger(e.probabilidade) ? e.probabilidade : ""}" placeholder="${padrao}" title="Vazio = padrão do estágio (${padrao}%)"></label>`;
   }
   // Depois de mudar etapas: completa as protegidas se faltava alguma e redesenha o quadro.
   async function aplicarEtapas(etapas) {
@@ -5836,13 +5911,21 @@
       campo.setAttribute("aria-invalid", String(Boolean(problema)));
       if (problema) { avisarEtapas(problema); return; }
       campos = { limite_parado_dias: texto ? dias : null };
+    } else if (campo.classList.contains("etapa-input-chance")) {
+      const chance = LicitaCrmRelatorios.lerChance(campo.value);
+      campo.setAttribute("aria-invalid", String(chance === undefined));
+      if (chance === undefined) { avisarEtapas("A chance de ganhar aceita de 0 a 100% (vazio usa o padrão do estágio)."); return; }
+      campos = { probabilidade: chance };
     }
     if (!campos) return;
     avisarEtapas("");
-    try { await gravarEtapa(id, campos); }
-    catch (erro) {
+    try {
+      await gravarEtapa(id, campos);
+      if (campos.status_sistema) renderizarDialogoEtapas(); // a chance de ganhar só vale para etapa em aberto
+    } catch (erro) {
       avisarEtapas(erroColunaFunil(erro) ? "Este recurso ainda está sendo ativado. Tente mais tarde." : mensagemErroEtapa(erro));
       if ("limite_parado_dias" in campos) { campo.value = Number.isInteger(etapa.limite_parado_dias) ? etapa.limite_parado_dias : ""; return; }
+      if ("probabilidade" in campos) { campo.value = Number.isInteger(etapa.probabilidade) ? etapa.probabilidade : ""; return; }
       // Nome repetido fica no campo para a pessoa corrigir; o resto volta ao valor salvo.
       if (erro?.code === "23505") campo.setAttribute("aria-invalid", "true");
       else if (campos.nome) campo.value = etapa.nome;
@@ -9516,6 +9599,7 @@
 
 window.__atualizarDashboard = function () {
   carregarVisaoGeralMercado();
+  void window.LicitaCrmRelatorios?.atualizar?.();
   const elOp = document.getElementById("dash-num-oportunidades");
   try {
     if (typeof bolResultadosCompletos !== "undefined" && elOp) {

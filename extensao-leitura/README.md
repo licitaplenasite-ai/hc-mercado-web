@@ -232,3 +232,7 @@ Quando um fluxo não reconhece a página do portal, o popup mostra a seção **P
 ## Visual na paleta do site (0.5.1, 23/11/2026)
 
 Só aparência: popup com a paleta A (marinho, royal, ciano de destaque), logo livre embutida no `popup.html` (o empacotador só segue `<script>`/`<link>`), botões em pílula e ícone `icone.png` novo (logo branca no marinho). Sem mudança de permissões, ids ou lógica. A versão sobe para o pacote novo ter outro nome de arquivo e quem já instalou saber que há atualização.
+
+## Popup com topo marinho e atalhos (0.5.2, 24/11/2026)
+
+Só aparência: topo marinho de ponta a ponta com a logo branca e fio ciano (mesma assinatura do site e dos e-mails), atalhos para as cinco seções, botão "PARAR lances" logo abaixo do topo e grudado no alto ao rolar, com moldura da cor do fundo para o texto não aparecer por trás, e um giro pequeno nos botões enquanto a leitura/gravação está em andamento (respeita "reduzir movimento"). Sem mudança de permissões, ids ou lógica.

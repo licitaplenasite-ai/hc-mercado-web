@@ -62,7 +62,8 @@ function avisosDeLembretes(lembretes, agora) {
 }
 
 function avisosDePrazosProcesso(prazos) {
-  return prazos.filter((p) => p.operacao_processos?.criado_por).map((p) => ({ usuario: p.operacao_processos.criado_por, chave: `prz:${p.id}:${p.vencimento}`,
+  // Exemplo do primeiro acesso (funil_exemplos.sql) não vira aviso: o banco garante o prefixo "[Exemplo] " no objeto.
+  return prazos.filter((p) => p.operacao_processos?.criado_por && !String(p.operacao_processos.objeto || "").startsWith("[Exemplo] ")).map((p) => ({ usuario: p.operacao_processos.criado_por, chave: `prz:${p.id}:${p.vencimento}`,
     tipo: "prazo", titulo: "Prazo vencendo", tag: `prz:${p.id}`, corpo: `${curto(p.titulo, 80)} (${curto(p.operacao_processos.objeto, 60)})`,
     url: linkProcesso(p.operacao_processos.empresa_id, p.processo_id) }));
 }

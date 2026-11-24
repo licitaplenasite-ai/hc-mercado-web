@@ -257,7 +257,10 @@ async function buscarJson(url, signal) {
     // status e Retry-After seguem no erro: o robô da pré-consulta (scripts/pre_consultar_precos.js) respeita o 429.
     const erro = new Error(`fonte-${resposta.status}`);
     erro.status = resposta.status;
-    erro.esperarS = Number(resposta.headers?.get?.("retry-after")) || null;
+    // Retry-After vem em segundos ou como data HTTP (RFC 9110); a data vira segundos a partir de agora.
+    const retry = resposta.headers?.get?.("retry-after");
+    erro.esperarS = Number(retry) || (retry && Math.ceil((Date.parse(retry) - Date.now()) / 1000)) || null;
+    if (erro.esperarS !== null && !(erro.esperarS > 0)) erro.esperarS = null;
     throw erro;
   }
   return resposta.json();

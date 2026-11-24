@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { escolherTermos, consultarTermo, executar, TERMOS_INICIAIS } = require("./pre_consultar_precos");
+const { escolherTermos, consultarTermo, executar, esperaDepoisDo429, proximosPendentes, TERMOS_INICIAIS } = require("./pre_consultar_precos");
 const { chaveDaConsulta } = require("../netlify/functions/comprasgov-marcas-produto");
 
 test("escolherTermos: mais buscados primeiro, completa com a lista inicial, sem repetir nem passar do total", () => {
@@ -38,10 +38,11 @@ test("executar: 429 espera o Retry-After e tenta de novo; 429 seguidos param o r
   const esperas = [], gravadas = [];
   let bloqueiosRestantes = 1;
   const montar = fonte({ bloquear: () => bloqueiosRestantes-- > 0 });
-  const r1 = await executar({ termos: ["notebook", "toner"], montar, gravar: async (l) => gravadas.push(...l), esperar: async (ms) => esperas.push(ms), log: () => {} });
+  const r1 = await executar({ termos: ["notebook", "toner"], montar, gravar: async (l) => gravadas.push(...l), esperar: async (ms) => esperas.push(ms), log: () => {}, aleatorio: () => 0 });
   assert.deepEqual([r1.completos, r1.bloqueios, r1.parouCedo], [2, 1, null]);
-  assert.equal(esperas[0], 20000, "esperou o Retry-After (20 s), acima do mínimo de 15 s");
+  assert.ok(esperas[0] >= 19900 && esperas[0] <= 20000, `esperou o Retry-After (20 s), acima do mínimo de 15 s: ${esperas[0]}`);
   assert.equal(gravadas.length, 6);
+  assert.deepEqual([r1.falharam, r1.naoRodaram], [[], []]);
 
   const sempre = fonte({ bloquear: () => true });
   const r2 = await executar({ termos: ["a1", "b2", "c3", "d4", "e5"], montar: sempre, gravar: async () => {}, esperar: async () => {}, log: () => {}, concorrencia: 1 });
@@ -64,4 +65,53 @@ test("executar: 2 termos por vez consultam todos, cada um gravado uma vez", asyn
     esperar: async () => {}, log: () => {}, concorrencia: 2 });
   assert.equal(r.completos, 5);
   assert.deepEqual([...gravados].sort(), ["caneta", "cola", "lapis", "notebook", "toner"]);
+});
+
+test("esperaDepoisDo429: recuo exponencial com teto, Retry-After como piso e jitter limitado", () => {
+  // Padrões: base 15 s, teto 120 s, jitter 30%.
+  assert.deepEqual([1, 2, 3, 4, 5].map((n) => esperaDepoisDo429(n, null, () => 0)), [15000, 30000, 60000, 120000, 120000]);
+  assert.equal(esperaDepoisDo429(1, 45, () => 0), 45000, "Retry-After maior que o recuo manda");
+  assert.equal(esperaDepoisDo429(1, 300, () => 0), 300000, "Retry-After passa do teto: a fonte manda");
+  assert.equal(esperaDepoisDo429(2, 10, () => 0.999), Math.round(30000 * (1 + 0.3 * 0.999)), "jitter até +30%");
+});
+
+test("executar: 429 pausa todos os termos simultâneos e respeita a pausa antes do próximo pedido", async () => {
+  let t = 0;
+  const esperas = [];
+  let bloqueios = 1;
+  const pedidos = [];
+  const montar = async (consulta) => {
+    pedidos.push({ termo: consulta.termo, t });
+    if (consulta.codigoPdm === null && consulta.termo === "toner" && bloqueios-- > 0) { const e = new Error("fonte-429"); e.status = 429; e.esperarS = 60; throw e; }
+    return fonte()(consulta);
+  };
+  // O relógio só anda quando alguém espera (esperar avança t).
+  const r = await executar({ termos: ["toner", "caneta", "lapis"], montar, gravar: async () => {}, relogio: () => t,
+    esperar: async (ms) => { esperas.push(ms); t += ms; }, log: () => {}, concorrencia: 2, aleatorio: () => 0 });
+  assert.equal(r.completos, 3);
+  assert.ok(esperas.includes(60000), "esperou o Retry-After de 60 s");
+  // Nenhum pedido de outro termo antes de a pausa do 429 acabar (exceto os que já tinham saído antes do 429).
+  const depois = pedidos.filter((p) => p.termo === "lapis");
+  assert.ok(depois.every((p) => p.t >= 60000), `lapis só depois da pausa: ${JSON.stringify(depois)}`);
+});
+
+test("executar: termo bloqueado em todas as tentativas vai para a lista de retomada, e o que não rodou também", async () => {
+  const montar = fonte({ bloquear: (c) => c.termo === "toner" });
+  const r = await executar({ termos: ["toner", "caneta", "lapis"], montar, gravar: async () => {}, esperar: async () => {}, log: () => {},
+    concorrencia: 1, aleatorio: () => 0 });
+  // 4 bloqueios seguidos (1 + 3 tentativas) param o robô: toner falhou, caneta e lapis ficaram para depois.
+  assert.equal(r.parouCedo, "429");
+  assert.deepEqual([r.falharam, r.naoRodaram], [["toner"], ["caneta", "lapis"]]);
+});
+
+test("proximosPendentes: falhou soma, não rodou mantém, completou sai, desiste em MAX_RETOMADAS", () => {
+  const anterior = { toner: 1, caneta: 2, lapis: 0, cola: 1 };
+  const fila = proximosPendentes(anterior, { falharam: ["toner", "caneta", "novo"], naoRodaram: ["lapis", "papel a4"] }, 3);
+  // cola completou (não está em nenhuma lista); caneta chegou a 3 e sai.
+  assert.deepEqual(fila, { toner: 2, novo: 1, lapis: 0, "papel a4": 0 });
+  assert.deepEqual(proximosPendentes({}, { falharam: [], naoRodaram: [] }, 3), {});
+});
+
+test("escolherTermos: retomados entram primeiro, sem repetir os mais buscados", () => {
+  assert.deepEqual(escolherTermos(["toner", "papel a4", "toner"], 3), ["toner", "papel a4", "caneta"]);
 });

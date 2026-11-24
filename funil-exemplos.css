@@ -1,0 +1,13 @@
+/* Funil: exemplos do primeiro acesso (funil-exemplos-ui.js) e cartão aberto pelo link ?processo=. Só tokens (ds-tokens.css). */
+.fx-faixa { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-8) var(--space-12);
+  margin: 0 0 var(--space-12); padding: 12px 16px; border: 1px solid var(--info-border); border-radius: var(--radius-control);
+  background: var(--info-bg); color: var(--text-primary); font: var(--text-body); }
+.fx-faixa p { margin: 0; flex: 1 1 280px; overflow-wrap: anywhere; }
+.fx-faixa strong { color: var(--info-text); }
+.fx-faixa-ativa { border-color: var(--attention-border); background: var(--attention-bg); }
+.fx-faixa-ativa strong { color: var(--attention-text); }
+.fx-faixa button { min-height: 40px; }
+.fx-faixa button:focus-visible, .kanban-card.fx-aberto:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+/* Cartão que o link "Abrir no Funil" (Meu dia) abriu: borda e anel em ciano, sem depender só da cor (o rótulo vem no title). */
+.kanban-card.fx-aberto { border-color: var(--destaque); box-shadow: 0 0 0 3px var(--destaque); }
+@media (prefers-reduced-motion: no-preference) { .kanban-card.fx-aberto { transition: box-shadow .3s; } }

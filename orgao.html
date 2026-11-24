@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="robots" content="noindex, nofollow">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ficha do órgão — LicitaPlena</title>
+<link rel="icon" type="image/png" href="favicon.png?v=3"><link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" crossorigin="anonymous"></script><script src="supabase-config.js"></script><script src="trava-sessao.js"></script><noscript><meta http-equiv="refresh" content="0;url=login.html"></noscript><script src="plano-trava.js" defer></script>
+<link rel="stylesheet" href="ds-tokens.css"><link rel="stylesheet" href="agentes-rotulo.css"><link rel="stylesheet" href="menu-lateral.css">
+<!-- Tema: mesma chave do painel; claro é o padrão, só quem escolheu "escuro" fica no escuro. -->
+<script>(function(){var t=null;try{t=localStorage.getItem("licitaplena_tema");}catch(e){}if(t!=="escuro")document.documentElement.classList.add("tema-claro");document.documentElement.dataset.theme=t==="escuro"?"dark":"light";})();</script>
+<style>
+/* Ficha do órgão (CRM fase 2, 24/11/2026). Base copiada de prospeccao.html (topo, botões, campos, avisos); o resto em crm-orgao.css. */
+*{box-sizing:border-box}
+[data-theme="dark"]{color-scheme:dark}[data-theme="light"]{color-scheme:light}
+body{margin:0;background:var(--surface-page);color:var(--text-primary);font:var(--text-body);font-family:var(--font-sans)}
+button,input,select{font-family:var(--font-sans)}
+:is(button,a,input,select,[tabindex]):focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
+header{position:sticky;top:0;z-index:5;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:8px 24px;background:var(--surface-default);border-bottom:1px solid var(--border-default)}
+.topo-marca-linha{display:flex;align-items:center;gap:8px;min-width:0}
+header .marca{display:flex;align-items:center;gap:8px;color:var(--text-primary);text-decoration:none;font:600 16px/24px var(--font-sans)}
+.marca-placa{display:inline-grid;place-content:center;width:32px;height:32px;border-radius:var(--radius-control);background:none;border:0;flex:none}
+.marca-placa img{width:24px;height:24px;display:block}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:0 16px;border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--surface-default);color:var(--text-primary);font:500 14px/16px var(--font-sans);cursor:pointer;text-decoration:none}
+.btn:hover{background:var(--surface-sunken)}
+.btn.primario{background:var(--action-strong);border-color:transparent;color:var(--action-on)}
+.btn.primario:hover{background:var(--action-strong-hover)}
+.tema-icone{width:40px;padding:0;font-size:16px}
+main{max-width:1280px;margin:0 auto;padding:24px 24px 56px}
+.topo h1{font:var(--text-title);margin:0 0 4px}
+.topo p,.nota,.vazio{color:var(--text-secondary);line-height:1.5;margin:0}
+.card{background:var(--surface-default);border:1px solid var(--border-default);border-radius:var(--radius-card);padding:16px;margin:16px 0}
+.filtros{display:grid;grid-template-columns:110px 1fr 170px minmax(190px,auto) auto;gap:12px;align-items:end}
+label{display:block;font:var(--text-label);color:var(--text-primary);margin:0 0 6px}
+select,input{width:100%;min-height:40px;padding:8px 12px;border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--surface-default);color:var(--text-primary);font:var(--text-body)}
+input::placeholder{color:var(--text-secondary);opacity:1}
+#origem-filtro{margin-top:8px;font-size:13px}
+.abas{display:flex;gap:8px;overflow:auto;border-bottom:1px solid var(--border-default);margin:8px 0 0}
+.aba{background:transparent;border:0;border-bottom:2px solid transparent;color:var(--text-secondary);font:500 14px/20px var(--font-sans);padding:11px 10px;cursor:pointer;white-space:nowrap}
+.aba:hover{color:var(--text-primary)}
+.aba.ativa{color:var(--text-primary);border-color:var(--action-strong);font-weight:600}
+.explica{margin:12px 0 8px;font-size:13px}
+#contador{font:var(--text-label);color:var(--text-secondary);margin:8px 0}
+.tabela-wrap{border:1px solid var(--border-default);border-radius:var(--radius-card);overflow:auto}
+.tabela{width:100%;border-collapse:collapse}
+.tabela th{background:var(--surface-sunken);color:var(--text-secondary);font:var(--text-label);text-align:left;padding:10px 12px;border-bottom:1px solid var(--border-default);white-space:nowrap}
+.tabela td{padding:10px 12px;line-height:20px;border-bottom:1px solid var(--border-default);vertical-align:top}
+.tabela tbody tr:last-child td{border-bottom:0}
+.tabela tbody tr:hover{background:var(--surface-sunken)}
+.tabela td small{display:block;color:var(--text-secondary);font-size:12px;line-height:18px;margin-top:2px}
+.tabela td.item{max-width:460px}
+/* Objeto da contratação costuma ter 10+ linhas: 3 bastam para reconhecer; o resto está no link oficial. */
+.tabela td.item small:first-of-type{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.tabela a{color:var(--action-text);font-weight:600}
+.dias.urgente{color:var(--attention-text);font-weight:600}
+.tabela tr[hidden]{display:none}
+.tabela tr.espec-cab td{background:var(--surface-sunken);text-align:center;padding:10px 12px}
+.tabela tr.so-espec td{opacity:.85}
+.tabela small.adesao b{color:var(--text-primary)}
+.tabela small.adesao.esgotada,.tabela small.adesao.esgotada b{color:var(--attention-text)}
+.vazio{padding:24px;text-align:center}
+#cobertura{margin:4px 0 12px;font-size:13px;color:var(--text-secondary)}
+#cobertura summary{cursor:pointer;color:var(--action-text);font-weight:600}
+.cobertura-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:4px 12px;list-style:none;padding:8px 0 0;margin:0}
+.aviso{display:none;margin:12px 0;border:1px solid;border-radius:var(--radius-card);padding:12px 16px}
+.aviso.erro{display:block;color:var(--error-text);border-color:var(--error-border);background:var(--error-bg)}
+.aviso.info{display:block;color:var(--info-text);border-color:var(--info-border);background:var(--info-bg)}
+@media(max-width:900px){.filtros{grid-template-columns:110px 1fr 1fr}.filtros .acao{grid-column:1/-1}}
+@media(max-width:640px){
+  header{padding:8px 12px}main{padding:16px}
+  .filtros{grid-template-columns:1fr 1fr}.filtros .palavras{grid-column:1/-1}
+  /* Celular: cada linha vira um cartão com o rótulo da coluna (data-rotulo), sem rolagem lateral. */
+  .tabela-wrap{border:0;overflow:visible}.tabela thead{display:none}
+  .tabela,.tabela tbody,.tabela tr,.tabela td{display:block;width:100%}
+  .tabela tr{border:1px solid var(--border-default);border-radius:var(--radius-card);margin-bottom:12px;background:var(--surface-default)}
+  .tabela td{border-bottom:1px solid var(--border-default);max-width:none}
+  .tabela td[data-rotulo]::before{content:attr(data-rotulo);display:block;font:var(--text-label);color:var(--text-secondary);margin-bottom:2px}
+  .tabela td.item{max-width:none}
+}
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&display=swap" rel="stylesheet"><link rel="stylesheet" href="interno-premium.css"><link rel="stylesheet" href="crm-orgao.css">
+</head>
+<body>
+<header><div class="topo-marca-linha"><button id="nav-gaveta-btn" type="button" aria-controls="menu-principal" aria-expanded="false">Menu</button><a class="marca" href="painel.html" title="Voltar ao painel principal"><span class="marca-placa"><img src="logo-icone.svg" alt=""></span>LicitaPlena</a></div><div class="acoes"><button class="btn tema-icone" id="btn-tema" type="button" title="Alternar tema claro/escuro" aria-label="Alternar tema claro/escuro">☾</button></div></header>
+<div class="shell">
+<!-- Menu lateral: mesma estrutura e itens do menu do painel.html (duplicação intencional entre páginas). Comportamento em menu-lateral.js. -->
+<nav id="menu-principal" aria-label="Menu principal">
+  <button id="nav-colapsar-btn" type="button" title="Recolher menu" aria-controls="menu-principal">
+    <span class="nav-ico" aria-hidden="true">&#171;</span><span class="nav-label">Recolher</span>
+  </button>
+  <a href="/sistema" title="Hoje"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-house"></use></svg></span><span class="nav-label">Hoje</span></a>
+  <a href="painel.html#dashboard" title="Dashboard"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-squares-four"></use></svg></span><span class="nav-label">Dashboard</span></a>
+  <a href="painel.html#boletim" title="Boletim"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-clipboard-text"></use></svg></span><span class="nav-label">Boletim</span></a>
+  <a href="painel.html#oportunidades" title="Encontrar Licitações"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-magnifying-glass"></use></svg></span><span class="nav-label">Encontrar Licitações</span></a>
+  <a href="painel.html#diagnostico" title="Inteligência de Mercado"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-chart-bar"></use></svg></span><span class="nav-label">Inteligência de Mercado</span></a>
+  <a href="prospeccao.html" title="Prospecção"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-target"></use></svg></span><span class="nav-label">Prospecção</span></a>
+  <a href="painel.html#empresa" title="Analisar concorrente"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-buildings"></use></svg></span><span class="nav-label">Analisar concorrente</span></a>
+  <a href="painel.html#transparencia" title="Convênios e Emendas Federais"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-handshake"></use></svg></span><span class="nav-label">Convênios e Emendas Federais</span></a>
+  <a href="painel.html#precos" title="Pesquisa de Preços"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-coins"></use></svg></span><span class="nav-label">Pesquisa de Preços</span></a>
+  <a href="orcamento-obra.html" title="Orçamento de obra"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-toolbox"></use></svg></span><span class="nav-label">Orçamento de obra</span></a>
+  <a href="painel.html#kanban" title="Funil"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-funnel"></use></svg></span><span class="nav-label">Funil</span></a>
+  <a href="quadros.html" title="Quadros"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-kanban"></use></svg></span><span class="nav-label">Quadros</span></a>
+  <a href="processos.html" title="Processos"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-folder-open"></use></svg></span><span class="nav-label">Processos</span></a>
+  <a href="operacao.html" title="Minhas empresas e documentos"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-files"></use></svg></span><span class="nav-label">Minhas empresas e documentos</span></a>
+  <a href="extensao.html" target="_blank" rel="noopener" class="nav-externo" title="Extensão (abre em nova guia)" aria-label="Extensão (abre em nova guia)"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-puzzle-piece"></use></svg></span><span class="nav-label">Extensão</span><svg class="icone-ph nav-externo-ico" aria-hidden="true"><use href="menu-icones.svg#ph-arrow-square-out"></use></svg></a>
+  <a href="painel.html#juridico" title="Jurídico &amp; Dúvidas"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-scales"></use></svg></span><span class="nav-label">Jurídico &amp; Dúvidas</span></a>
+  <a href="hc.html" target="_blank" rel="noopener" data-hc-site title="Consultoria"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-briefcase"></use></svg></span><span class="nav-label">Consultoria</span></a>
+</nav>
+<div class="nav-gaveta-fundo" id="nav-gaveta-fundo" hidden></div>
+<main id="ficha-orgao">
+  <a class="fo-voltar" href="processos.html" id="fo-voltar">&larr; Voltar</a>
+  <div id="aviso" class="aviso" role="status" aria-live="polite"></div>
+  <div id="fo-conteudo"><p class="fo-carregando">Carregando a ficha do órgão…</p></div>
+</main>
+</div>
+<script src="ficha-orgao.js"></script>
+<script>
+(() => {
+  'use strict';
+  const F = window.LicitaFichaOrgao;
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const $ = (id) => document.getElementById(id);
+  const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const dinheiro = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? 'Não informado' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+  const data = (d) => (d ? new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC' }).format(new Date(String(d).slice(0, 10) + 'T00:00:00Z')) : '—');
+  const hoje = new Date(Date.now() - 3 * 36e5).toISOString().slice(0, 10); // dia de Brasília (UTC-3, sem horário de verão)
+  const ETAPAS = { triagem: 'Triagem', preparacao: 'Preparação', proposta_enviada: 'Proposta enviada', sessao: 'Sessão', habilitacao: 'Habilitação', recurso: 'Recurso', homologado: 'Homologado', contratado: 'Contratado', perdido: 'Perdido', arquivado: 'Arquivado' };
+  const estado = { orgId: null, podeEscrever: false, alvo: F.lerParametros(location.search), cnpj: null, nome: '', chave: null, chaves: [], registros: [], registrosOk: true, empresas: new Map(), ficha: null, processos: [] };
+
+  function aviso(texto, tipo) { const a = $('aviso'); a.className = 'aviso' + (texto ? ' ' + (tipo || 'info') : ''); a.textContent = texto || ''; }
+  if (document.referrer && new URL(document.referrer).origin === location.origin) $('fo-voltar').addEventListener('click', (ev) => { ev.preventDefault(); history.back(); });
+
+  $('btn-tema').addEventListener('click', () => {
+    const claro = document.documentElement.classList.toggle('tema-claro');
+    document.documentElement.dataset.theme = claro ? 'light' : 'dark';
+    try { localStorage.setItem('licitaplena_tema', claro ? 'claro' : 'escuro'); } catch { /* segue sem persistir */ }
+  });
+
+  async function autenticar() {
+    const { data: { session } } = await sb.auth.getSession();
+    const voltar = encodeURIComponent('/orgao' + location.search);
+    if (!session) { location.replace('login.html?voltar=' + voltar); return null; }
+    const { data: cliente } = await sb.from('clientes').select('status').eq('id', session.user.id).maybeSingle();
+    if (!cliente || cliente.status !== 'aprovado') { await sb.auth.signOut(); location.replace('login.html?voltar=' + voltar); return null; }
+    return session.user.id;
+  }
+
+  async function iniciar() {
+    const usuario = await autenticar();
+    if (!usuario) return;
+    const { data: orgId, error } = await sb.rpc('bootstrap_operacao');
+    if (error) { aviso('Não foi possível abrir a ficha agora. Recarregue a página em instantes; se continuar, fale com o suporte.', 'erro'); return; }
+    estado.orgId = orgId;
+    const [m, e] = await Promise.all([
+      sb.from('operacao_membros').select('papel,empresa_id').eq('organizacao_id', orgId).eq('usuario_id', usuario).maybeSingle(),
+      sb.from('operacao_empresas').select('id,razao_social').eq('organizacao_id', orgId),
+    ]);
+    estado.podeEscrever = !m.error && m.data && !m.data.empresa_id && ['gestor', 'operador'].includes(m.data.papel);
+    for (const x of e.data || []) estado.empresas.set(x.id, x.razao_social);
+    if (!estado.alvo.cnpj && !estado.alvo.nome) { await mostrarInicio(); return; }
+    await carregarFicha();
+  }
+
+  // ---------- Sem órgão no link: busca e órgãos acompanhados ----------
+  async function mostrarInicio() {
+    document.title = 'Ficha do órgão — LicitaPlena';
+    const r = await sb.from('operacao_orgaos_registros').select('id,orgao_chave,orgao_nome,criado_em').eq('organizacao_id', estado.orgId).eq('tipo', 'acompanhar').order('orgao_nome');
+    const lista = r.error ? [] : r.data || [];
+    $('fo-conteudo').innerHTML = `
+      <section class="fo-cabeca"><div><span class="fo-rotulo">Ficha do órgão</span><h1>Qual órgão você quer conhecer?</h1>
+        <p>Licitações abertas, contratos, atas, quem vende para ele e o seu histórico, num lugar só.</p></div></section>
+      <section class="fo-secao"><h2>Abrir a ficha</h2>
+        <form class="fo-busca" id="fo-busca" novalidate>
+          <div><label for="fo-busca-termo">CNPJ ou nome exato do órgão</label><input id="fo-busca-termo" maxlength="300" placeholder="Ex.: 04.312.369/0001-90 ou Prefeitura Municipal de Manaus" autocomplete="off"></div>
+          <button class="btn primario" type="submit">Abrir ficha do órgão</button>
+          <p class="fo-erro inteiro" id="fo-busca-erro" role="alert"></p>
+        </form></section>
+      <section class="fo-secao"><h2>Órgãos que você acompanha</h2>
+        ${r.error ? '<p class="nota">A lista de órgãos acompanhados fica disponível depois da atualização do banco.</p>' : lista.length
+          ? `<ul class="fo-lista">${lista.map((o) => { const c = /^cnpj:(\d{14})$/.exec(o.orgao_chave)?.[1]; return `<li><div><strong><a href="${esc(F.linkFicha({ cnpj: c, nome: o.orgao_nome }))}">${esc(o.orgao_nome || F.formatarCnpj(c) || 'Órgão')}</a></strong><small>${c ? 'CNPJ ' + esc(F.formatarCnpj(c)) + ' · ' : ''}acompanhando desde ${esc(data(o.criado_em))}</small></div></li>`; }).join('')}</ul>`
+          : '<p class="nota">Nenhum ainda. Abra a ficha de um órgão (pelo Funil ou pelo processo) e clique em "Acompanhar este órgão".</p>'}
+      </section>`;
+    $('fo-busca').addEventListener('submit', (ev) => {
+      ev.preventDefault();
+      const termo = $('fo-busca-termo').value.trim(), dig = termo.replace(/\D/g, '');
+      const link = dig.length === 14 ? F.linkFicha({ cnpj: dig }) : termo.length >= 3 ? F.linkFicha({ nome: termo }) : null;
+      if (!link) { $('fo-busca-erro').textContent = 'Digite o CNPJ com 14 números ou pelo menos 3 letras do nome do órgão.'; $('fo-busca-termo').setAttribute('aria-invalid', 'true'); $('fo-busca-termo').focus(); return; }
+      location.href = link;
+    });
+    $('fo-busca-termo').addEventListener('input', () => { $('fo-busca-erro').textContent = ''; $('fo-busca-termo').removeAttribute('aria-invalid'); });
+  }
+
+  // ---------- Ficha ----------
+  async function lerProcessos(cnpj, nomes) {
+    const campos = 'id,empresa_id,objeto,numero,orgao,status,decisao,situacao_resultado,valor_homologado,valor_estimado,data_sessao,criado_em,origem_externa_id';
+    const consultas = [];
+    if (cnpj) consultas.push(sb.from('operacao_processos').select(campos).eq('organizacao_id', estado.orgId).like('origem_externa_id', cnpj + '-%').limit(200));
+    for (const n of new Set(nomes.filter((x) => x && x.trim().length >= 3))) consultas.push(sb.from('operacao_processos').select(campos).eq('organizacao_id', estado.orgId).ilike('orgao', F.padraoIlike(n)).limit(200));
+    const respostas = await Promise.all(consultas);
+    const erro = respostas.find((r) => r.error);
+    const unicos = new Map();
+    for (const r of respostas) for (const p of r.data || []) unicos.set(p.id, p);
+    return { erro: erro?.error || null, lista: [...unicos.values()].sort((a, b) => String(b.criado_em).localeCompare(String(a.criado_em))) };
+  }
+  async function lerRegistros() {
+    const r = await sb.from('operacao_orgaos_registros').select('*').eq('organizacao_id', estado.orgId).in('orgao_chave', estado.chaves).order('criado_em', { ascending: false });
+    estado.registrosOk = !r.error;
+    estado.registros = r.error ? [] : r.data || [];
+  }
+
+  async function carregarFicha() {
+    const { cnpj, nome } = estado.alvo;
+    const f = await sb.rpc('ficha_orgao', { p_cnpj: cnpj, p_nome: nome || null });
+    if (f.error) aviso('Os dados públicos do órgão não puderam ser lidos agora (licitações, contratos e atas). O seu histórico e as anotações aparecem abaixo. Tente de novo em instantes.', 'erro');
+    estado.ficha = f.error ? null : f.data;
+    estado.cnpj = estado.ficha?.cnpj || cnpj || null;
+    estado.nome = estado.ficha?.dados?.nome || nome || '';
+    estado.chave = F.chaveOrgao({ cnpj: estado.cnpj, nome: estado.nome });
+    // Anotação feita quando só havia o nome continua aparecendo depois que o CNPJ é descoberto.
+    estado.chaves = [...new Set([estado.chave, F.chaveOrgao({ nome: estado.nome }), F.chaveOrgao({ nome })].filter(Boolean))];
+    const [proc] = await Promise.all([lerProcessos(estado.cnpj, [nome, estado.nome]), estado.chaves.length ? lerRegistros() : null]);
+    if (proc.erro) aviso('Não foi possível ler os seus processos com este órgão agora. Recarregue a página em instantes.', 'erro');
+    estado.processos = proc.lista;
+    document.title = `${estado.nome || 'Órgão'} — Ficha do órgão — LicitaPlena`;
+    desenhar();
+  }
+
+  const chip = (classe, texto) => `<span class="fo-chip ${esc(classe)}">${esc(texto)}</span>`;
+  const tabela = (cabecalho, linhas, vazio) => linhas.length
+    ? `<div class="fo-tabela-wrap" tabindex="0" role="region" aria-label="${esc(cabecalho[0])}"><table class="fo-tabela"><thead><tr>${cabecalho.map((c) => `<th scope="col">${esc(c)}</th>`).join('')}</tr></thead><tbody>${linhas.join('')}</tbody></table></div>`
+    : `<p class="nota">${vazio}</p>`;
+  const linkExterno = (url, texto) => (url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(texto)}</a>` : '');
+
+  function desenhar() {
+    const fi = estado.ficha || {};
+    const abertas = fi.abertas || [], contratos = fi.contratos || [], atas = fi.atas || [], fornecedores = fi.fornecedores || [];
+    const resumo = F.resumirRelacionamento(estado.processos);
+    const cr = fi.contratos_resumo || { quantidade: 0, valor: 0 };
+    const acompanhando = estado.registros.find((r) => r.tipo === 'acompanhar');
+    const contatos = estado.registros.filter((r) => r.tipo === 'contato');
+    const anotacoes = estado.registros.filter((r) => r.tipo === 'anotacao');
+    const local = [fi.dados?.municipio, fi.dados?.uf].filter(Boolean).join(' / ');
+    const uasgs = (fi.uasgs || []).slice(0, 6);
+    const subtitulo = [estado.cnpj ? 'CNPJ ' + F.formatarCnpj(estado.cnpj) : 'CNPJ não identificado', local, uasgs.length ? 'UASG ' + uasgs.join(', ') : ''].filter(Boolean).join(' · ');
+    const naoAchou = estado.ficha && estado.ficha.encontrado === false;
+    const proximaAberta = abertas[0] ? F.prazoAberta(abertas[0].encerramento, hoje) : null;
+
+    $('fo-conteudo').innerHTML = `
+      <section class="fo-cabeca" aria-labelledby="fo-titulo"><div><span class="fo-rotulo">Ficha do órgão</span><h1 id="fo-titulo">${esc(estado.nome || F.formatarCnpj(estado.cnpj) || 'Órgão')}</h1><p>${esc(subtitulo)}</p></div>
+        ${estado.chave && estado.registrosOk && estado.podeEscrever ? `<button type="button" class="fo-acompanhar" id="fo-acompanhar" aria-pressed="${acompanhando ? 'true' : 'false'}">${acompanhando ? '✓ Acompanhando este órgão' : 'Acompanhar este órgão'}</button>` : ''}</section>
+      ${naoAchou ? '<p class="aviso info" style="display:block">Não achamos este órgão nos dados públicos já coletados (licitações dos últimos 120 dias e contratos dos últimos 2 anos). O seu histórico, os contatos e as anotações continuam valendo.</p>' : ''}
+      <h2 class="fo-pergunta">Vale a pena disputar com este órgão?</h2>
+      <div class="fo-kpis">
+        <div class="fo-kpi destaque"><span>Licitações abertas agora</span><b>${abertas.length}</b><small>${proximaAberta ? esc(proximaAberta.texto.replace('Aberta: ', 'A próxima: ')) : 'Nenhuma aberta no momento'}</small></div>
+        <div class="fo-kpi"><span>Seu histórico aqui</span><b>${resumo.ganhou} de ${resumo.ganhou + resumo.perdeu}</b><small>${resumo.taxaVitoria == null ? 'Nenhuma disputa decidida ainda' : `disputas ganhas (${resumo.taxaVitoria}%) · ${resumo.andamento} em andamento`}</small></div>
+        <div class="fo-kpi"><span>Valor que você ganhou</span><b>${resumo.valorGanho ? esc(dinheiro(resumo.valorGanho)) : 'R$ 0,00'}</b><small>${resumo.ganhosSemValor ? `${resumo.ganhosSemValor} vitória(s) sem valor homologado informado` : 'soma do valor homologado à empresa'}</small></div>
+        <div class="fo-kpi"><span>Contratos publicados pelo órgão</span><b>${Number(cr.quantidade || 0)}</b><small>${cr.quantidade ? `${esc(dinheiro(cr.valor))} desde ${esc(data(cr.desde))}` : 'Sem contrato nos dados coletados'}</small></div>
+      </div>
+
+      <section class="fo-secao" aria-labelledby="fo-h-abertas"><h2 id="fo-h-abertas">Licitações abertas agora</h2><p class="nota">Do PNCP, coletadas pelo robô do LicitaPlena. Confira sempre o edital no link oficial.</p>
+        ${tabela(['Objeto', 'Modalidade', 'Valor estimado', 'Propostas até', 'Situação', 'Link'], abertas.map((a) => { const s = F.prazoAberta(a.encerramento, hoje); return `<tr><td><span class="fo-objeto">${esc(a.objeto)}</span></td><td>${esc(a.modalidade || '—')}</td><td class="num">${esc(dinheiro(a.valor))}</td><td>${esc(data(a.encerramento))}</td><td>${chip(s.classe, s.texto)}</td><td>${linkExterno(F.linkPncp(a.numero_controle_pncp), 'Ver no PNCP')}</td></tr>`; }), 'Nenhuma licitação aberta deste órgão nos dados coletados.')}
+      </section>
+
+      <section class="fo-secao" aria-labelledby="fo-h-historico"><h2 id="fo-h-historico">Seu histórico com este órgão</h2><p class="nota">Processos da sua organização com este órgão, de todas as empresas que você acompanha.</p>
+        ${tabela(['Processo', 'Empresa', 'Etapa', 'Resultado', 'Valor', ''], estado.processos.map((p) => { const s = F.situacaoProcesso(p); const valor = s.chave === 'ganhou' ? p.valor_homologado : p.valor_estimado; return `<tr><td><span class="fo-objeto">${esc(p.objeto)}</span>${p.numero ? `<small>${esc(p.numero)}</small>` : ''}</td><td>${esc(estado.empresas.get(p.empresa_id) || '—')}</td><td>${esc(ETAPAS[p.status] || p.status)}</td><td>${chip(s.chave, s.texto)}</td><td class="num">${esc(dinheiro(valor))}<small>${s.chave === 'ganhou' ? 'homologado' : 'estimado'}</small></td><td><a href="processos.html?empresa=${encodeURIComponent(p.empresa_id)}&amp;processo=${encodeURIComponent(p.id)}">Abrir processo</a></td></tr>`; }), 'A sua organização ainda não tem processo com este órgão. Quando você colocar uma licitação dele no Funil, ela aparece aqui.')}
+      </section>
+
+      <div class="fo-duas">
+        <section class="fo-secao" aria-labelledby="fo-h-contatos"><h2 id="fo-h-contatos">Contatos no órgão</h2><p class="nota">Pregoeiro, fiscal, gestor do contrato. Visível só para a sua equipe.</p>
+          ${!estado.registrosOk ? '<p class="nota">Contatos e anotações ficam disponíveis depois da atualização do banco.</p>' : `
+          ${contatos.length ? `<ul class="fo-lista">${contatos.map((c) => `<li><div><strong>${esc(c.nome)}</strong><small>${esc([c.papel, c.telefone, c.email].filter(Boolean).join(' · ') || 'Sem telefone ou e-mail')}${c.texto ? '\n' + esc(c.texto) : ''}</small></div>${estado.podeEscrever ? `<button type="button" class="btn" data-remover="${esc(c.id)}" aria-label="Remover o contato ${esc(c.nome)}">Remover</button>` : ''}</li>`).join('')}</ul>` : '<p class="nota">Nenhum contato registrado.</p>'}
+          ${estado.podeEscrever && estado.chave ? `<form class="fo-form" id="fo-form-contato" novalidate>
+            <div><label for="fc-nome">Nome</label><input id="fc-nome" name="nome" maxlength="120" required autocomplete="off"></div>
+            <div><label for="fc-papel">Função</label><input id="fc-papel" name="papel" maxlength="80" placeholder="Ex.: Pregoeira" list="fc-papeis" autocomplete="off"><datalist id="fc-papeis"><option value="Pregoeiro(a)"><option value="Agente de contratação"><option value="Fiscal do contrato"><option value="Gestor(a) do contrato"><option value="Setor de compras"></datalist></div>
+            <div><label for="fc-telefone">Telefone</label><input id="fc-telefone" name="telefone" type="tel" inputmode="tel" maxlength="20" placeholder="(92) 3333-4444"></div>
+            <div><label for="fc-email">E-mail</label><input id="fc-email" name="email" type="email" inputmode="email" maxlength="160" placeholder="nome@orgao.gov.br"></div>
+            <div class="inteiro"><label for="fc-texto">Observação</label><textarea id="fc-texto" name="texto" maxlength="2000" placeholder="Ex.: atende melhor de manhã"></textarea></div>
+            <p class="fo-erro inteiro" id="fc-erro" role="alert"></p>
+            <div class="fo-acoes inteiro"><button class="btn primario" type="submit">Salvar contato</button></div></form>` : ''}`}
+        </section>
+        <section class="fo-secao" aria-labelledby="fo-h-anotacoes"><h2 id="fo-h-anotacoes">Anotações da equipe</h2><p class="nota">O que vale lembrar na próxima licitação deste órgão.</p>
+          ${!estado.registrosOk ? '<p class="nota">Contatos e anotações ficam disponíveis depois da atualização do banco.</p>' : `
+          ${anotacoes.length ? `<ul class="fo-lista">${anotacoes.map((a) => `<li><div><small>${esc(data(a.criado_em))}</small><strong>${esc(a.texto)}</strong></div>${estado.podeEscrever ? `<button type="button" class="btn" data-remover="${esc(a.id)}" aria-label="Remover anotação">Remover</button>` : ''}</li>`).join('')}</ul>` : '<p class="nota">Nenhuma anotação ainda.</p>'}
+          ${estado.podeEscrever && estado.chave ? `<form class="fo-form" id="fo-form-anotacao" novalidate>
+            <div class="inteiro"><label for="fa-texto">Nova anotação</label><textarea id="fa-texto" name="texto" maxlength="2000" required placeholder="Ex.: exige amostra em 48 h; paga em dia; prefere marca X"></textarea></div>
+            <p class="fo-erro inteiro" id="fa-erro" role="alert"></p>
+            <div class="fo-acoes inteiro"><button class="btn primario" type="submit">Salvar anotação</button></div></form>` : ''}`}
+          ${!estado.podeEscrever && estado.registrosOk ? '<p class="nota">Seu acesso é de leitura: peça ao gestor para registrar contatos e anotações.</p>' : ''}
+        </section>
+      </div>
+
+      <section class="fo-secao" aria-labelledby="fo-h-fornecedores"><h2 id="fo-h-fornecedores">Quem mais vende para este órgão</h2><p class="nota">Pelos contratos publicados no PNCP nos últimos 2 anos.</p>
+        ${tabela(['Fornecedor', 'Contratos', 'Valor somado'], fornecedores.map((x) => `<tr><td>${esc(x.nome)}</td><td class="num">${Number(x.contratos)}</td><td class="num">${esc(dinheiro(x.valor))}</td></tr>`), 'Sem contratos nos dados coletados.')}
+      </section>
+      <section class="fo-secao" aria-labelledby="fo-h-contratos"><h2 id="fo-h-contratos">Contratos recentes</h2>
+        ${tabela(['Objeto', 'Fornecedor', 'Assinatura', 'Valor', 'Link'], contratos.map((c) => `<tr><td><span class="fo-objeto">${esc(c.objeto)}</span></td><td>${esc(c.fornecedor || '—')}</td><td>${esc(data(c.data_assinatura))}</td><td class="num">${esc(dinheiro(c.valor))}</td><td>${linkExterno(F.linkPncp(c.numero_controle_pncp), 'Ver no PNCP')}</td></tr>`), 'Nenhum contrato nos dados coletados.')}
+      </section>
+      <section class="fo-secao" aria-labelledby="fo-h-atas"><h2 id="fo-h-atas">Atas de registro de preços</h2>
+        ${tabela(['Objeto', 'Assinatura', 'Vigência até', 'Situação', 'Link'], atas.map((a) => { const vigente = !a.cancelado && a.vigencia_fim && a.vigencia_fim >= hoje; return `<tr><td><span class="fo-objeto">${esc(a.objeto)}</span></td><td>${esc(data(a.data_assinatura))}</td><td>${esc(data(a.vigencia_fim))}</td><td>${a.cancelado ? chip('atrasado', 'Cancelada') : vigente ? chip('emdia', 'Vigente') : chip('neutro', 'Encerrada')}</td><td>${linkExterno(F.linkPncp(a.numero_controle_pncp_ata), 'Ver no PNCP')}</td></tr>`; }), 'Nenhuma ata nos dados coletados.')}
+      </section>`;
+    ligar();
+  }
+
+  // Validação na hora: erro aparece no envio, junto do campo, e some assim que a pessoa corrige.
+  function marcarErro(form, idErro, campo, texto) {
+    $(idErro).textContent = texto || '';
+    form.querySelectorAll('[aria-invalid]').forEach((x) => x.removeAttribute('aria-invalid'));
+    if (campo) { campo.setAttribute('aria-invalid', 'true'); campo.focus(); }
+  }
+  async function gravar(acao, mensagem) {
+    const { error } = await acao;
+    if (error) { aviso('Não foi possível salvar: ' + (error.message || 'tente de novo.'), 'erro'); return false; }
+    await lerRegistros(); desenhar(); aviso(mensagem, 'info'); return true;
+  }
+  const base = () => ({ organizacao_id: estado.orgId, orgao_chave: estado.chave, orgao_nome: (estado.nome || F.formatarCnpj(estado.cnpj)).slice(0, 300) });
+
+  function ligar() {
+    $('fo-acompanhar')?.addEventListener('click', async (ev) => {
+      const b = ev.currentTarget; b.disabled = true;
+      const atual = estado.registros.find((r) => r.tipo === 'acompanhar');
+      const ok = await gravar(atual ? sb.from('operacao_orgaos_registros').delete().eq('id', atual.id).eq('organizacao_id', estado.orgId)
+        : sb.from('operacao_orgaos_registros').insert({ ...base(), tipo: 'acompanhar' }), atual ? 'Você deixou de acompanhar este órgão.' : 'Pronto: este órgão está na sua lista de acompanhados.');
+      if (!ok) b.disabled = false; else $('fo-acompanhar')?.focus();
+    });
+    const fc = $('fo-form-contato');
+    fc?.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const v = F.validarContato(Object.fromEntries(new FormData(fc)));
+      if (v.erro) { marcarErro(fc, 'fc-erro', fc.elements.namedItem(v.campo), v.erro); return; }
+      fc.querySelector('[type=submit]').disabled = true;
+      if (!await gravar(sb.from('operacao_orgaos_registros').insert({ ...base(), tipo: 'contato', ...v.dados }), `Contato ${v.dados.nome} salvo.`)) fc.querySelector('[type=submit]').disabled = false;
+    });
+    fc?.addEventListener('input', (ev) => { if (ev.target.getAttribute('aria-invalid')) marcarErro(fc, 'fc-erro', null, ''); });
+    const fa = $('fo-form-anotacao');
+    fa?.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const v = F.validarAnotacao(fa.elements.namedItem('texto').value);
+      if (v.erro) { marcarErro(fa, 'fa-erro', fa.elements.namedItem('texto'), v.erro); return; }
+      fa.querySelector('[type=submit]').disabled = true;
+      if (!await gravar(sb.from('operacao_orgaos_registros').insert({ ...base(), tipo: 'anotacao', ...v.dados }), 'Anotação salva.')) fa.querySelector('[type=submit]').disabled = false;
+    });
+    fa?.addEventListener('input', () => marcarErro(fa, 'fa-erro', null, ''));
+    document.querySelectorAll('[data-remover]').forEach((b) => b.addEventListener('click', async () => {
+      if (!confirm('Remover este registro? Não dá para desfazer.')) return;
+      b.disabled = true;
+      if (!await gravar(sb.from('operacao_orgaos_registros').delete().eq('id', b.dataset.remover).eq('organizacao_id', estado.orgId), 'Registro removido.')) b.disabled = false;
+    }));
+  }
+
+  iniciar().catch((e) => { console.warn('Ficha do órgão:', e); aviso('Algo deu errado ao abrir a ficha. Recarregue a página.', 'erro'); });
+})();
+</script>
+<script src="menu-lateral.js"></script>
+<script src="ajuda-ui.js" defer></script>
+<script src="chat-ia-ui.js" defer></script>
+<script src="avisos-celular.js" defer></script>
+</body>
+</html>

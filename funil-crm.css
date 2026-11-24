@@ -40,6 +40,9 @@
 .etapa-limite input[aria-invalid="true"] { border-color: var(--error-border); }
 @media (min-width: 601px) {
   .etapa-linha { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.2fr) 48px 132px 172px; }
+  /* + Chance de ganhar: os dois números estreitos e as ações descem para a 2ª linha, à direita. */
+  .etapa-linha:has(.etapa-chance) { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.2fr) 48px 120px 120px; }
+  .etapa-linha:has(.etapa-chance) .etapa-acoes { grid-column: 1 / -1; justify-content: flex-end; }
 }
 @media (max-width: 640px) {
   .fc-acoes { flex-direction: column-reverse; }

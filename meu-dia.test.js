@@ -34,7 +34,7 @@ test('agrupa em Atrasado, Hoje, Próximos 7 dias e Mais adiante, em ordem de dat
   const parado = g.atrasado[0];
   assert.equal(parado.seloTexto, 'Parado há 9 dias');
   assert.match(parado.detalhes[0], /limite da etapa \(7 dias\)\. Defina o próximo passo/);
-  assert.equal(parado.acao.href, 'painel.html#kanban');
+  assert.equal(parado.acao.href, 'painel.html?empresa=' + EA + '&processo=' + PA + '#kanban');
 });
 
 test('prazo legal mostra a base da lei, que o edital prevalece e o link para corrigir; agenda sem processo vai para a agenda', () => {
@@ -72,7 +72,13 @@ test('o prazo "Sessão" do processo não repete a sessão; tarefa do Funil abre 
       { id: 'x', empresaId: EA, processoId: PA, titulo: 'Sem data', inicio: 'ontem', dias: 0 }] }, AGORA, JuridicoPrazos);
   assert.deepEqual(itens.map((i) => i.tipo), ['sessao', 'tarefa']);
   assert.deepEqual(itens[1].detalhes, ['Processo 10/2026 · Papel A4', '26/11 às 10:00 (horário de Brasília)', 'Responsável: Ana']);
-  assert.equal(itens[1].acao.href, 'painel.html#kanban');
+  assert.equal(itens[1].acao.href, 'painel.html?empresa=' + EA + '&processo=' + PA + '#kanban');
+});
+
+test('"Abrir no Funil" sem IDs válidos leva só ao Funil (nada de texto solto na URL)', () => {
+  const itens = M.montarItens({ tarefas: [{ id: 't', empresaId: 'x&y=1', processoId: PA, titulo: 'T', inicio: '2026-11-26T10:00', dias: 2 }],
+    parados: [{ processoId: 'nao-e-uuid', empresaId: EA, dias: 9, limite: 7 }] }, AGORA, JuridicoPrazos);
+  assert.deepEqual(itens.map((i) => i.acao.href), ['painel.html#kanban', 'painel.html#kanban']);
 });
 
 test('filtro por empresa (Assessoria): a empresa escolhida mais a agenda da organização inteira', () => {

@@ -440,8 +440,11 @@ def test_cabecalho_usa_chave_explicita_de_planos(monkeypatch):
 def test_layout_resiste_ao_gmail_escuro_e_tem_cabecalho_em_tabela():
     # 23/11: no Gmail escuro do iPhone a faixa e o botão viravam lilás; no computador o cabeçalho ficava desalinhado.
     html = b.montar_email_html("HCM LTDA", "papel", EDICAO, 3, LINK, ["2 em AM"], CAB)
-    fixo = "background-image:linear-gradient(" + b.COR_MARCA + "," + b.COR_MARCA + ")"
-    assert html.count(fixo) == 2  # faixa do topo e botão "Acessar o boletim"
+    fixo = lambda cor: "background-image:linear-gradient(" + cor + "," + cor + ")"
+    assert html.count(fixo("#0A1B4F")) == 2  # paleta A: topo e faixa "Edição nº" em marinho
+    assert html.count(fixo("#1F4FD8")) == 1  # botão "Acessar o boletim" em royal
+    assert html.count(fixo("#22D3EE")) == 1  # fio ciano sob o cabeçalho
+    assert "#0b3b6f" not in html.lower()  # azul antigo não volta
     assert '<meta name="color-scheme" content="light dark">' in html and 'width="600"' in html
     assert "Arial" in html and "font-family:-apple-system" in html
     # identificação em 2 colunas (rótulo | valor), Edição e Data na mesma faixa, nessa ordem

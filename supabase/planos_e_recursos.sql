@@ -9,6 +9,9 @@
 -- e limite_cnpjs_operacao()).
 begin;
 
+-- Exemplos do primeiro acesso (funil_exemplos.sql): não contam no limite de processos nem bloqueiam o cliente.
+alter table public.operacao_processos add column if not exists exemplo boolean not null default false;
+
 -- ---------------------------------------------------------------------------------------------------------------
 -- 1) Catálogo: planos, recursos e a tabela única plano x recurso. Leitura pública (é a página de preços);
 --    escrita só pelas funções do admin (owner com 2 fatores) ou pelo SQL Editor.
@@ -392,7 +395,7 @@ begin
     elsif p_o_que = 'novo_usuario' then
       select count(distinct usuario_id) into n from public.operacao_membros where organizacao_id = p_org;
     else
-      select count(*) into n from public.operacao_processos where organizacao_id = p_org and status <> 'arquivado';
+      select count(*) into n from public.operacao_processos where organizacao_id = p_org and status <> 'arquivado' and not exemplo;
     end if;
     return n < v_lim;
   end if;
@@ -432,7 +435,7 @@ begin
     'uso', jsonb_build_object(
       'cnpjs', (select count(*) from public.operacao_empresas where organizacao_id = v_org and ativo),
       'usuarios', (select count(distinct usuario_id) from public.operacao_membros where organizacao_id = v_org),
-      'processos', (select count(*) from public.operacao_processos where organizacao_id = v_org and status <> 'arquivado'),
+      'processos', (select count(*) from public.operacao_processos where organizacao_id = v_org and status <> 'arquivado' and not exemplo),
       'hoje', (select coalesce(jsonb_object_agg(r.codigo, (select coalesce(sum(u.contagem), 0) from public.uso_diario u
           where u.usuario_id = v_usuario and u.dia = current_date and u.funcao = any (r.funcoes)
             and u.funcao not in ('analise-cnpj-buscar', 'analise-cnpj-cadastro'))), '{}'::jsonb) from public.recursos_plano r)),
@@ -559,7 +562,7 @@ create or replace function public.verificar_limite_processos_operacao() returns 
 language plpgsql security definer set search_path = public as $$
 declare v jsonb;
 begin
-  if new.status = 'arquivado' then return new; end if;
+  if new.status = 'arquivado' or new.exemplo then return new; end if; -- exemplo: teto próprio em funil_exemplos.sql
   if tg_op = 'UPDATE' and old.status <> 'arquivado' then return new; end if;
   perform 1 from public.operacao_organizacoes where id = new.organizacao_id for update;
   if not public.pode_organizacao(new.organizacao_id, 'novo_processo') then
@@ -576,7 +579,7 @@ create trigger operacao_processos_limite_plano before insert or update of status
 -- RLS: o navegador grava processos direto (Funil). Policy restritiva = a mesma regra antes de chegar ao trigger.
 drop policy if exists operacao_processos_plano_permite on public.operacao_processos;
 create policy operacao_processos_plano_permite on public.operacao_processos as restrictive for insert to authenticated
-  with check (public.organizacao_pode(organizacao_id, 'novo_processo'));
+  with check (exemplo or public.organizacao_pode(organizacao_id, 'novo_processo'));
 
 -- Prospecção (prospeccao.html e /api/prospeccao leem com o token do usuário): fora do plano, a tabela some para a
 -- conta. Restritiva = soma-se à policy de leitura de prospeccao.sql. (select ...) roda uma vez por consulta, não por linha.
@@ -724,7 +727,7 @@ begin
       'efetivo', public.plano_efetivo_titular(t.tit) - 'recursos',
       'cnpjs_ativos', (select count(*) from public.operacao_organizacoes o join public.operacao_empresas e on e.organizacao_id = o.id and e.ativo where o.owner_id = c.id),
       'usuarios', (select count(distinct m.usuario_id) from public.operacao_organizacoes o join public.operacao_membros m on m.organizacao_id = o.id where o.owner_id = c.id),
-      'processos_ativos', (select count(*) from public.operacao_organizacoes o join public.operacao_processos p on p.organizacao_id = o.id and p.status <> 'arquivado' where o.owner_id = c.id),
+      'processos_ativos', (select count(*) from public.operacao_organizacoes o join public.operacao_processos p on p.organizacao_id = o.id and p.status <> 'arquivado' and not p.exemplo where o.owner_id = c.id),
       'uso_hoje', (select coalesce(sum(u.contagem), 0) from public.uso_diario u where u.usuario_id = c.id and u.dia = current_date),
       'uso_30d', (select coalesce(sum(u.contagem), 0) from public.uso_diario u where u.usuario_id = c.id and u.dia > current_date - 30),
       'ia_mes_uso', case when t.tit = c.id then public.uso_ia_mes_titular(c.id) end) as x

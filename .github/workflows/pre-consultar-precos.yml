@@ -38,6 +38,10 @@ jobs:
           INTERVALO_MS: "2500"
           CONCORRENCIA_TERMOS: "2"
           PAUSA_429_MS: "15000"
-          MAX_BLOQUEIOS: "3"
+          ESPERA_MAX_MS: "120000"
+          JITTER: "0.3"
+          TENTATIVAS_429: "3"
+          MAX_BLOQUEIOS: "4"
+          MAX_RETOMADAS: "3"
           SO_TERMOS: ${{ github.event.inputs.so_termos }}
         run: node scripts/pre_consultar_precos.js

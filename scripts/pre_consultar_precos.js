@@ -16,16 +16,22 @@
 //   DIAS_HISTORICO=30           -> janela dos "mais buscados"
 //   PAGINAS_PRODUTO=3           -> páginas do produto principal (a tela abre 3)
 //   INTERVALO_MS=2500           -> pausa entre termos (a fonte devolve 429 com rajadas)
-//   PAUSA_429_MS=15000          -> espera mínima depois de um 429 (usa o Retry-After se for maior)
-//   MAX_BLOQUEIOS=3             -> 429 seguidos que fazem o robô parar cedo (não insistir num bloqueio)
+//   PAUSA_429_MS=15000          -> base do recuo depois de um 429: 15 s, 30 s, 60 s... (o Retry-After da fonte é o piso)
+//   ESPERA_MAX_MS=120000        -> teto do recuo exponencial (o Retry-After pode passar dele: a fonte manda)
+//   JITTER=0.3                  -> até +30% sorteado em cada espera, para os termos simultâneos não voltarem juntos
+//   TENTATIVAS_429=3            -> novas tentativas do mesmo termo depois de 429 antes de deixá-lo para a próxima execução
+//   MAX_BLOQUEIOS=4             -> 429 seguidos (somando todos os termos) que fazem o robô parar cedo
+//   MAX_RETOMADAS=3             -> execuções seguidas em que um termo que falhou volta na frente da fila antes de desistir
 //   PRAZO_TERMO_MS=40000        -> tempo máximo de um termo (a fonte fria leva até ~10 s por produto)
 //   CONCORRENCIA_TERMOS=2       -> termos consultados ao mesmo tempo (cada um já abre ~12 consultas à fonte)
-//   RETENCAO_DIAS_CACHE=7       -> respostas mais velhas são apagadas
+//   RETENCAO_DIAS_CACHE=7      -> respostas mais velhas são apagadas
 //   RETENCAO_DIAS_BUSCAS=90     -> contagens mais velhas são apagadas
 //   SO_TERMOS="papel a4,toner"  -> teste manual: só estes termos
 //   SIMULAR=1                   -> consulta e mede, mas não lê nem grava no banco
+// Retomada: termo que falhou (429 ou erro) ou que ficou de fora por tempo/parada cedo vai para dados_robo
+// (chave pre_consulta_pendentes, só service_role lê) e entra primeiro na próxima execução.
 
-const { restFetch, upsertEmLotes, removerMaisAntigosQue } = require("./supabase_dados");
+const { restFetch, upsertEmLotes, removerMaisAntigosQue, buscarBlob, salvarBlob } = require("./supabase_dados");
 const { montarCorpo, chaveDaConsulta, termoParaContagem } = require("../netlify/functions/comprasgov-marcas-produto");
 
 const numero = (nome, padrao) => { const n = Number(process.env[nome]); return Number.isFinite(n) && n >= 0 ? n : padrao; };
@@ -35,7 +41,12 @@ const DIAS_HISTORICO = numero("DIAS_HISTORICO", 30);
 const PAGINAS_PRODUTO = numero("PAGINAS_PRODUTO", 3);
 const INTERVALO_MS = numero("INTERVALO_MS", 2500);
 const PAUSA_429_MS = numero("PAUSA_429_MS", 15000);
-const MAX_BLOQUEIOS = numero("MAX_BLOQUEIOS", 3);
+const ESPERA_MAX_MS = numero("ESPERA_MAX_MS", 120000);
+const JITTER = numero("JITTER", 0.3);
+const TENTATIVAS_429 = numero("TENTATIVAS_429", 3);
+const MAX_BLOQUEIOS = Math.max(1, numero("MAX_BLOQUEIOS", 4));
+const MAX_RETOMADAS = numero("MAX_RETOMADAS", 3);
+const CHAVE_PENDENTES = "pre_consulta_pendentes";
 const PRAZO_TERMO_MS = numero("PRAZO_TERMO_MS", 40000);
 const CONCORRENCIA_TERMOS = Math.max(1, numero("CONCORRENCIA_TERMOS", 2));
 const RETENCAO_DIAS_CACHE = numero("RETENCAO_DIAS_CACHE", 7);
@@ -98,6 +109,22 @@ const consultaDoTermo = (termo) => ({ termo, uf: "", codigoPdm: null, codigoItem
 // Um 429 pode vir na busca do catálogo (lança) ou em parte dos produtos (resposta parcial com esperarS).
 const esperaDoErro = (e) => (e && e.status === 429 ? Math.max(10, e.esperarS || 0) : null);
 
+// Espera depois do n-ésimo 429 seguido do mesmo termo (n = 1, 2...): recuo exponencial com teto, nunca menos que o
+// Retry-After, mais um sorteio de até JITTER (aleatorio() em [0, 1)).
+function esperaDepoisDo429(n, retryAfterS, aleatorio = Math.random) {
+  const recuo = Math.min(ESPERA_MAX_MS, PAUSA_429_MS * 2 ** Math.max(0, n - 1));
+  return Math.round(Math.max(recuo, (retryAfterS || 0) * 1000) * (1 + JITTER * aleatorio()));
+}
+
+// Fila da próxima execução: { termo: execuções em que falhou }. Falhou de novo soma 1; não chegou a rodar (tempo, parada
+// cedo) mantém a conta; completou sai. Chegou a MAX_RETOMADAS: desiste (a tela consulta ao vivo, como sem robô).
+function proximosPendentes(anterior, resumo, max = MAX_RETOMADAS) {
+  const fila = {};
+  for (const t of resumo.falharam) if ((anterior[t] || 0) + 1 < max) fila[t] = (anterior[t] || 0) + 1;
+  for (const t of resumo.naoRodaram) if ((anterior[t] || 0) < max) fila[t] = anterior[t] || 0;
+  return fila;
+}
+
 // Um termo: a busca e as páginas do produto principal. Devolve { linhas, bloqueadoS } (bloqueadoS = 429 da fonte).
 async function consultarTermo(termo, { montar = montarCorpo, agora = () => new Date() } = {}) {
   const sinal = () => globalThis.AbortSignal.timeout(PRAZO_TERMO_MS);
@@ -133,24 +160,29 @@ async function lerMaisBuscados() {
 
 // deps injetáveis para o teste (sem rede nem banco).
 // Medido 24/11 (fonte fria): ~17 s por termo um por vez, 200 termos passariam de 55 min. CONCORRENCIA_TERMOS termos
-// andam juntos (2 = ~30 min); o 429 de qualquer um conta para todos e faz o robô parar cedo.
+// andam juntos (2 = ~30 min). Um 429 em qualquer termo pausa todos (pausaAte): a fonte limita por origem, não por termo.
 async function executar({ termos, montar, gravar, esperar = esperarPadrao, relogio = Date.now, limiteMs = LIMITE_MINUTOS * 60000, log = console.log,
-  concorrencia = CONCORRENCIA_TERMOS } = {}) {
+  concorrencia = CONCORRENCIA_TERMOS, aleatorio = Math.random } = {}) {
   const inicio = relogio();
-  const resumo = { termos: termos.length, completos: 0, linhas: 0, bytes: 0, falhas: 0, bloqueios: 0, parouCedo: null };
-  let seguidos = 0, proximo = 0;
+  const resumo = { termos: termos.length, completos: 0, linhas: 0, bytes: 0, falhas: 0, bloqueios: 0, parouCedo: null, falharam: [], naoRodaram: [] };
+  let seguidos = 0, proximo = 0, pausaAte = 0;
+  const aguardarPausa = async () => { const resta = pausaAte - relogio(); if (resta > 0) await esperar(resta); };
   const trabalhador = async () => {
     while (proximo < termos.length && !resumo.parouCedo) {
       if (relogio() - inicio > limiteMs) { resumo.parouCedo = "tempo"; break; }
       const termo = termos[proximo++];
+      await aguardarPausa();
       let r = await consultarTermo(termo, { montar });
-      if (r.bloqueadoS) {
+      for (let n = 1; r.bloqueadoS && !resumo.parouCedo; n += 1) {
         resumo.bloqueios += 1;
         seguidos += 1;
         if (seguidos >= MAX_BLOQUEIOS) { resumo.parouCedo = "429"; log(`[pre-consulta] ${seguidos} bloqueios (429) seguidos: parando para não insistir.`); break; }
-        await esperar(Math.max(PAUSA_429_MS, r.bloqueadoS * 1000));
+        if (n > TENTATIVAS_429) break;
+        const ms = esperaDepoisDo429(n, r.bloqueadoS, aleatorio);
+        pausaAte = Math.max(pausaAte, relogio() + ms);
+        log(`[pre-consulta] 429 em "${termo}" (tentativa ${n}/${TENTATIVAS_429}): pausa de ${Math.round(ms / 1000)} s.`);
+        await aguardarPausa();
         r = await consultarTermo(termo, { montar });
-        if (r.bloqueadoS) { resumo.bloqueios += 1; seguidos += 1; }
       }
       if (!r.bloqueadoS) seguidos = 0;
       if (r.linhas.length) {
@@ -160,11 +192,13 @@ async function executar({ termos, montar, gravar, esperar = esperarPadrao, relog
         resumo.bytes += r.linhas.reduce((soma, l) => soma + l.corpo.length, 0);
       } else {
         resumo.falhas += 1;
+        resumo.falharam.push(termo);
       }
       if (proximo < termos.length) await esperar(INTERVALO_MS);
     }
   };
   await Promise.all(Array.from({ length: Math.max(1, Math.min(concorrencia, termos.length)) }, trabalhador));
+  resumo.naoRodaram = termos.slice(proximo);
   resumo.minutos = Math.round(((relogio() - inicio) / 60000) * 10) / 10;
   return resumo;
 }
@@ -172,16 +206,24 @@ async function executar({ termos, montar, gravar, esperar = esperarPadrao, relog
 async function main() {
   const simular = process.env.SIMULAR === "1";
   const soTermos = (process.env.SO_TERMOS || "").split(",").map((t) => t.trim()).filter(Boolean);
-  const maisBuscados = soTermos.length || simular ? [] : await lerMaisBuscados();
-  const termos = soTermos.length ? escolherTermos(soTermos, soTermos.length) : escolherTermos(maisBuscados);
-  console.log(`[pre-consulta] ${termos.length} termo(s): ${maisBuscados.length} do histórico de buscas, o resto da lista inicial.`);
+  const manual = soTermos.length > 0 || simular;
+  const maisBuscados = manual ? [] : await lerMaisBuscados();
+  // Teste manual (SO_TERMOS/SIMULAR) não lê nem mexe na fila de retomada.
+  const anterior = manual ? {} : (await buscarBlob("dados_robo", CHAVE_PENDENTES))?.termos || {};
+  const pendentes = Object.keys(anterior);
+  const termos = soTermos.length ? escolherTermos(soTermos, soTermos.length) : escolherTermos([...pendentes, ...maisBuscados]);
+  console.log(`[pre-consulta] ${termos.length} termo(s): ${pendentes.length} retomado(s) da execução anterior, ${maisBuscados.length} do histórico de buscas, o resto da lista inicial.`);
   const resumo = await executar({ termos, montar: montarCorpo, gravar: simular ? async () => {} : (linhas) => upsertEmLotes("cache_consultas_publicas", linhas, "chave", 10) });
+  const fila = proximosPendentes(anterior, resumo);
+  if (!manual) await salvarBlob("dados_robo", CHAVE_PENDENTES, { termos: fila, em: new Date().toISOString() });
   if (!simular) {
     const dia = (dias) => new Date(Date.now() - dias * 86400000).toISOString();
     await removerMaisAntigosQue("cache_consultas_publicas", "atualizado_em", dia(RETENCAO_DIAS_CACHE));
     await removerMaisAntigosQue("buscas_termos", "dia", dia(RETENCAO_DIAS_BUSCAS).slice(0, 10));
   }
-  console.log(`[pre-consulta] ${JSON.stringify({ ...resumo, megabytes: Math.round(resumo.bytes / 10485.76) / 100 })}`);
+  const { falharam, naoRodaram, ...contagem } = resumo;
+  console.log(`[pre-consulta] ${JSON.stringify({ ...contagem, megabytes: Math.round(resumo.bytes / 10485.76) / 100, naoRodaram: naoRodaram.length, paraProxima: Object.keys(fila).length })}`);
+  if (falharam.length) console.log(`[pre-consulta] falharam (${falharam.length}): ${falharam.slice(0, 30).join(", ")}${falharam.length > 30 ? "..." : ""}`);
   // Parar cedo por 429 não é falha do robô (a fonte pediu calma); nenhum termo completo, sim.
   if (!resumo.completos && termos.length) process.exitCode = 1;
 }
@@ -190,4 +232,4 @@ if (require.main === module) {
   main().catch((e) => { console.error(`[pre-consulta] ${String(e?.message || e)}`); process.exitCode = 1; });
 }
 
-module.exports = { escolherTermos, consultarTermo, executar, TERMOS_INICIAIS };
+module.exports = { escolherTermos, consultarTermo, executar, esperaDepoisDo429, proximosPendentes, TERMOS_INICIAIS };

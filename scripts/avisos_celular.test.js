@@ -114,3 +114,11 @@ test("boletim: um aviso por rodada com oportunidade; sem oportunidade ou sem cli
   assert.match(avisos[0].url, /painel\.html#boletim$/);
   assert.deepEqual(av.filtrarPorPreferencia(avisos, [{ usuario_id: "u1", boletim: false }]), []);
 });
+
+test("prazo de processo de exemplo (funil_exemplos.sql) não vira aviso no celular", () => {
+  const base = { id: "p1", processo_id: "x", titulo: "Prazo de propostas (Boletim)", vencimento: "2026-11-25T21:00:00Z" };
+  const avisos = av.avisosDePrazosProcesso([
+    { ...base, operacao_processos: { objeto: "[Exemplo] Limpeza predial", empresa_id: "e", criado_por: "u" } },
+    { ...base, id: "p2", operacao_processos: { objeto: "Limpeza predial", empresa_id: "e", criado_por: "u" } }]);
+  assert.deepEqual(avisos.map((a) => a.tag), ["prz:p2"]);
+});

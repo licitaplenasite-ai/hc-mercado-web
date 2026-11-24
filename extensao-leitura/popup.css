@@ -7,10 +7,15 @@
   font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif; color: var(--texto); background: var(--claro);
 }
 body { width: 340px; margin: 0; padding: 14px 16px 18px; background: var(--claro); }
-.topo { display: flex; align-items: center; gap: 10px; margin: 4px 0 10px; }
+/* Topo marinho de ponta a ponta, logo branca e fio ciano: mesma assinatura do site e dos e-mails. */
+.topo { display: flex; align-items: center; gap: 10px; margin: -14px -16px 12px; padding: 14px 16px 12px; background: var(--marinho); border-bottom: 3px solid var(--ciano); }
 .topo .logo { flex: none; }
-h1 { font: 600 21px/1.1 var(--titulo); color: var(--marinho); margin: 0; letter-spacing: -.2px; }
-.sobre { margin: 2px 0 0; font-size: 11.5px; font-weight: 600; color: var(--apoio); }
+h1 { font: 600 21px/1.1 var(--titulo); color: #fff; margin: 0; letter-spacing: -.2px; }
+.sobre { margin: 2px 0 0; font-size: 11.5px; font-weight: 600; color: #afc2ee; }
+.atalhos { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 8px; }
+.atalhos a { padding: 5px 10px; border: 1px solid var(--borda); border-radius: 999px; background: #fff; color: var(--marinho); font-size: 12px; font-weight: 600; text-decoration: none; }
+.atalhos a:hover { border-color: var(--royal); color: var(--royal); }
+h2 { scroll-margin-top: 56px; }
 p { font-size: 13px; line-height: 1.5; color: var(--texto); }
 .intro { margin: 0 0 4px; color: var(--apoio); }
 section { margin-top: 12px; padding: 4px 14px 12px; background: #fff; border: 1px solid var(--borda); border-radius: 14px; box-shadow: 0 1px 2px rgba(10, 27, 79, .05); transition: border-color .2s, box-shadow .2s, transform .2s; }
@@ -27,8 +32,13 @@ input { box-sizing: border-box; width: 100%; margin-top: 4px; padding: 8px 10px;
 input[type=file] { padding: 6px; font-size: 12px; }
 button { margin-top: 12px; padding: 10px 16px; width: 100%; border: 0; border-radius: 999px; background: var(--royal); color: #fff; font: inherit; font-size: 13.5px; font-weight: 600; line-height: 1.25; cursor: pointer; transition: transform .15s, box-shadow .15s, background-color .15s; }
 button:hover:not(:disabled) { background: var(--royal-escuro); transform: translateY(-1px); box-shadow: 0 6px 16px rgba(31, 79, 216, .28), 0 0 0 3px rgba(34, 211, 238, .25); }
-button:disabled { opacity: .6; cursor: wait; }
+/* Carregando: botão desligado enquanto lê/grava ganha um giro pequeno (o texto do status diz o que está acontecendo). */
+button:disabled { opacity: .7; cursor: wait; }
+button:disabled::after { content: ""; display: inline-block; width: 11px; height: 11px; margin-left: 8px; vertical-align: -1px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: girar .8s linear infinite; }
+@keyframes girar { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { button:disabled::after { animation: none; } button, section { transition: none; } }
 :focus-visible { outline: 2px solid var(--royal); outline-offset: 2px; }
+.topo :focus-visible { outline-color: var(--ciano); }
 #result { font-weight: 600; overflow-wrap: anywhere; white-space: pre-line; }
 #gravarStatus { font-weight: 600; overflow-wrap: anywhere; white-space: pre-line; }
 #acompanharStatus { font-weight: 600; overflow-wrap: anywhere; white-space: pre-line; }
@@ -37,7 +47,8 @@ button:disabled { opacity: .6; cursor: wait; }
 label:has(> input[type=checkbox]) { display: flex; gap: 8px; align-items: center; font-weight: 500; }
 input[type=checkbox] { width: 16px; height: 16px; margin: 0; accent-color: var(--royal); }
 #lanceStatus, #lancePergunta { font-weight: 600; overflow-wrap: anywhere; white-space: pre-line; }
-.parar { position: sticky; top: 0; z-index: 2; margin: 0 0 8px; background: #b3261e; font-weight: 700; letter-spacing: .5px; box-shadow: 0 4px 12px rgba(179, 38, 30, .22); }
+/* Moldura da cor do fundo: o texto que rola por trás do botão grudado não aparece em volta dele. */
+.parar { position: sticky; top: 6px; z-index: 2; margin: 0 0 4px; background: #b3261e; font-weight: 700; letter-spacing: .5px; box-shadow: 0 -6px 0 6px var(--claro), 0 8px 14px rgba(179, 38, 30, .25); }
 .parar:hover:not(:disabled) { background: #8f1e18; box-shadow: 0 6px 16px rgba(179, 38, 30, .3); }
 .secundario { background: #fff; color: var(--royal); border: 1px solid var(--royal); }
 .secundario:hover:not(:disabled) { background: #e8effe; color: var(--royal-escuro); }

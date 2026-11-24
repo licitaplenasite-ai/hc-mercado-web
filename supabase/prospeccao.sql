@@ -159,6 +159,15 @@ create policy prospeccao_busca_select_aprovado on public.prospeccao_busca for se
 -- Numa tabela vazia o create é instantâneo; em produção a carga vem depois (prospeccao_busca_producao.sql).
 create index if not exists prospeccao_busca_tipo_data_idx on public.prospeccao_busca (tipo, data_ref, valor_total desc nulls last) include (uf, catmat, id, nome, texto);
 create index if not exists prospeccao_busca_tipo_uf_data_idx on public.prospeccao_busca (tipo, uf, data_ref, valor_total desc nulls last) include (catmat, id, nome, texto);
+-- v8 (24/11/2026): ata levava 2,7–4 s em produção. A janela da ata não tem teto (vigente daqui a 30 dias em diante), então
+-- palavra rara ou que não casa lia a parte das atas do índice inteira (ou a tabela toda) em cada um dos três níveis.
+-- Trigram só das atas: a busca lê o GIN quando a palavra é rara e segue no índice ordenado quando é comum (o planejador
+-- escolhe; o resultado é o mesmo, ver testar_prospeccao_atas_rapida.sql). Funciona porque buscar_prospeccao é security
+-- definer (sem RLS por dentro). Em produção, criar ANTES com supabase/prospeccao_atas_rapida.sql (concurrently, pg_cron):
+-- aqui, numa tabela cheia, o create normal trava a gravação do robô e estoura os 60 s do SQL Editor.
+create extension if not exists pg_trgm;
+create index if not exists prospeccao_busca_ata_texto_trgm_idx on public.prospeccao_busca using gin (texto gin_trgm_ops) where tipo = 'ata';
+create index if not exists prospeccao_busca_ata_nome_trgm_idx on public.prospeccao_busca using gin (nome gin_trgm_ops) where tipo = 'ata';
 
 create or replace function public.prospeccao_palavras(t text) returns text
 language sql immutable parallel safe set search_path = '' as $$
