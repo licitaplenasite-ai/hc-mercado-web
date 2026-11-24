@@ -96,6 +96,8 @@ exports.handler = async (event) => {
       isBase64Encoded: true,
     };
   } catch (e) {
-    return { statusCode: 500, headers: { "Content-Type": "text/plain" }, body: "Erro ao baixar: " + String((e && e.message) || e) };
+    // Detalhe técnico só no log: a mensagem da exceção (rede, PNCP, memória) não vai para o visitante.
+    console.warn(`pncp-baixar: falha (${(e && e.name) || "erro"})`);
+    return { statusCode: 502, headers: { "Content-Type": "text/plain; charset=utf-8" }, body: "Não foi possível baixar o arquivo agora. Tente de novo em instantes." };
   }
 };

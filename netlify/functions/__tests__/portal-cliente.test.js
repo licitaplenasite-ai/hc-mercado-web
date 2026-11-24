@@ -228,6 +228,17 @@ test("no Cloudflare vale cf-connecting-ip e o cabeçalho do Netlify é ignorado"
   }));
 });
 
+test("no Cloudflare, IPv6 da mesma rede /64 conta como a mesma origem (auditoria 23/11)", async () => {
+  await comoCloudflare(() => comAmbiente(async (chamadas) => {
+    await handler(evento({ token: TOKEN, acao: "ler" }, { headers: { "cf-connecting-ip": "2001:db8:5:6::1" } }));
+    await handler(evento({ token: TOKEN, acao: "ler" }, { headers: { "cf-connecting-ip": "2001:db8:5:6:ffff:1:2:3" } }));
+    await handler(evento({ token: TOKEN, acao: "ler" }, { headers: { "cf-connecting-ip": "2001:db8:5:7::1" } }));
+    const [a, b, c] = chamadas.map((x) => x.corpo.p_ip_hash);
+    assert.equal(a, b);
+    assert.notEqual(a, c);
+  }));
+});
+
 test("sem IP confiável o limite em memória passa a ser por token e mais estrito (10/min)", async () => {
   const outro = "B".repeat(42) + "c";
   await comAmbiente(async (chamadas) => {
