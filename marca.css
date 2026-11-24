@@ -117,6 +117,27 @@ section.bloco.bloco-faixa { padding-bottom: 24px; }
 .plano.destaque::before { content: ""; position: absolute; inset: 0 0 auto; height: 5px; background: var(--grad-linha); }
 /* Selo do plano recomendado: azul vivo sobre azul-marinho. */
 .plano.destaque .chip { background: var(--marca-escuro); border-color: var(--marca-escuro); color: var(--destaque-forte); font-weight: 600; }
+/* Plano recomendado em marinho (o mesmo degradê das faixas escuras), com fio ciano e um degrau acima dos outros:
+   o olho cai nele primeiro sem precisar de cor de alerta. Texto branco/azul-claro sobre marinho passa de 10:1. */
+.plano.destaque { background: var(--degrade-escuro); border: 1px solid rgba(var(--destaque-rgb), 0.6); color: #ffffff;
+  box-shadow: 0 0 0 1px rgba(var(--destaque-rgb), 0.18), 0 28px 60px -22px rgba(10, 27, 79, 0.6); }
+.plano.destaque::before { height: 3px; background: var(--destaque); }
+.plano.destaque h3, .plano.destaque .preco b { color: #ffffff; }
+.plano.destaque .para, .plano.destaque .total-ciclo, .plano.destaque .obs, .plano.destaque .preco span { color: var(--claro-sobre-escuro); }
+.plano.destaque .inclui { border-top-color: rgba(255, 255, 255, 0.16); }
+.plano.destaque .inclui li { color: #eef3ff; }
+.plano.destaque .inclui li::before, .plano.destaque .inclui li.titulo-lista { color: var(--destaque); }
+.plano.destaque .chip { background: var(--destaque); border-color: var(--destaque); color: var(--destaque-texto); font-weight: 700; padding: 0 12px; }
+.plano.destaque .chip .g { display: none; }
+.plano.destaque:hover { border-color: var(--destaque); box-shadow: 0 0 0 1px rgba(var(--destaque-rgb), 0.35), 0 32px 70px -22px rgba(10, 27, 79, 0.7); }
+.plano .preco b { font-size: 46px; line-height: 52px; }
+.plano .preco + .total-ciclo { margin-top: 2px; }
+@media (min-width: 1001px) {
+  .planos { padding-top: 14px; }
+  .plano.destaque { transform: translateY(-14px); }
+  .plano.destaque:hover { transform: translateY(-20px); }
+}
+@media (min-width: 1001px) and (prefers-reduced-motion: reduce) { .plano.destaque:hover { transform: translateY(-14px); } }
 .preco b { color: var(--titulo-cor); font-weight: 700; }
 .numeros dd, .fatos-site dt { color: var(--titulo-cor); font-weight: 700; }
 .faq details[open] summary { color: var(--marca-texto); }

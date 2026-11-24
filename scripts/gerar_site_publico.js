@@ -208,7 +208,19 @@ const ferramentaPorSlug = (s) => FERRAMENTAS.find((f) => f.slug === s);
 // Tela do sistema novo (prints com dados fictícios, scripts/gerar_vitrine.js); sem ela, fica o print da Central de ajuda.
 const telaVitrine = ([nome, largura, altura], alt) => `<img src="/img/vitrine/${nome}-${largura}.webp" srcset="/img/vitrine/${nome}-640.webp 640w, /img/vitrine/${nome}-${largura}.webp ${largura}w" sizes="(max-width: 800px) 92vw, 720px" alt="${esc(alt)}" width="${largura}" height="${altura}" loading="lazy" decoding="async">`;
 // Cartão ilustrado (index e /ferramentas/): mini-tela da ferramenta em cima e detalhe azul-escuro embaixo (marca.css).
-const cartaoFerramenta = (f, nivel = "h3") => `<li class="ferr"><span class="ferr-arte">${ICONES[f.slug]}</span><${nivel}><a href="/ferramentas/${f.slug}">${esc(f.nome)}</a></${nivel}><p>${esc(f.descricao)}</p><span class="ferr-mais" aria-hidden="true">Conhecer a ferramenta</span></li>`;
+// Chamada de cada cartão: diz o que a pessoa vai ver ao abrir (o cartão inteiro é o link), em vez de repetir
+// "Conhecer a ferramenta" oito vezes.
+const CHAMADA_FERRAMENTA = {
+  "boletim-e-busca-de-licitacoes": "Ver o boletim de um dia",
+  "resumo-de-edital-com-ia": "Ver um edital resumido",
+  "vigia-do-chat-do-pregao": "Ver como o aviso chega",
+  "orcamento-de-obras": "Ver a planilha conferida",
+  "contador-cbs-ibs": "Ver o preço com impostos",
+  "pesquisa-de-precos": "Ver preços já pagos",
+  "analise-de-concorrente": "Ver a análise de um CNPJ",
+  "minhas-empresas-e-documentos": "Ver o controle de certidões",
+};
+const cartaoFerramenta = (f, nivel = "h3") => `<li class="ferr"><span class="ferr-arte">${ICONES[f.slug]}</span><${nivel}><a href="/ferramentas/${f.slug}">${esc(f.nome)}</a></${nivel}><p>${esc(f.descricao)}</p><span class="ferr-mais" aria-hidden="true">${esc(CHAMADA_FERRAMENTA[f.slug] || "Conhecer a ferramenta")}</span></li>`;
 
 // ---------- Páginas ----------
 function paginasFerramentas(artigos) {
