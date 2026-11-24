@@ -26,7 +26,7 @@
     const add = (tag, attrs) => { if (!document.head.querySelector(`${tag}[${Object.keys(attrs)[0]}="${Object.values(attrs)[0]}"]`)) document.head.append(Object.assign(document.createElement(tag), attrs)); };
     add("link", { rel: "manifest", href: "/manifest.webmanifest" });
     add("link", { rel: "apple-touch-icon", href: "/apple-touch-icon.png" });
-    add("meta", { name: "theme-color", content: "#071b70" });
+    add("meta", { name: "theme-color", content: "#0A1B4F" });
     add("meta", { name: "apple-mobile-web-app-capable", content: "yes" });
     add("meta", { name: "apple-mobile-web-app-title", content: "LicitaPlena" });
   }
