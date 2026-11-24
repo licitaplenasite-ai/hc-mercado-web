@@ -980,6 +980,13 @@ def registrar_log_boletim(destinatario, status, quantidade, mensagem_erro=None):
 
 def enviar_zeptomail(token, destino_email, nome_destinatario, assunto, texto, html_corpo):
     token = re.sub(r"^Zoho-enczapikey\s+", "", token.strip()).strip("\"'").strip()
+    # 25/11: o nginx do ZeptoMail devolvia 400 em HTML (token inválido dá 401 em JSON), sinal de cabeçalho malformado:
+    # token colado com quebra de linha, espaço ou caractere invisível no meio. O token é base64: fica só com esses caracteres
+    # e registra no log o que foi descartado (sem mostrar o token).
+    descartados = sorted({repr(c) for c in token if not re.match(r"[A-Za-z0-9+/=_.-]", c)})
+    if descartados:
+        log("AVISO: ZEPTOMAIL_TOKEN tinha caracteres estranhos (removidos): " + ", ".join(descartados))
+        token = re.sub(r"[^A-Za-z0-9+/=_.-]", "", token)
     # Limites do ZeptoMail (TM_8001/SM_129): nome até 250 e assunto até 500 caracteres; nome vazio vai sem a chave,
     # como no envio do site (enviar-resumo-edital.js), em vez de "name": "" ou null.
     nome = (nome_destinatario or "").strip()[:250]
