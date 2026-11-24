@@ -128,6 +128,44 @@ test('limitarPorIp: só IP da plataforma conta, banco recebe HMAC (nunca o IP), 
   }
 });
 
+// Auditoria 23/11: com IPv6 cada casa/servidor tem 2^64 endereços; contar por endereço deixava zerar o teto
+// trocando de IP a cada pedido. Conta pela rede /64; IPv4 e IPv4 dentro de IPv6 continuam por endereço.
+test('redeDoIp: IPv6 agrupa pela rede /64, IPv4 fica igual', () => {
+  const { redeDoIp } = require("../_auth");
+  assert.equal(redeDoIp('203.0.113.7'), '203.0.113.7');
+  assert.equal(redeDoIp(' 203.0.113.7 '), '203.0.113.7');
+  assert.equal(redeDoIp('::ffff:198.51.100.9'), '198.51.100.9');
+  const rede = redeDoIp('2001:db8:1:2:3:4:5:6');
+  assert.equal(rede, '2001:db8:1:2::/64');
+  for (const ip of ['2001:db8:1:2::9', '2001:0DB8:0001:0002:ffff::1', '2001:db8:1:2:aaaa:bbbb:cccc:dddd', '2001:db8:1:2::1%eth0']) {
+    assert.equal(redeDoIp(ip), rede, ip);
+  }
+  assert.notEqual(redeDoIp('2001:db8:1:3::1'), rede);
+  assert.equal(redeDoIp('2001:db8::'), '2001:db8:0:0::/64');
+  assert.equal(redeDoIp('::1'), '0:0:0:0::/64');
+});
+
+test('limitarPorIp no Cloudflare: endereços IPv6 da mesma rede /64 somam no mesmo contador', async () => {
+  const { limitarPorIp } = require("../_auth");
+  const fetchAnterior = global.fetch, chaveAnterior = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const navAnterior = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  const chaves = [];
+  try {
+    Object.defineProperty(globalThis, 'navigator', { value: { userAgent: 'Cloudflare-Workers' }, configurable: true });
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'teste-local';
+    global.fetch = async (url, op) => { chaves.push(JSON.parse(op.body).p_chave); return new Response('1'); };
+    await limitarPorIp({ headers: { 'cf-connecting-ip': '2001:db8:1:2::1' } }, 'busca-publica', 100);
+    await limitarPorIp({ headers: { 'cf-connecting-ip': '2001:db8:1:2:dead:beef:0:7' } }, 'busca-publica', 100);
+    await limitarPorIp({ headers: { 'cf-connecting-ip': '2001:db8:1:9::1' } }, 'busca-publica', 100);
+    assert.equal(chaves[0], chaves[1]);
+    assert.notEqual(chaves[0], chaves[2]);
+  } finally {
+    global.fetch = fetchAnterior;
+    if (navAnterior) Object.defineProperty(globalThis, 'navigator', navAnterior); else delete globalThis.navigator;
+    if (chaveAnterior === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY; else process.env.SUPABASE_SERVICE_ROLE_KEY = chaveAnterior;
+  }
+});
+
 test('B2: origem antiga do Netlify não é mais confiável', () => {
   assert.equal(origemPermitida({ headers: { origin: 'https://hc-mercado-web.netlify.app' } }), 'https://licitaplena.com.br');
 });

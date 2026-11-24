@@ -34,10 +34,10 @@ const CATEGORIAS = {
 };
 
 // Páginas do sistema logado e telas internas: fora do sitemap e bloqueadas no robots.txt.
-const PRIVADAS = ["/painel", "/admin", "/operacao", "/processos", "/sistema", "/quadros", "/cliente", "/convite",
+const PRIVADAS = ["/painel", "/bdi", "/normas-obra", "/admin", "/operacao", "/processos", "/sistema", "/quadros", "/cliente", "/convite",
   "/responder-oportunidade", "/resumo-processo", "/prospeccao", "/orcamento-obra", "/assinar", "/sinapi", "/mao-de-obra", "/hc", "/api/", "/data/"];
 // Páginas públicas que já existiam (feitas à mão) e entram no sitemap. SINAPI e Mão de obra pedem login: ficam de fora.
-const PUBLICAS_EXISTENTES = ["index.html", "cadastro.html", "extensao.html", "bdi.html",
+const PUBLICAS_EXISTENTES = ["index.html", "cadastro.html", "extensao.html",
   "termos-de-uso.html", "politica-privacidade.html", "politica-cookies.html"];
 
 const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -96,7 +96,7 @@ function mapaDoSite() {
 ${col("Ferramentas", FERRAMENTAS.map((f) => [`/ferramentas/${f.slug}`, f.curto]))}
 ${col("Para quem é", PUBLICOS.map((p) => [`/para/${p.slug}`, p.nome]).concat([["/#planos", "Planos e preços"]]))}
 ${col("Conteúdo", [["/blog/", "Blog"], ...Object.entries(CATEGORIAS).map(([s, n]) => [`/blog/categoria/${s}`, n]), ["/glossario", "Glossário de licitação"]])}
-${col("LicitaPlena", [["/sobre", "Sobre"], ["/contato", "Contato"], ["/assessoria-hc", "Assessoria HC Licitações"], ["/extensao", "Extensão do navegador"], ["/bdi", "Calculadora de BDI"], ["/termos-de-uso", "Termos de uso"], ["/politica-privacidade", "Privacidade"], ["/politica-cookies", "Cookies"]])}
+${col("LicitaPlena", [["/sobre", "Sobre"], ["/contato", "Contato"], ["/assessoria-hc", "Assessoria HC Licitações"], ["/extensao", "Extensão do navegador"], ["/termos-de-uso", "Termos de uso"], ["/politica-privacidade", "Privacidade"], ["/politica-cookies", "Cookies"]])}
 </nav>`;
 }
 

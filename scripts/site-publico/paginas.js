@@ -110,7 +110,7 @@ const FERRAMENTAS = [
       ["O sistema assina o orçamento?", "Não. O orçamento precisa de revisão e assinatura de um responsável técnico."],
     ],
     artigos: ["como-montar-planilha-de-obra", "limite-75-preco-inexequivel-obras"],
-    extra: { href: "/bdi", texto: "Abrir a calculadora de BDI" },
+    extra: { href: "/cadastro", texto: "Testar grátis por 14 dias" },
   },
   {
     slug: "contador-cbs-ibs",

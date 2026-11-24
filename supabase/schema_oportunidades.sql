@@ -38,6 +38,11 @@ create table if not exists public.oportunidades_abertas (
 create index if not exists oportunidades_abertas_uf_idx on public.oportunidades_abertas (uf);
 create index if not exists oportunidades_abertas_publicacao_idx on public.oportunidades_abertas (publicacao);
 create index if not exists oportunidades_abertas_encerramento_idx on public.oportunidades_abertas (encerramento);
+-- 23/11: a busca pública da landing (busca-publica.js, sem login, chave de serviço, ILIKE '*palavra*' no objeto) lia a
+-- tabela inteira e levava 6-8 s com UF "Todas" (estourava o timeout de 8 s). Com a chave de serviço a RLS não entra,
+-- então o trigram vale (leitura logada sob RLS não usa: ILIKE não é leakproof). Em produção: "create index concurrently".
+create extension if not exists pg_trgm;
+create index if not exists oportunidades_abertas_objeto_trgm_idx on public.oportunidades_abertas using gin (objeto gin_trgm_ops);
 
 alter table public.oportunidades_abertas enable row level security;
 
