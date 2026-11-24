@@ -161,7 +161,7 @@ def _corpo_zepto(funcao, *args):
 def test_lembrete_sai_de_avisos_com_resposta_para_o_dono():
     corpo = _corpo_zepto(lic.enviar_mensagem, "a@b.c", "A", "Assunto", "texto", "<p>x</p>")
     assert corpo["from"] == {"address": "avisos@licitaplena.com.br", "name": "LicitaPlena Avisos"}
-    assert corpo["reply_to"] == [{"address": "licitaplena.site@gmail.com", "name": "LicitaPlena"}]
+    assert corpo["reply_to"] == [{"address": "licitaplena@licitaplena.com.br", "name": "LicitaPlena"}]
 
 
 def test_cobranca_sai_de_financeiro():
@@ -169,7 +169,7 @@ def test_cobranca_sai_de_financeiro():
         lic.enviar_mensagem("a@b.c", "A", "Assunto", "texto", "<p>x</p>", cobranca_diaria.REMETENTE_FINANCEIRO, cobranca_diaria.NOME_FINANCEIRO)
     corpo = _corpo_zepto(enviar_como_cobranca)
     assert corpo["from"] == {"address": "financeiro@licitaplena.com.br", "name": "LicitaPlena Financeiro"}
-    assert corpo["reply_to"][0]["address"] == "licitaplena.site@gmail.com"
+    assert corpo["reply_to"][0]["address"] == "licitaplena@licitaplena.com.br"
 
 
 def test_remetente_recusado_diz_qual_endereco_confirmar():

@@ -48,7 +48,7 @@ ESPERA_ZEPTO_SEGUNDOS = 15
 # Remetente do boletim (domínio verificado no ZeptoMail; não precisa de caixa). Respostas vão ao dono (Reply-To).
 REMETENTE_ZEPTO = "boletim@licitaplena.com.br"
 NOME_ZEPTO = "LicitaPlena Boletim"
-RESPONDER_PARA = "licitaplena.site@gmail.com"
+RESPONDER_PARA = "licitaplena@licitaplena.com.br"
 
 TODAS_UFS = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB",
              "PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"]
@@ -733,7 +733,7 @@ def carregar_cabecalhos(ids, hoje=None):
 
 URL_LOGO = "https://licitaplena.com.br/logo.png"  # PNG branco 1000x1000, publicado por montar_publico.js (SVG nao abre no Gmail/Outlook)
 URL_AJUSTAR_FILTROS = URL_PAINEL + "#boletim"
-EMAIL_SUPORTE = "licitaplena.site@gmail.com"  # mesmo contato do site; WhatsApp de supabase-config.js ainda vazio
+EMAIL_SUPORTE = "licitaplena@licitaplena.com.br"  # mesmo contato do site; WhatsApp de supabase-config.js ainda vazio
 URL_PRIVACIDADE = "https://licitaplena.com.br/politica-privacidade.html"
 # Texto próprio (23/11), com as mesmas garantias do boletim do ConLicitação: não substitui a publicação oficial,
 # obrigação de meio, uso exclusivo do cliente identificado; mais LGPD e como parar de receber.

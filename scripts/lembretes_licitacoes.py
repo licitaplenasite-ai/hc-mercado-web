@@ -29,7 +29,7 @@ REMETENTE_ZEPTO = "avisos@licitaplena.com.br"
 NOME_ZEPTO = "LicitaPlena Avisos"
 REMETENTE_FINANCEIRO = "financeiro@licitaplena.com.br"
 NOME_FINANCEIRO = "LicitaPlena Financeiro"
-RESPONDER_PARA = "licitaplena.site@gmail.com"
+RESPONDER_PARA = "licitaplena@licitaplena.com.br"
 BRASILIA = timezone(timedelta(hours=-3))
 NOME_REMETENTE = "LicitaPlena - Lembretes de Licitação"
 SITE_URL = os.environ.get("SITE_URL") or "https://licitaplena.com.br"

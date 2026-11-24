@@ -18,7 +18,7 @@ const RAIZ = path.join(__dirname, "..");
 const SITE = "https://licitaplena.com.br";
 // Data fixa (e não a do dia) para a saída ser sempre a mesma: troque ao publicar conteúdo novo.
 const DATA_ATUALIZACAO = "2026-11-22";
-const EMAIL = "licitaplena.site@gmail.com";
+const EMAIL = "licitaplena@licitaplena.com.br";
 const WHATSAPP = "5592981937781";
 const HC_SITE = "https://www.hclicitacoes.com";
 const ZAP_HC = `https://wa.me/${WHATSAPP}?text=${encodeURIComponent("Olá! Vim pelo site do LicitaPlena e quero ajuda da HC Licitações com licitações.")}`;

@@ -8,7 +8,7 @@ const ZEPTOMAIL_URL = "https://api.zeptomail.com/v1.1/email";
 const REMETENTE_PADRAO = "licitaplena@licitaplena.com.br";
 const NOME_REMETENTE = "LicitaPlena";
 // Respostas do cliente vão para a caixa que o dono lê (o remetente do domínio não tem caixa de entrada).
-const RESPONDER_PARA = "licitaplena.site@gmail.com";
+const RESPONDER_PARA = "licitaplena@licitaplena.com.br";
 const MAX_DESTINATARIOS_POR_ENVIO = 10;
 
 // Corpo HTML compartilhado com a impressão do painel (resumo-email.js): uma fonte só.

@@ -209,7 +209,7 @@ legend{font:var(--text-section);margin:0 0 12px;padding:0}
         <label for="pix-codigo"><strong>Pix copia e cola</strong> <span class="nota">(cole no aplicativo do seu banco, em Pix &gt; Copia e cola; o valor já vem preenchido)</span></label>
         <textarea id="pix-codigo" readonly>${esc(codigo)}</textarea>`;
     } else {
-      html += `</dl><p class="aviso info" id="fale-equipe">Fale com a equipe para receber os dados do Pix: escreva para <a href="mailto:licitaplena.site@gmail.com">licitaplena.site@gmail.com</a> com o número do pedido.</p>`;
+      html += `</dl><p class="aviso info" id="fale-equipe">Fale com a equipe para receber os dados do Pix: escreva para <a href="mailto:licitaplena@licitaplena.com.br">licitaplena@licitaplena.com.br</a> com o número do pedido.</p>`;
     }
     html += `<div class="botoes">${codigo ? '<button type="button" class="btn primario" id="btn-copiar">Copiar código Pix</button>' : ""}${zap ? `<a class="btn" id="btn-whatsapp" target="_blank" rel="noopener" href="https://wa.me/${zap}?text=${encodeURIComponent(mensagem)}">Mandar comprovante no WhatsApp</a>` : ""}</div>
       <ol class="nota" id="pagar-passos" style="margin-top:12px;padding-left:20px">

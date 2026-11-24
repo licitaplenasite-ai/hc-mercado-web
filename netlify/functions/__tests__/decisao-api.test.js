@@ -31,7 +31,7 @@ const dados={destinos:'cliente@example.com',nomeDestino:'Cliente',texto:'Resumo 
 for(const [provedor,status] of [[200,'enviado'],[400,'falhou'],['timeout','incerto']])test(`envio ${provedor} registra ${status} sem alterar o resumo`,async()=>ambiente(async chamadas=>{
  const r=await envio.handler(pedido(dados));assert.equal(r.statusCode,provedor===200?200:502);
  const criar=chamadas.find(c=>c.url.includes('criar_decisao'));assert.equal(criar.body.p_usuario,usuario);assert.equal(criar.body.p_empresa,empresa);
- const mail=chamadas.find(c=>c.url.includes('api.zeptomail'));assert.match(mail.body.htmlbody,/Resumo completo/);assert.equal(mail.body.from.address,'licitaplena@licitaplena.com.br');assert.deepEqual(mail.body.reply_to,[{address:'licitaplena.site@gmail.com',name:'LicitaPlena'}]);assert.match(mail.body.htmlbody,/Quero participar/);
+ const mail=chamadas.find(c=>c.url.includes('api.zeptomail'));assert.match(mail.body.htmlbody,/Resumo completo/);assert.equal(mail.body.from.address,'licitaplena@licitaplena.com.br');assert.deepEqual(mail.body.reply_to,[{address:'licitaplena@licitaplena.com.br',name:'LicitaPlena'}]);assert.match(mail.body.htmlbody,/Quero participar/);
  assert.equal(chamadas.find(c=>c.url.includes('marcar_envio')).body.p_status,status);
 },{provedor}));
 test('envio antigo não depende da infraestrutura de decisões; flag desligada recusa opt-in sem transmitir',async()=>ambiente(async chamadas=>{

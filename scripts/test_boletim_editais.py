@@ -409,7 +409,7 @@ def test_boletim_sai_de_boletim_com_resposta_para_o_dono(monkeypatch):
     monkeypatch.setattr(b.urllib.request, "urlopen", lambda req, timeout=None: enviados.append(_json.loads(req.data)) or _Resp())
     b.enviar_zeptomail("token-falso", "a@b.c", "A", "Assunto", "texto", "<p>x</p>")
     assert enviados[0]["from"] == {"address": "boletim@licitaplena.com.br", "name": "LicitaPlena Boletim"}
-    assert enviados[0]["reply_to"] == [{"address": "licitaplena.site@gmail.com", "name": "LicitaPlena"}]
+    assert enviados[0]["reply_to"] == [{"address": "licitaplena@licitaplena.com.br", "name": "LicitaPlena"}]
 
 
 # ---- 23/11: log público sem e-mail e cabeçalho com a chave certa de planos ----

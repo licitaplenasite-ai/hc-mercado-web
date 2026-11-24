@@ -17,7 +17,7 @@ const BASE = "https://www.comprasnet.gov.br/livre/pregao";
 const PAUSA_MINIMA_MS = 1500;
 const TIMEOUT_MS = 20000;
 const MAX_BYTES = 3 * 1024 * 1024;
-const UA = "LicitaPlena/1.0 (leitura de paginas publicas; contato licitaplena.site@gmail.com)";
+const UA = "LicitaPlena/1.0 (leitura de paginas publicas; contato licitaplena@licitaplena.com.br)";
 
 const ENTIDADES = { nbsp: " ", amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", agrave: "À", Agrave: "À" };
 const decodificar = (s) => String(s).replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (m, e) => {
