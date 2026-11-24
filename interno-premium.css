@@ -90,7 +90,9 @@
   }
   @keyframes lp-int-brilho { from { left: -80%; } to { left: 130%; } }
   /* Perigo: contorno vermelho; fundo de erro no hover. */
-  :is(html, html.tema-claro) .btn.perigo, .btn-perigo, .btn-limpar-select:hover, .btn-rejeitar, .btn-remover { color: var(--error-text); border-color: var(--error-border); }
+  :is(html, html.tema-claro) .btn.perigo, .btn-perigo, .btn-limpar-select:hover { color: var(--error-text); border-color: var(--error-border); }
+  /* Admin: o fundo era vermelho cheio; com o texto vermelho daqui ficava invisível (1:1). Perigo = contorno. */
+  .btn-rejeitar, .btn-remover { background-color: var(--surface-default); color: var(--error-text); border: 1px solid var(--error-border); }
   :is(html, html.tema-claro) .btn.perigo:hover:not(:disabled), .btn-perigo:hover:not(:disabled), .btn-rejeitar:hover:not(:disabled), .btn-remover:hover:not(:disabled) { background-color: var(--error-bg); border-color: var(--error-text); color: var(--error-text); }
   :is(.btn, .btn-imprimir, .pp-mercado .btn):disabled { transform: none; box-shadow: none; }
   /* Kit de documentos: o secundário era cinza cheio (--card2); vira contorno como os outros. */
@@ -216,12 +218,13 @@
   .estado-vazio-titulo { font-family: var(--fonte-titulo) !important; font-weight: 600 !important; color: var(--marca-titulo) !important; }
 
   /* ---- Carregando: anel royal girando antes do texto ---- */
-  .carregando, .cl-carregando { display: flex; align-items: center; gap: 10px; }
-  .carregando::before, .cl-carregando::before {
+  /* Só quando o elemento ainda é o aviso de texto: o admin reaproveita o mesmo contêiner (classe "carregando") para a tabela pronta. */
+  .carregando:not(:has(*)), .cl-carregando { display: flex; align-items: center; gap: 10px; }
+  .carregando:not(:has(*))::before, .cl-carregando::before {
     content: ""; flex: none; width: 16px; height: 16px; border-radius: 50%;
     border: 2px solid rgba(var(--medio-rgb), 0.18); border-top-color: var(--marca-medio); animation: lp-int-giro 0.8s linear infinite;
   }
-  [data-theme="dark"] :is(.carregando, .cl-carregando)::before { border-color: rgba(255, 255, 255, 0.14); border-top-color: var(--destaque); }
+  [data-theme="dark"] :is(.carregando:not(:has(*)), .cl-carregando)::before { border-color: rgba(255, 255, 255, 0.14); border-top-color: var(--destaque); }
   @keyframes lp-int-giro { to { transform: rotate(360deg); } }
 
   /* ---- Gráficos simples: barra royal→ciano ---- */
