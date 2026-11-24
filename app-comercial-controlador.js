@@ -49,7 +49,7 @@
     const empresas = Array.isArray(j.empresas) ? j.empresas.filter((e) => e && typeof e.empresaId === 'string').map((e) => ({ empresaId: e.empresaId, razaoSocial: typeof e.razaoSocial === 'string' ? e.razaoSocial.trim() : '' })) : [];
     // Certidões e prazos: lista, null (o servidor não conseguiu ler) ou ausente (fonte sem esses blocos, como o QA).
     const bloco = (v) => (Array.isArray(v) ? v : v === null ? null : undefined);
-    return { estado: 'ok', sessao: { userId: j.userId, accessToken: accessToken || j.accessToken, contextos: Array.isArray(j.contextos) ? j.contextos : [], empresas, certidoes: bloco(j.certidoes), prazos: bloco(j.prazos), sancoes: bloco(j.sancoes), contratos: bloco(j.contratos) } };
+    return { estado: 'ok', sessao: { userId: j.userId, accessToken: accessToken || j.accessToken, contextos: Array.isArray(j.contextos) ? j.contextos : [], empresas, certidoes: bloco(j.certidoes), prazos: bloco(j.prazos), sancoes: bloco(j.sancoes), contratos: bloco(j.contratos), tarefas: bloco(j.tarefas), parados: bloco(j.parados) } };
   }
 
   // Produção (sistema.html): Supabase Auth no navegador, mesmo fluxo do login.html, inclusive recusar e
@@ -139,6 +139,8 @@
     // Preparação de empresa (identificação, sem processo e sem kit): empresa do módulo montado e seu modo.
     let prepEmpresaId = null;
     let identDe = null;
+    // Meu dia (meu-dia.js): empresa escolhida no filtro do bloco ('' = todas). Só muda a vista, nunca o acesso.
+    let filtroMeuDia = '';
 
     function aviso(texto, estado) {
       el('app-aviso').textContent = texto || '';
@@ -249,10 +251,20 @@
       li.append(selo, p, d);
       return li;
     }
+    // Meu dia: certidões, prazos, sessões, tarefas do Funil e cartões parados numa lista só (meu-dia.js).
+    // Sem o módulo ou sem o contêiner (harness QA), ficam os blocos antigos de certidões e prazos abaixo.
+    function renderizarMeuDia() {
+      const alvo = el('hoje-meu-dia'), M = global.LicitaMeuDia;
+      if (!alvo || !M || !sessao) return false;
+      M.renderizar({ doc, alvo, dados: { ...sessao, contextos: autorizados }, empresas: empresasAutorizadas(), filtro: filtroMeuDia,
+        aoFiltrar: (v) => { filtroMeuDia = v; renderizarMeuDia(); el('meu-dia-empresa')?.focus(); } });
+      return true;
+    }
     function renderizarAlertas() {
       const alvo = el('hoje-alertas');
       if (!alvo) return;
-      const certidoes = sessao?.certidoes, prazos = sessao?.prazos;
+      const comMeuDia = renderizarMeuDia();
+      const certidoes = comMeuDia ? undefined : sessao?.certidoes, prazos = comMeuDia ? undefined : sessao?.prazos;
       // Sanções: o bloco só aparece se alguma empresa tiver sanção vigente (ou se a conferência falhou).
       const contratos = sessao?.contratos, comContrato = contratos === null || (Array.isArray(contratos) && contratos.length > 0);
       const sancoes = sessao?.sancoes, comSancao = sancoes === null || (Array.isArray(sancoes) && sancoes.length > 0);
@@ -359,6 +371,8 @@
     function limparSessaoVisivel() {
       el('hoje-lista').replaceChildren();
       el('hoje-alertas')?.replaceChildren();
+      el('hoje-meu-dia')?.replaceChildren();
+      filtroMeuDia = '';
       atual = null;
       empresasSessao = [];
       novoEmpresaId = null;

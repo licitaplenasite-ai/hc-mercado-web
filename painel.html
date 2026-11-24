@@ -2318,6 +2318,7 @@
     <script src="funil-checklist-ui.js"></script>
     <link rel="stylesheet" href="funil-v3.css"><link rel="stylesheet" href="agenda-ics.css">
     <script src="agenda-ics.js"></script><script src="funil-tarefas-ui.js"></script><script src="funil-metas-ui.js"></script>
+    <link rel="stylesheet" href="funil-crm.css"><script src="funil-crm-ui.js"></script>
     <div class="boletim-cabecalho">
       <div>
         <h2 style="margin:0;"><svg class='icone-ph'><use href='#ph-folders'></use></svg> Funil</h2>
@@ -2337,6 +2338,7 @@
     <button type="button" class="btn-imprimir" id="funil-metas" aria-haspopup="dialog">Metas e automação</button>
     </div>
     <div id="funil-filtros" class="funil-filtros"></div>
+    <div id="funil-salvos"></div>
     <div id="kanban-quadro" class="kanban-quadro"></div>
     <div id="funil-lista" hidden></div>
     <div id="funil-arquivados" hidden></div>
@@ -2348,7 +2350,7 @@
         <h3 id="etapas-titulo">Etapas do Funil</h3>
         <button type="button" class="btn-imprimir" id="etapas-fechar">Fechar</button>
       </div>
-      <p class="etapas-ajuda">Cada etapa é uma coluna do Funil, nesta ordem. "Conta como" é o estágio que o processo recebe no sistema. As 4 etapas do sistema podem ser renomeadas, coloridas e reordenadas, mas não excluídas. Tudo é salvo na hora.</p>
+      <p class="etapas-ajuda">Cada etapa é uma coluna do Funil, nesta ordem. "Conta como" é o estágio que o processo recebe no sistema. As 4 etapas do sistema podem ser renomeadas, coloridas e reordenadas, mas não excluídas. "Alerta de parado" é quantos dias o cartão pode ficar na etapa sem mudar nem ter tarefa concluída antes de ganhar o selo "Parado" (vazio usa o número sugerido; 0 desliga). Tudo é salvo na hora.</p>
       <p id="etapas-aviso" class="erro-campo" role="alert" hidden></p>
       <ol id="etapas-lista" class="etapas-lista"></ol>
       <button type="button" class="btn-imprimir" id="etapas-nova">+ Nova etapa</button>
@@ -4703,7 +4705,8 @@
       checklistFunil: "checklistFunil" in edital ? edital.checklistFunil : (mapa[id]?.checklistFunil || {}),
       favorito: "favorito" in edital ? Boolean(edital.favorito) : Boolean(mapa[id]?.favorito),
       // Funil v3 (funil_v3.sql): tarefas do cartão, selo do Prospecta, itens do monitor e data do resultado.
-      ...Object.fromEntries(["tarefasCard", "sugeridaNota", "monitorItens", "dataResultado"].map((k) => [k, k in edital ? edital[k] : (mapa[id]?.[k] ?? null)])),
+      // Fase 1 de CRM (funil_crm.sql): entrada na etapa, última atualização, motivo da perda e valor proposto.
+      ...Object.fromEntries(["tarefasCard", "sugeridaNota", "monitorItens", "dataResultado", "etapaDesde", "atualizadoEm", "motivoPerda", "precoProposta"].map((k) => [k, k in edital ? edital[k] : (mapa[id]?.[k] ?? null)])),
     };
     salvarMapa("kanban-editais", mapa, empresaId);
   }
@@ -5022,7 +5025,10 @@
         favorito: Boolean(processo.favorito),
         // Funil v3 (funil_v3.sql): tarefas do cartão, selo do Prospecta e itens do monitor. Ausentes = SQL ainda não aplicado.
         tarefasCard: processo.tarefas_card ?? null, sugeridaNota: processo.sugerida_nota ?? null,
-        monitorItens: Array.isArray(processo.monitor_itens) ? processo.monitor_itens : [], dataResultado: processo.data_resultado || null
+        monitorItens: Array.isArray(processo.monitor_itens) ? processo.monitor_itens : [], dataResultado: processo.data_resultado || null,
+        // Fase 1 de CRM: etapa_desde ausente = funil_crm.sql ainda não aplicado ou processo antigo (conta de atualizado_em).
+        etapaDesde: processo.etapa_desde || null, atualizadoEm: processo.atualizado_em || null,
+        motivoPerda: processo.motivo_perda || null, precoProposta: processo.preco_proposta ?? null
       };
     }
     const idsProcesso = processos.filter(p => status[p.origem_externa_id]).map(p => p.id);
@@ -5301,8 +5307,13 @@
     const opcoesMoverHtml = colunasDoFunil(etapasDoQuadro())
       .map((c) => `<option value="${escapeHtml(c.chave)}" ${c.chave === valorStatus ? "selected" : ""}>${escapeHtml(c.titulo)}</option>`)
       .join("");
+    // Fase 1 de CRM (funil-crm-ui.js): selo "Parado há N dias" pelo limite da etapa e motivo da perda no cartão.
+    const etapaColuna = etapasDoQuadro()?.find((e) => e.id === valorStatus) || null;
+    const estagioCard = etapaColuna?.status_sistema || dadosStatusOperacional(valorStatus)?.estagio || edital.statusProcesso;
+    const parado = LicitaFunilCrm.estadoParado(edital, LicitaFunilCrm.limiteDaEtapa(etapaColuna, estagioCard));
+    const motivoHtml = estagioCard === "perdido" ? LicitaFunilCrm.htmlMotivoCard(id, edital.motivoPerda) : "";
     return `
-      <div class="kanban-card" draggable="true" data-id="${escapeHtml(id)}">
+      <div class="kanban-card${parado?.parado ? " fc-parado" : ""}" draggable="true" data-id="${escapeHtml(id)}">
         <div class="kanban-card-topo">
           ${LicitaFunil.htmlEstrela(id, edital.favorito)}
           <p class="kanban-card-objeto">${escapeHtml(edital.objeto || "Licitação sem título")}</p>
@@ -5310,7 +5321,8 @@
         </div>
         <p class="kanban-card-meta"><svg class='icone-ph'><use href='#ph-bank'></use></svg> ${escapeHtml(edital.orgao || "Órgão não informado")}</p>
         <p class="kanban-card-meta"><svg class='icone-ph'><use href='#ph-map-pin'></use></svg> ${escapeHtml([edital.municipio, edital.uf].filter(Boolean).join(" / ") || "Não informado")}</p>
-        ${prazoHtml}${seloHtml}
+        ${prazoHtml}${seloHtml}${LicitaFunilCrm.htmlSeloParado(parado)}
+        ${motivoHtml}
         ${LicitaFunil.htmlContador(id, contagemChecklistFunil(id, edital))}
         ${htmlTarefasCardFunil(id, edital, valorStatus)}
         ${PortalOrigem.htmlPortal(edital)}
@@ -5332,6 +5344,7 @@
     if (semEmpresaCadastrada || !empresaAcompanhamentoPronta) {
       mostrarVistaFunil("quadro");
       document.getElementById("funil-filtros").innerHTML = "";
+      document.getElementById("funil-salvos").innerHTML = "";
     }
     if (semEmpresaCadastrada) {
       alvo.innerHTML = '<div class="kanban-vazio convite-neutro">O Funil mostra os editais que sua empresa está acompanhando. Para começar, cadastre sua empresa em <a href="operacao.html">Minhas empresas e documentos</a>.</div>';
@@ -5353,6 +5366,7 @@
       .map((id) => ({ id, edital: editaisMapa[id], portal: PortalOrigem.portalDe({ sistema: editaisMapa[id].fonte, ...editaisMapa[id] }).nome, favorito: editaisMapa[id].favorito,
         coluna: colunaDoCard(etapas, statusMapa[id], editaisMapa[id].etapaId, editaisMapa[id].statusProcesso) }));
     desenharFiltrosFunil(itens);
+    desenharSalvosFunil();
     mostrarVistaFunil(filtrosFunil.visao);
     if (filtrosFunil.visao === "arquivados") {
       document.getElementById("funil-arquivados").innerHTML = LicitaFunil.htmlArquivados(arquivadosFunil,
@@ -5379,6 +5393,7 @@
             <span class="kanban-coluna-titulo"><svg class='icone-ph'><use href='#ph-${col.icone}'></use></svg> ${escapeHtml(col.titulo)}</span>
             <span class="kanban-coluna-contagem">${idsColuna.length}</span>
           </div>
+          ${LicitaFunilCrm.htmlTotal(LicitaFunilCrm.totalDaColuna(idsColuna.map((id) => editaisMapa[id])))}
           <div class="kanban-lista" data-status="${escapeHtml(col.chave)}">${cardsHtml}</div>
         </div>`;
     }).join("");
@@ -5616,6 +5631,112 @@
     }
   });
 
+  // ---- Funil, fase 1 de CRM: motivo da perda e filtros salvos (funil-crm-ui.js, funil_crm.sql) ----
+  // O diálogo fica no <body>: o Boletim também pede o motivo, com a seção do Funil escondida.
+  function pedirMotivoPerda(objeto) {
+    let dialogo = document.getElementById("funil-motivo-dialogo");
+    if (!dialogo) {
+      dialogo = document.createElement("dialog");
+      dialogo.id = "funil-motivo-dialogo";
+      dialogo.className = "etapas-dialogo fc-motivo-dialogo";
+      dialogo.setAttribute("aria-labelledby", "fc-motivo-titulo");
+      document.body.appendChild(dialogo);
+    }
+    return LicitaFunilCrm.pedirMotivo(dialogo, objeto || "Licitação sem título");
+  }
+  // A mudança de coluna já foi salva: falha aqui só avisa e deixa o botão "Informar o motivo" no cartão.
+  // motivo null = limpar (o cartão saiu de Perdi). Devolve true/false para quem chama não cobrir o aviso de falha.
+  async function gravarMotivoPerda(id, motivo) {
+    try {
+      await salvarProcessoFunilV3(id, { motivo_perda: motivo }, { motivoPerda: motivo });
+      renderizarKanban();
+      return true;
+    } catch (erro) {
+      avisarSincronizacaoOperacional(motivo
+        ? "A licitação foi movida, mas o motivo da perda não foi salvo: " + erro.message + " Use “Informar o motivo da perda” no cartão."
+        : "A licitação foi movida, mas o motivo da perda antigo não foi apagado: " + erro.message, true);
+      return false;
+    }
+  }
+  let filtrosSalvosFunil = [], salvosFunilEmpresa = null, formSalvoFunil = false, avisoSalvoFunil = "";
+  const vence3Funil = () => document.querySelector("#kanban-filtros-rapidos .btn-filtro-rapido.ativo")?.dataset.modo === "vence-3";
+  function desenharSalvosFunil() {
+    const host = document.getElementById("funil-salvos");
+    if (salvosFunilEmpresa !== empresaOperacionalId) void carregarFiltrosSalvosFunil();
+    if (formSalvoFunil && host.querySelector("[data-fc-form]")) return; // não apaga o nome que a pessoa está digitando
+    host.hidden = filtrosFunil.visao === "arquivados";
+    host.innerHTML = LicitaFunilCrm.htmlSalvos(filtrosSalvosFunil, LicitaFunil.filtroAtivo(filtrosFunil) || vence3Funil(), formSalvoFunil, avisoSalvoFunil);
+  }
+  // Mesma tabela de "Meus filtros salvos" de Encontrar licitações, separada por filtro.tela = 'funil' e pela empresa ativa.
+  async function carregarFiltrosSalvosFunil() {
+    const empresaId = empresaOperacionalId;
+    salvosFunilEmpresa = empresaId;
+    const base = () => window.__sbClient.from("filtros_salvos").select("id,nome,filtro").eq("filtro->>tela", "funil").order("nome");
+    let resposta = await base().eq("empresa_id", empresaId);
+    if (resposta.error) resposta = await base(); // banco sem boletim_por_empresa.sql: sem coluna empresa_id
+    if (empresaOperacionalId !== empresaId) return;
+    filtrosSalvosFunil = resposta.error ? [] : resposta.data || [];
+    if (resposta.error) avisoSalvoFunil = "Não foi possível carregar seus filtros salvos agora.";
+    desenharSalvosFunil();
+  }
+  function avisarSalvosFunil(texto) { avisoSalvoFunil = texto; desenharSalvosFunil(); }
+  document.getElementById("funil-salvos").addEventListener("click", async (ev) => {
+    const b = ev.target.closest("button");
+    if (!b) return;
+    if (b.hasAttribute("data-fc-novo")) {
+      formSalvoFunil = true; avisoSalvoFunil = ""; desenharSalvosFunil();
+      document.querySelector("#funil-salvos [data-fc-form] input").focus();
+    } else if (b.hasAttribute("data-fc-cancelar")) {
+      formSalvoFunil = false; avisarSalvosFunil("");
+    } else if (b.dataset.fcAplicar) {
+      const salvo = filtrosSalvosFunil.find((s) => s.id === b.dataset.fcAplicar);
+      if (!salvo) return;
+      const { filtros, vence3 } = LicitaFunilCrm.filtroSalvoParaTela(salvo.filtro);
+      Object.assign(filtrosFunil, filtros);
+      avisoSalvoFunil = `Filtro "${salvo.nome}" aplicado.`;
+      // O botão rápido redesenha o quadro com os filtros novos.
+      document.querySelector(`#kanban-filtros-rapidos [data-modo="${vence3 ? "vence-3" : "todos"}"]`).click();
+    } else if (b.dataset.fcApagar) {
+      const salvo = filtrosSalvosFunil.find((s) => s.id === b.dataset.fcApagar);
+      if (!salvo || !confirm(`Apagar o filtro "${salvo.nome}"? Os cartões do Funil não mudam.`)) return;
+      const { error } = await window.__sbClient.from("filtros_salvos").delete().eq("id", salvo.id);
+      if (error) { avisarSalvosFunil("Não foi possível apagar agora. Tente de novo em instantes."); return; }
+      filtrosSalvosFunil = filtrosSalvosFunil.filter((s) => s.id !== salvo.id);
+      avisarSalvosFunil(`Filtro "${salvo.nome}" apagado.`);
+    }
+  });
+  document.getElementById("funil-salvos").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const form = ev.target, campo = form.querySelector("input");
+    const nome = LicitaFunilCrm.nomeFiltroValido(campo.value);
+    const aviso = form.parentElement.querySelector(".fc-salvos-aviso");
+    if (!nome) { campo.setAttribute("aria-invalid", "true"); aviso.textContent = "Dê um nome ao filtro (até 60 letras)."; campo.focus(); return; }
+    form.querySelector("button[type=submit]").disabled = true;
+    const filtro = LicitaFunilCrm.filtroParaSalvar(filtrosFunil, vence3Funil());
+    const sb = window.__sbClient;
+    let resposta = await sb.from("filtros_salvos").insert({ nome, filtro, empresa_id: empresaOperacionalId }).select("id,nome,filtro").single();
+    if (["42703", "PGRST204"].includes(resposta.error?.code)) resposta = await sb.from("filtros_salvos").insert({ nome, filtro }).select("id,nome,filtro").single();
+    const { data, error } = resposta;
+    if (error) {
+      form.querySelector("button[type=submit]").disabled = false;
+      campo.setAttribute("aria-invalid", "true");
+      aviso.textContent = error.code === "23505" ? "Já existe um filtro com esse nome (aqui ou em Encontrar licitações). Escolha outro nome."
+        : /Limite de 20/.test(error.message || "") ? "Sua conta já tem 20 filtros salvos, somando os de Encontrar licitações. Apague um para salvar outro."
+        : "Não foi possível salvar agora. Tente de novo em instantes.";
+      return;
+    }
+    filtrosSalvosFunil = [...filtrosSalvosFunil, data].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+    formSalvoFunil = false;
+    avisarSalvosFunil(`Filtro "${nome}" salvo. Clique no nome para aplicar.`);
+  });
+  // Cartão em Perdi sem motivo (antigo, ou o motivo não gravou): pede e salva sem mover.
+  document.getElementById("kanban").addEventListener("click", async (ev) => {
+    const b = ev.target.closest("[data-fc-motivo]");
+    if (!b) return;
+    const motivo = await pedirMotivoPerda(lerMapa("kanban-editais")[b.dataset.fcMotivo]?.objeto);
+    if (motivo) await gravarMotivoPerda(b.dataset.fcMotivo, motivo);
+  });
+
   // ---- Diálogo "Etapas" do Funil ----
   // Escrita direto na tabela, sob RLS: só quem tem vínculo com a organização inteira grava.
   // UPDATE/DELETE barrados pela RLS não dão erro, só não afetam linha: por isso o .select().
@@ -5641,6 +5762,7 @@
         <label class="etapa-campo etapa-nome"><span>Nome</span><input type="text" class="etapa-input-nome" maxlength="40" aria-describedby="etapas-aviso" required value="${nome}"></label>
         <label class="etapa-campo etapa-conta"><span>Conta como</span><select class="etapa-input-status" ${protegida ? 'disabled title="Etapa do sistema: o estágio não muda"' : ""}>${opcoes}</select></label>
         <label class="etapa-campo etapa-cor"><span>Cor</span><input type="color" class="etapa-input-cor" value="${escapeHtml(e.cor)}"></label>
+        <label class="etapa-campo etapa-limite"><span>Alerta de parado (dias)</span><input type="number" class="etapa-input-limite" inputmode="numeric" min="0" max="365" step="1" aria-describedby="etapas-aviso" value="${Number.isInteger(e.limite_parado_dias) ? e.limite_parado_dias : ""}" placeholder="${LicitaFunilCrm.limiteDaEtapa(null, e.status_sistema) ?? "sem alerta"}" title="Vazio = padrão do estágio; 0 = sem alerta"></label>
         <div class="etapa-acoes">
           <button type="button" class="btn-imprimir etapa-mover" data-passo="-1" aria-label="Subir ${nome}" ${i === 0 ? "disabled" : ""}>↑</button>
           <button type="button" class="btn-imprimir etapa-mover" data-passo="1" aria-label="Descer ${nome}" ${i === etapas.length - 1 ? "disabled" : ""}>↓</button>
@@ -5682,11 +5804,21 @@
       campos = { nome };
     } else if (campo.classList.contains("etapa-input-status")) campos = { status_sistema: campo.value };
     else if (campo.classList.contains("etapa-input-cor")) campos = { cor: campo.value };
+    else if (campo.classList.contains("etapa-input-limite")) {
+      // Vazio = padrão do estágio (funil-crm-ui.js); 0 = sem alerta nesta etapa.
+      const texto = campo.value.trim();
+      const dias = Number(texto);
+      const problema = texto && !(Number.isInteger(dias) && dias >= 0 && dias <= 365) ? "O alerta de parado aceita de 0 a 365 dias (0 desliga; vazio usa o padrão)." : null;
+      campo.setAttribute("aria-invalid", String(Boolean(problema)));
+      if (problema) { avisarEtapas(problema); return; }
+      campos = { limite_parado_dias: texto ? dias : null };
+    }
     if (!campos) return;
     avisarEtapas("");
     try { await gravarEtapa(id, campos); }
     catch (erro) {
-      avisarEtapas(mensagemErroEtapa(erro));
+      avisarEtapas(erroColunaFunil(erro) ? "Este recurso ainda está sendo ativado. Tente mais tarde." : mensagemErroEtapa(erro));
+      if ("limite_parado_dias" in campos) { campo.value = Number.isInteger(etapa.limite_parado_dias) ? etapa.limite_parado_dias : ""; return; }
       // Nome repetido fica no campo para a pessoa corrigir; o resto volta ao valor salvo.
       if (erro?.code === "23505") campo.setAttribute("aria-invalid", "true");
       else if (campos.nome) campo.value = etapa.nome;
@@ -5760,7 +5892,22 @@
   async function moverCardParaColuna(id, coluna) {
     const etapa = etapasDoQuadro()?.find((e) => e.id === coluna) || null;
     const status = etapa ? (etapa.chave_sistema || statusDoProcessoAcompanhamento({ status: etapa.status_sistema })) : coluna;
-    try { await salvarStatusAcompanhamento(id, lerMapa("kanban-editais")[id], status, etapa); }
+    const edital = lerMapa("kanban-editais")[id];
+    const mudou = colunaDoCard(etapasDoQuadro(), lerMapa("status-licitacao")[id], edital?.etapaId, edital?.statusProcesso) !== coluna;
+    // Perder pede o motivo antes de mover; cancelar deixa o cartão onde estava.
+    let motivo = null;
+    const paraPerdido = (etapa ? etapa.status_sistema : dadosStatusOperacional(coluna)?.estagio) === "perdido";
+    if (mudou && paraPerdido) {
+      motivo = await pedirMotivoPerda(edital?.objeto);
+      if (!motivo) { renderizarKanban(); return; }
+    }
+    // O gatilho de funil_crm.sql grava etapa_desde no banco; aqui só o retrato, para o selo "Parado" sumir na hora.
+    try {
+      await salvarStatusAcompanhamento(id, edital && (mudou ? { ...edital, etapaDesde: new Date().toISOString() } : edital), status, etapa);
+      if (motivo) await gravarMotivoPerda(id, motivo);
+      // Saiu de Perdi (ex.: recurso deu certo e foi para Ganhei): o motivo antigo deixa de valer.
+      else if (mudou && !paraPerdido && edital?.motivoPerda) await gravarMotivoPerda(id, null);
+    }
     catch (erro) {
       const etapaMudou = ["23503", "23514"].includes(erro?.code) && /etapa/i.test(erro?.message || "");
       if (etapaMudou) await carregarEtapasFunil(organizacaoFunilId);
@@ -6750,10 +6897,16 @@
         selectStatus.addEventListener("change", async () => {
           const statusAnterior = lerMapa("status-licitacao")[id] || "";
           const idx = Number(card.dataset.idx);
+          // Mesmo motivo obrigatório do Funil (funil-crm-ui.js) ao marcar "Perdi".
+          const motivo = selectStatus.value === "perdi" && statusAnterior !== "perdi" ? await pedirMotivoPerda(resultados[idx]?.objeto) : null;
+          if (selectStatus.value === "perdi" && statusAnterior !== "perdi" && !motivo) { selectStatus.value = statusAnterior; return; }
           selectStatus.disabled = true;
           try {
             const { empresaNome, pendencia } = await salvarStatusAcompanhamento(id, resultados[idx], selectStatus.value);
-            avisarSincronizacaoOperacional(`Acompanhamento salvo para ${empresaNome}.${pendencia ? " " + pendencia : ""}`, Boolean(pendencia));
+            // Falha no motivo já mostrou o aviso de erro: não cobre com "Acompanhamento salvo".
+            const motivoOk = motivo ? await gravarMotivoPerda(id, motivo)
+              : statusAnterior === "perdi" && selectStatus.value !== "perdi" && lerMapa("kanban-editais")[id]?.motivoPerda ? await gravarMotivoPerda(id, null) : true;
+            if (motivoOk) avisarSincronizacaoOperacional(`Acompanhamento salvo para ${empresaNome}.${pendencia ? " " + pendencia : ""}`, Boolean(pendencia));
             if (btnAcompanhar) btnAcompanhar.textContent = rotuloBotaoAcompanhar(selectStatus.value);
           } catch (erro) {
             selectStatus.value = statusAnterior;
@@ -7758,8 +7911,9 @@
   async function carregarFiltrosSalvos() {
     // Jornais por empresa: os da empresa ativa e os sem empresa (da conta). Sem a coluna (SQL não aplicado), todos.
     const empresa = window.__filtroBoletimEmpresa;
-    let resposta = await window.__sbClient.from("filtros_salvos").select("id, nome, filtro, empresa_id").or(empresa ? `empresa_id.is.null,empresa_id.eq.${empresa}` : "empresa_id.is.null").order("nome");
-    if (resposta.error) resposta = await window.__sbClient.from("filtros_salvos").select("id, nome, filtro").order("nome");
+    // filtro.tela = 'funil' são os filtros salvos do Funil (funil-crm-ui.js): não aparecem aqui nem viram jornal.
+    let resposta = await window.__sbClient.from("filtros_salvos").select("id, nome, filtro, empresa_id").or(empresa ? `empresa_id.is.null,empresa_id.eq.${empresa}` : "empresa_id.is.null").is("filtro->>tela", null).order("nome");
+    if (resposta.error) resposta = await window.__sbClient.from("filtros_salvos").select("id, nome, filtro").is("filtro->>tela", null).order("nome");
     const { data, error } = resposta;
     if (error) { mensagemSalvos("Não foi possível carregar seus filtros salvos agora."); return; }
     filtrosSalvos = data || [];

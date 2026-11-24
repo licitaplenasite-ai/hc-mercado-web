@@ -16,9 +16,15 @@
 //   Tabela ausente (SQL ainda não aplicado) omite o bloco em vez de mostrar erro.
 // - Contratos (operacao_contratos_publicos, etapa 8 da esteira): vencimento a até 90 dias e pagamento atrasado (liquidado
 //   sem pagamento há mais de 30 dias). Mesma regra de bloco; a conta de dias é a de contrato-publico.js.
+// - Meu dia (meu-dia.js): prazos e agenda abertos vencidos há até 30 dias também vêm (dias negativos = atrasado), e as
+//   tarefas com data do cartão do Funil (operacao_processos.tarefas_card, funil_v3.sql) na mesma janela. Coluna ausente
+//   (SQL ainda não aplicado) omite o bloco de tarefas.
+// - Cartões do Funil parados além do limite da etapa (funil_crm.sql + funil-crm-ui.js, a mesma conta do selo do Funil).
 const {cabecalhosPadrao,exigirUsuarioLogado}=require('./_auth');
 const {sancoesDoCnpj,textoSancao}=require('../../sancoes-ui.js');
 const {alertasDoContrato,DIAS_PAGAMENTO_ATRASADO}=require('../../contrato-publico.js');
+const FunilTarefas=require('../../funil-tarefas-ui.js');
+const FunilCrm=require('../../funil-crm-ui.js');
 const URL='https://lsqjamqvmrcyrvowndiu.supabase.co';
 const ANON='sb_publishable_yH695cc52QUKYfFEgV5RwQ_0a8GLIeb';
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
@@ -29,7 +35,7 @@ const uuid=v=>typeof v==='string'&&UUID.test(v);
 // Exibição: sempre string, com teto (mesmos limites do cadastro de processo para número e objeto).
 const texto=(v,max)=>typeof v==='string'?v.slice(0,max):'';
 // Brasília é UTC-3 fixo (sem horário de verão desde 2019), mesma conta do painel.html (diaBrasilia).
-const MS_DIA=864e5,FUSO_BR=-3*36e5,DIAS_CERTIDAO=30,DIAS_PRAZO=7;
+const MS_DIA=864e5,FUSO_BR=-3*36e5,DIAS_CERTIDAO=30,DIAS_PRAZO=7,DIAS_ATRASO=30;
 const diaBrasilia=ms=>Math.floor((ms+FUSO_BR)/MS_DIA);
 // vencimento de documento é coluna date (AAAA-MM-DD). Vencido (<0), até 30 dias ou fora (null).
 function situacaoCertidao(vencimento,hoje){
@@ -38,12 +44,60 @@ function situacaoCertidao(vencimento,hoje){
  if(!Number.isFinite(dias)||dias>DIAS_CERTIDAO)return null;
  return {dias,situacao:dias<0?'vencido':'vencendo'};
 }
-// vencimento de prazo/agenda é timestamptz. Dias de 0 (hoje) a 7 no calendário de Brasília; fora disso, null.
+// vencimento de prazo/agenda é timestamptz. Dias de -30 (vencido há 30 dias) a 7 no calendário de Brasília; fora disso, null.
 function diasDoPrazo(vencimento,hoje){
  const ms=typeof vencimento==='string'?Date.parse(vencimento):NaN;
  if(!Number.isFinite(ms))return null;
  const dias=diaBrasilia(ms)-hoje;
- return dias>=0&&dias<=DIAS_PRAZO?dias:null;
+ return dias>=-DIAS_ATRASO&&dias<=DIAS_PRAZO?dias:null;
+}
+
+// Tarefas abertas com data do cartão do Funil (mesma conta de funil-tarefas-ui.js, inclusive os prazos automáticos).
+// Esclarecimento, impugnação e disputa automáticos ficam de fora: o Meu dia já os mostra pela tabela de prazos
+// (prazos_legais.sql) e pela data da sessão. Processo perdido ou contratado não entra (mesma regra de processos.html).
+const AUTO_REPETIDO=['esclarecimento','impugnacao','disputa'];
+async function blocoTarefas(contextos,ler,hoje){
+ const ativos=new Map(contextos.filter(c=>!['perdido','contratado'].includes(c.status)).map(c=>[c.processoId,c]));
+ if(!ativos.size)return [];
+ let linhas;
+ try{linhas=await ler(`operacao_processos?id=in.${emLista([...ativos.keys()])}&select=id,tarefas_card,data_sessao,data_resultado`);}
+ catch(e){return e.status===400||e.status===404?undefined:null;}
+ const semRepetidas=card=>({...(card||{}),secoes:(Array.isArray(card?.secoes)?card.secoes:FunilTarefas.MODELO_PADRAO)
+  .map(s=>({...s,tarefas:(Array.isArray(s?.tarefas)?s.tarefas:[]).filter(t=>!AUTO_REPETIDO.includes(t?.auto))}))});
+ const processos=linhas.filter(l=>l&&ativos.has(l.id)).map(l=>({id:l.id,objeto:'',empresaId:ativos.get(l.id).empresaId,
+  tarefas_card:semRepetidas(l.tarefas_card),abertura:l.data_sessao,ata:l.data_resultado}));
+ return FunilTarefas.eventosAgenda(processos).flatMap(ev=>{
+  if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(String(ev.inicio)))return [];
+  const dias=Math.floor(Date.parse(ev.inicio.slice(0,10)+'T00:00:00Z')/MS_DIA)-hoje;
+  return dias>=-DIAS_ATRASO&&dias<=DIAS_PRAZO?[{id:texto(ev.id,90),empresaId:ev.empresaId,processoId:ev.processoId,titulo:texto(ev.titulo,160),inicio:ev.inicio,dias,responsavel:texto(ev.responsavel,80)}]:[];
+ });
+}
+
+// Cartões parados: [{empresaId,processoId,dias,limite,aproximada}], null em falha, undefined sem as colunas do Funil.
+// Sem funil_crm.sql (etapa_desde/limite_parado_dias): conta da última atualização (aproximado) e usa o limite padrão do estágio.
+async function lerComRecuo(ler,caminhos){
+ for(const [i,c] of caminhos.entries()){
+  try{return await ler(c);}catch(e){if(e.status!==400||i===caminhos.length-1)throw e;}
+ }
+}
+async function blocoParados(contextos,ler,agora){
+ const ativos=new Map(contextos.filter(c=>!['perdido','contratado'].includes(c.status)).map(c=>[c.processoId,c]));
+ if(!ativos.size)return [];
+ let linhas,etapas;
+ try{
+  const base=`operacao_processos?id=in.${emLista([...ativos.keys()])}&select=id,status,atualizado_em,checklist_funil,tarefas_card`;
+  linhas=await lerComRecuo(ler,[base+',etapa_id,etapa_desde',base+',etapa_id',base]);
+  const ids=[...new Set(linhas.map(l=>l?.etapa_id).filter(uuid))];
+  const de=`operacao_funil_etapas?id=in.${emLista(ids)}&select=id,status_sistema`;
+  etapas=ids.length?await lerComRecuo(ler,[de+',limite_parado_dias',de]):[];
+ }catch(e){return e.status===400||e.status===404?undefined:null;}
+ const porEtapa=new Map(etapas.map(e=>[e.id,e]));
+ return linhas.filter(l=>l&&ativos.has(l.id)).flatMap(l=>{
+  const etapa=porEtapa.get(l.etapa_id)||null;
+  const estado=FunilCrm.estadoParado({etapaDesde:l.etapa_desde,atualizadoEm:l.atualizado_em,checklistFunil:l.checklist_funil,tarefasCard:l.tarefas_card},
+   FunilCrm.limiteDaEtapa(etapa,etapa?.status_sistema||l.status),agora);
+  return estado?.parado?[{empresaId:ativos.get(l.id).empresaId,processoId:l.id,dias:estado.dias,limite:estado.limite,aproximada:estado.aproximada===true}]:[];
+ }).sort((a,b)=>b.dias-a.dias);
 }
 
 // Sanções vigentes por empresa: [{empresaId,cadastro,tipo,dataFim,texto}], null em falha, undefined se a tabela não existe.
@@ -108,7 +162,7 @@ exports.handler=async event=>{
   const contextos=processos.filter(p=>p&&uuid(p.id)&&p.status!=='arquivado'&&porId.get(p.empresa_id)?.organizacao_id===p.organizacao_id)
    .map(p=>({empresaId:p.empresa_id,processoId:p.id,numero:texto(p.numero,60),objeto:texto(p.objeto,500),status:texto(p.status,40),prazo:texto(p.data_sessao,40)}));
   const hoje=diaBrasilia(Date.now());
-  const inicio=new Date(hoje*MS_DIA-FUSO_BR).toISOString(),fim=new Date((hoje+DIAS_PRAZO+1)*MS_DIA-FUSO_BR).toISOString();
+  const inicio=new Date((hoje-DIAS_ATRASO)*MS_DIA-FUSO_BR).toISOString(),fim=new Date((hoje+DIAS_PRAZO+1)*MS_DIA-FUSO_BR).toISOString();
   const limiteCertidao=new Date((hoje+DIAS_CERTIDAO)*MS_DIA).toISOString().slice(0,10);
   const bloco=async fn=>{try{return await fn();}catch{return null;}};
   const empresaOk=(empresaId,org)=>porId.get(empresaId)?.organizacao_id===org;
@@ -128,8 +182,10 @@ exports.handler=async event=>{
    return [...doProcesso,...daAgenda].filter(p=>p.dias!==null).sort((a,b)=>Date.parse(a.vencimento)-Date.parse(b.vencimento));
   });
   const contratos=await blocoContratos([...porId.keys()],ler,hoje,contextos);
+  const tarefas=await blocoTarefas(contextos,ler,hoje);
+  const parados=await blocoParados(contextos,ler,Date.now());
   const sancoes=await blocoSancoes(empresas,ler,new Date(hoje*MS_DIA).toISOString().slice(0,10));
-  return resposta(200,{userId,...(sancoes===undefined?{}:{sancoes}),...(contratos===undefined?{}:{contratos}),empresas:empresas.map(e=>({empresaId:e.id,razaoSocial:typeof e.razao_social==='string'?e.razao_social:''})),contextos,certidoes,prazos});
+  return resposta(200,{userId,...(sancoes===undefined?{}:{sancoes}),...(contratos===undefined?{}:{contratos}),...(tarefas===undefined?{}:{tarefas}),...(parados===undefined?{}:{parados}),empresas:empresas.map(e=>({empresaId:e.id,razaoSocial:typeof e.razao_social==='string'?e.razao_social:''})),contextos,certidoes,prazos});
  }catch{
   return resposta(503,{erro:'Não foi possível carregar suas empresas agora. Tente de novo em instantes.'});
  }

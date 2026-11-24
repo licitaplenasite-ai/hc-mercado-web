@@ -82,7 +82,7 @@ test("devolve só a empresa do vínculo e seus processos, lendo com o token do u
   assert.equal(r.statusCode, 200);
   assert.equal(r.headers["Cache-Control"], "no-store");
   const corpo = JSON.parse(r.body);
-  assert.deepEqual(corpo, { userId: U, empresas: [{ empresaId: EMP_A, razaoSocial: "A" }], contextos: [{ empresaId: EMP_A, processoId: PROC_A, numero: "10/2026", objeto: "Papel A4", status: "triagem", prazo: "2026-12-01T13:00:00+00:00" }], certidoes: [], prazos: [], sancoes: [], contratos: [] });
+  assert.deepEqual(corpo, { userId: U, empresas: [{ empresaId: EMP_A, razaoSocial: "A" }], contextos: [{ empresaId: EMP_A, processoId: PROC_A, numero: "10/2026", objeto: "Papel A4", status: "triagem", prazo: "2026-12-01T13:00:00+00:00" }], certidoes: [], prazos: [], sancoes: [], contratos: [], tarefas: [], parados: [] });
   for (const c of chamadas.filter((x) => x.caminho.startsWith("/rest/"))) {
     assert.equal(c.auth, "Bearer TOKEN-U");
     assert.match(c.apikey, /^sb_publishable_/);
@@ -172,9 +172,11 @@ test("certidão: vencida, até 30 dias e mais de 30 dias, pelo dia de Brasília"
   for (const v of [null, undefined, "", "18/11/2026", "2026-11-18T10:00:00Z"]) assert.equal(situacaoCertidao(v, HOJE), null);
 });
 
-test("prazo: janela de hoje até 7 dias, contada pelo dia de Brasília", () => {
+test("prazo: janela de 30 dias atrás até 7 dias, contada pelo dia de Brasília", () => {
   assert.equal(diasDoPrazo("2026-11-18T03:00:00Z", HOJE), 0, "meia-noite de Brasília já é hoje");
-  assert.equal(diasDoPrazo("2026-11-18T02:59:00Z", HOJE), null, "23h59 de ontem em Brasília fica fora");
+  assert.equal(diasDoPrazo("2026-11-18T02:59:00Z", HOJE), -1, "23h59 de ontem em Brasília já é atrasado");
+  assert.equal(diasDoPrazo("2026-10-19T12:00:00-03:00", HOJE), -30);
+  assert.equal(diasDoPrazo("2026-10-18T12:00:00-03:00", HOJE), null, "vencido há 31 dias fica fora");
   assert.equal(diasDoPrazo("2026-11-19T02:45:00Z", HOJE), 0, "02h45 UTC do dia 19 ainda é dia 18 em Brasília");
   assert.equal(diasDoPrazo("2026-11-25T10:00:00-03:00", HOJE), 7);
   assert.equal(diasDoPrazo("2026-11-26T03:00:00Z", HOJE), null, "dia 8 fica fora");
@@ -356,4 +358,58 @@ test("contratos: tabela ausente omite o bloco; outra falha vira null e o catálo
   const corpo = JSON.parse((await handler(evento())).body);
   assert.equal(corpo.contratos, null);
   assert.ok(corpo.contextos.length > 0);
+}));
+
+// ---- Meu dia: tarefas do cartão do Funil e cartões parados ----
+// Fonte que responde 400 (coluna ainda não criada) só na leitura que pede essas colunas.
+function fonteSemColuna(b, coluna) {
+  instalarFetch(b);
+  const rls = global.fetch;
+  global.fetch = async (url, op) => (new URL(url).searchParams.get("select")?.includes(coluna) ? new Response("{}", { status: 400 }) : rls(url, op));
+}
+
+test("tarefas do Funil: só abertas com data na janela, sem repetir esclarecimento/impugnação/disputa automáticos", () => comRelogio(async () => {
+  const b = banco();
+  Object.assign(b.operacao_processos[0], { data_resultado: "2026-11-16", tarefas_card: { secoes: [{ id: "s", nome: "Prazos", tarefas: [
+    { id: "impugnacao", titulo: "Impugnar", auto: "impugnacao" },
+    { id: "recurso", titulo: "Razões do recurso", auto: "recurso" },
+    { id: "amostra", titulo: "Levar amostra", quando: "2026-11-20T10:00", responsavel: "Ana" },
+    { id: "feita", titulo: "Já feita", quando: "2026-11-19T10:00", feita_em: "2026-11-18T10:00:00Z" },
+    { id: "longe", titulo: "Longe", quando: "2026-12-30T10:00" },
+  ] }] } });
+  instalarFetch(b);
+  const corpo = JSON.parse((await handler(evento())).body);
+  // Ata 16/11 (segunda) + 3 dias úteis = 19/11, às 17h (funil-tarefas-ui.js).
+  assert.deepEqual(corpo.tarefas, [
+    { id: `${PROC_A}:recurso`, empresaId: EMP_A, processoId: PROC_A, titulo: "Razões do recurso", inicio: "2026-11-19T17:00", dias: 1, responsavel: "" },
+    { id: `${PROC_A}:amostra`, empresaId: EMP_A, processoId: PROC_A, titulo: "Levar amostra", inicio: "2026-11-20T10:00", dias: 2, responsavel: "Ana" },
+  ]);
+  fonteSemColuna(b, "tarefas_card,data_sessao");
+  const sem = JSON.parse((await handler(evento())).body);
+  assert.equal("tarefas" in sem, false, "coluna ausente omite o bloco");
+  assert.equal(sem.contextos.length, 1);
+}));
+
+test("cartões parados: passa do limite da etapa (padrão do estágio ou da etapa); sem as colunas do funil_crm.sql omite", () => comRelogio(async () => {
+  const b = banco();
+  b.operacao_membros[0].empresa_id = null;
+  const ETAPA = "aaaaaaaa-0000-4000-8000-000000000009";
+  b.operacao_funil_etapas = [{ id: ETAPA, organizacao_id: ORG_A, status_sistema: "preparacao", limite_parado_dias: 2 }];
+  Object.assign(b.operacao_processos[0], { etapa_desde: "2026-11-08T10:00:00-03:00" }); // triagem: limite 7, parado há 10 dias
+  Object.assign(b.operacao_processos[1], { etapa_id: ETAPA, etapa_desde: "2026-11-15T10:00:00-03:00" }); // etapa com limite 2: 3 dias
+  instalarFetch(b);
+  const corpo = JSON.parse((await handler(evento())).body);
+  assert.deepEqual(corpo.parados, [
+    { empresaId: EMP_A, processoId: PROC_A, dias: 10, limite: 7, aproximada: false },
+    { empresaId: EMP_A2, processoId: PROC_A2, dias: 3, limite: 2, aproximada: false },
+  ]);
+  b.operacao_processos[0].etapa_desde = "2026-11-17T10:00:00-03:00";
+  instalarFetch(b);
+  assert.deepEqual(JSON.parse((await handler(evento())).body).parados.map((p) => p.processoId), [PROC_A2], "dentro do limite não acende");
+  // Sem funil_crm.sql: conta da última atualização, marcado aproximado.
+  Object.assign(b.operacao_processos[0], { etapa_desde: undefined, atualizado_em: "2026-11-08T10:00:00-03:00" });
+  fonteSemColuna(b, "etapa_desde");
+  assert.deepEqual(JSON.parse((await handler(evento())).body).parados.find((p) => p.processoId === PROC_A), { empresaId: EMP_A, processoId: PROC_A, dias: 10, limite: 7, aproximada: true });
+  fonteSemColuna(b, "checklist_funil");
+  assert.equal("parados" in JSON.parse((await handler(evento())).body), false, "sem as colunas do Funil o bloco some");
 }));

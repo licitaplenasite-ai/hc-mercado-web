@@ -24,6 +24,7 @@
 <link rel="stylesheet" href="monitor-processo.css">
 <link rel="stylesheet" href="processo-documentos.css">
 <link rel="stylesheet" href="processo-abas.css">
+<link rel="stylesheet" href="meu-dia.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" crossorigin="anonymous"></script>
 <script src="supabase-config.js"></script><script src="trava-sessao.js"></script><noscript><meta http-equiv="refresh" content="0;url=login.html"></noscript><script src="plano-trava.js" defer></script>
 <script src="fetch-sessao.js"></script>
@@ -75,6 +76,8 @@
   <section id="hoje" hidden aria-labelledby="hoje-titulo">
     <h1 id="hoje-titulo" class="app-titulo" tabindex="-1"><span class="rotulo-agente">Chefe</span> Hoje</h1>
     <p id="hoje-estado" class="app-apoio" role="status" aria-live="polite"></p>
+    <!-- Meu dia (meu-dia.js): a lista do que pede atenção vem primeiro; os blocos de sanções e contratos seguem abaixo. -->
+    <div id="hoje-meu-dia" hidden></div>
     <div id="hoje-alertas" class="hoje-alertas" hidden></div>
     <div id="hoje-monitor" class="hoje-alertas" hidden></div>
     <div id="hoje-lista" class="hoje-lista"></div>
@@ -187,6 +190,8 @@
 <script src="robo-lances.js"></script>
 <script src="robo-lances-ui.js"></script>
 <script src="agenda-ics.js"></script>
+<script src="juridico-prazos.js"></script>
+<script src="meu-dia.js"></script>
 <script src="portal-origem.js"></script>
 <script src="app-comercial-core.js"></script>
 <script src="app-comercial-controlador.js"></script>

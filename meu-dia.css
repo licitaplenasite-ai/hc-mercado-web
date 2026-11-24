@@ -1,0 +1,61 @@
+/* Meu dia (meu-dia.js) no topo da tela Hoje do sistema.html. Paleta A só por tokens (ds-tokens.css); o
+   interno-premium.css, carregado depois, põe o título em Fraunces. Situação sempre em texto no selo, além da cor. */
+#hoje-meu-dia[hidden] { display: none; }
+#hoje-meu-dia { margin-top: var(--space-16); }
+.meu-dia { position: relative; max-width: none; min-width: 0; overflow: hidden; padding: var(--space-24); box-shadow: var(--sombra-cartao); }
+/* Fio royal→ciano no topo: a marca, sem pintar o cartão inteiro. */
+.meu-dia::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 4px; background: var(--grad-linha); }
+.md-cabecalho { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--space-16); margin-bottom: var(--space-16); }
+.md-titulos { min-width: 0; }
+.md-titulo { margin: 0; font: var(--text-section); color: var(--marca-titulo); }
+/* A pergunta da tela ("o que pede atenção hoje?") é o maior elemento do cartão. */
+.md-resumo { margin: var(--space-4) 0 0; color: var(--text-primary); font: var(--text-body-lg); display: flex; align-items: baseline; gap: var(--space-8); flex-wrap: wrap; }
+.md-numero { font-family: var(--fonte-titulo, Georgia, serif); font-weight: 600; font-size: 44px; line-height: 1; color: var(--marca-titulo); letter-spacing: -0.02em; }
+.md-contagem { margin: var(--space-4) 0 0; color: var(--text-secondary); font: var(--text-label); }
+.md-filtro { display: grid; gap: var(--space-4); font: var(--text-label); color: var(--text-secondary); min-width: 220px; }
+.md-filtro select { min-height: 44px; padding: 0 var(--space-12); border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface-default); color: var(--text-primary); font: var(--text-body); }
+.md-falha { margin: 0 0 var(--space-12); padding: var(--space-8) var(--space-12); border: 1px solid var(--attention-border); border-radius: var(--radius-control); background: var(--attention-bg); color: var(--attention-text); font: var(--text-label); }
+
+.md-grupo { margin-top: var(--space-16); }
+.md-grupo-titulo { display: flex; align-items: center; gap: var(--space-8); margin: 0 0 var(--space-8); font: var(--text-label); font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-secondary); }
+details.md-grupo > summary { cursor: pointer; list-style: revert; }
+.md-conta { display: inline-grid; place-items: center; min-width: 24px; height: 22px; padding: 0 var(--space-8); border-radius: 999px; background: var(--marca-claro); color: var(--marca-texto); font: var(--text-label); font-weight: 700; letter-spacing: 0; }
+.md-grupo[data-grupo="atrasado"] .md-conta { background: var(--error-bg); color: var(--error-text); }
+.md-grupo[data-grupo="hoje"] .md-conta { background: var(--destaque); color: var(--destaque-texto); }
+
+.md-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-8); }
+.md-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "topo acoes" "corpo acoes"; gap: var(--space-4) var(--space-16);
+  padding: var(--space-12) var(--space-16); border: 1px solid var(--border-default); border-left: 4px solid var(--success-border); border-radius: var(--radius-control);
+  background: var(--surface-default); transition: border-color .15s ease, box-shadow .15s ease; }
+.md-item:hover { box-shadow: var(--sombra-cartao); }
+.md-item[data-situacao="atencao"] { border-left-color: var(--attention-border); }
+.md-item[data-situacao="atrasado"] { border-left-color: var(--error-border); background: linear-gradient(90deg, var(--error-bg) 0, var(--surface-default) 180px); }
+.md-item-topo { grid-area: topo; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); min-width: 0; }
+.md-selo { padding: 2px var(--space-8); border-radius: 999px; border: 1px solid var(--success-border); background: var(--success-bg); color: var(--success-text); font: var(--text-label); font-weight: 600; white-space: nowrap; }
+.md-item[data-situacao="atencao"] .md-selo { border-color: var(--attention-border); background: var(--attention-bg); color: var(--attention-text); }
+.md-item[data-situacao="atrasado"] .md-selo { border-color: var(--error-border); background: var(--error-bg); color: var(--error-text); }
+.md-tipo { font: var(--text-label); color: var(--marca-texto); font-weight: 600; }
+.md-empresa { font: var(--text-label); color: var(--text-secondary); overflow-wrap: anywhere; }
+.md-item-corpo { grid-area: corpo; min-width: 0; }
+.md-item-titulo { margin: 0; font: var(--text-body); font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
+.md-item-detalhe { margin: 2px 0 0; font: var(--text-label); color: var(--text-secondary); overflow-wrap: anywhere; }
+.md-acoes { grid-area: acoes; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--space-8); }
+.md-acoes .md-abrir { min-height: 40px; white-space: nowrap; }
+.md-link { display: inline-flex; align-items: center; min-height: 40px; padding: 0 var(--space-4); color: var(--action-text); font: var(--text-label); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
+.md-acoes :is(a, button):focus-visible, .md-filtro select:focus-visible, details.md-grupo > summary:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+
+.md-vazio { padding: var(--space-24); border: 1px dashed var(--border-strong); border-radius: var(--radius-control); background: var(--marca-claro-2); text-align: center; }
+.md-vazio-titulo { margin: 0; font-family: var(--fonte-titulo, Georgia, serif); font-size: 22px; font-weight: 600; color: var(--marca-titulo); }
+.md-vazio-texto { margin: var(--space-8) auto 0; max-width: 56ch; color: var(--text-secondary); font: var(--text-body); }
+.md-nota { margin: var(--space-16) 0 0; color: var(--text-secondary); font: var(--text-label); }
+
+/* Celular do pátio: botão embaixo, largura toda; nada estoura a largura da tela. */
+@media (max-width: 640px) {
+  .meu-dia { padding: var(--space-16); }
+  .md-filtro { min-width: 0; width: 100%; }
+  .md-numero { font-size: 38px; }
+  .md-item { grid-template-columns: minmax(0, 1fr); grid-template-areas: "topo" "corpo" "acoes"; padding: var(--space-12); }
+  .md-acoes { justify-content: flex-start; }
+  .md-acoes .md-abrir { flex: 1 1 100%; }
+}
+@media (prefers-reduced-motion: reduce) { .md-item { transition: none; } }

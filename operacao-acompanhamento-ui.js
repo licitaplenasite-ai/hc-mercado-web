@@ -321,7 +321,8 @@
           const form = prepararFormulario("prazo", registro.processo_id);
           $("titulo-form-prazo").textContent = "Editar prazo";
           for (const campo of ["id", "categoria", "titulo", "responsavel", "observacoes"]) form.elements.namedItem(campo).value = registro[campo] ?? "";
-          form.elements.namedItem("vencimento").value = dataLocal(registro.vencimento);
+          // salvarPrazo (processos.html) grava o campo como horário de Brasília (-03:00); preencher no mesmo fuso evita perder 1 h a cada salvar em Manaus.
+          form.elements.namedItem("vencimento").value = new Date(Date.parse(registro.vencimento) - 3 * 36e5).toISOString().slice(0, 16);
           return;
         }
         if (contrato) { prepararFormulario("contrato", contrato); return; }

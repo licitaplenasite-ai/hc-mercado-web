@@ -105,21 +105,8 @@ begin
   end if;
  end if;
 
- -- (b) Art. 164 da Lei 14.133: 3 dias úteis antes da abertura, sem feriados (estimativa).
- if new.data_sessao is not null then
-  d := (new.data_sessao at time zone 'America/Sao_Paulo')::date;
-  while n < 3 loop
-   d := d - 1;
-   if extract(isodow from d) < 6 then n := n + 1; end if;
-  end loop;
-  v_venc := (d + time '23:59') at time zone 'America/Sao_Paulo';
-  for cat in select * from (values ('impugnacao', 'Impugnação'), ('esclarecimento', 'Esclarecimento')) v(categoria, titulo) loop
-   insert into public.operacao_prazos_processo (organizacao_id, processo_id, categoria, titulo, vencimento, observacoes)
-   select new.organizacao_id, new.id, cat.categoria, cat.titulo, v_venc, v_obs
-   where not exists (select 1 from public.operacao_prazos_processo x
-                      where x.processo_id = new.id and x.categoria = cat.categoria and x.observacoes = v_obs);
-  end loop;
- end if;
+ -- (b) Prazos do art. 164 (esclarecimento e impugnação) saíram daqui em 24/11/2026: agora vêm de prazos_legais.sql,
+ -- com feriados e recálculo quando a data da sessão muda, e para todo processo (não só os do PNCP).
 
  -- (c) Tarefas do robô e o edital na fila. Primeira entrada = o processo ainda não tinha tarefas
  -- (INSERT ou primeira vez no Funil); troca de status depois disso não sobe prioridade de novo.

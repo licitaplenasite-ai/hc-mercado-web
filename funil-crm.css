@@ -1,0 +1,47 @@
+/* Funil, fase 1 de CRM (24/11/2026, funil-crm-ui.js): total da coluna, selo "Parado", motivo da perda e filtros salvos.
+   Só tokens (ds-tokens.css, Paleta A): claro e escuro vêm deles. Ciano só no botão principal, sempre com texto marinho. */
+.fc-total { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--space-8); padding: 8px 16px 10px;
+  border-bottom: 1px solid var(--border-default); background: var(--marca-claro-2); font: var(--text-label); color: var(--text-secondary); }
+.fc-total strong { font-size: 15px; font-weight: 800; color: var(--marca-titulo); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.fc-sem-valor { flex-basis: 100%; color: var(--text-secondary); font-style: italic; }
+
+.kanban-card.fc-parado { border-color: var(--attention-border); box-shadow: inset 4px 0 0 var(--attention-border); }
+.fc-selo-parado { margin-left: 4px; background: var(--attention-bg) !important; color: var(--attention-text) !important; border: 1px solid var(--attention-border); }
+.fc-motivo { margin: 8px 0 0; padding: 6px 8px; border-radius: var(--radius-control); background: var(--error-bg); color: var(--error-text); font: var(--text-label); overflow-wrap: anywhere; }
+.fc-motivo span { font-weight: 700; }
+.fc-motivo-falta { margin-top: 8px; padding: 4px 10px; border: 1px dashed var(--error-border); border-radius: 999px; background: transparent; color: var(--error-text); font: var(--text-label); cursor: pointer; }
+
+.fc-salvos { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); margin: 0 0 var(--space-12); font: var(--text-body); }
+.fc-salvos-titulo { font: var(--text-label); color: var(--text-secondary); text-transform: uppercase; letter-spacing: .04em; }
+.fc-salvos-vazio { color: var(--text-secondary); font: var(--text-label); }
+.fc-chip { display: inline-flex; align-items: stretch; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--marca-claro); overflow: hidden; }
+.fc-chip button { min-height: 32px; border: 0; background: transparent; color: var(--marca-texto); font: var(--text-label); font-weight: 600; cursor: pointer; }
+.fc-chip-aplicar { padding: 0 6px 0 12px; }
+.fc-chip-apagar { padding: 0 10px; border-left: 1px solid var(--border-default) !important; color: var(--text-secondary) !important; font-size: 15px !important; }
+.fc-chip button:hover { background: var(--surface-default); }
+.fc-salvar-form { display: flex; flex-wrap: wrap; align-items: end; gap: var(--space-8); }
+.fc-salvar-form label, .fc-detalhe { display: grid; gap: var(--space-4); font: var(--text-label); color: var(--text-secondary); }
+.fc-salvar-form input, .fc-detalhe textarea { min-height: 36px; box-sizing: border-box; max-width: 100%; padding: 6px 10px; border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control); background: var(--surface-default); color: var(--text-primary); font: var(--text-body); }
+.fc-salvar-form input[aria-invalid="true"] { border-color: var(--error-border); }
+.fc-salvos-aviso { color: var(--text-secondary); font: var(--text-label); }
+.fc-primario { background: var(--destaque) !important; color: var(--destaque-texto) !important; border-color: var(--destaque) !important; font-weight: 700; }
+.fc-primario:hover { background: var(--destaque-forte) !important; }
+
+.fc-motivo-dialogo { max-width: min(520px, calc(100vw - 24px)); }
+.fc-opcoes { display: grid; gap: var(--space-4); margin: var(--space-12) 0; padding: var(--space-12); border: 1px solid var(--border-default); border-radius: var(--radius-card); }
+.fc-opcoes legend { padding: 0 4px; font: var(--text-label); color: var(--text-secondary); }
+.fc-opcao { display: flex; align-items: center; gap: var(--space-8); min-height: 36px; font: var(--text-body); color: var(--text-primary); cursor: pointer; }
+.fc-opcao input { width: 18px; height: 18px; accent-color: var(--marca-medio); }
+.fc-detalhe textarea { width: 100%; resize: vertical; }
+.fc-acoes { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-8); margin-top: var(--space-12); }
+.etapa-limite input { width: 100%; box-sizing: border-box; min-height: 40px; padding: 8px 12px; border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control); background: var(--surface-default); color: var(--text-primary); font: var(--text-body); }
+.etapa-limite input[aria-invalid="true"] { border-color: var(--error-border); }
+@media (min-width: 601px) {
+  .etapa-linha { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.2fr) 48px 132px 172px; }
+}
+@media (max-width: 640px) {
+  .fc-acoes { flex-direction: column-reverse; }
+  .fc-acoes button { width: 100%; }
+}

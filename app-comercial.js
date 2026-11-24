@@ -78,6 +78,11 @@
     const novo = alvo ? alvo.closest('button[data-novo-empresa]') : null;
     if (novo) ctrl.abrirNovoProcesso(novo.dataset.novoEmpresa);
   });
+  // Meu dia: "Abrir processo" de prazo, sessão ou certidão abre o processo na própria tela (os links vão direto).
+  doc.getElementById('hoje-meu-dia')?.addEventListener('click', (ev) => {
+    const abrir = ev.target instanceof Element ? ev.target.closest('button[data-processo]') : null;
+    if (abrir) ctrl.abrirProcesso(abrir.dataset.empresa, abrir.dataset.processo);
+  });
   const formNovo = doc.getElementById('form-novo-processo');
   formNovo.addEventListener('submit', (ev) => {
     ev.preventDefault();

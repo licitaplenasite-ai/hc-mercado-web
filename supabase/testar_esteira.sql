@@ -68,7 +68,9 @@ begin
 
  -- Arquivado e sem ID do PNCP não disparam.
  if exists(select 1 from public.operacao_esteira_tarefas where processo_id in ('f7000000-0000-4000-8000-000000000023','f7000000-0000-4000-8000-000000000024'))
-  or exists(select 1 from public.operacao_prazos_processo where processo_id in ('f7000000-0000-4000-8000-000000000023','f7000000-0000-4000-8000-000000000024'))
+  -- Prazos legais (prazos_legais.sql) valem também para processo sem ID do PNCP; só o arquivado fica sem.
+  or exists(select 1 from public.operacao_prazos_processo where processo_id='f7000000-0000-4000-8000-000000000023')
+  or (select count(*) from public.operacao_prazos_processo where processo_id='f7000000-0000-4000-8000-000000000024')<>2
   or (select premissas_fonte from public.operacao_processos where id='f7000000-0000-4000-8000-000000000023') is not null
   then raise exception 'Arquivado ou sem ID do PNCP disparou';end if;
 
