@@ -1,0 +1,243 @@
+/* Visual premium da área interna (23/11, dono: "o miolo continua com cara antiga"). Mesmo padrão do site
+   (marca.css / entrar.css): paleta A só por tokens de ds-tokens.css, títulos em Fraunces, botões em pílula que
+   sobem com brilho, cartões que suspendem, menu lateral marinho com destaque ciano. Carregado por último nas
+   telas internas (painel, sistema, processos, operação, quadros, prospecção, obra, admin, extensão).
+   Só aparência: nenhum id/classe novo é exigido do HTML ou do JS. Impressão, e-mail e DOCX ficam de fora (@media screen). */
+:root {
+  --fonte-titulo: "Fraunces", Georgia, "Times New Roman", serif;
+  /* Cantos um pouco mais macios que o DS de 18/11: campo 8px, cartão 14px, janela 18px. */
+  --radius-control: 8px; --radius-card: 14px; --radius-modal: 18px;
+  /* Atenção usada por orcamento-obra/sinapi com reserva laranja: aponta para o token de status (amarelo). */
+  --warning-text: var(--attention-text); --warning-bg: var(--attention-bg); --warning-border: var(--attention-border);
+  --anel: 0 0 0 3px rgba(var(--medio-rgb), 0.18);
+  --zebra: rgba(var(--medio-rgb), 0.025);
+  --menu-fundo: radial-gradient(circle at 0% 0%, rgba(var(--destaque-rgb), 0.14), transparent 42%), linear-gradient(180deg, #0a1b4f 0%, #0c2063 100%);
+  --menu-texto: #dbe6ff; /* 12:1 sobre o marinho */
+  --menu-icone: #a9bbec;
+}
+[data-theme="dark"] { --anel: 0 0 0 3px rgba(var(--destaque-rgb), 0.22); --zebra: rgba(255, 255, 255, 0.022); --menu-fundo: radial-gradient(circle at 0% 0%, rgba(var(--destaque-rgb), 0.12), transparent 42%), linear-gradient(180deg, #0a1638 0%, #0b1a4a 100%); }
+
+@media screen {
+  /* ---- Fundo e títulos ---- */
+  body { background: radial-gradient(1100px 380px at 75% -180px, rgba(var(--medio-rgb), 0.07), transparent 70%), var(--surface-page); background-attachment: scroll; }
+  main h1, main h2, .app-titulo, .topo h1, .card h2, .modal-corpo h2, .etapas-dialogo h3, #modal-conta-titulo, .bol-config-intro h3, .bloco-separado-titulo, .modal-ia-titulo {
+    font-family: var(--fonte-titulo); font-weight: 600; letter-spacing: -0.01em; color: var(--marca-titulo);
+  }
+  main h1, .app-titulo, .topo h1 { font-size: 30px; line-height: 38px; }
+  /* Título que recebe foco por script (troca de tela): sem a moldura de foco, que parecia erro. Não é controle. */
+  [tabindex="-1"]:focus:not(:focus-visible), h1[tabindex="-1"]:focus, h2[tabindex="-1"]:focus { outline: none; }
+  /* Link sem cor própria no sistema ficava no azul padrão do navegador (1,9:1 no tema escuro). */
+  :where(#area, #hoje, main) a { color: var(--action-text); }
+  ::selection { background: rgba(var(--destaque-rgb), 0.28); color: var(--text-primary); }
+
+  /* ---- Topo: vidro leve como o do site ---- */
+  header, .app-topo {
+    background-color: color-mix(in srgb, var(--surface-default) 90%, transparent);
+    -webkit-backdrop-filter: saturate(1.4) blur(10px); backdrop-filter: saturate(1.4) blur(10px);
+  }
+  .header-icone-btn, .header-sair, header .tema-icone { border-radius: 999px; transition: background-color 0.2s ease, border-color 0.2s ease; }
+  .header-icone-btn:hover, .header-sair:hover { border-color: var(--marca-medio); background: var(--marca-claro-2); }
+  .header-badge, .header-badge-plano { border-radius: 999px; }
+
+  /* ---- Menu lateral marinho (painel e páginas do CRM usam o mesmo #menu-principal) ---- */
+  #menu-principal { background: var(--fundo-escuro); background-image: var(--menu-fundo); border-right: 0; scrollbar-color: rgba(255, 255, 255, 0.18) transparent; }
+  #menu-principal :is(button, a) { color: var(--menu-texto); font-weight: 400; border-radius: 10px; transition: background-color 0.2s ease, color 0.2s ease; }
+  #menu-principal :is(button, a) .nav-ico, #menu-principal .nav-externo-ico { color: var(--menu-icone); transition: color 0.2s ease, transform 0.25s ease; }
+  #menu-principal :is(button, a):hover { background: rgba(255, 255, 255, 0.07); color: #ffffff; }
+  #menu-principal :is(button, a):hover .nav-ico { color: #ffffff; transform: translateX(1px); }
+  #menu-principal :is(button.ativo, a.ativo) {
+    background: linear-gradient(90deg, rgba(var(--destaque-rgb), 0.2), rgba(var(--destaque-rgb), 0.04)); color: #ffffff; font-weight: 600;
+    box-shadow: inset 3px 0 0 var(--destaque);
+  }
+  #menu-principal :is(button.ativo, a.ativo) .nav-ico { color: var(--destaque); }
+  #menu-principal #nav-colapsar-btn { color: var(--menu-icone); border-bottom: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px 10px 0 0; }
+  #menu-principal :focus-visible { outline-color: var(--destaque); }
+
+  /* ---- Botões ---- */
+  /* Secundário: pílula de contorno; no hover sobe 1px e ganha o royal. */
+  .btn, .btn-imprimir, .btn-ia-edital, .bol-cal-filtro-ativo button, main button:not([class]):not([style]):not([role="tab"]), .pp-mercado .btn,
+  .defesa-botao, #identificacao .defesa-botao, :where(#area, #hoje, .app-topo, .novo-processo) button, .modal-ia-acoes-rodape button, #contatos-resumo-lista button,
+  .btn-secundario, .btn-detalhe, .btn-mostrar, .btn-reverter, .btn-aprovar, .btn-adicionar, .btn-salvar, .btn-rejeitar, .btn-remover, .tela-auth button[type="submit"] {
+    border-radius: 999px; font-weight: 600;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  }
+  :is(.btn, .btn-imprimir, .btn-ia-edital, .pp-mercado .btn, .defesa-botao, .modal-ia-acoes-rodape button, .btn-secundario, .btn-detalhe, .btn-mostrar, .btn-reverter):hover:not(:disabled),
+  main button:not([class]):not([style]):not([role="tab"]):hover:not(:disabled), :where(#area, #hoje, .app-topo, .novo-processo) button:hover:not(:disabled) {
+    border-color: var(--marca-medio); background-color: var(--marca-claro-2); color: var(--marca-titulo);
+    transform: translateY(-1px); box-shadow: 0 8px 18px -12px rgba(var(--escuro-rgb), 0.55);
+  }
+  /* Primário: ciano com texto marinho (9:1), brilho que atravessa no hover — o mesmo do site. */
+  .btn-buscar, .app-primario, :is(html, html.tema-claro) .btn.primario, .pp-mercado .btn.primario, .btn-baixar, #bell-ver-boletim,
+  .btn-aprovar, .btn-adicionar, .btn-salvar, .tela-auth button[type="submit"] {
+    position: relative; overflow: hidden; isolation: isolate;
+    background-color: var(--destaque) !important; background-image: none; border-color: transparent; color: var(--destaque-texto) !important;
+    border-radius: 999px !important; font-weight: 700; box-shadow: 0 8px 18px -8px rgba(var(--destaque-rgb), 0.6);
+    transition: transform 0.25s ease, box-shadow 0.25s ease, background-color 0.2s ease;
+  }
+  :is(.btn-buscar, .app-primario, .btn.primario, .pp-mercado .btn.primario, .btn-baixar)::after {
+    content: ""; position: absolute; z-index: -1; top: 0; bottom: 0; left: -80%; width: 45%; pointer-events: none;
+    background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.5), transparent); transform: skewX(-20deg);
+  }
+  :is(.btn-buscar, .app-primario, .btn.primario, .pp-mercado .btn.primario, .btn-baixar):hover:not(:disabled) {
+    background-color: var(--destaque-forte) !important; color: var(--destaque-texto); border-color: transparent;
+    transform: translateY(-2px); box-shadow: 0 14px 26px -12px rgba(var(--destaque-rgb), 0.85);
+  }
+  :is(.btn-buscar, .app-primario, .btn.primario, .pp-mercado .btn.primario, .btn-baixar):hover:not(:disabled)::after { animation: lp-int-brilho 0.85s ease; }
+  :is(.btn-buscar, .app-primario, .btn.primario, .pp-mercado .btn.primario):disabled {
+    background-color: var(--surface-sunken) !important; color: var(--text-disabled) !important; box-shadow: none; transform: none;
+  }
+  @keyframes lp-int-brilho { from { left: -80%; } to { left: 130%; } }
+  /* Perigo: contorno vermelho; fundo de erro no hover. */
+  :is(html, html.tema-claro) .btn.perigo, .btn-perigo, .btn-limpar-select:hover, .btn-rejeitar, .btn-remover { color: var(--error-text); border-color: var(--error-border); }
+  :is(html, html.tema-claro) .btn.perigo:hover:not(:disabled), .btn-perigo:hover:not(:disabled), .btn-rejeitar:hover:not(:disabled), .btn-remover:hover:not(:disabled) { background-color: var(--error-bg); border-color: var(--error-text); color: var(--error-text); }
+  :is(.btn, .btn-imprimir, .pp-mercado .btn):disabled { transform: none; box-shadow: none; }
+  /* Kit de documentos: o secundário era cinza cheio (--card2); vira contorno como os outros. */
+  .kit-documentos .btn:not(.primario) { background: var(--surface-default); border-color: var(--border-strong); color: var(--text-primary); }
+  .kit-documentos .btn:not(.primario):hover:not(:disabled) { background: var(--marca-claro-2); border-color: var(--marca-medio); color: var(--marca-titulo); }
+
+  /* ---- Abas e filtros rápidos ---- */
+  /* Chips de filtro (sub-abas do painel, filtros de fase, barra do Orçamento de obra): pílula; marcado = marinho cheio. */
+  .btn-subaba, .btn-filtro-rapido, .fases-filtro button, .abas-obra a {
+    border-radius: 999px; transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  }
+  .btn-subaba:hover, .btn-filtro-rapido:hover, .fases-filtro button:hover, .abas-obra a:hover { border-color: var(--marca-medio); background: var(--marca-claro-2); color: var(--marca-titulo); }
+  .btn-subaba.ativo, .btn-filtro-rapido.ativo, .btn-subaba.ativo:hover, .btn-filtro-rapido.ativo:hover,
+  .fases-filtro button[aria-pressed="true"], .abas-obra a[aria-current="page"], .abas-obra a[aria-current="page"]:hover,
+  .abas .btn[role="tab"][aria-selected="true"], .abas .btn[role="tab"][aria-selected="true"]:hover {
+    background: var(--marca-escuro); border-color: var(--marca-escuro); color: #ffffff; box-shadow: 0 6px 14px -8px rgba(var(--escuro-rgb), 0.7); font-weight: 600;
+  }
+  [data-theme="dark"] :is(.btn-subaba.ativo, .btn-filtro-rapido.ativo, .fases-filtro button[aria-pressed="true"], .abas-obra a[aria-current="page"], .abas .btn[role="tab"][aria-selected="true"]) {
+    background: var(--marca-claro); border-color: var(--marca-texto); color: var(--text-primary); box-shadow: none;
+  }
+  /* Abas de conteúdo (processo, processos/operacao): sublinhado royal, sem caixa. */
+  .proc-abas [role="tab"], .robo-abas [role="tab"], .aba { border-radius: 0; transition: color 0.2s ease, border-color 0.2s ease; }
+  .proc-abas [role="tab"]:hover, .aba:hover { background: none; color: var(--marca-titulo); }
+  .proc-abas [role="tab"][aria-selected="true"], .aba.ativa { background: none; color: var(--marca-titulo); border-bottom-color: var(--marca-medio); font-weight: 700; }
+  [data-theme="dark"] :is(.proc-abas [role="tab"][aria-selected="true"], .aba.ativa) { border-bottom-color: var(--marca-texto); }
+
+  /* ---- Campos ---- */
+  :where(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]):not([type="range"]), select, textarea) {
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  html :is(input, select, textarea):hover:not(:disabled):not(:focus):not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([readonly]) { border-color: var(--marca-medio); }
+  html :is(input, select, textarea):focus:not([type="checkbox"]):not([type="radio"]):not([type="file"]) { border-color: var(--marca-medio); box-shadow: var(--anel); }
+  input[type="checkbox"], input[type="radio"] { accent-color: var(--marca-medio); }
+  input[type="file"]::file-selector-button {
+    margin-right: 10px; padding: 6px 14px; border: 1px solid var(--marca-medio); border-radius: 999px; background: var(--marca-claro-2);
+    color: var(--marca-titulo); font: 600 13px/18px var(--font-sans); cursor: pointer;
+  }
+  [data-theme="dark"] :is(input[type="checkbox"], input[type="radio"]) { accent-color: var(--destaque); }
+
+  /* ---- Cartões: sombra leve; os clicáveis suspendem e ganham borda ---- */
+  .cartao, .card, .dash-painel, .boletim-card, .app-cartao, .processo, .painel-filtros, .filtros-lateral, .acc, .kanban-coluna,
+  .mural-item, .metrica, .fase, .secao-conteudo-principal, .dash-vence-semana, #kit, #identificacao, .marca-dossie, .ficha-empresa {
+    border-color: var(--border-default); box-shadow: var(--sombra-cartao);
+  }
+  .secao-conteudo-principal > .painel-filtros, .secao-conteudo-principal .filtros-lateral { box-shadow: none; }
+  .boletim-card, .processo, .kanban-card, .mural-item, .arquivo-linha, .dash-atalho, .angulo-card, .hc-acao-explorar, a.card {
+    transition: transform 0.3s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.3s ease, border-color 0.3s ease;
+  }
+  .boletim-card:hover, .processo:hover, .kanban-card:hover, .mural-item:hover, a.card:hover {
+    transform: translateY(-2px); border-color: rgba(var(--medio-rgb), 0.45); box-shadow: var(--sombra-cartao-forte);
+  }
+  .boletim-topo { background: var(--marca-claro-2); }
+  .boletim-numero { border-radius: 999px; }
+
+  /* Cartões de número (Dashboard, Processos, fases): número em Fraunces; fio royal→ciano que cresce no hover. */
+  .dash-card, .metrica, .fase { position: relative; overflow: hidden; }
+  .dash-card-num, .metrica b, .fase b, .cartao .valor, .contador { font-family: var(--fonte-titulo); font-weight: 600; letter-spacing: -0.01em; color: var(--marca-titulo); }
+  .dash-card-num { font-size: 32px; line-height: 40px; }
+  /* A serifa é mais larga que a Inter: valor em reais não pode vazar o cartão estreito. */
+  .metrica b, .fase b { font-size: clamp(20px, 1.9vw, 28px); line-height: 1.25; overflow-wrap: anywhere; }
+  .dash-card::after, .metrica::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--grad-linha);
+    transform: scaleX(0.22); transform-origin: left; transition: transform 0.45s cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  .dash-card:hover::after, .metrica:hover::after { transform: scaleX(1); }
+  .metrica { transition: transform 0.3s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.3s ease, border-color 0.3s ease; }
+  .metrica:hover { transform: translateY(-3px); border-color: rgba(var(--medio-rgb), 0.45); box-shadow: var(--sombra-cartao-forte); }
+  .dash-card-ico, .dash-atalho-ico { border-radius: 50%; }
+  .dash-card-ico { background: radial-gradient(circle at 30% 25%, #ffffff 0%, var(--marca-claro) 55%); color: var(--marca-texto); box-shadow: inset 0 0 0 1px rgba(var(--medio-rgb), 0.12); }
+  [data-theme="dark"] .dash-card-ico { background: var(--marca-claro); }
+  .dash-atalho { border-radius: var(--radius-card); }
+  .dash-atalho:hover .dash-atalho-ico, .angulo-card:hover .angulo-icone { color: var(--marca-texto); }
+
+  /* Boas-vindas do Dashboard: faixa marinha da marca, como as seções escuras do site. */
+  .dash-boas-vindas {
+    position: relative; isolation: isolate; overflow: hidden; padding: 28px 32px; border: 0; border-radius: var(--radius-modal);
+    background-color: var(--fundo-escuro); background-image: radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1.3px), var(--degrade-escuro);
+    background-size: 22px 22px, auto, auto, auto; background-position: 0 0, 0 0, 0 0, 0 0; background-repeat: repeat, no-repeat, no-repeat, no-repeat; color: #ffffff; box-shadow: var(--sombra-cartao);
+  }
+  .dash-boas-vindas::after { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background-image: var(--grao); opacity: 0.14; mix-blend-mode: overlay; }
+  .dash-boas-vindas h2 { color: #ffffff; font-size: 30px; line-height: 38px; }
+  .dash-boas-vindas h2 #dash-nome { color: var(--destaque-sobre-escuro); }
+  .dash-boas-vindas p { color: var(--claro-sobre-escuro) !important; }
+
+  /* ---- Tabelas: cabeçalho em versalete discreto, zebra suave, linha que acende no hover ---- */
+  :is(table, .tabela) th {
+    background: var(--marca-claro-2); color: var(--text-secondary); font: 600 11.5px/16px var(--font-sans);
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  :where(table, .tabela) tbody tr:where(:nth-child(even)) { background: var(--zebra); }
+  :where(table, .tabela) tbody tr:hover { background: var(--marca-claro-2); }
+  :is(table, .tabela) td { font-variant-numeric: tabular-nums; }
+  .tabela-wrap, .tabela-rolavel { border-radius: var(--radius-card); box-shadow: var(--sombra-cartao); }
+
+  /* ---- Selos e etiquetas: pílula, texto + cor (nunca só cor) ---- */
+  .chip, .tag, .proc-selo, .badge-modalidade, .fonte-badge, .boletim-prazo, .situacao-ativa, .situacao-outra, .mural-tag, .kanban-card-prazo,
+  .item-licitacao-tipo, .marca-kpi, .kanban-coluna-contagem, .acc-contagem, .app-badge, .seletor-ufs-chip {
+    border-radius: 999px; padding-left: 10px; padding-right: 10px; font-weight: 600;
+  }
+  /* "Não enviada" / "Sem vencimento": a regra antiga (#cad5e3 sobre claro, 1,4:1) ainda vencia a do DS. */
+  .tag.pendente { background: var(--surface-sunken); border-color: var(--border-default); color: var(--text-secondary); }
+
+  /* ---- Janelas e gavetas ---- */
+  .modal-ia, .modal-corpo, .etapas-dialogo, .itens-dialogo, dialog:not(.sem-moldura) {
+    border-radius: var(--radius-modal); background-image: var(--grad-linha); background-size: 100% 3px; background-repeat: no-repeat; background-position: top left;
+  }
+  #modal-ia-fundo .modal-ia { border-radius: 0; }
+  .modal-ia-fundo, .modal, .nav-gaveta-fundo { -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
+  dialog::backdrop { background: rgba(var(--escuro-fundo-rgb), 0.5); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
+  .header-flutuante, .seletor-ufs-menu { border-radius: var(--radius-card); }
+
+  /* ---- Estado vazio: caixa tracejada royal com disco ciano (motivo do site) ---- */
+  .estado-vazio, .kanban-vazio, .marcas-vazio, div.vazio, .itens-vazio, .proc-vazio {
+    border: 1px dashed rgba(var(--medio-rgb), 0.35); background: var(--grad-suave); border-radius: var(--radius-card); color: var(--text-secondary);
+  }
+  div.vazio::before, .estado-vazio::before {
+    content: ""; display: block; width: 44px; height: 44px; margin: 0 auto 12px; border-radius: 50%;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230a1b4f' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") center / 20px no-repeat,
+      radial-gradient(circle at 30% 25%, #ffffff 0%, var(--destaque-forte) 30%, var(--destaque) 75%);
+    box-shadow: 0 10px 22px -12px rgba(var(--destaque-rgb), 0.9);
+  }
+  .estado-vazio::before { margin: 0 0 12px; }
+  .estado-vazio-titulo { font-family: var(--fonte-titulo) !important; font-weight: 600 !important; color: var(--marca-titulo) !important; }
+
+  /* ---- Carregando: anel royal girando antes do texto ---- */
+  .carregando, .cl-carregando { display: flex; align-items: center; gap: 10px; }
+  .carregando::before, .cl-carregando::before {
+    content: ""; flex: none; width: 16px; height: 16px; border-radius: 50%;
+    border: 2px solid rgba(var(--medio-rgb), 0.18); border-top-color: var(--marca-medio); animation: lp-int-giro 0.8s linear infinite;
+  }
+  [data-theme="dark"] :is(.carregando, .cl-carregando)::before { border-color: rgba(255, 255, 255, 0.14); border-top-color: var(--destaque); }
+  @keyframes lp-int-giro { to { transform: rotate(360deg); } }
+
+  /* ---- Gráficos simples: barra royal→ciano ---- */
+  .dash-barra, .mini-grafico-barra { background: linear-gradient(180deg, var(--destaque) 0%, var(--marca-medio) 100%); border-radius: 6px 6px 2px 2px; }
+  .barra-preenchida { background: var(--marca-medio); }
+
+  /* ---- Avisos: faixa lateral na cor do status ---- */
+  .aviso, .app-aviso:not(:empty) { border-radius: var(--radius-card); }
+  .aviso.info, .estudo, .convite-neutro { border-left: 3px solid var(--info-text); }
+  .aviso.erro { border-left: 3px solid var(--error-text); }
+
+  /* ---- Paginação ---- */
+  .paginacao button, .paginacao a, .pag-botao { border-radius: 999px; }
+}
+@media screen and (prefers-reduced-motion: reduce) {
+  .btn, .btn-imprimir, .btn-buscar, .app-primario, .btn.primario, .boletim-card, .processo, .kanban-card, .mural-item, .metrica, .dash-card::after, .metrica::after,
+  main button, #area button, #menu-principal :is(button, a), #menu-principal .nav-ico { transition: none; }
+  :is(.btn, .btn-imprimir, .btn-buscar, .app-primario, .btn.primario, .boletim-card, .processo, .kanban-card, .mural-item, .metrica, main button, #area button):hover { transform: none !important; }
+  :is(.btn-buscar, .app-primario, .btn.primario, .pp-mercado .btn.primario, .btn-baixar)::after { display: none; }
+  .carregando::before, .cl-carregando::before { animation-duration: 2.4s; }
+}
