@@ -38,6 +38,11 @@ create table if not exists public.oportunidades_abertas (
 create index if not exists oportunidades_abertas_uf_idx on public.oportunidades_abertas (uf);
 create index if not exists oportunidades_abertas_publicacao_idx on public.oportunidades_abertas (publicacao);
 create index if not exists oportunidades_abertas_encerramento_idx on public.oportunidades_abertas (encerramento);
+-- Busca pública da landing (netlify/functions/busca-publica.js, sem login): ILIKE '*palavra*' em objeto. Ela lê com a
+-- chave de serviço, que não passa pela RLS, então o Postgres pode usar este índice de trigramas (auditoria 23/11: sem
+-- ele cada busca anônima lia a tabela inteira). Leitura logada (RLS) não usa: ILIKE não é leakproof (ver prospeccao.sql).
+create extension if not exists pg_trgm;
+create index if not exists oportunidades_abertas_objeto_trgm_idx on public.oportunidades_abertas using gin (objeto gin_trgm_ops);
 
 alter table public.oportunidades_abertas enable row level security;
 

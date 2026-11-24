@@ -22,7 +22,7 @@
 // - Sem IP confiável: a origem vira o próprio token, com limite em memória mais estrito (10/min). No banco
 //   os limites "por IP" passam a valer por token; o token tem 256 bits, então isso não abre enumeração.
 const { createHash, createHmac } = require("node:crypto");
-const { cabecalhosPadrao } = require("./_auth");
+const { cabecalhosPadrao, redeDoIp } = require("./_auth");
 
 const SUPABASE_URL = "https://lsqjamqvmrcyrvowndiu.supabase.co";
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
@@ -62,7 +62,8 @@ const emCloudflare = () => globalThis.navigator?.userAgent === "Cloudflare-Worke
 function ipDoEvento(headers, naCloudflare = emCloudflare()) {
   const h = headers || {};
   const ip = naCloudflare ? h["cf-connecting-ip"] : h["x-nf-client-connection-ip"];
-  return typeof ip === "string" && ip.trim() ? ip.trim() : null;
+  // IPv6 conta pela rede /64 (mesma regra de _auth.js): trocar de endereço dentro dela não zera o limite.
+  return typeof ip === "string" && ip.trim() ? redeDoIp(ip) : null;
 }
 
 function lerCorpo(event) {

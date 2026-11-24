@@ -182,10 +182,23 @@ async function exigirUsuarioAprovado(event) {
 // (fail-open, como verificarLimiteDiario fora da IA): o teto protege contra abuso, não é controle de acesso.
 const LIMITE_PROXY_POR_IP = 3000;
 const ERRO_POR_MINUTO = "Muitos pedidos em pouco tempo. Espere 1 minuto e tente de novo.";
+// IPv6: conta a rede /64, não o endereço. Uma única casa/servidor recebe 2^64 endereços e trocar de um para outro a
+// cada pedido zerava o teto por IP (auditoria 23/11). IPv4 (e IPv4 dentro de IPv6, "::ffff:1.2.3.4") fica como está.
+function redeDoIp(ip) {
+  const limpo = String(ip).trim().toLowerCase().replace(/%.*$/, "");
+  if (!limpo.includes(":")) return limpo;
+  const ipv4 = /(\d{1,3}(?:\.\d{1,3}){3})$/.exec(limpo);
+  if (ipv4) return ipv4[1];
+  const [cabeca, cauda = ""] = limpo.split("::");
+  const a = cabeca ? cabeca.split(":") : [];
+  const b = cauda ? cauda.split(":") : [];
+  const meio = limpo.includes("::") ? Array(Math.max(0, 8 - a.length - b.length)).fill("0") : [];
+  return [...a, ...meio, ...b].slice(0, 4).map((g) => g.replace(/^0+(?=.)/, "")).join(":") + "::/64";
+}
 function ipConfiavel(event) {
   const h = event.headers || {};
   const ip = globalThis.navigator?.userAgent === "Cloudflare-Workers" ? h["cf-connecting-ip"] : h["x-nf-client-connection-ip"];
-  return typeof ip === "string" && ip.trim() ? ip.trim() : null;
+  return typeof ip === "string" && ip.trim() ? redeDoIp(ip) : null;
 }
 // Contador compartilhado entre as instâncias do Cloudflare (memória não serve: cada isolate conta sozinho).
 // Reaproveita incrementar_uso_ip (uso_ip_diario, que apaga sozinho o que passou de ontem): a janela de 1 minuto
@@ -269,4 +282,4 @@ async function limitarFilaDossies(userId) {
 }
 
 
-module.exports = { SUPABASE_URL, SUPABASE_ANON_KEY, cabecalhosPadrao, exigirUsuarioLogado, exigirClienteAprovado, exigirUsuarioAprovado, verificarLimiteDiario, origemPermitida, limitarPorIp, limitarContaPorMinuto, exigirAprovadoComLimite, limitarFilaDossies };
+module.exports = { SUPABASE_URL, SUPABASE_ANON_KEY, redeDoIp, cabecalhosPadrao, exigirUsuarioLogado, exigirClienteAprovado, exigirUsuarioAprovado, verificarLimiteDiario, origemPermitida, limitarPorIp, limitarContaPorMinuto, exigirAprovadoComLimite, limitarFilaDossies };
