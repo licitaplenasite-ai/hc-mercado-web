@@ -27,12 +27,17 @@
     .btn-baixar{display:inline-block;margin:4px 0 16px;padding:10px 18px;border-radius:var(--radius-control,8px);background:var(--action-strong,#2255e0);color:var(--action-on,#fff);font-weight:600;text-decoration:none}
     .btn-baixar:hover{background:var(--action-strong-hover,#1a44b8)}
     .info{background:var(--info-bg,#eaf1fe);border:1px solid var(--info-border,#b9ccf5);color:var(--info-text,#1f4fb8);border-radius:8px;padding:10px 12px}
+    /* Voltar ao sistema: só para quem está logado (24/11, dono: a página abria sem menu e ele dependia da seta do navegador). */
+    .ext-voltar{display:inline-flex;align-items:center;gap:6px;min-height:44px;margin:0 0 16px;padding:8px 16px;border:1px solid var(--border-strong,var(--border-default,#c9d2e0));border-radius:var(--radius-control,8px);background:var(--surface-default,#fff);color:var(--action-text,#2255e0);font-weight:600;text-decoration:none}
+    .ext-voltar:hover{background:var(--action-tint,#eaf1fe)}
+    .ext-voltar[hidden],[hidden]{display:none}
   </style>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="paginas-soltas.css"><link rel="stylesheet" href="interno-premium.css">
 </head>
 <body>
 <main>
+  <a id="ext-voltar" class="ext-voltar" data-voltar hidden><span aria-hidden="true">←</span> Voltar ao LicitaPlena</a>
   <h1>Extensão do LicitaPlena para o navegador</h1>
   <p class="apoio">A extensão trabalha no seu navegador, com você no comando: lê os pregões anteriores (participantes, marcas e motivos de recusa), preenche a proposta no Compras.gov, acompanha o chat do pregoeiro e ajuda no lance com 1 clique.</p>
   <p class="aviso"><strong>Versão de desenvolvedor (0.5.1).</strong> A versão da Chrome Web Store vem depois. Por enquanto a extensão é instalada manualmente, como abaixo.</p>
@@ -114,8 +119,32 @@
   </ol>
   <p class="aviso">Em nenhum passo a extensão clica em Salvar, aceita termo ou declarações, resolve captcha, envia lance sem o seu clique em "Sim, dar lance" ou troca de página sozinha.</p>
 
-  <p><a href="/login">Entrar no LicitaPlena</a> · <a href="/cadastro">Testar grátis por 14 dias</a></p>
+  <p id="ext-rodape-publico"><a href="/login">Entrar no LicitaPlena</a> · <a href="/cadastro">Testar grátis por 14 dias</a></p>
+  <p id="ext-rodape-logado" hidden>Extensão instalada? <a data-voltar>Voltar ao LicitaPlena</a> e continue de onde parou.</p>
 </main>
+<script>
+// Logado = existe o token do Supabase no navegador (mesma regra do trava-sessao.js). Só troca o que aparece; não lê dado nenhum.
+(function () {
+  var logado = false;
+  try { for (var i = 0; i < localStorage.length; i++) { if (/^sb-.+-auth-token$/.test(localStorage.key(i) || "")) { logado = true; break; } } } catch (e) {}
+  if (!logado) return;
+  document.getElementById("ext-voltar").hidden = false;
+  document.getElementById("ext-rodape-publico").hidden = true;
+  document.getElementById("ext-rodape-logado").hidden = false;
+  // Aberta pelo menu do sistema (guia nova, sem histórico): fecha a guia e o usuário cai no sistema que ficou aberto.
+  // Se o navegador não deixar fechar, segue o link para painel.html.
+  var veioDoSistema = history.length === 1 && document.referrer.indexOf(location.origin + "/") === 0;
+  document.querySelectorAll("[data-voltar]").forEach(function (a) {
+    a.href = "painel.html"; // página pública: o link para a tela interna só existe para quem está logado
+    a.addEventListener("click", function (ev) {
+      if (!veioDoSistema) return;
+      ev.preventDefault();
+      window.close();
+      setTimeout(function () { location.href = a.href; }, 200);
+    });
+  });
+})();
+</script>
 <script src="ajuda-ui.js" defer></script>
 <script src="avisos-celular.js" defer></script>
 </body>

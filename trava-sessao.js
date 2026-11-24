@@ -10,7 +10,8 @@
   var raiz = document.documentElement;
   var exige = (document.currentScript && document.currentScript.dataset.exige) || "aprovado";
   raiz.style.visibility = "hidden";
-  function irParaLogin() { location.replace("login.html?voltar=" + encodeURIComponent(location.pathname + location.search)); }
+  // Com o #: o link do e-mail (painel.html?edicao=...#boletim) volta para o Boletim depois do login, não para a busca.
+  function irParaLogin() { location.replace("login.html?voltar=" + encodeURIComponent(location.pathname + location.search + location.hash)); }
   function liberar() { raiz.style.visibility = ""; }
 
   var temToken = false;

@@ -1635,7 +1635,7 @@
   <a href="quadros.html" title="Quadros"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-kanban'></use></svg></span><span class="nav-label">Quadros</span></a>
   <a href="processos.html" title="Processos"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-folder-open'></use></svg></span><span class="nav-label">Processos</span></a>
   <a href="operacao.html" class="nav-externo" title="Minhas empresas e documentos (abre outra página)"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-files'></use></svg></span><span class="nav-label">Minhas empresas e documentos</span><svg class='icone-ph nav-externo-ico' aria-hidden="true"><use href='#ph-arrow-square-out'></use></svg></a>
-  <a href="extensao.html" title="Extensão"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-puzzle-piece'></use></svg></span><span class="nav-label">Extensão</span></a>
+  <a href="extensao.html" target="_blank" rel="noopener" class="nav-externo" title="Extensão (abre em nova guia)" aria-label="Extensão (abre em nova guia)"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-puzzle-piece'></use></svg></span><span class="nav-label">Extensão</span><svg class='icone-ph nav-externo-ico' aria-hidden="true"><use href='#ph-arrow-square-out'></use></svg></a>
   <button data-alvo="juridico" title="Jurídico &amp; Dúvidas"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-scales'></use></svg></span><span class="nav-label">Jurídico &amp; Dúvidas</span></button>
   <a href="hc.html" target="_blank" rel="noopener" data-hc-site title="Consultoria"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-briefcase'></use></svg></span><span class="nav-label">Consultoria</span></a>
 </nav>
@@ -1700,6 +1700,22 @@
     });
     celular.addEventListener("change", () => definir(false));
   })();
+</script>
+<script src="voltar-fecha-modal.js"></script>
+<script>
+  // Voltar do celular fecha o que estiver aberto por cima da tela: modais (#modal-*-fundo, fechados pelo próprio ✕ para
+  // rodar a limpeza de cada um), gaveta do menu e o diálogo de etapas do Funil.
+  document.addEventListener("DOMContentLoaded", () => {
+    const porId = (id) => document.getElementById(id);
+    const itens = Array.from(document.querySelectorAll('[id^="modal-"][id$="-fundo"]'), (el) => ({
+      el, aberto: () => el.classList.contains("aberto"),
+      fechar: () => { const x = porId(el.id.replace(/-fundo$/, "-fechar")); if (x) x.click(); else el.classList.remove("aberto"); },
+    }));
+    const nav = porId("menu-principal"), gaveta = porId("nav-gaveta-fundo"), etapas = porId("etapas-dialogo");
+    if (nav && gaveta) itens.push({ el: nav, aberto: () => nav.classList.contains("gaveta-aberta"), fechar: () => gaveta.click() });
+    if (etapas) itens.push({ el: etapas, aberto: () => etapas.open, fechar: () => etapas.close() });
+    window.criarPilhaVoltar(window, itens);
+  });
 </script>
 
 <main>
@@ -1803,17 +1819,26 @@
 
   <section id="boletim">
     <div class="boletim-cabecalho">
-      <div>
-        <h2 style="margin-top:0;"><span class="rotulo-agente">Caçador</span> Boletim de oportunidades</h2>
+      <div class="bol-titulo-bloco">
+        <h2 style="margin-top:0;"><span class="rotulo-agente">Caçador</span> Boletins de <span class="bol-cal-titulo" id="bol-mes-titulo"></span></h2>
+        <details class="bol-filtro-resumo" id="bol-filtro-detalhe" data-simples>
+          <summary><span id="bol-meta-curto">Configure seu filtro para gerar o boletim automaticamente a cada visita.</span><span class="bol-filtro-alternar" aria-hidden="true"><span class="bol-filtro-ver">Ver filtro</span><span class="bol-filtro-recolher">Recolher</span></span></summary>
+        </details>
         <p class="dica-clique" id="bol-meta" style="margin:0;">Configure seu filtro para gerar o boletim automaticamente a cada visita.</p>
+      </div>
+      <div class="bol-acoes-topo" id="bol-acoes-topo" hidden>
+        <button type="button" class="btn-imprimir bol-marcar-lidos" id="bol-marcar-lidos" title="Marca como lidas todas as licitações da lista abaixo"><svg class='icone-ph' aria-hidden="true"><use href='#ph-check-circle'></use></svg> Marcar boletins do filtro como lido <span class="bol-contador" id="bol-marcar-lidos-n" aria-label="não lidas">0</span></button>
+        <button class="btn-imprimir bol-icone" id="bol-atualizar" title="Atualizar boletim: buscar de novo agora" aria-label="Atualizar boletim"><svg class='icone-ph' aria-hidden="true"><use href='#ph-arrows-clockwise'></use></svg></button>
+        <button class="btn-imprimir btn-config-boletim bol-icone" id="bol-config-toggle" aria-controls="bol-config-painel" title="Configurar filtro do boletim" aria-label="Configurar filtro do boletim"><svg class='icone-ph' aria-hidden="true"><use href='#ph-gear'></use></svg></button>
+        <button type="button" class="btn-imprimir btn-baixar-planilha bol-icone" data-planilha-de="bol-resultado" data-planilha-nome="boletim" title="Baixar esta lista em planilha do Excel (.xlsx)" aria-label="Baixar planilha"><svg class='icone-ph' aria-hidden="true"><use href='#ph-download-simple'></use></svg></button>
+        <button class="btn-imprimir btn-imprimir-generico bol-icone" title="Imprimir / Gerar PDF desta tela" aria-label="Imprimir ou gerar PDF"><svg class='icone-ph' aria-hidden="true"><use href='#ph-printer'></use></svg></button>
       </div>
     </div>
     <div class="secao-conteudo-principal">
-    <div class="empresa-acompanhamento"><label for="bol-empresa">Acompanhar oportunidades para<select id="bol-empresa" class="seletor-empresa-acompanhamento" disabled><option>Carregando empresas...</option></select></label><a href="operacao.html">Gerenciar empresas</a><p class="empresa-ajuda">A escolha define a empresa do acompanhamento; não altera os editais públicos do boletim.</p><p class="empresa-convite" hidden>Para acompanhar editais no Funil, cadastre sua empresa em <a href="operacao.html">Minhas empresas e documentos</a>. O Boletim funciona sem isso.</p></div>
-    <div class="bol-acoes-topo" id="bol-acoes-topo" hidden>
-        <button class="btn-imprimir" id="bol-atualizar" title="Buscar de novo agora"><svg class='icone-ph'><use href='#ph-arrows-clockwise'></use></svg> Atualizar boletim</button>
-        <button class="btn-imprimir btn-config-boletim" id="bol-config-toggle" aria-controls="bol-config-painel"><svg class='icone-ph'><use href='#ph-gear'></use></svg> Configurar filtro do boletim</button>
-      </div>
+    <div class="bol-barra">
+    <div class="bol-meses-bloco"><span class="bol-barra-rotulo" id="bol-meses-rotulo">Mês selecionado</span><div class="bol-meses" id="bol-meses" role="group" aria-labelledby="bol-meses-rotulo"></div></div>
+    <div class="empresa-acompanhamento"><label for="bol-empresa">Filtro selecionado<select id="bol-empresa" class="seletor-empresa-acompanhamento" aria-describedby="bol-empresa-ajuda" title="Cada empresa tem o próprio filtro do boletim; a escolha não altera os editais públicos." disabled><option>Carregando empresas...</option></select></label><span class="bol-selo-filtros" id="bol-selo-filtros"></span><a href="operacao.html">Gerenciar empresas</a><p class="empresa-ajuda" id="bol-empresa-ajuda">Cada empresa tem o próprio filtro do boletim; a escolha não altera os editais públicos.</p><p class="empresa-convite" hidden>Para acompanhar editais no Funil, cadastre sua empresa em <a href="operacao.html">Minhas empresas e documentos</a>. O Boletim funciona sem isso.</p></div>
+    </div>
     <div class="painel-filtros" id="bol-config-painel" style="display:none;">
       <div class="bol-config-intro" id="bol-config-intro" hidden>
         <h3>Monte seu boletim em 1 minuto</h3>
@@ -1838,7 +1863,6 @@
     </div>
     <p id="bol-filtro-status" role="status" aria-live="polite"></p>
     <div id="bol-edicoes" class="caixa-interna" hidden></div>
-    <div class="dg-topo-acoes"><span></span><div class="dg-topo-botoes"><button type="button" class="btn-imprimir btn-baixar-planilha" data-planilha-de="bol-resultado" data-planilha-nome="boletim" title="Baixar esta lista em planilha do Excel (.xlsx)"><svg class='icone-ph' aria-hidden="true"><use href='#ph-download-simple'></use></svg> Baixar planilha</button><button class="btn-imprimir btn-imprimir-generico" title="Gerar PDF/impressão desta tela"><svg class='icone-ph'><use href='#ph-printer'></use></svg> Imprimir / Gerar PDF</button></div></div>
     <div id="bol-calendario" class="caixa-interna"></div>
     <div id="bol-resultado"></div>
     </div>
@@ -7156,6 +7180,69 @@
   function metaBoletim(ufs, palavras, sufixo = "") {
     return `Boletim · estados: ${textoUfs(ufs)} · ${palavras.join(", ")} · publicações recentes e oportunidades abertas${sufixo}`;
   }
+  // Topo do Boletim (24/11, pedido do dono): o texto inteiro do filtro ocupava várias linhas; vira 1 linha + "Ver filtro".
+  // Devolve null para textos curtos (sem filtro, edição de outro dia): esses aparecem inteiros, sem recolher.
+  function resumoMetaBoletim(texto, filtro) {
+    if (!/^Boletim · estados:/.test(texto) || !filtro) return null;
+    const nUfs = normalizarUfs(filtro.ufs || filtro.uf).length;
+    const nPalavras = String(filtro.palavrasRaw || "").split(",").filter((p) => p.trim()).length;
+    const data = texto.match(/(\d{2}\/\d{2})\/\d{4},? (\d{2}:\d{2})/);
+    const aviso = /buscando editais novos/.test(texto) ? "buscando editais novos"
+      : /Pode haver editais mais novos/.test(texto) ? "pode haver editais mais novos"
+        : /mantendo a última edição/.test(texto) ? "mantendo a última edição" : "";
+    return ["Filtro: " + (nUfs ? `${nUfs} ${nUfs === 1 ? "estado" : "estados"}` : "todos os estados"),
+      `${nPalavras} ${nPalavras === 1 ? "palavra" : "palavras"}`,
+      data ? `atualizado ${data[1]} ${data[2]}` : "", aviso].filter(Boolean).join(" · ");
+  }
+  {
+    const meta = document.getElementById("bol-meta");
+    const detalhe = document.getElementById("bol-filtro-detalhe");
+    const chaveAberto = () => (window.__clienteIdAtual ? `hc_boletim_filtro_aberto:${window.__clienteIdAtual}` : null);
+    // Todos os pontos que escrevem em #bol-meta continuam iguais; o resumo acompanha por aqui.
+    new MutationObserver(() => {
+      const curto = resumoMetaBoletim(meta.textContent, lerFiltroBoletim());
+      document.getElementById("bol-meta-curto").textContent = curto || meta.textContent;
+      detalhe.toggleAttribute("data-simples", !curto);
+      const chave = chaveAberto();
+      detalhe.open = Boolean(curto && chave && localStorage.getItem(chave) === "1");
+    }).observe(meta, { childList: true, characterData: true, subtree: true });
+    detalhe.querySelector("summary").addEventListener("click", (e) => { if (detalhe.hasAttribute("data-simples")) e.preventDefault(); });
+    detalhe.addEventListener("toggle", () => {
+      const chave = chaveAberto();
+      if (chave && !detalhe.hasAttribute("data-simples")) {
+        try { localStorage.setItem(chave, detalhe.open ? "1" : "0"); } catch (e) { /* armazenamento indisponível: só não lembra */ }
+      }
+    });
+    // "Marcar boletins do filtro como lido (N)": N = cartões não lidos da lista na tela (boletim de hoje ou edição aberta).
+    const lista = document.getElementById("bol-resultado");
+    const btnLidos = document.getElementById("bol-marcar-lidos");
+    const atualizarContadorLidos = () => {
+      const n = lista.querySelectorAll(".boletim-card:not(.lido)").length;
+      document.getElementById("bol-marcar-lidos-n").textContent = n;
+      btnLidos.disabled = n === 0;
+    };
+    new MutationObserver(atualizarContadorLidos).observe(lista, { childList: true });
+    lista.addEventListener("click", () => setTimeout(() => {
+      atualizarContadorLidos();
+      if (typeof window.__bolRedesenharCalendario === "function") window.__bolRedesenharCalendario(); // cor lido/não lido das etiquetas
+    }));
+    btnLidos.addEventListener("click", () => {
+      const lidos = lerConjunto("lidos");
+      (resultadosPlanilha.get("bol-resultado") || []).forEach((r) => lidos.add(idOportunidade(r)));
+      salvarConjunto("lidos", lidos);
+      const painel = paineisRenderizados.get(lista);
+      if (painel) renderizarPainelBoletim(...painel);
+      if (typeof window.__bolRedesenharCalendario === "function") window.__bolRedesenharCalendario();
+    });
+    // Selo "1 de N filtros": cada empresa tem o próprio filtro do boletim.
+    const seletor = document.getElementById("bol-empresa");
+    const atualizarSelo = () => {
+      const n = seletor.disabled ? 0 : seletor.options.length;
+      document.getElementById("bol-selo-filtros").textContent = n ? `${seletor.selectedIndex + 1} de ${n} ${n === 1 ? "filtro" : "filtros"}` : "";
+    };
+    new MutationObserver(atualizarSelo).observe(seletor, { childList: true, attributes: true, attributeFilter: ["disabled"] });
+    seletor.addEventListener("change", atualizarSelo);
+  }
 
   let bolJaGerado = false;
   const BOL_FRESCOR_MS = 6 * 60 * 60 * 1000;
@@ -7173,6 +7260,7 @@
 
   const BOL_MESES_NOME = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
   const BOL_DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+  if (document.getElementById("bol-mes-titulo")) document.getElementById("bol-mes-titulo").textContent = `${BOL_MESES_NOME[bolMesReferencia.getMonth()]} de ${bolMesReferencia.getFullYear()}`;
 
   function bolChaveDia(iso) {
     if (!iso) return null;
@@ -7202,48 +7290,77 @@
     const totalDias = new Date(ano, mes + 1, 0).getDate();
     const hojeChave = bolChaveDia(new Date().toISOString());
 
+    // Edições já enviadas por e-mail (boletim_edicoes, carregadas no bloco das edições) viram etiquetas no dia,
+    // como no ConLicitação: "Boletim 1744 · 12", verde com ✓ quando todas as licitações dela já foram lidas.
+    const porDiaEdicoes = new Map();
+    (window.__bolEdicoesLista || []).forEach((e) => {
+      if (!porDiaEdicoes.has(e.edicao)) porDiaEdicoes.set(e.edicao, []);
+      porDiaEdicoes.get(e.edicao).push(e);
+    });
+    const lidos = porDiaEdicoes.size && typeof lerConjunto === "function" ? lerConjunto("lidos") : new Set();
+    let algumConteudo = false;
     let html = `<div class="bol-calendario">
-      <div class="bol-cal-topo">
-        <button type="button" class="bol-cal-nav" id="bol-cal-prev" title="Mês anterior">‹</button>
-        <span class="bol-cal-titulo">${BOL_MESES_NOME[mes]} de ${ano}</span>
-        <button type="button" class="bol-cal-nav" id="bol-cal-next" title="Próximo mês">›</button>
-      </div>
       <div class="bol-cal-grade">`;
     BOL_DIAS_SEMANA.forEach((d) => { html += `<div class="bol-cal-dia-semana">${d}</div>`; });
     for (let i = 0; i < primeiroDiaSemana; i++) html += `<div class="bol-cal-dia vazio"></div>`;
     for (let dia = 1; dia <= totalDias; dia++) {
       const chave = `${ano}-${String(mes + 1).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
       const itens = porDia.get(chave) || [];
+      const edicoes = porDiaEdicoes.get(chave) || [];
       const classes = ["bol-cal-dia"];
       if (itens.length > 0) classes.push("tem-dados");
       if (chave === hojeChave) classes.push("hoje");
       if (chave === diaSelecionado) classes.push("selecionado");
-      html += `<button type="button" class="${classes.join(" ")}" data-dia="${chave}" aria-pressed="${chave === diaSelecionado}" aria-label="${chave.split("-").reverse().join("/")}: ${itens.length} oportunidade(s)" title="${itens.length} oportunidade(s) publicada(s) nesse dia">
-        <span class="bol-cal-dia-numero">${dia}</span>
+      if (itens.length || edicoes.length) algumConteudo = true;
+      const etiquetas = edicoes.map((e) => {
+        const lida = (e.numeros || []).length > 0 && e.numeros.every((n) => lidos.has(n));
+        const nome = `Boletim${e.numero ? " " + e.numero : ""}`;
+        return `<button type="button" class="bol-cal-edicao ${lida ? "lida" : "nova"}" data-edicao-id="${escapeHtml(e.id)}"
+          title="${escapeHtml(`${nome} · ${e.empresa || "Minha empresa"} · filtro: ${e.filtro_nome || "principal"}`)}"
+          aria-label="${escapeHtml(`${nome}, ${e.quantidade} editais, ${lida ? "lido" : "não lido"}`)}">${lida ? "✓ " : ""}${nome} · ${e.quantidade}</button>`;
+      }).join("");
+      html += `<div class="bol-cal-celula${itens.length || edicoes.length ? " tem-conteudo" : ""}${chave === hojeChave ? " hoje" : ""}">
+        <button type="button" class="${classes.join(" ")}" data-dia="${chave}" aria-pressed="${chave === diaSelecionado}" aria-label="${chave.split("-").reverse().join("/")}: ${itens.length} oportunidade(s)" title="${itens.length} oportunidade(s) publicada(s) nesse dia">
+        <span class="bol-cal-dia-sem" aria-hidden="true">${BOL_DIAS_SEMANA[new Date(ano, mes, dia).getDay()]}</span><span class="bol-cal-dia-numero">${dia}</span>
         ${itens.length > 0 ? `<span class="bol-cal-dia-badge">${itens.length}</span>` : ""}
-      </button>`;
+      </button>${etiquetas}</div>`;
     }
     html += `</div>`;
+    if (!algumConteudo) html += `<p class="bol-cal-sem-conteudo">Nenhum boletim nem edital publicado em ${BOL_MESES_NOME[mes]}.</p>`;
     if (diaSelecionado) {
       html += `<div class="bol-cal-filtro-ativo">Mostrando oportunidades de ${diaSelecionado.split("-").reverse().join("/")}<button type="button" id="bol-cal-limpar">Ver todos os dias ✕</button></div>`;
     } else {
-      html += `<p class="bol-cal-legenda">O calendário mostra a data de publicação do edital. O e-mail pode incluir editais publicados em dias anteriores. Clique num dia para ver suas oportunidades.</p>`;
+      html += `<p class="bol-cal-legenda"><span class="bol-cal-edicao nova">Boletim</span> não lido <span class="bol-cal-edicao lida">✓ Boletim</span> lido · o número no dia conta os editais publicados nele; clique para ver só esses.</p>`;
     }
     html += `</div>`;
     return html;
   }
 
+  // Últimos 4 meses em botões (no lugar das setas ‹ ›), o mês do calendário destacado.
+  function montarMesesBoletim(mesRef) {
+    const hoje = new Date();
+    let html = "";
+    for (let i = 3; i >= 0; i--) {
+      const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+      const ativo = d.getFullYear() === mesRef.getFullYear() && d.getMonth() === mesRef.getMonth();
+      html += `<button type="button" class="bol-mes${ativo ? " ativo" : ""}" data-mes="${d.getFullYear()}-${d.getMonth()}" aria-pressed="${ativo}">${BOL_MESES_NOME[d.getMonth()]}</button>`;
+    }
+    return html;
+  }
+
   function ligarCalendarioBoletim(alvoCalendario, aoMudar) {
-    const prev = document.getElementById("bol-cal-prev");
-    const next = document.getElementById("bol-cal-next");
-    if (prev) prev.addEventListener("click", () => {
-      bolMesReferencia.setMonth(bolMesReferencia.getMonth() - 1);
+    const alvoMeses = document.getElementById("bol-meses");
+    if (alvoMeses) alvoMeses.querySelectorAll("[data-mes]").forEach((el) => el.addEventListener("click", () => {
+      // Numa edição antiga aberta, trocar de mês volta ao boletim de hoje (o calendário é o do boletim de hoje).
+      if (window.__bolEdicaoAberta) document.getElementById("bol-edicao-hoje")?.click();
+      const [a, m] = el.dataset.mes.split("-").map(Number);
+      bolMesReferencia = new Date(a, m, 1);
       aoMudar();
-    });
-    if (next) next.addEventListener("click", () => {
-      bolMesReferencia.setMonth(bolMesReferencia.getMonth() + 1);
-      aoMudar();
-    });
+    }));
+    alvoCalendario.querySelectorAll(".bol-cal-edicao[data-edicao-id]").forEach((el) => el.addEventListener("click", () => {
+      const edicao = (window.__bolEdicoesLista || []).find((e) => e.id === el.dataset.edicaoId);
+      if (edicao && typeof window.__bolAbrirEdicao === "function") window.__bolAbrirEdicao(edicao);
+    }));
     const limpar = document.getElementById("bol-cal-limpar");
     if (limpar) limpar.addEventListener("click", () => {
       bolDiaSelecionado = null;
@@ -7265,9 +7382,23 @@
     const alvoCal = document.getElementById("bol-calendario");
     const alvoLista = document.getElementById("bol-resultado");
 
-    const desenhar = () => {
+    // Só o calendário e os meses (etiquetas de edição mudam ao ler licitações ou ao chegarem as edições).
+    const desenharCalendario = () => {
+      if (window.__bolEdicaoAberta) return; // edição antiga na tela: o calendário fica fechado, como antes
       alvoCal.innerHTML = montarCalendarioBoletim(bolResultadosCompletos, bolMesReferencia, bolDiaSelecionado);
+      const alvoMeses = document.getElementById("bol-meses");
+      if (alvoMeses) {
+        alvoMeses.innerHTML = montarMesesBoletim(bolMesReferencia);
+        // Celular: os meses rolam na horizontal; o mês atual (último) não pode ficar cortado.
+        if (typeof alvoMeses.querySelector === "function" && !alvoMeses.querySelector(".ativo")?.nextElementSibling) alvoMeses.scrollLeft = alvoMeses.scrollWidth;
+      }
+      const titulo = document.getElementById("bol-mes-titulo");
+      if (titulo) titulo.textContent = `${BOL_MESES_NOME[bolMesReferencia.getMonth()]} de ${bolMesReferencia.getFullYear()}`;
       ligarCalendarioBoletim(alvoCal, desenhar);
+    };
+    window.__bolRedesenharCalendario = desenharCalendario;
+    const desenhar = () => {
+      desenharCalendario();
       const listaFiltrada = bolDiaSelecionado
         ? bolResultadosCompletos.filter((r) => bolChaveDia(r.publicacao) === bolDiaSelecionado)
         : bolResultadosCompletos;
@@ -7688,9 +7819,15 @@
     async function carregarEdicoes() {
       await window.__clientePronto;
       if (!window.__clienteIdAtual) return;
-      const { data, error } = await window.__sbClient.from("boletim_edicoes")
-        .select("id, edicao, filtro_id, filtro_nome, empresa, quantidade, numeros").gt("quantidade", 0).order("edicao", { ascending: false }).limit(90);
+      const consultar = (colunas) => window.__sbClient.from("boletim_edicoes")
+        .select(colunas).gt("quantidade", 0).order("edicao", { ascending: false }).limit(90);
+      let { data, error } = await consultar("id, edicao, filtro_id, filtro_nome, empresa, quantidade, numeros, numero");
+      if (error) ({ data, error } = await consultar("id, edicao, filtro_id, filtro_nome, empresa, quantidade, numeros")); // banco sem a coluna numero
       edicoesLista = error ? [] : (data || []);
+      // Etiquetas "Boletim nº" no calendário (bloco do calendário) leem esta lista e abrem a edição por aqui.
+      window.__bolEdicoesLista = edicoesLista;
+      window.__bolAbrirEdicao = abrirEdicao;
+      if (typeof window.__bolRedesenharCalendario === "function") window.__bolRedesenharCalendario();
       desenharEdicoes(null);
       if (!edicaoDoLink) return;
       const doLink = edicoesLista.find((e) => e.edicao === edicaoDoLink && (!filtroDoLink || e.filtro_id === filtroDoLink));

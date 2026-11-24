@@ -172,7 +172,9 @@
     if (typeof voltar !== "string" || !/^\/(?![\/\\])/.test(voltar)) return "painel.html";
     try {
       const u = new URL(voltar, window.location.origin);
-      return u.origin === window.location.origin ? u.pathname + u.search + u.hash : "painel.html";
+      // 25/11: "/.//evil.com" e "/a/..//evil.com" normalizam para o caminho "//evil.com" (outro domínio): recusar.
+      if (u.origin !== window.location.origin || /^\/[\/\\]/.test(u.pathname)) return "painel.html";
+      return u.pathname + u.search + u.hash;
     } catch (e) { return "painel.html"; }
   }
   const parametros = new URLSearchParams(window.location.search);
@@ -292,7 +294,8 @@
     }
 
     mostrarAviso("Login realizado! Redirecionando...", "ok");
-    window.location.href = destino;
+    // replace: o login não fica no histórico; o "voltar" do celular dentro do sistema nunca cai de novo nesta tela.
+    window.location.replace(destino);
   });
 </script>
 </body>

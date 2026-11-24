@@ -26,6 +26,8 @@
 }
 #menu-principal a.ativo { background: var(--action-tint); color: var(--text-primary); font-weight: 600; box-shadow: inset 3px 0 0 var(--action-strong); }
 #menu-principal a.ativo .nav-ico { color: var(--action-text); }
+/* Item que abre em nova guia (Extensão): mesmo ícone "abre fora" do painel. */
+#menu-principal .nav-externo-ico { width: 14px; height: 14px; flex: none; margin-left: auto; color: var(--text-secondary); }
 #menu-principal :focus-visible, #nav-gaveta-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 #nav-colapsar-btn {
   color: var(--text-secondary); font-size: 12px; border-bottom: 1px solid var(--border-default);
@@ -35,7 +37,7 @@
 @media (min-width: 769px) {
   #menu-principal.colapsada { width: 60px; padding: 12px 6px; }
   #menu-principal.colapsada button, #menu-principal.colapsada a { justify-content: center; padding: 6px 0; }
-  #menu-principal.colapsada .nav-label { display: none; }
+  #menu-principal.colapsada .nav-label, #menu-principal.colapsada .nav-externo-ico { display: none; }
   #menu-principal.colapsada #nav-colapsar-btn .nav-ico { transform: scaleX(-1); }
 }
 

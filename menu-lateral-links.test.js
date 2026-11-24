@@ -58,7 +58,7 @@ test('todas as páginas têm o mesmo conjunto e ordem de itens no menu (Dashboar
 
 test('painel leva Hoje, Processos e Extensão para as páginas certas e Calendário/Licitação anterior para atalhos do próprio painel', () => {
   const nav = fs.readFileSync('painel.html', 'utf8').match(/<nav id="menu-principal"[\s\S]*?<\/nav>/)[0];
-  for (const [href, rotulo] of [['/sistema', 'Hoje'], ['processos.html', 'Processos'], ['extensao.html', 'Extensão']]) {
+  for (const [href, rotulo] of [['/sistema', 'Hoje'], ['processos.html', 'Processos']]) {
     assert.ok(nav.includes(`<a href="${href}" title="${rotulo}">`), rotulo);
   }
   const html = fs.readFileSync('painel.html', 'utf8');
@@ -88,6 +88,40 @@ test('ícones novos do menu existem nos dois sprites', () => {
     assert.match(sprite, new RegExp(`<symbol id="${id}"`), id);
     assert.match(painel, new RegExp(`<symbol id="${id}"`), id);
   }
+});
+
+// 24/11 (dono): Extensão abria na mesma aba e o sistema "sumia"; agora abre em nova guia, com o ícone "abre fora".
+test('Extensão do menu abre em nova guia em todas as páginas', () => {
+  for (const p of paginas) {
+    const nav = fs.readFileSync(`${p}.html`, 'utf8').match(/<nav id="menu-principal"[\s\S]*?<\/nav>/)[0];
+    const link = nav.match(/<a href="extensao\.html"[\s\S]*?<\/a>/)[0];
+    assert.ok(link.startsWith('<a href="extensao.html" target="_blank" rel="noopener" class="nav-externo" title="Extensão (abre em nova guia)" aria-label="Extensão (abre em nova guia)">'), p);
+    assert.match(link, /nav-externo-ico[\s\S]*?ph-arrow-square-out/, `${p}: ícone abre fora`);
+  }
+  assert.match(fs.readFileSync('menu-icones.svg', 'utf8'), /<symbol id="ph-arrow-square-out"/);
+});
+
+// 24/11: um espaço faltando em `<symbol id="ph-puzzle-piece"viewBox=` quebrou o XML do sprite e apagou do menu
+// todos os ícones dali em diante (Dashboard, Prospecção, Orçamento de obra, Funil, Quadros, Extensão, Consultoria).
+test('todo <symbol> dos sprites do menu é bem formado e tem path preenchido', () => {
+  const simbolo = /^<symbol id="ph-[a-z-]+" viewBox="0 0 256 256"><path (?:fill-rule="evenodd" )?d="[^"]{10,}"\/><\/symbol>$/;
+  const sprite = fs.readFileSync('menu-icones.svg', 'utf8');
+  const linhas = sprite.split(/\r?\n/).filter((l) => l.includes('<symbol'));
+  assert.ok(linhas.length >= 20);
+  for (const l of linhas) assert.match(l, simbolo, l.slice(0, 60));
+  assert.doesNotMatch(sprite, /fill="none"|stroke=/, 'menu usa só ícones preenchidos');
+  const painel = [...fs.readFileSync('painel.html', 'utf8').matchAll(/<symbol id="ph-[^>]*>[\s\S]*?<\/symbol>/g)].map((m) => m[0]);
+  assert.ok(painel.length >= 20);
+  for (const s of painel) assert.match(s, /^<symbol id="ph-[a-z-]+" viewBox="[^"]+"><path [^>]*d="[^"]{10,}"/, s.slice(0, 60));
+});
+
+test('extensao.html: logado ganha Voltar ao LicitaPlena; visitante mantém Entrar/Testar grátis', () => {
+  const html = fs.readFileSync('extensao.html', 'utf8');
+  assert.match(html, /<a id="ext-voltar" class="ext-voltar" data-voltar hidden>/);
+  assert.match(html, /a\.href = "painel\.html"/);
+  assert.match(html, /<p id="ext-rodape-publico"><a href="\/login">Entrar no LicitaPlena<\/a> · <a href="\/cadastro">Testar grátis por 14 dias<\/a><\/p>/);
+  assert.match(html, /<p id="ext-rodape-logado" hidden>/);
+  assert.match(html, /\/\^sb-\.\+-auth-token\$\//);
 });
 
 test('extensao.html baixa o pacote da versão atual do manifesto', () => {

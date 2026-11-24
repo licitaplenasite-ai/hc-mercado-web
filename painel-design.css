@@ -488,6 +488,101 @@
 
   /* Boletim sem filtro: um passo só. */
   .bol-acoes-topo { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; margin-bottom: 12px; }
+
+  /* Topo do Boletim compacto (24/11, dono): filtro resumido em 1 linha. */
+  /* Link do e-mail (#boletim): o título parava por baixo do cabeçalho fixo; desconta a altura medida dele. */
+  #boletim { scroll-margin-top: calc(var(--altura-header, 64px) + 12px); }
+  #boletim .boletim-cabecalho { margin-bottom: 12px; }
+  #boletim .boletim-cabecalho > div { min-width: 0; flex: 1 1 auto; }
+  #boletim .boletim-cabecalho h2 { margin-bottom: 4px; }
+  .bol-filtro-resumo summary { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; list-style: none; cursor: pointer;
+    font-size: 13px; line-height: 20px; color: var(--text-secondary); border-radius: var(--radius-control); }
+  .bol-filtro-resumo summary::-webkit-details-marker { display: none; }
+  .bol-filtro-resumo summary:focus-visible { outline: 2px solid var(--action-text); outline-offset: 2px; }
+  .bol-filtro-alternar { color: var(--action-text); font-weight: 600; white-space: nowrap; }
+  .bol-filtro-alternar::after { content: ""; display: inline-block; width: 6px; height: 6px; margin-left: 6px; border: solid currentColor;
+    border-width: 0 2px 2px 0; transform: translateY(-2px) rotate(45deg); }
+  .bol-filtro-resumo[open] .bol-filtro-alternar::after { transform: translateY(1px) rotate(-135deg); }
+  .bol-filtro-resumo summary:hover .bol-filtro-alternar { text-decoration: underline; }
+  .bol-filtro-recolher, .bol-filtro-resumo[open] .bol-filtro-ver { display: none; }
+  .bol-filtro-resumo[open] .bol-filtro-recolher { display: inline; }
+  .bol-filtro-resumo + #bol-meta { margin-top: 6px !important; padding: 8px 12px; border-left: 3px solid var(--action-text);
+    background: var(--surface-sunken); border-radius: 0 var(--radius-control) var(--radius-control) 0;
+    font-size: 13px; line-height: 20px; color: var(--text-secondary); overflow-wrap: anywhere; }
+  .bol-filtro-resumo[data-simples] summary { cursor: default; }
+  /* #bol-meta fica fora do <details>: escondido com display:none, innerText continua devolvendo o texto (testes e2e). */
+  .bol-filtro-resumo[data-simples] .bol-filtro-alternar, .bol-filtro-resumo:not([open]) + #bol-meta, .bol-filtro-resumo[data-simples] + #bol-meta { display: none; }
+  /* Boletim no padrão de leitura do ConLicitação (24/11, dono): título com o mês + ações em ícone; faixa com os
+     4 últimos meses e o filtro da empresa; edições como etiquetas dentro do dia. Visual da Paleta A. */
+  #boletim .boletim-cabecalho { align-items: flex-start; }
+  #boletim .boletim-cabecalho > .bol-acoes-topo { flex: 0 0 auto; margin: 0; gap: 6px; align-items: center; }
+  .bol-acoes-topo .bol-icone { width: 36px; min-width: 36px; height: 36px; min-height: 36px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+  .bol-acoes-topo .bol-icone .icone-ph { margin: 0; }
+  .bol-marcar-lidos { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; }
+  .bol-marcar-lidos:disabled { opacity: .6; cursor: default; }
+  .bol-contador { min-width: 22px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--action-strong); color: var(--action-on);
+    font-size: 12px; font-weight: 700; line-height: 20px; text-align: center; }
+  #boletim:not(:has(#bol-resultado .boletim-card)) .bol-marcar-lidos { display: none; }
+  .bol-barra { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; margin-bottom: 12px; }
+  .bol-meses-bloco { display: grid; gap: 5px; min-width: 0; }
+  .bol-meses-bloco:not(:has(.bol-mes)) { display: none; }
+  .bol-barra-rotulo { font-size: 12px; font-weight: 700; color: var(--text-secondary); }
+  .bol-meses { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: thin; }
+  .bol-mes { flex: 0 0 auto; min-height: 36px; padding: 0 14px; border: 1px solid var(--border-strong); border-radius: var(--radius-control);
+    background: var(--surface-default); color: var(--text-primary); font: 600 13px/20px var(--font-sans); cursor: pointer; white-space: nowrap; }
+  .bol-mes:hover { background: var(--surface-sunken); }
+  .bol-mes.ativo { background: var(--action-strong); border-color: var(--action-strong); color: var(--action-on); }
+  .bol-mes:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  .bol-barra .empresa-acompanhamento { margin: 0 0 0 auto; flex: 0 1 auto; min-width: 0; }
+  .bol-barra .empresa-acompanhamento select { min-width: 280px; min-height: 36px; padding-top: 6px; padding-bottom: 6px; }
+  .bol-barra .empresa-acompanhamento > a { padding-bottom: 8px; font-size: 12px; }
+  .bol-selo-filtros:not(:empty) { align-self: end; margin-bottom: 7px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--info-border);
+    background: var(--info-bg); color: var(--info-text); font-size: 12px; font-weight: 600; white-space: nowrap; }
+  /* A frase de ajuda vira dica (title do campo) e segue lida por leitor de tela via aria-describedby. */
+  .bol-barra .empresa-ajuda { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .bol-barra .empresa-convite { flex-basis: 100%; }
+  #boletim #bol-edicoes { margin: 0 0 12px; padding: 12px 16px; }
+  /* Fora de uma edição aberta, as edições já estão no calendário (etiquetas); a lista só volta numa edição antiga,
+     quando o calendário some, para navegar entre elas e "Voltar ao boletim de hoje". */
+  #boletim #bol-edicoes:not(:has(#bol-edicao-hoje)) { display: none; }
+  #bol-mes-titulo { font: inherit; }
+  #boletim #bol-edicoes h3 { font-size: 15px; margin-bottom: 8px; }
+  #boletim #bol-edicoes .bol-edicoes-grupo + .bol-edicoes-grupo { margin-top: 10px; }
+  /* Calendário: cada dia é uma célula com o número (filtra a lista pela publicação) e as etiquetas das edições. */
+  #boletim .bol-calendario { padding: 12px; margin-bottom: 16px; }
+  #boletim .bol-cal-grade { gap: 4px; }
+  .bol-cal-celula { display: flex; flex-direction: column; gap: 3px; min-height: 56px; min-width: 0; padding: 3px; border: 1px solid var(--border-default);
+    border-radius: var(--radius-control); background: var(--surface-default); }
+  .bol-cal-celula.hoje { background: var(--info-bg); border-color: var(--info-border); }
+  #boletim .bol-cal-celula .bol-cal-dia { height: auto; min-height: 24px; aspect-ratio: auto; width: 100%; justify-content: space-between; gap: 4px;
+    padding: 0 4px; border: 0; font: 600 12px/20px var(--font-sans); }
+  #boletim .bol-cal-celula .bol-cal-dia.hoje { color: var(--info-text); }
+  #boletim .bol-cal-celula .bol-cal-dia-badge { position: static; }
+  .bol-cal-dia-sem { display: none; }
+  .bol-cal-edicao { display: block; width: 100%; min-width: 0; padding: 1px 6px; border: 1px solid; border-radius: 4px; font: 600 11px/18px var(--font-sans);
+    text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+  .bol-cal-edicao.nova { background: var(--action-strong); border-color: var(--action-strong); color: var(--action-on); }
+  .bol-cal-edicao.lida { background: var(--success-bg); border-color: var(--success-border); color: var(--success-text); }
+  button.bol-cal-edicao:hover { filter: brightness(1.08); }
+  .bol-cal-edicao:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+  .bol-cal-legenda .bol-cal-edicao { display: inline-block; width: auto; cursor: default; margin: 0 2px 0 6px; vertical-align: middle; }
+  .bol-cal-sem-conteudo { display: none; }
+  @media (max-width: 600px) {
+    .bol-barra { align-items: stretch; gap: 10px; }
+    .bol-meses-bloco, .bol-barra .empresa-acompanhamento { flex: 1 1 100%; margin: 0; }
+    .bol-barra .empresa-acompanhamento label, .bol-barra .empresa-acompanhamento select { width: 100%; min-width: 0; }
+    #boletim .boletim-cabecalho > .bol-acoes-topo { flex: 1 1 100%; justify-content: flex-start; }
+    .bol-mes { padding: 0 10px; font-size: 12px; }
+    .bol-marcar-lidos { flex: 1 1 100%; justify-content: center; white-space: normal; height: auto; }
+    /* Grade de 7 colunas fica ilegível com etiquetas: vira lista só com os dias que têm algo (e hoje). */
+    #boletim .bol-cal-grade { display: flex; flex-direction: column; gap: 6px; }
+    #boletim .bol-cal-dia-semana, #boletim .bol-cal-dia.vazio, .bol-cal-celula:not(.tem-conteudo):not(.hoje) { display: none; }
+    .bol-cal-celula { flex-direction: row; flex-wrap: wrap; align-items: center; min-height: 44px; padding: 4px 6px; }
+    #boletim .bol-cal-celula .bol-cal-dia { width: auto; min-width: 92px; min-height: 36px; justify-content: flex-start; font-size: 14px; }
+    .bol-cal-dia-sem { display: inline; font-weight: 400; color: var(--text-secondary); }
+    .bol-cal-celula .bol-cal-edicao { width: auto; flex: 0 1 auto; font-size: 12px; line-height: 28px; }
+    .bol-cal-sem-conteudo { display: block; margin: 0; font-size: 13px; color: var(--text-secondary); }
+  }
   .bol-config-intro { flex: 1 1 100%; }
   .bol-config-intro h3 { margin: 0 0 4px; font: 600 18px/26px var(--font-sans); color: var(--text-primary); }
   .bol-config-intro p { margin: 0; color: var(--text-secondary); font-size: 14px; line-height: 22px; }
