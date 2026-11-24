@@ -34,7 +34,7 @@ const CATEGORIAS = {
 };
 
 // Páginas do sistema logado e telas internas: fora do sitemap e bloqueadas no robots.txt.
-const PRIVADAS = ["/painel", "/bdi", "/admin", "/operacao", "/processos", "/sistema", "/quadros", "/cliente", "/convite",
+const PRIVADAS = ["/painel", "/bdi", "/normas-obra", "/admin", "/operacao", "/processos", "/sistema", "/quadros", "/cliente", "/convite",
   "/responder-oportunidade", "/resumo-processo", "/prospeccao", "/orcamento-obra", "/assinar", "/sinapi", "/mao-de-obra", "/hc", "/api/", "/data/"];
 // Páginas públicas que já existiam (feitas à mão) e entram no sitemap. SINAPI e Mão de obra pedem login: ficam de fora.
 const PUBLICAS_EXISTENTES = ["index.html", "cadastro.html", "extensao.html",

@@ -2,6 +2,7 @@
 User-agent: *
 Disallow: /painel
 Disallow: /bdi
+Disallow: /normas-obra
 Disallow: /admin
 Disallow: /operacao
 Disallow: /processos
