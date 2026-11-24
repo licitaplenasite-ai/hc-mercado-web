@@ -9,7 +9,27 @@
 <link rel="icon" type="image/png" href="favicon.png?v=3">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<meta name="robots" content="noindex, nofollow">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" crossorigin="anonymous"></script>
 <script src="supabase-config.js"></script><script src="plano-trava.js" defer></script>
+<!-- 24/11 (dono): a calculadora de BDI é ferramenta do sistema, só para cliente logado e aprovado. Antes abria sem login
+     (link do blog levava direto). Mesma trava das outras telas de obra (sinapi-ui.js, mao-de-obra-ui.js): página escondida
+     até confirmar a sessão; sem sessão ou sem aprovação, vai para o login. -->
+<script>
+document.documentElement.style.visibility = "hidden";
+(async function () {
+  var voltar = "login.html?voltar=/bdi";
+  try {
+    var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); // eslint-disable-line no-undef
+    var r = await sb.auth.getSession();
+    var sessao = r && r.data && r.data.session;
+    if (!sessao) { location.replace(voltar); return; }
+    var c = await sb.from("clientes").select("status").eq("id", sessao.user.id).maybeSingle();
+    if (!c.data || c.data.status !== "aprovado") { await sb.auth.signOut(); location.replace(voltar); return; }
+    document.documentElement.style.visibility = "";
+  } catch (e) { location.replace(voltar); }
+})();
+</script>
 <link rel="stylesheet" href="ds-tokens.css"><link rel="stylesheet" href="menu-lateral.css"><link rel="stylesheet" href="obra-abas.css">
 <!-- Tema: mesma chave do painel; claro é o padrão, só quem escolheu "escuro" fica no escuro. -->
 <script>(function(){var t=null;try{t=localStorage.getItem("licitaplena_tema");}catch(e){}if(t!=="escuro")document.documentElement.classList.add("tema-claro");document.documentElement.dataset.theme=t==="escuro"?"dark":"light";})();</script>

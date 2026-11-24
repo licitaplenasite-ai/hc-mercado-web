@@ -1,6 +1,7 @@
 # Robôs de busca e de IA podem ler o site público. As telas do sistema logado ficam de fora.
 User-agent: *
 Disallow: /painel
+Disallow: /bdi
 Disallow: /admin
 Disallow: /operacao
 Disallow: /processos
