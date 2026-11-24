@@ -983,7 +983,7 @@ test("contratos: upsert envia só o que veio da fonte nesta execução, com atua
   const enviados = [];
   const ambiente = vm.createContext({
     UFS: ["AM"], RETENCAO_DIAS: 730, FOLGA_DIAS: 2, DIAS_HISTORICO_INICIAL: 30, TAMANHO_PAGINA: 100, CONCORRENCIA_PAGINAS: 1,
-    console: { log() {} }, fmtData: () => "20261118", segmentosQueBatem: () => [],
+    console: { log() {} }, fmtData: () => "20261118", segmentosQueBatem: () => [], nomeFornecedorPublico: (_ni, nome) => nome || "",
     chaveRegistro: (r) => r.numeroControlePNCP,
     lerJsonExistente: async () => ({ dataFinal: "20261117", registros: [contrato("hidratado"), contrato("recoletado")] }),
     buscarPaginasEmLote: async (_url, _p, _t, _c, aoReceber) => {
@@ -1117,4 +1117,14 @@ test("cadência da fase de atas espaça as chamadas e um 429 com Retry-After pau
   cad.pausar("20", 0);
   await cad.antes();
   assert.ok(esperas[1] >= 20000 && esperas[1] <= 20300, `esperou ${esperas[1]} ms`);
+});
+
+test("LGPD: nome de fornecedor pessoa física (CPF ou tipoPessoa PF) não é gravado", () => {
+  const inicio = codigo.indexOf("function nomeFornecedorPublico(");
+  const nomeFornecedorPublico = vm.runInNewContext(codigo.slice(inicio, codigo.indexOf("\n}\n", inicio) + 2) + "; nomeFornecedorPublico", {});
+  assert.equal(nomeFornecedorPublico("12345678000190", "Empresa LTDA", "PJ"), "Empresa LTDA");
+  assert.equal(nomeFornecedorPublico("12345678909", "Fulano de Tal", undefined), "Pessoa física");
+  assert.equal(nomeFornecedorPublico("123.456.789-09", "Fulano de Tal"), "Pessoa física");
+  assert.equal(nomeFornecedorPublico("", "Fulano", "PF"), "Pessoa física");
+  assert.equal(nomeFornecedorPublico(null, null), "");
 });

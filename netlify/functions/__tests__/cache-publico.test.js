@@ -79,3 +79,21 @@ test("comCache: usa caches.default do Cloudflare quando existe (compartilhado en
     delete globalThis.caches;
   }
 });
+
+test("comCache: renovação em segundo plano vai para o waitUntil (Cloudflare); sem ele segue como antes", async () => {
+  _limparMemoria();
+  const r = relogio();
+  await comCache("k9", async () => "velho", { frescoS: 1, agora: r.agora });
+  r.andar(10);
+  const mantidas = [];
+  const lento = () => new Promise((ok) => setTimeout(() => ok("novo"), 60));
+  const res = await comCache("k9", lento, { frescoS: 1, prazoMs: 10, agora: r.agora, waitUntil: (p) => mantidas.push(p) });
+  assert.equal(res.origem, "guardado");
+  assert.equal(mantidas.length, 1, "a renovação pendente foi entregue ao waitUntil");
+  await mantidas[0];
+  const depois = await comCache("k9", async () => "outro", { frescoS: 60, agora: r.agora });
+  assert.deepEqual([depois.origem, depois.valor], ["cache", "novo"], "terminou e gravou depois da resposta");
+  const nada = [];
+  await comCache("k10", async () => "x", { agora: r.agora, waitUntil: (p) => nada.push(p) });
+  assert.equal(nada.length, 0, "sem nada guardado não há segundo plano");
+});

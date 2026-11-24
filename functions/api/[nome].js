@@ -76,8 +76,11 @@ import * as situacaoSicaf from "../../netlify/functions/situacao-sicaf.js";
 import * as planilhaIa from "../../netlify/functions/planilha-ia.js";
 // Acelerar a esteira (checklist do processo): logado e aprovado, 2/min por conta; até 2 chamadas à API do GitHub.
 import * as acelerarEsteira from "../../netlify/functions/acelerar-esteira.js";
+// Ficha do órgão ao vivo do PNCP: logado e aprovado, cota diária; até 4 chamadas ao PNCP + cache (~17 subrequisições).
+import * as orgaoPncp from "../../netlify/functions/orgao-pncp.js";
 
 const ROTAS = {
+  "orgao-pncp": orgaoPncp,
   "acelerar-esteira": acelerarEsteira,
   "vinculo-compra-portal": vinculoCompraPortal,
   "importar-item-pncp": importacaoPncp,
@@ -151,5 +154,6 @@ export async function onRequest(context) {
   copiarEnvParaProcess(context.env);
   const modulo = ROTAS[nome];
   const handler = (modulo.default || modulo).handler || modulo.handler;
-  return executarHandler(handler, context.request, { cacheControlPadrao: CACHE_PADRAO[nome] });
+  // waitUntil: o Workers corta o que ainda roda depois da resposta; com ele, a renovação do cache (_cache_publico.js) termina.
+  return executarHandler(handler, context.request, { cacheControlPadrao: CACHE_PADRAO[nome], waitUntil: context.waitUntil?.bind(context) });
 }

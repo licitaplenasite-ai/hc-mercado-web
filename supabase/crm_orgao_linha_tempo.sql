@@ -1,7 +1,8 @@
 -- CRM, fase 2 (24/11/2026): ficha do órgão (visão 360°) e linha do tempo do processo. Idempotente (seguro rodar mais
 -- de uma vez), transação única; só acrescenta (não apaga nem altera dados). Rodar no SQL Editor do Supabase DEPOIS de
 -- operacao_licitacoes.sql, operacao_acompanhamento.sql, acesso_empresa_convites.sql, operacao_funil_etapas.sql,
--- seguranca_aprovacao_20261119.sql, schema_oportunidades.sql e schema_dados_mercado.sql. Teste: scripts/crm_orgao_linha_tempo_sql.test.js.
+-- seguranca_aprovacao_20261119.sql, schema_oportunidades.sql, schema_dados_mercado.sql e orgaos_catalogo.sql.
+-- Teste: scripts/crm_orgao_linha_tempo_sql.test.js.
 --  1. operacao_processos_etapas_historico: cada mudança de estágio/etapa do processo vira uma linha (gatilho). Antes deste
 --     SQL só existia etapa_desde (a última mudança); o passado não é reconstruído: a linha do tempo mostra "na etapa atual
 --     desde" para processos antigos. Só o gatilho grava (o navegador só lê), então ninguém falsifica o histórico.
@@ -14,6 +15,9 @@
 --     Índices por CNPJ: o número de controle do PNCP começa pelo CNPJ do órgão (CNPJ-1-000012/2026), nas três tabelas.
 --     Em produção os índices de contratos podem levar alguns segundos; se preferir, rode antes, fora desta transação,
 --     os mesmos "create index concurrently if not exists" (nome igual: aqui viram no-op).
+--     24/11 (catálogo de órgãos): pelo nome, acha pelo nome canônico do catálogo (sem acento, prefeitura = município:
+--     "Prefeitura Municipal de Apuí" acha "MUNICIPIO DE APUI"); sem dado coletado, nome/UF/cidade/esfera/UASGs vêm do
+--     catálogo (cadastro do PNCP). A tela completa com o PNCP ao vivo (/api/orgao-pncp).
 begin;
 set local lock_timeout = '5s';
 do $$ begin
@@ -22,8 +26,9 @@ do $$ begin
     or to_regclass('public.mercado_atas') is null
     or to_regprocedure('public.pode_acessar_processo_operacao(uuid,uuid)') is null
     or to_regprocedure('public.pode_escrever_org_operacao(uuid)') is null
-    or to_regprocedure('public.cliente_aprovado()') is null then
-    raise exception 'Aplique antes operacao_licitacoes.sql, operacao_acompanhamento.sql, acesso_empresa_convites.sql, operacao_funil_etapas.sql, seguranca_aprovacao_20261119.sql, schema_oportunidades.sql e schema_dados_mercado.sql';
+    or to_regprocedure('public.cliente_aprovado()') is null
+    or to_regclass('public.orgaos_catalogo') is null or to_regprocedure('public.orgao_chave_nome(text)') is null then
+    raise exception 'Aplique antes operacao_licitacoes.sql, operacao_acompanhamento.sql, acesso_empresa_convites.sql, operacao_funil_etapas.sql, seguranca_aprovacao_20261119.sql, schema_oportunidades.sql, schema_dados_mercado.sql e orgaos_catalogo.sql';
   end if;
 end $$;
 
@@ -129,28 +134,41 @@ begin
   end if;
   if v_cnpj is null then
     if length(v_nome) < 3 then raise exception 'Informe o CNPJ ou o nome do órgão' using errcode = '22023'; end if;
-    -- Sem CNPJ (processo cadastrado à mão): acha pelo nome exato numa licitação ou num contrato do mesmo órgão.
+    -- Sem CNPJ (processo cadastrado à mão): pelo nome canônico no catálogo (o mais ativo, matriz antes da filial);
+    -- de reserva, pelo nome exato numa licitação ou num contrato do mesmo órgão.
+    select c.cnpj into v_cnpj from public.orgaos_catalogo c
+      where c.nome_chave = public.orgao_chave_nome(p_nome) and c.nome_chave <> ''
+      order by c.abertas * 5 + c.contratos + c.atas + c.itens desc, substr(c.cnpj, 9, 4) = '0001' desc, c.cnpj limit 1;
+    if v_cnpj is null then
     select left(o.numero_controle_pncp, 14) into v_cnpj from public.oportunidades_abertas o
       where lower(o.dado ->> 'orgao') = v_nome and o.numero_controle_pncp ~ '^[0-9]{14}-' limit 1;
     if v_cnpj is null then
       select left(c.numero_controle_pncp, 14) into v_cnpj from public.contratos c
         where lower(c.dado ->> 'orgao') = v_nome and c.numero_controle_pncp ~ '^[0-9]{14}-' limit 1;
     end if;
+    end if;
     if v_cnpj is null then return jsonb_build_object('encontrado', false, 'cnpj', null); end if;
   end if;
   return jsonb_build_object(
     'encontrado', true,
     'cnpj', v_cnpj,
-    'dados', (select jsonb_build_object('nome', x.orgao, 'uf', x.uf, 'municipio', x.municipio) from (
-        select o.dado ->> 'orgao' as orgao, o.uf, o.dado ->> 'municipio' as municipio, o.publicacao as quando
-          from public.oportunidades_abertas o where left(o.numero_controle_pncp, 14) = v_cnpj
-        union all
-        select c.dado ->> 'orgao', c.uf, c.dado ->> 'municipio', c.data_assinatura
-          from public.contratos c where left(c.numero_controle_pncp, 14) = v_cnpj
-        order by quando desc nulls last limit 1) x),
-    'uasgs', (select coalesce(jsonb_agg(distinct o.dado ->> 'codigoUnidade'), '[]'::jsonb)
-        from public.oportunidades_abertas o
-        where left(o.numero_controle_pncp, 14) = v_cnpj and coalesce(o.dado ->> 'codigoUnidade', '') <> ''),
+    -- Campo a campo: o dado coletado mais recente; o que faltar (contrato sem nome do órgão, órgão sem compra), do catálogo.
+    'dados', (select jsonb_build_object('nome', coalesce(nullif(x.orgao, ''), k.nome), 'uf', coalesce(x.uf, k.uf),
+          'municipio', coalesce(nullif(x.municipio, ''), k.municipio))
+        from (select 1) um
+        left join lateral (
+          select o.dado ->> 'orgao' as orgao, o.uf, o.dado ->> 'municipio' as municipio, o.publicacao as quando
+            from public.oportunidades_abertas o where left(o.numero_controle_pncp, 14) = v_cnpj
+          union all
+          select c.dado ->> 'orgao', c.uf, c.dado ->> 'municipio', c.data_assinatura
+            from public.contratos c where left(c.numero_controle_pncp, 14) = v_cnpj
+          order by quando desc nulls last limit 1) x on true
+        left join public.orgaos_catalogo k on k.cnpj = v_cnpj),
+    'esfera', (select k.esfera from public.orgaos_catalogo k where k.cnpj = v_cnpj),
+    'uasgs', (select coalesce(jsonb_agg(distinct u), '[]'::jsonb) from (
+        select o.dado ->> 'codigoUnidade' as u from public.oportunidades_abertas o
+          where left(o.numero_controle_pncp, 14) = v_cnpj and coalesce(o.dado ->> 'codigoUnidade', '') <> ''
+        union select unnest(k.uasgs) from public.orgaos_catalogo k where k.cnpj = v_cnpj) x),
     'abertas', (select coalesce(jsonb_agg(to_jsonb(x) order by x.encerramento nulls last), '[]'::jsonb) from (
         select o.numero_controle_pncp, o.objeto, o.publicacao, o.encerramento, o.dado ->> 'modalidadeNome' as modalidade,
           case when jsonb_typeof(o.dado -> 'valorTotalEstimado') = 'number' then (o.dado ->> 'valorTotalEstimado')::numeric end as valor
@@ -162,12 +180,14 @@ begin
           'desde', min(c.data_assinatura))
         from public.contratos c where left(c.numero_controle_pncp, 14) = v_cnpj),
     'contratos', (select coalesce(jsonb_agg(to_jsonb(x) order by x.data_assinatura desc nulls last), '[]'::jsonb) from (
-        select c.numero_controle_pncp, c.objeto, c.data_assinatura, c.dado ->> 'nomeFornecedor' as fornecedor,
+        select c.numero_controle_pncp, c.objeto, c.data_assinatura,
+          -- LGPD: fornecedor com CPF (11 dígitos) aparece como "Pessoa física", nunca pelo nome.
+          case when regexp_replace(coalesce(c.dado ->> 'cnpjFornecedor', ''), '\D', '', 'g') ~ '^[0-9]{11}$' then 'Pessoa física' else c.dado ->> 'nomeFornecedor' end as fornecedor,
           case when jsonb_typeof(c.dado -> 'valor') = 'number' then (c.dado ->> 'valor')::numeric end as valor
           from public.contratos c where left(c.numero_controle_pncp, 14) = v_cnpj
           order by c.data_assinatura desc nulls last limit 30) x),
     'fornecedores', (select coalesce(jsonb_agg(to_jsonb(x) order by x.valor desc), '[]'::jsonb) from (
-        select coalesce(nullif(c.dado ->> 'nomeFornecedor', ''), 'Fornecedor não informado') as nome, count(*) as contratos,
+        select case when regexp_replace(coalesce(c.dado ->> 'cnpjFornecedor', ''), '\D', '', 'g') ~ '^[0-9]{11}$' then 'Pessoa física' else coalesce(nullif(c.dado ->> 'nomeFornecedor', ''), 'Fornecedor não informado') end as nome, count(*) as contratos,
           coalesce(sum(case when jsonb_typeof(c.dado -> 'valor') = 'number' then (c.dado ->> 'valor')::numeric end), 0) as valor
           from public.contratos c where left(c.numero_controle_pncp, 14) = v_cnpj
           group by 1 order by 3 desc limit 5) x),

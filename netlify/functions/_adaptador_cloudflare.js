@@ -81,7 +81,8 @@ function resultadoParaResponse(resultado, opcoes = {}) {
 async function executarHandler(handler, request, opcoes = {}) {
   try {
     const event = await requestParaEvent(request);
-    const resultado = await handler(event, {});
+    // Segundo argumento no formato do contexto do Netlify, com o waitUntil do Workers quando houver.
+    const resultado = await handler(event, typeof opcoes.waitUntil === "function" ? { waitUntil: opcoes.waitUntil } : {});
     return resultadoParaResponse(resultado, opcoes);
   } catch (e) {
     console.error("adaptador-cloudflare: falha no handler", e?.name || "erro");

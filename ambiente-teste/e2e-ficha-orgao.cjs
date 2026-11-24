@@ -8,7 +8,7 @@
 // "exemplo local" do Município de Apuí) e apaga tudo o que criou no fim.
 const path = require('node:path'), fs = require('node:fs'), { spawnSync } = require('node:child_process');
 process.env.PRINTS = process.env.PRINTS || 'C:/Users/harre/Desktop/LICITAPLENA/_historico/prints-fase2-orgao';
-const { passo, exigir, novaPagina, seed, SITE, PRINTS, resultados } = require('./e2e.cjs');
+const { passo, exigir, novaPagina, entrar, seed, SITE, PRINTS, resultados } = require('./e2e.cjs');
 const { chromium } = require(process.env.PLAYWRIGHT_CORE || 'C:/Users/harre/AppData/Local/npm-cache/_npx/e41f203b7505f1fb/node_modules/playwright-core');
 const psql = (sql) => { const r = spawnSync('docker', ['exec', '-i', 'supabase_db_licitaplena-teste', 'psql', '-U', 'postgres', '-d', 'postgres', '-X', '-q', '-A', '-t', '-v', 'ON_ERROR_STOP=1'], { input: sql, encoding: 'utf8' }); if (r.status !== 0) throw new Error('psql: ' + r.stderr); return r.stdout.trim(); };
 const CNPJ = '22812960000199', GANHO = 'f2000000-0000-4000-8000-000000000001';
@@ -50,6 +50,10 @@ commit;`;
 const limpar = () => psql(`delete from operacao_orgaos_registros where orgao_chave in ('cnpj:${CNPJ}', 'nome:municipio de apui');
   delete from operacao_processos where observacoes = 'fixture-fase2';
   delete from contratos where objeto like '%(exemplo local)'; delete from mercado_atas where objeto like '%(exemplo local)';`);
+// PNCP ao vivo (/api/orgao-pncp) desligado aqui: os números conferidos são os das fixtures locais. A busca e o PNCP ao
+// vivo têm o próprio teste (e2e-orgao-busca.cjs).
+const VIVO_VAZIO = JSON.stringify({ orgao: null, abertas: [], contratos: [], atas: [], totais: {}, falharam: [], origem: 'cache', guardadoEm: new Date().toISOString() });
+const semPncp = (ctx) => ctx.route('**/api/orgao-pncp', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: VIVO_VAZIO }));
 const semRolagemLateral = (p) => p.evaluate(() => document.scrollingElement.scrollWidth <= window.innerWidth + 1);
 
 (async () => {
@@ -58,7 +62,7 @@ const semRolagemLateral = (p) => p.evaluate(() => document.scrollingElement.scro
   const navegador = await chromium.launch({ channel: process.env.NAVEGADOR === 'chrome' ? 'chrome' : 'msedge' });
   let p;
   try {
-    p = await novaPagina(navegador, seed.usuarios.gestor);
+    p = await novaPagina(navegador); await semPncp(p.context()); await entrar(p, seed.usuarios.gestor);
     await passo('dossie com linha do tempo unica', null, async () => {
       await p.goto(`${SITE}/processos.html?empresa=${seed.ids.empA2}&processo=${GANHO}`);
       await p.waitForSelector('#d-linha-tempo .lt-item', { timeout: 20000 });
@@ -129,8 +133,7 @@ const semRolagemLateral = (p) => p.evaluate(() => document.scrollingElement.scro
     await p.context().close();
 
     const cel = await navegador.newContext({ viewport: { width: 375, height: 812 }, locale: 'pt-BR', isMobile: true, hasTouch: true });
-    p = await cel.newPage(); p.erros = [];
-    const { entrar } = require('./e2e.cjs');
+    await semPncp(cel); p = await cel.newPage(); p.erros = [];
     await entrar(p, seed.usuarios.gestor);
     await passo('celular 375 ficha', p, async () => {
       await p.goto(`${SITE}/orgao.html?cnpj=${CNPJ}&nome=MUNICIPIO%20DE%20APUI`);
@@ -152,7 +155,7 @@ const semRolagemLateral = (p) => p.evaluate(() => document.scrollingElement.scro
     await cel.close();
 
     const esc = await navegador.newContext({ viewport: { width: 1366, height: 900 }, locale: 'pt-BR' });
-    p = await esc.newPage(); p.erros = [];
+    await semPncp(esc); p = await esc.newPage(); p.erros = [];
     await entrar(p, seed.usuarios.gestor);
     await passo('escuro 1366 dossie', null, async () => {
       await p.evaluate(() => localStorage.setItem('licitaplena_tema', 'escuro'));
@@ -162,7 +165,7 @@ const semRolagemLateral = (p) => p.evaluate(() => document.scrollingElement.scro
     });
     await esc.close();
 
-    p = await novaPagina(navegador, seed.usuarios.leitura);
+    p = await novaPagina(navegador); await semPncp(p.context()); await entrar(p, seed.usuarios.leitura);
     await passo('papel leitura ve sem formulario', p, async () => {
       await p.goto(`${SITE}/orgao.html?cnpj=${CNPJ}`);
       await p.waitForSelector('.fo-kpis', { timeout: 20000 });
@@ -170,7 +173,7 @@ const semRolagemLateral = (p) => p.evaluate(() => document.scrollingElement.scro
       exigir(!(await p.$('#fo-form-contato')) && !(await p.$('#fo-acompanhar')), 'leitura sem formulário nem acompanhar');
     });
     await p.context().close();
-    p = await novaPagina(navegador, seed.usuarios.outra_org);
+    p = await novaPagina(navegador); await semPncp(p.context()); await entrar(p, seed.usuarios.outra_org);
     await passo('outra organizacao nao ve anotacoes', p, async () => {
       await p.goto(`${SITE}/orgao.html?cnpj=${CNPJ}`);
       await p.waitForSelector('.fo-kpis', { timeout: 20000 });

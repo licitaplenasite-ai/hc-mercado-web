@@ -81,3 +81,12 @@ test("B3 (19/11): respostas de /api levam nosniff, sem sobrescrever o do handler
   assert.equal(resultadoParaResponse({ statusCode: 200, body: "{}" }).headers.get("x-content-type-options"), "nosniff");
   assert.equal(resultadoParaResponse({ statusCode: 204 }).headers.get("x-content-type-options"), "nosniff");
 });
+
+test("executarHandler repassa o waitUntil do Cloudflare no contexto do handler; sem ele, contexto vazio", async () => {
+  let recebido;
+  const espera = () => {};
+  await executarHandler(async (_e, ctx) => { recebido = ctx; return { statusCode: 200, body: "{}" }; }, new Request("https://x.test/api/a"), { waitUntil: espera });
+  assert.equal(recebido.waitUntil, espera);
+  await executarHandler(async (_e, ctx) => { recebido = ctx; return { statusCode: 200, body: "{}" }; }, new Request("https://x.test/api/a"));
+  assert.deepEqual(recebido, {});
+});

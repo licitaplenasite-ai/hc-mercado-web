@@ -83,7 +83,23 @@
 .fo-erro:empty{display:none}
 .fo-acoes{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 .fo-carregando{color:var(--text-secondary);padding:24px;text-align:center}
-.fo-busca{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:end}
+.fo-busca{display:grid;grid-template-columns:1fr 130px auto;gap:12px;align-items:end}
+/* Autocompletar da busca de órgãos (24/11): lista sob o campo, item escolhido pelas setas com fundo e borda (não só cor). */
+.fo-busca-campo{position:relative;min-width:0}
+.fo-sugestoes{position:absolute;z-index:20;left:0;right:0;top:100%;margin:4px 0 0;padding:4px;list-style:none;background:var(--surface-default);border:1px solid var(--border-strong);border-radius:var(--radius-card);box-shadow:0 8px 24px rgba(0,0,0,.14);max-height:min(420px,60vh);overflow:auto}
+.fo-sugestoes li a{display:block;padding:8px 10px;border-radius:var(--radius-control);border:1px solid transparent;color:var(--text-primary);text-decoration:none}
+.fo-sugestoes li a:hover,.fo-sugestoes li[aria-selected="true"] a{background:var(--surface-sunken);border-color:var(--border-strong)}
+.fo-sugestoes strong{display:block;font-weight:600;overflow-wrap:anywhere}
+.fo-sugestoes small{display:block;color:var(--text-secondary);font-size:12px;line-height:18px;overflow-wrap:anywhere}
+.fo-dica{color:var(--text-secondary);font-size:13px;margin:0}
+.fo-dica:empty{display:none}
+.fo-busca .inteiro{grid-column:1/-1}
+/* Origem dos dados (coletado x PNCP ao vivo): texto + botão; a cor só reforça. */
+.fo-pncp{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:12px 0;padding:8px 12px;border:1px solid var(--border-default);border-radius:var(--radius-card);background:var(--surface-default);font-size:13px;color:var(--text-secondary)}
+.fo-pncp.ok{color:var(--success-text);background:var(--success-bg);border-color:var(--success-border)}
+.fo-pncp.atencao{color:var(--attention-text);background:var(--attention-bg);border-color:var(--attention-border)}
+.fo-pncp .btn{min-height:32px;padding:0 12px;font-size:13px}
+.fo-nao-achou p{margin:0 0 8px}
 @media(max-width:900px){.fo-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.fo-duas{grid-template-columns:1fr}}
 @media(max-width:640px){
   .fo-cabeca{padding:16px}.fo-cabeca h1{font-size:21px;line-height:28px}.fo-acompanhar{width:100%}

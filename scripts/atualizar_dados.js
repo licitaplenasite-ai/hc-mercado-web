@@ -430,7 +430,7 @@ async function coletarContratosComplementarPorUf(registrosExistentes, anteriores
           uf: (detalhe.unidadeOrgao && detalhe.unidadeOrgao.ufSigla) || uf,
           municipio: (detalhe.unidadeOrgao && detalhe.unidadeOrgao.municipioNome) || item.municipio_nome || "",
           cnpjFornecedor: detalhe.niFornecedor || "",
-          nomeFornecedor: detalhe.nomeRazaoSocialFornecedor || "",
+          nomeFornecedor: nomeFornecedorPublico(detalhe.niFornecedor, detalhe.nomeRazaoSocialFornecedor, detalhe.tipoPessoa),
           valor: Number(detalhe.valorGlobal || item.valor_global || 0),
           dataAssinatura: detalhe.dataAssinatura || item.data_assinatura || null,
           numeroControlePNCP: numero,
@@ -498,7 +498,7 @@ async function coletarContratos(caminhoArquivo) {
         uf: (item.unidadeOrgao && item.unidadeOrgao.ufSigla) || "",
         municipio: (item.unidadeOrgao && item.unidadeOrgao.municipioNome) || "",
         cnpjFornecedor: item.niFornecedor || "",
-        nomeFornecedor: item.nomeRazaoSocialFornecedor || "",
+        nomeFornecedor: nomeFornecedorPublico(item.niFornecedor, item.nomeRazaoSocialFornecedor, item.tipoPessoa),
         valor: Number(item.valorGlobal || item.valorInicial || 0),
         dataAssinatura: item.dataAssinatura || item.dataVigenciaInicio || null,
         numeroControlePNCP: item.numeroControlePNCP || null,
@@ -1735,7 +1735,12 @@ async function registrarAlarmeColeta(fase, lista) {
   }
 }
 
-module.exports = { fetchComRetentativa, resumoDashboardMercado };
+// LGPD: nome de pessoa física (CPF = 11 dígitos, ou tipoPessoa PF) não é gravado nem exibido; vira "Pessoa física".
+function nomeFornecedorPublico(ni, nome, tipoPessoa) {
+  return tipoPessoa === "PF" || /^\d{11}$/.test(String(ni || "").replace(/\D/g, "")) ? "Pessoa física" : nome || "";
+}
+
+module.exports = { fetchComRetentativa, resumoDashboardMercado, nomeFornecedorPublico };
 
 if (require.main === module) {
   main().catch((e) => {

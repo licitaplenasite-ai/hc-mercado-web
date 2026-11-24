@@ -76,6 +76,14 @@ jobs:
           fi
           node scripts/preparar_dossies_editais.js
 
+      # Catálogo de órgãos (supabase/orgaos_catalogo.sql): cadastro inteiro do PNCP, 1 vez por semana (~2 min; nas outras
+      # rodadas sai na hora). Falha aqui não derruba a coleta: a busca de órgãos segue com o cadastro da semana anterior.
+      - name: Cadastro de órgãos do PNCP
+        continue-on-error: true
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/atualizar_cadastro_orgaos.js
+
       - name: Consolidar base de empresas (Fase 1)
         run: node scripts/coletar_empresas.js
 

@@ -243,7 +243,7 @@ const LIMITE_POR_MINUTO_CONTA = {
   "ia-edital": 3, "chat-ia": 4, "fornecedor-ia": 3, "monte-busca-ia": 3,
   "analise-cnpj": 5, "analise-cnpj-buscar": 10, "analise-cnpj-cadastro": 5,
   "licitacao-anterior": 5, "licitacao-anterior-orgaos": 10, "sancoes": 20, "despesas-fornecedor": 10,
-  "pagometro": 10, "conferir-cbs-ibs": 10, "contador-ia": 6, "contador-calculo": 20, "planilha-ia": 8,
+  "pagometro": 10, "orgao-pncp": 20, "orgao-pncp-buscar": 30, "conferir-cbs-ibs": 10, "contador-ia": 6, "contador-calculo": 20, "planilha-ia": 8,
 };
 // Proxies do PNCP/Compras.gov: a busca do painel abre 1 página por UF e por termo ao mesmo tempo (27 UFs x 5 termos
 // = 135 pedidos num clique), por isso o teto é bem maior que o das rotas de IA.

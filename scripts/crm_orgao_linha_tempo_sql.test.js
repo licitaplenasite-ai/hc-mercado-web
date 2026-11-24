@@ -3,6 +3,8 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { PGlite } = require("@electric-sql/pglite");
+const { pg_trgm } = require("@electric-sql/pglite/contrib/pg_trgm");
+const { unaccent } = require("@electric-sql/pglite/contrib/unaccent");
 
 // PGlite em memória roda supabase/crm_orgao_linha_tempo.sql de verdade (2 vezes: tem de ser idempotente) sobre os SQL reais
 // da operação (mesma base do ponte_leitura_sql.test.js). Prova o gatilho do histórico de etapas, a RLS das duas tabelas
@@ -12,7 +14,7 @@ const sql = (nome) => fs.readFileSync(path.join(__dirname, "..", "supabase", nom
 const CNPJ = "12345678000190";
 
 async function banco() {
-  const db = new PGlite();
+  const db = new PGlite({ extensions: { pg_trgm, unaccent } });
   await db.exec(`create role anon; create role authenticated; create role service_role bypassrls;
     create schema auth; create table auth.users(id uuid primary key, email text);
     create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid$$;
@@ -33,10 +35,12 @@ async function banco() {
     create table public.oportunidades_abertas(chave text primary key, numero_controle_pncp text, objeto text not null default '', uf text,
       publicacao date, encerramento date, dado jsonb not null);
     create table public.contratos(numero_controle_pncp text primary key, objeto text not null default '', uf text, data_assinatura date, dado jsonb not null);
-    create table public.mercado_atas(numero_controle_pncp_ata text primary key, objeto text not null default '', data_assinatura date,
+    create table public.mercado_atas(numero_controle_pncp_ata text primary key, objeto text not null default '', uf_orgao text, municipio_orgao text, data_assinatura date,
       vigencia_fim date, cancelado boolean not null default false, dado jsonb not null);
     alter table public.oportunidades_abertas enable row level security; alter table public.contratos enable row level security;
     alter table public.mercado_atas enable row level security;
+    create table public.prospeccao_itens(id text primary key, tipo text, uf text, orgao_cnpj text, orgao_nome text, unidade_codigo text,
+      unidade_nome text, municipio text, data_inicio date);
     -- Como no Supabase: authenticated tem privilégio de tabela; quem filtra é a RLS.
     grant select, insert, update, delete on all tables in schema public to authenticated;`);
   for (const n of [101, 102, 103, 104]) {
@@ -50,6 +54,7 @@ async function banco() {
   await db.query("insert into operacao_funil_etapas(id, organizacao_id, nome, ordem, status_sistema) values($1, $2, 'Montando proposta', 5, 'preparacao')", [id(61), id(1)]);
   // Processo de antes do SQL: o passado dele não é inventado.
   await db.query("insert into operacao_processos(id, organizacao_id, empresa_id, objeto) values($1, $2, $3, 'Antigo')", [id(20), id(1), id(11)]);
+  await db.exec(sql("orgaos_catalogo.sql"));
   await db.exec(sql("crm_orgao_linha_tempo.sql"));
   await db.exec(sql("crm_orgao_linha_tempo.sql"));
   return db;
@@ -145,7 +150,25 @@ test("crm_orgao_linha_tempo.sql: ficha_orgao junta abertas, contratos e atas pel
     assert.equal(f.atas.length, 1);
     assert.equal((await ficha(null, "  Prefeitura Ficticia ")).cnpj, CNPJ, "acha pelo nome quando o processo não tem CNPJ");
     assert.deepEqual(await ficha(null, "Órgão que não existe"), { encontrado: false, cnpj: null });
+    // Catálogo (orgaos_catalogo.sql): nome canônico sem acento, prefeitura = município; órgão só do cadastro do PNCP.
+    await db.exec("reset role");
+    await db.query(`select carregar_cadastro_orgaos('[{"cnpj":"22812960000199","nome":"MUNICIPIO DE APUI","esfera":"M","poder":"E"}]'::jsonb)`);
+    await db.query("insert into contratos(numero_controle_pncp, objeto, uf, data_assinatura, dado) values ('22812960000199-2-000001/2026', 'Contrato Apuí', 'AM', '2026-03-01', '{}')");
+    await db.query("select atualizar_orgaos_catalogo()");
+    await como(db, id(103));
+    assert.equal((await ficha(null, "Prefeitura Municipal de Apuí")).cnpj, "22812960000199", "acha pelo nome canônico do catálogo");
+    const soCatalogo = await ficha("22812960000199");
+    assert.deepEqual([soCatalogo.dados.nome, soCatalogo.dados.uf, soCatalogo.esfera], ["MUNICIPIO DE APUI", "AM", "M"], "sem licitação aberta, o nome vem do catálogo");
+    assert.equal(f.esfera, null, "órgão fora do catálogo: esfera vazia");
     await assert.rejects(ficha("123"), /CNPJ do órgão inválido/);
     await assert.rejects(ficha(null, "ab"), /Informe o CNPJ ou o nome/);
+    // LGPD: fornecedor com CPF (11 dígitos) aparece como "Pessoa física", na lista e no ranking.
+    await db.exec("reset role");
+    await db.query(`insert into contratos(numero_controle_pncp, objeto, uf, data_assinatura, dado) values
+      ('${CNPJ}-2-000009/2026', 'Contrato PF', 'AM', '2026-09-01', '{"nomeFornecedor":"Fulano de Tal","cnpjFornecedor":"123.456.789-09","valor":5000}')`);
+    await como(db, id(103));
+    const pf = await ficha(CNPJ);
+    assert.equal(pf.contratos[0].fornecedor, "Pessoa física");
+    assert.ok(!JSON.stringify(pf).includes("Fulano"), "nome da pessoa física não sai da ficha");
   } finally { await db.close(); }
 });

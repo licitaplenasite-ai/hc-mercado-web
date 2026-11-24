@@ -65,7 +65,9 @@ function comPrazo(promessa, prazoMs) {
 // buscar() -> valor serializável em JSON, ou lança. Valor `null`/`undefined` não é guardado (resposta ruim do portal),
 // nem o que `guardar(valor)` recusar (resposta parcial: volta para a tela, mas a próxima busca tenta de novo).
 // Devolve { valor, origem: "ao-vivo" | "cache" | "guardado", guardadoEm (ISO) }.
-async function comCache(chave, buscar, { frescoS = 600, guardaS = 7 * 86400, prazoMs = 4000, agora = Date.now, guardar = () => true } = {}) {
+// waitUntil (opcional, do contexto do Cloudflare): mantém viva a renovação que continua depois da resposta. Sem ele
+// (Netlify, Node, testes) a promessa segue solta, como antes.
+async function comCache(chave, buscar, { frescoS = 600, guardaS = 7 * 86400, prazoMs = 4000, agora = Date.now, guardar = () => true, waitUntil } = {}) {
   let item = lerMemoria(chave);
   if (!item) {
     item = await lerCloudflare(chave);
@@ -83,7 +85,8 @@ async function comCache(chave, buscar, { frescoS = 600, guardaS = 7 * 86400, pra
     return valor;
   });
   if (!guardadoValido) return { valor: await aoVivo, origem: "ao-vivo", guardadoEm: new Date(agora()).toISOString() };
-  aoVivo.catch(() => {}); // segue em segundo plano; o erro já foi tratado devolvendo o guardado
+  const emSegundoPlano = aoVivo.catch(() => {}); // segue em segundo plano; o erro já foi tratado devolvendo o guardado
+  if (typeof waitUntil === "function") waitUntil(emSegundoPlano);
   try {
     const valor = await comPrazo(aoVivo, prazoMs);
     if (valor !== null && valor !== undefined) return { valor, origem: "ao-vivo", guardadoEm: new Date(agora()).toISOString() };
