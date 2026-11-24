@@ -161,7 +161,7 @@ ${indexar ? `<link rel="canonical" href="${url}">` : '<meta name="robots" conten
 <meta property="og:description" content="${esc(descricao)}">
 ${indexar ? `<meta property="og:url" content="${url}">\n` : ""}<meta property="og:image" content="${SITE}${imagem}">
 <meta name="twitter:card" content="${imagem === "/logo.png" ? "summary" : "summary_large_image"}">
-<link rel="icon" type="image/png" href="/favicon.png?v=3">
+<link rel="icon" type="image/png" href="/favicon.png?v=3"><link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/ds-tokens.css">
