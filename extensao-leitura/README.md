@@ -228,3 +228,7 @@ Quando um fluxo não reconhece a página do portal, o popup mostra a seção **P
 | Acompanhar | Data "dd/mm/aaaa hh:mm" (Brasília) | sem data: alerta sem hora; janela de 30 min não se aplica | — |
 | Acompanhar | Texto "sessão expirou/expirada/encerrada" | logout sem esse texto não para | "parei" se a rota mudar |
 | Todos | Portal instável pede recarregar | vigia some; preencher perde o que não foi salvo | reconexão do vigia; diário do preencher |
+
+## Visual na paleta do site (0.5.1, 23/11/2026)
+
+Só aparência: popup com a paleta A (marinho, royal, ciano de destaque), logo livre embutida no `popup.html` (o empacotador só segue `<script>`/`<link>`), botões em pílula e ícone `icone.png` novo (logo branca no marinho). Sem mudança de permissões, ids ou lógica. A versão sobe para o pacote novo ter outro nome de arquivo e quem já instalou saber que há atualização.

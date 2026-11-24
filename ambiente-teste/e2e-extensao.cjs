@@ -87,10 +87,10 @@ async function main() {
       return (await chrome.scripting.executeScript({ target: { tabId: t, frameIds: [0] }, func: mod[f], args: a }))[0].result;
     }, [tabId, modulo, func, args]);
 
-    await passo('extensão carrega no Edge com o manifesto 0.5.0 e o worker', async () => {
+    await passo('extensão carrega no Edge com o manifesto 0.5.1 e o worker', async () => {
       const m = await ext.evaluate(() => chrome.runtime.getManifest());
       exigir(!errosPopup.length, `erro ao abrir o popup: ${errosPopup.join(' | ')}`);
-      exigir(m.version === '0.5.0' && m.background.service_worker === 'acompanhar-worker.mjs', JSON.stringify(m).slice(0, 200));
+      exigir(m.version === '0.5.1' && m.background.service_worker === 'acompanhar-worker.mjs', JSON.stringify(m).slice(0, 200));
       await ext.screenshot({ path: path.join(PRINTS, 'extensao-01-popup.png'), fullPage: true });
     });
 
