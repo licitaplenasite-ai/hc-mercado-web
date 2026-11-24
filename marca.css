@@ -491,3 +491,111 @@ footer .mapa-titulo { color: var(--destaque-sobre-escuro); font-size: 13px; lett
 /* Parcimônia do ciano: dentro da caixa de busca o botão é royal (o ciano fica para o CTA principal). */
 .busca .btn-pri { background-color: var(--marca-medio); color: #ffffff; box-shadow: 0 8px 20px -8px rgba(var(--medio-rgb), 0.6); }
 .busca .btn-pri:hover { background-color: var(--action-strong-hover); color: #ffffff; }
+
+/* ================= Rodada 4 (23/11): o que ainda tinha cara antiga no site público =================
+   Tudo por tokens da paleta A; nada de lógica. */
+
+/* 1. Busca da primeira tela: cartão de vidro escuro, título em Fraunces, campos e chips no padrão novo,
+      botão royal em pílula com brilho (o ciano fica só para "Testar grátis"). */
+.hero .busca {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05));
+  -webkit-backdrop-filter: blur(16px) saturate(1.3); backdrop-filter: blur(16px) saturate(1.3);
+  border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 22px; padding: 30px; color: #ffffff;
+  box-shadow: 0 40px 80px -30px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+.hero .busca::before { height: 3px; background: var(--grad-linha); }
+.hero .busca h2 { font-family: var(--fonte-titulo); font-weight: 600; font-size: 26px; line-height: 32px; color: #ffffff; }
+.hero .busca > p, .hero .busca .sugestoes span { color: var(--claro-sobre-escuro); }
+.hero .busca .fld label { color: #ffffff; }
+.hero .busca .inp {
+  height: 48px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.96); color: var(--marca-escuro);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.hero .busca .inp::placeholder { color: #55627d; }
+.hero .busca .inp:focus { outline: none; border-color: var(--destaque); box-shadow: 0 0 0 3px rgba(var(--destaque-rgb), 0.45); }
+.hero .busca .erro-campo { color: #ffd2cc; }
+.hero .busca .btn-pri { height: 50px; border-radius: 999px; }
+.sugestao {
+  height: 32px; padding: 0 14px; border-radius: 999px; font-size: 13px; cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+.hero .sugestao { border: 1px solid rgba(255, 255, 255, 0.3); background: rgba(255, 255, 255, 0.06); color: #ffffff; }
+.hero .sugestao:hover { border-color: var(--destaque); background: rgba(var(--destaque-rgb), 0.14); transform: translateY(-1px); }
+.hero .busca .resultados-topo h3, .hero .busca .resultados-topo span { color: #ffffff; }
+.hero .busca .lista-op, .hero .busca .status-busca, .hero .busca .convite { border-radius: 14px; color: var(--text-primary); }
+[data-theme="dark"] .hero .busca .inp { background: rgba(11, 16, 32, 0.85); color: #ffffff; border-color: rgba(255, 255, 255, 0.3); }
+[data-theme="dark"] .hero .busca .inp::placeholder { color: #a3aec2; }
+[data-theme="dark"] .hero .busca .inp option { color: #0b1020; }
+
+/* 2. "Dois jeitos de usar": dois cartões; empresa claro, assessoria no degradê escuro; benefícios com
+      disco ciano e marca de conferido, no lugar dos números 01/02/03. */
+.rotas { gap: 24px; border-top: 0; }
+.rota, .rota + .rota {
+  position: relative; overflow: hidden; isolation: isolate; padding: 40px; border-radius: 22px;
+  border: 1px solid var(--border-default); background: var(--surface-default); box-shadow: var(--sombra-cartao);
+}
+.rota + .rota { border: 0; background-color: var(--fundo-escuro); background-image: var(--degrade-escuro); color: #ffffff; }
+.rota + .rota::after { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background-image: var(--grao); opacity: 0.16; mix-blend-mode: overlay; }
+.rota h3 { font-size: 26px; line-height: 32px; }
+.rota + .rota h3, .rota + .rota .beneficios strong { color: #ffffff; }
+.rota + .rota > p, .rota + .rota .beneficios span { color: var(--claro-sobre-escuro); }
+.rota + .rota .sobretitulo { color: var(--claro-sobre-escuro); }
+.rota + .rota .sobretitulo::before { background: var(--destaque); }
+.rota + .rota .btn-sec { color: #ffffff; border-color: rgba(255, 255, 255, 0.55); }
+.rota + .rota .btn-sec:hover { background: rgba(255, 255, 255, 0.1); border-color: #ffffff; }
+.beneficios li { grid-template-columns: 30px minmax(0, 1fr); gap: 2px 14px; align-items: center; }
+.beneficios span { align-self: start; }
+.beneficios li::before {
+  content: ""; width: 26px; height: 26px; margin-top: 1px; border-radius: 50%;
+  background: center / 14px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg' viewBox='0 0 24 24' fill='none' stroke='%230a1b4f' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E"), radial-gradient(circle at 30% 25%, #ffffff 0%, var(--destaque-forte) 35%, var(--destaque) 80%);
+  box-shadow: 0 6px 14px -6px rgba(var(--destaque-rgb), 0.9);
+}
+
+/* 3. Etapas (as telas ilustradas continuam; o sistema novo traz prints novos depois): número em pílula,
+      tela com moldura deslocada listrada e sombra, como a foto emoldurada. */
+.etapa-num { display: inline-flex; align-items: center; gap: 8px; min-height: 30px; padding: 0 14px; border-radius: 999px; background: var(--marca-claro); color: var(--marca-titulo); font-size: 13px; font-weight: 700; }
+.etapa figure.tela { position: relative; isolation: isolate; margin: 0 22px 22px 0; }
+.etapa figure.tela::before { content: ""; position: absolute; z-index: -1; inset: 22px -22px 36px 22px; border-radius: 18px; background: repeating-linear-gradient(135deg, rgba(var(--escuro-rgb), 0.12) 0 1px, transparent 1px 12px), var(--marca-claro); transition: transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1); }
+.etapa figure.tela:hover::before { transform: translate(6px, 6px); }
+.tela-moldura { border-radius: 16px; box-shadow: var(--sombra-cartao-forte); }
+.tela-barra { background: var(--marca-claro-2); }
+
+/* 4. Exemplo do e-mail: botões das telas ilustradas em royal (o ciano fica para as chamadas reais). */
+/* Também os cartões de edital do exemplo (.ed). */
+:is(.email, .tela-moldura, .ed) .btn-pri { background-color: var(--marca-medio); color: #ffffff; box-shadow: 0 6px 14px -6px rgba(var(--medio-rgb), 0.6); }
+:is(.email, .tela-moldura, .ed) .btn-pri:hover { background-color: var(--action-strong-hover); color: #ffffff; }
+.email { border-radius: 18px; }
+
+/* 5. Seletor Mensal/Semestral/Anual em pílulas; chips do site público arredondados. */
+.ciclos label { border-radius: 999px; border-color: var(--border-strong); padding: 8px 18px; transition: border-color 0.2s ease, background 0.2s ease; }
+.ciclos label:hover { border-color: var(--marca-medio); }
+.ciclos label:has(input:checked) { border-color: var(--marca-medio); box-shadow: inset 0 0 0 1px var(--marca-medio); background: var(--marca-claro); }
+.ciclos input { accent-color: var(--marca-medio); }
+.chip { border-radius: 999px; padding: 0 10px; }
+
+/* 6. Diferenciais e "Comece em 3 passos": fio fino + número em disco (sequência real). */
+.dif { border-top: 1px solid var(--border-strong); padding-top: 24px; }
+.dif:hover { border-color: var(--marca-medio); }
+.passos3 li { border-top: 1px solid var(--border-strong); padding-top: 22px; }
+.passos3 li::before {
+  content: counter(passo); display: inline-grid; place-items: center; width: 38px; height: 38px; margin-bottom: 14px;
+  border-radius: 50%; background: var(--marca-escuro); color: var(--destaque-sobre-escuro);
+  font: 600 17px/1 var(--fonte-titulo);
+}
+[data-theme="dark"] .passos3 li::before { background: var(--marca-claro); color: var(--marca-texto); }
+
+/* 7. FAQ, avisos e listas das páginas geradas. */
+.faq summary { font-family: var(--fonte-titulo); font-weight: 600; font-size: 19px; color: var(--titulo-cor); }
+.faq details[open] summary { color: var(--marca-texto); }
+.aviso { border-radius: 14px; }
+.migalhas a { color: var(--marca-texto); }
+
+@media (max-width: 760px) {
+  .rota, .rota + .rota { padding: 28px 22px; }
+  .rota + .rota { margin-top: 0; }
+  .hero .busca { padding: 22px 18px; }
+  .etapa figure.tela { margin: 0 14px 14px 0; }
+  .etapa figure.tela::before { inset: 14px -14px 30px 14px; }
+}
+@media (prefers-reduced-motion: reduce) { .sugestao, .etapa figure.tela::before, .ciclos label { transition: none; } .hero .sugestao:hover { transform: none; } }

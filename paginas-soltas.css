@@ -1,0 +1,25 @@
+/* Páginas públicas soltas que não usam o marca.css (termos, privacidade, cookies, extensão, assinatura, HC).
+   Rodada 4 (23/11): mesmo padrão do site (paleta A em ds-tokens.css, títulos em Fraunces, botão principal
+   em pílula ciano que sobe com um brilho). Só aparência. */
+h1, h2 { font-family: "Fraunces", Georgia, "Times New Roman", serif; font-weight: 600; letter-spacing: -0.01em; color: var(--marca-titulo); }
+h1 { font-size: clamp(30px, 4vw, 40px); line-height: 1.15; }
+a { color: var(--marca-texto); }
+:is(.btn.primario, .btn-baixar) {
+  position: relative; overflow: hidden; isolation: isolate; border-radius: 999px; border-color: transparent;
+  background: var(--destaque); color: var(--destaque-texto); font-weight: 700;
+  box-shadow: 0 8px 20px -8px rgba(var(--destaque-rgb), 0.6); transition: transform 0.25s ease, box-shadow 0.25s ease, background-color 0.2s ease;
+}
+:is(.btn.primario, .btn-baixar)::after {
+  content: ""; position: absolute; z-index: -1; top: 0; bottom: 0; left: -80%; width: 45%; pointer-events: none;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.55), transparent); transform: skewX(-20deg);
+}
+:is(.btn.primario, .btn-baixar):hover { background: var(--destaque-forte); color: var(--destaque-texto); transform: translateY(-3px); box-shadow: 0 16px 30px -12px rgba(var(--destaque-rgb), 0.85); }
+:is(.btn.primario, .btn-baixar):hover::after { animation: solta-brilho 0.85s ease; }
+@keyframes solta-brilho { from { left: -80%; } to { left: 130%; } }
+.btn:not(.primario) { border-radius: 999px; }
+.card { border-radius: 18px; box-shadow: var(--sombra-cartao); }
+@media (prefers-reduced-motion: reduce) {
+  :is(.btn.primario, .btn-baixar) { transition: none; }
+  :is(.btn.primario, .btn-baixar):hover { transform: none; }
+  :is(.btn.primario, .btn-baixar)::after { display: none; }
+}
