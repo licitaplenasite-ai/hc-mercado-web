@@ -567,7 +567,8 @@
   const boasVindas = () => registrar({ papel: "ia", texto: "Olá, eu sou a Plena. Tiro dúvidas sobre licitação (Lei 14.133 e outras), mostro seus processos, prazos, tarefas e certidões, e digo onde fica cada coisa no LicitaPlena. Para ler um edital, toque em Plena no cartão da licitação." });
 
   function montar() {
-    for (const href of ["gaveta-lateral.css", "chat-ia-ui.css"]) if (!document.querySelector(`link[href^="${href}"]`)) document.head.append(criar("link", { rel: "stylesheet", href }));
+    // ?v= força o CSS novo: em 25/11 o cache (4 h) mostrou o ícone da Plena gigante com o CSS antigo.
+    for (const href of ["gaveta-lateral.css", "chat-ia-ui.css"]) if (!document.querySelector(`link[href^="${href}"]`)) document.head.append(criar("link", { rel: "stylesheet", href: href + "?v=20261125" }));
     const fechar = criar("button", { type: "button", className: "lp-gaveta-fechar", title: "Fechar", textContent: "✕" });
     fechar.setAttribute("aria-label", "Fechar a Plena");
     const nova = criar("button", { type: "button", className: "lp-plena-nova", textContent: "Nova conversa" });
@@ -657,7 +658,7 @@
   }
 
   function instalarBotao() {
-    if (!document.querySelector('link[href^="chat-ia-ui.css"]')) document.head.append(criar("link", { rel: "stylesheet", href: "chat-ia-ui.css" }));
+    if (!document.querySelector('link[href^="chat-ia-ui.css"]')) document.head.append(criar("link", { rel: "stylesheet", href: "chat-ia-ui.css?v=20261125" }));
     const botao = criar("button", { type: "button", id: "chat-ia-btn", className: "lp-chat-flutuante", title: "Plena, a IA do LicitaPlena (beta)" }, [criar("span", { className: "lp-plena-avatar" }, icone("lp-plena-icone")), "Plena"]);
     botao.setAttribute("aria-label", "Abrir a Plena, a IA do LicitaPlena");
     // Fora do plano (Essencial) ou teste encerrado: plano-trava.js esconde o botão, para não levar a uma recusa.
