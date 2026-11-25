@@ -179,7 +179,11 @@ language sql stable security definer set search_path = public, pg_temp as $$
          or (c.local_falhas = 0 and c.local_consultado_em < current_date - 30)
          or (c.local_falhas between 1 and 2 and c.local_consultado_em < current_date)
          or (c.local_falhas >= 3 and c.local_consultado_em < current_date - 7))
-     order by c.local_falhas, c.local_consultado_em nulls first, (c.abertas + c.contratos + c.atas) desc, (substr(c.cnpj, 9, 4) = '0001') desc, c.cnpj
+     -- Prefeituras, governos estaduais, câmaras e assembleias antes dos demais: a ficha deles lista as secretarias (que
+     -- publicam os contratos) e precisa da UF/cidade para isso. Depois, os mais ativos.
+     order by c.local_falhas, (c.local_consultado_em is null) desc,
+       (c.tipo in ('prefeitura', 'legislativo') or (c.tipo = 'estadual' and (c.nome_chave ~ '^estado ' or c.natureza = '1236'))) desc,
+       (c.abertas + c.contratos + c.atas) desc, (substr(c.cnpj, 9, 4) = '0001') desc, c.cnpj
      limit least(greatest(coalesce(p_limite, 500), 1), 2000)) s
 $$;
 revoke all on function public.orgaos_sem_local(int) from public, anon, authenticated;
@@ -306,13 +310,17 @@ begin
   end if;
   if v_dig !~ '^[0-9]{14}$' then return null; end if;
   -- O CNPJ aberto ou outro da mesma raiz (a ficha soma matriz e filiais): o que tem cidade e é matriz primeiro.
-  select o.* into c from public.orgaos_catalogo o where left(o.cnpj, 8) = left(v_dig, 8) and o.uf is not null
-   order by (o.cnpj = v_dig) desc, (o.municipio_norm is not null) desc, (substr(o.cnpj, 9, 4) = '0001') desc, o.cnpj limit 1;
+  select o.* into c from public.orgaos_catalogo o where left(o.cnpj, 8) = left(v_dig, 8)
+   order by (o.uf is not null) desc, (o.cnpj = v_dig) desc, (o.municipio_norm is not null) desc, (substr(o.cnpj, 9, 4) = '0001') desc, o.cnpj limit 1;
   if not found then return null; end if;
   v_ente := case
-    when c.esfera = 'M' and c.tipo in ('prefeitura', 'legislativo') and c.municipio_norm is not null then 'municipio'
+    when c.esfera = 'M' and c.tipo in ('prefeitura', 'legislativo') then 'municipio'
     when c.esfera in ('E', 'D') and (c.tipo = 'legislativo' or c.nome_chave ~ '^estado ' or c.natureza = '1236') then 'estado' end;
   if v_ente is null then return null; end if;
+  -- Prefeitura/governo ainda sem UF (ou cidade): o robô das unidades ainda não chegou nele. A ficha avisa em vez de sumir.
+  if c.uf is null or (v_ente = 'municipio' and c.municipio_norm is null) then
+    return jsonb_build_object('ente', v_ente, 'pendente', true);
+  end if;
 
   with irmaos as (
     select o.* from public.orgaos_catalogo o

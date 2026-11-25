@@ -334,6 +334,11 @@
   function desenharEnte(alvo, d, F, esc) {
     if (!alvo) return;
     if (!d) { alvo.innerHTML = ''; return; }
+    if (d.pendente) {
+      alvo.innerHTML = `<section class="fo-secao fo-mesmo-ente" aria-labelledby="fo-h-ente"><h2 id="fo-h-ente">${d.ente === 'municipio' ? 'Órgãos do mesmo município' : 'Órgãos do mesmo governo'}</h2>
+        <p class="on-vazio" role="status">Estamos localizando este órgão no PNCP; as secretarias aparecem em breve.</p></section>`;
+      return;
+    }
     const brl = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     const t = textoEnte(d);
     const outros = Number(d.total.orgaos) - 1;

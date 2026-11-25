@@ -104,6 +104,8 @@ test("orgaos_navegacao.sql: natureza, tipo, UF e cidade das unidades do PNCP ent
     assert.ok(fila.includes("63606479000124") && fila.includes("04034526000143"));
     assert.ok(!fila.includes("04365326000173") && !fila.includes("04034583000122"), "UF já veio dos dados coletados");
     assert.equal(fila.indexOf("00394429000100") < fila.indexOf("10918674000204"), true, "matriz antes de filial");
+    assert.deepEqual(fila.slice(0, 3).sort(), ["04034526000143", "04115298000150", "63606479000124"],
+      "prefeitura, câmara e governo do estado primeiro (a ficha deles lista as secretarias)");
     assert.equal((await locais(db, [
       { cnpj: "63606479000124", uf: "AC", municipio: "Rio Branco" }, { cnpj: "04115298000150", uf: "AC", municipio: "Rio Branco" },
       { cnpj: "04034526000143", uf: "AC", municipio: "Cruzeiro do Sul" }, { cnpj: "13782456000103", uf: "AC", municipio: "Rio Branco" },
@@ -205,6 +207,13 @@ test("listar_orgaos: escolher pela UF sem digitar, com filtros, ordem, agrupamen
     const estadoAc = await ente("63.606.479/0001-24");
     assert.deepEqual([estadoAc.ente, estadoAc.orgaos.map((o) => o.cnpj).sort()], ["estado", ["04034484000140", "04035127000146"]], "governo: órgãos estaduais da UF");
     assert.equal(await ente("10918674000123"), null, "universidade federal: sem a seção");
+    assert.deepEqual(await ente("04365326000173"), { uf: "AM", municipio: "Manaus", ente: "municipio", total: (await ente("04365326000173")).total,
+      esfera: "M", orgaos: [], proprio: (await ente("04365326000173")).proprio }, "Manaus (UF dos dados): seção normal");
+    await db.exec("reset role");
+    await db.query("insert into orgaos_catalogo (cnpj, nome_registro, esfera_registro, natureza) values ('04312369000190', 'ESTADO DO AMAZONAS', 'E', '1236'), ('06636765000107', 'SAO PEDRO DO PIAUI PREFEITURA', 'M', '1031')");
+    await como(db, APROVADO);
+    assert.deepEqual(await ente("04312369000190"), { ente: "estado", pendente: true }, "governo ainda sem UF: avisa");
+    assert.deepEqual(await ente("06636765000107"), { ente: "municipio", pendente: true }, "prefeitura ainda sem UF: avisa");
     assert.equal(await ente("123"), null);
     // Cidades da UF.
     assert.deepEqual((await db.query("select * from listar_municipios_orgaos('ac')")).rows.map((r) => [r.municipio, r.orgaos]),
