@@ -1,8 +1,11 @@
-// Chat com IA do LicitaPlena (botão "IA · BETA" no canto de baixo à direita; equivalente ao "B2G Talk" do Siga Pregão).
+// Plena, a IA do LicitaPlena (botão "Plena" no canto de baixo à direita, antes "IA · BETA"; equivalente ao "B2G Talk").
 //   POST /api/chat-ia  (Authorization: Bearer <sessão>)
-//     {acao:"perguntar", pergunta, historico?:[{papel,texto}], empresaId?, salvar?, conversaId?}
+//     {acao:"perguntar", pergunta, historico?:[{papel,texto}], empresaId?, salvar?, conversaId?, contexto?:{tela,titulo,secao,edital?}}
 //       -> {resposta, fontes:[{tipo,titulo,detalhe,url?}], naoSei, modo:"ia"|"base", aviso, salvo}  (sem contagem de uso: IA com uso justo, 21/11)
 //     {acao:"historico"} -> {mensagens:[...]}      {acao:"apagar"} -> {apagado:true}
+//     {acao:"perguntas"|"salvar_pergunta"(texto)|"apagar_pergunta"(id)} -> {perguntas:[{id,texto}]}  (sem cota de IA)
+//   Perguntas ao edital (trechos literais com página) vão direto a /api/ia-edital modo "pergunta"; aqui não.
+//   Nesta fase a Plena só lê e responde: nenhuma ação grava nada no lugar da pessoa (fase 3).
 // Regras:
 //   - Dúvida de licitação: responde só com a base jurídica (juridico-base.js) e os tutoriais (ajuda-ui.js), citando a
 //     fonte; sem base, "não sei" (_chat_ia.js).
@@ -28,7 +31,8 @@ function supabase(fetchFn, authorization) {
   return async (caminho, op = {}) => {
     const r = await fetchFn(`${URL_SB}/rest/v1/${caminho}`, { ...op, signal: globalThis.AbortSignal.timeout(8000),
       headers: { apikey: ANON, Authorization: authorization, Accept: "application/json", "Content-Type": "application/json", ...(op.headers || {}) } });
-    if (!r.ok) throw Object.assign(new Error(`HTTP ${r.status}`), { status: r.status });
+    // corpo (curto) do erro do PostgREST: separa o teto de 50 do CHECK de CPF nas perguntas salvas.
+    if (!r.ok) throw Object.assign(new Error(`HTTP ${r.status}`), { status: r.status, corpo: (await r.text().catch(() => "")).slice(0, 500) });
     const t = await r.text();
     return t ? JSON.parse(t) : null;
   };
@@ -47,10 +51,11 @@ async function lerDadosDaConta(event, deps, ler) {
 }
 
 // Sem base nenhuma não chama a IA (economiza cota e evita resposta inventada). null = cair no modo base.
-async function responderPelaIA(deps, { pergunta, historico, fontes, dados, economico }) {
+// Prazo total de 22 s para a cadeia inteira (antes até 48 s): a tela corta em 30 s e oferece Cancelar.
+async function responderPelaIA(deps, { pergunta, historico, fontes, dados, tela, economico }) {
   const env = deps.env || process.env;
   if (!(fontes.juridico.length || fontes.ajuda.length || dados) || !haProvedorConfigurado(env)) return null;
-  const r = await (deps.responder || responderComFallback)(Chat.montarMensagens({ pergunta, historico, fontes, dados }), { maxTokens: 900, timeoutMs: 12000, json: true, economico }, { env });
+  const r = await (deps.responder || responderComFallback)(Chat.montarMensagens({ pergunta, historico, fontes, dados, tela }), { maxTokens: 900, timeoutMs: 10000, orcamentoMs: 22000, json: true, economico }, { env });
   const ids = new Set([...fontes.juridico, ...fontes.ajuda].map((f) => f.id).concat(dados ? ["D"] : []));
   return r?.ok ? Chat.lerRespostaIA(r.texto, ids) : null;
 }
@@ -64,10 +69,13 @@ async function perguntar(corpo, event, deps, ler, auth) {
   const pedirDados = Chat.querDados(pergunta);
   const lidos = pedirDados ? await lerDadosDaConta(event, deps, ler).catch(() => null) : null;
   const empresaAtiva = typeof corpo.empresaId === "string" && UUID.test(corpo.empresaId) ? corpo.empresaId : null;
-  const dados = lidos ? Chat.resumirDados(lidos.ctx, empresaAtiva, lidos.boletins) : null;
-  const fontes = Chat.recuperarFontes(pergunta);
+  const dados = lidos ? Chat.resumirDados(lidos.ctx, empresaAtiva, lidos.boletins, pergunta) : null;
+  const tela = Chat.lerContextoTela(corpo.contexto);
+  // "Onde fica isso aqui?": o nome da tela entra na busca dos tutoriais.
+  const daTela = tela?.titulo && /\baqui\b|\b(nesta|nessa|esta|essa) (tela|p[aá]gina)\b/i.test(pergunta) ? ` ${tela.titulo}` : "";
+  const fontes = Chat.recuperarFontes(pergunta + daTela);
 
-  const daIA = await responderPelaIA(deps, { pergunta, historico, fontes, dados, economico: limite.economico === true });
+  const daIA = await responderPelaIA(deps, { pergunta, historico, fontes, dados, tela, economico: limite.economico === true });
   let saida = daIA || Chat.respostaSemIA(fontes, dados, pedirDados);
   if (pedirDados && !lidos && saida.naoSei) saida = { ...saida, resposta: "Não consegui ler os dados da sua conta agora. Tente de novo em instantes." };
 
@@ -98,7 +106,39 @@ async function executarAcao(corpo, event, deps, ler, auth) {
     await ler(`ia_conversas?usuario_id=eq.${encodeURIComponent(auth.userId)}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
     return [200, { apagado: true }];
   }
+  if (corpo.acao === "perguntas" || corpo.acao === "salvar_pergunta" || corpo.acao === "apagar_pergunta") return perguntasSalvas(corpo, ler);
   return perguntar(corpo, event, deps, ler, auth);
+}
+
+// Perguntas salvas da Plena (ia_perguntas_salvas.sql): token do usuário, a RLS só deixa ler e mexer nas próprias.
+// Não gastam cota de IA. Tabela ausente (SQL ainda não aplicado) = lista vazia, para a tela mostrar só as prontas.
+async function perguntasSalvas(corpo, ler) {
+  const listar = async () => {
+    try { return [200, { perguntas: (await ler("ia_perguntas_salvas?select=id,texto&order=criado_em.asc&limit=50")) || [] }]; } catch (e) {
+      if (e.status === 404) return [200, { perguntas: [], indisponivel: true }];
+      throw e;
+    }
+  };
+  if (corpo.acao === "salvar_pergunta") {
+    const texto = Chat.lerPerguntaSalva(corpo.texto);
+    if (!texto) return [400, { erro: "Escreva a pergunta que quer salvar." }];
+    try {
+      await ler("ia_perguntas_salvas?on_conflict=usuario_id,texto", { method: "POST", headers: { Prefer: "resolution=ignore-duplicates,return=minimal" }, body: JSON.stringify({ texto }) });
+    } catch (e) {
+      if (e.status === 404) return [503, { erro: "Perguntas salvas ainda não estão disponíveis." }];
+      const recusa = Chat.motivoRecusaPergunta(e.status, e.corpo);
+      if (recusa === "repetida") return listar();
+      if (recusa) return [400, { erro: recusa }];
+      throw e;
+    }
+    return listar();
+  }
+  if (corpo.acao === "apagar_pergunta") {
+    if (typeof corpo.id !== "string" || !UUID.test(corpo.id)) return [400, { erro: "Pergunta inválida." }];
+    await ler(`ia_perguntas_salvas?id=eq.${corpo.id}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
+    return listar();
+  }
+  return listar();
 }
 
 exports.handler = async (event, deps = {}) => {

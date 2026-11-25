@@ -4,7 +4,10 @@
 //
 // Por quê: a 1ª consulta de um produto na fonte leva 7-9 s (medido 23/11); depois dela, 0,1-0,6 s.
 // Termos: os mais buscados nos últimos DIAS_HISTORICO dias (contagem anônima em buscas_termos: só o termo, nunca
-// quem buscou) completados com TERMOS_INICIAIS (materiais e serviços comuns em licitação) até TOTAL_TERMOS.
+// quem buscou) completados com TERMOS_INICIAIS (materiais e serviços comuns em licitação) e com os termos populares do
+// dicionário de sinônimos (netlify/functions/_sinonimos_precos.js: geladeira, tv, micro-ondas, ar-condicionado...) até
+// TOTAL_TERMOS. Depois, os TERMOS_POR_UF primeiros de novo com o filtro de cada UF de UFS_PRE_CONSULTA (a tela manda o
+// estado à fonte; sem pré-consulta, a 1ª busca filtrada leva 7-9 s).
 // Para cada termo: a busca (catálogo + 1 página de cada produto) e as PAGINAS_PRODUTO páginas do produto principal,
 // que é exatamente o que a tela abre. A resposta é montada pela própria função (montarCorpo), com a mesma chave.
 //
@@ -12,7 +15,9 @@
 // Variáveis de ambiente:
 //   SUPABASE_SERVICE_ROLE_KEY   -> obrigatória para ler os mais buscados e gravar (exceto com SIMULAR=1)
 //   LIMITE_MINUTOS=35           -> orçamento total; para antes e grava o que já fez (cada termo é gravado ao terminar)
-//   TOTAL_TERMOS=200            -> quantos termos consultar
+//   TOTAL_TERMOS=450            -> quantos termos consultar (sem contar os por UF)
+//   UFS_PRE_CONSULTA=""         -> UFs com pré-consulta própria, separadas por vírgula (ex.: "AM,SP"); vazio = só nacional
+//   TERMOS_POR_UF=30            -> quantos termos (os primeiros da lista) também são pré-consultados em cada UF
 //   DIAS_HISTORICO=30           -> janela dos "mais buscados"
 //   PAGINAS_PRODUTO=3           -> páginas do produto principal (a tela abre 3)
 //   INTERVALO_MS=2500           -> pausa entre termos (a fonte devolve 429 com rajadas)
@@ -30,13 +35,19 @@
 //   SIMULAR=1                   -> consulta e mede, mas não lê nem grava no banco
 // Retomada: termo que falhou (429 ou erro) ou que ficou de fora por tempo/parada cedo vai para dados_robo
 // (chave pre_consulta_pendentes, só service_role lê) e entra primeiro na próxima execução.
+// Status: o resumo de cada execução vai para dados_robo (chave pre_consulta_status), que a aba "Saúde do sistema" do
+// admin mostra (admin_saude_robos em supabase/admin_painel.sql): quando rodou, quantos termos, 429, cobertura, próxima.
 
 const { restFetch, upsertEmLotes, removerMaisAntigosQue, buscarBlob, salvarBlob } = require("./supabase_dados");
 const { montarCorpo, chaveDaConsulta, termoParaContagem } = require("../netlify/functions/comprasgov-marcas-produto");
+const { termosDoDicionario } = require("../netlify/functions/_sinonimos_precos");
 
 const numero = (nome, padrao) => { const n = Number(process.env[nome]); return Number.isFinite(n) && n >= 0 ? n : padrao; };
 const LIMITE_MINUTOS = numero("LIMITE_MINUTOS", 35);
-const TOTAL_TERMOS = numero("TOTAL_TERMOS", 200);
+const TOTAL_TERMOS = numero("TOTAL_TERMOS", 450);
+const UFS_PRE_CONSULTA = (process.env.UFS_PRE_CONSULTA || "").split(",").map((u) => u.trim().toUpperCase()).filter((u) => /^[A-Z]{2}$/.test(u));
+const TERMOS_POR_UF = numero("TERMOS_POR_UF", 30);
+const CHAVE_STATUS = "pre_consulta_status";
 const DIAS_HISTORICO = numero("DIAS_HISTORICO", 30);
 const PAGINAS_PRODUTO = numero("PAGINAS_PRODUTO", 3);
 const INTERVALO_MS = numero("INTERVALO_MS", 2500);
@@ -90,11 +101,11 @@ const TERMOS_INICIAIS = [
   "medalha", "trofeu", "banner", "carimbo", "bandeira",
 ];
 
-// Lista final: mais buscados primeiro, depois a lista inicial, sem repetir (mesma normalização da contagem).
+// Lista final: mais buscados primeiro, depois a lista inicial e o dicionário, sem repetir (mesma normalização da contagem).
 function escolherTermos(maisBuscados, total = TOTAL_TERMOS) {
   const vistos = new Set();
   const termos = [];
-  for (const t of [...maisBuscados, ...TERMOS_INICIAIS]) {
+  for (const t of [...maisBuscados, ...TERMOS_INICIAIS, ...termosDoDicionario()]) {
     const n = termoParaContagem(t);
     if (!n || vistos.has(n)) continue;
     vistos.add(n);
@@ -105,7 +116,11 @@ function escolherTermos(maisBuscados, total = TOTAL_TERMOS) {
 }
 
 const esperarPadrao = (ms) => new Promise((ok) => setTimeout(ok, ms));
-const consultaDoTermo = (termo) => ({ termo, uf: "", codigoPdm: null, codigoItem: null, pagina: 1, produto: "" });
+// Alvo do robô: "geladeira" (Brasil) ou "geladeira|AM" (só um estado, como a tela manda com o filtro de UF).
+const separarAlvo = (alvo) => { const [termo, uf = ""] = String(alvo).split("|"); return { termo, uf }; };
+const consultaDoTermo = (alvo) => ({ ...separarAlvo(alvo), codigoPdm: null, codigoItem: null, pagina: 1, produto: "" });
+// Os primeiros "porUf" termos repetidos em cada UF.
+const alvosPorUf = (termos, ufs = UFS_PRE_CONSULTA, porUf = TERMOS_POR_UF) => ufs.flatMap((uf) => termos.slice(0, porUf).map((t) => `${t}|${uf}`));
 // Um 429 pode vir na busca do catálogo (lança) ou em parte dos produtos (resposta parcial com esperarS).
 const esperaDoErro = (e) => (e && e.status === 429 ? Math.max(10, e.esperarS || 0) : null);
 
@@ -126,21 +141,22 @@ function proximosPendentes(anterior, resumo, max = MAX_RETOMADAS) {
 }
 
 // Um termo: a busca e as páginas do produto principal. Devolve { linhas, bloqueadoS } (bloqueadoS = 429 da fonte).
-async function consultarTermo(termo, { montar = montarCorpo, agora = () => new Date() } = {}) {
+async function consultarTermo(alvo, { montar = montarCorpo, agora = () => new Date() } = {}) {
   const sinal = () => globalThis.AbortSignal.timeout(PRAZO_TERMO_MS);
+  const { termo, uf } = separarAlvo(alvo);
   let busca;
   try {
-    busca = await montar(consultaDoTermo(termo), { signal: sinal(), prazoParcialMs: PRAZO_TERMO_MS });
+    busca = await montar(consultaDoTermo(alvo), { signal: sinal(), prazoParcialMs: PRAZO_TERMO_MS });
   } catch (e) {
     return { linhas: [], bloqueadoS: esperaDoErro(e), erro: String(e?.message || e) };
   }
   if (busca.parcial) return { linhas: [], bloqueadoS: busca.esperarS || null, erro: "resposta parcial" };
   const linha = (consulta, corpo) => ({ chave: chaveDaConsulta(consulta), fonte: "precos", termo, corpo, atualizado_em: agora().toISOString() });
-  const linhas = [linha(consultaDoTermo(termo), busca.corpo)];
+  const linhas = [linha(consultaDoTermo(alvo), busca.corpo)];
   const principal = JSON.parse(busca.corpo).catalogos?.[0];
   if (!principal) return { linhas, bloqueadoS: null };
   for (let pagina = 1; pagina <= PAGINAS_PRODUTO; pagina += 1) {
-    const consulta = { termo, uf: "", codigoPdm: principal.codigo, codigoItem: null, pagina, produto: principal.descricao };
+    const consulta = { termo, uf, codigoPdm: principal.codigo, codigoItem: null, pagina, produto: principal.descricao };
     try {
       const p = await montar(consulta, { signal: sinal() });
       linhas.push(linha(consulta, p.corpo));
@@ -151,6 +167,25 @@ async function consultarTermo(termo, { montar = montarCorpo, agora = () => new D
     }
   }
   return { linhas, bloqueadoS: null };
+}
+
+// Próxima execução agendada: o cron do workflow (.github/workflows/pre-consultar-precos.yml, "41 5 * * *" = 05:41 UTC).
+// O GitHub atrasa crons em horário cheio de fila (24/11 rodou às 16:19 UTC), então é "a partir de".
+const HORA_CRON_UTC = [5, 41];
+function proximaExecucao(agora = new Date()) {
+  const p = new Date(Date.UTC(agora.getUTCFullYear(), agora.getUTCMonth(), agora.getUTCDate(), ...HORA_CRON_UTC));
+  if (p <= agora) p.setUTCDate(p.getUTCDate() + 1);
+  return p.toISOString();
+}
+
+// O que a aba "Saúde do sistema" mostra do robô. Só termos de produto (dado público), nunca quem buscou.
+function statusDaExecucao(resumo, fila, agora = new Date()) {
+  return {
+    em: agora.toISOString(), proxima: proximaExecucao(agora), minutos: resumo.minutos,
+    consultas: resumo.termos, completos: resumo.completos, ufs: UFS_PRE_CONSULTA, falhas: resumo.falhas, bloqueios429: resumo.bloqueios,
+    parouCedo: resumo.parouCedo, naoRodaram: resumo.naoRodaram.length, paraProxima: Object.keys(fila).length,
+    megabytes: Math.round(resumo.bytes / 10485.76) / 100, falharam: resumo.falharam.slice(0, 20),
+  };
 }
 
 async function lerMaisBuscados() {
@@ -211,11 +246,17 @@ async function main() {
   // Teste manual (SO_TERMOS/SIMULAR) não lê nem mexe na fila de retomada.
   const anterior = manual ? {} : (await buscarBlob("dados_robo", CHAVE_PENDENTES))?.termos || {};
   const pendentes = Object.keys(anterior);
-  const termos = soTermos.length ? escolherTermos(soTermos, soTermos.length) : escolherTermos([...pendentes, ...maisBuscados]);
-  console.log(`[pre-consulta] ${termos.length} termo(s): ${pendentes.length} retomado(s) da execução anterior, ${maisBuscados.length} do histórico de buscas, o resto da lista inicial.`);
+  // Pendente com UF ("geladeira|AM") volta como está; o termo nacional passa pela normalização de sempre.
+  const pendentesUf = pendentes.filter((p) => p.includes("|"));
+  const nacionais = soTermos.length ? escolherTermos(soTermos, soTermos.length) : escolherTermos([...pendentes.filter((p) => !p.includes("|")), ...maisBuscados]);
+  const termos = [...new Set([...nacionais, ...pendentesUf, ...(soTermos.length ? [] : alvosPorUf(nacionais))])];
+  console.log(`[pre-consulta] ${termos.length} consulta(s): ${pendentes.length} retomada(s) da execução anterior, ${maisBuscados.length} do histórico de buscas, ${termos.length - nacionais.length} por UF (${UFS_PRE_CONSULTA.join(", ") || "nenhuma"}), o resto da lista inicial e do dicionário.`);
   const resumo = await executar({ termos, montar: montarCorpo, gravar: simular ? async () => {} : (linhas) => upsertEmLotes("cache_consultas_publicas", linhas, "chave", 10) });
   const fila = proximosPendentes(anterior, resumo);
-  if (!manual) await salvarBlob("dados_robo", CHAVE_PENDENTES, { termos: fila, em: new Date().toISOString() });
+  if (!manual) {
+    await salvarBlob("dados_robo", CHAVE_PENDENTES, { termos: fila, em: new Date().toISOString() });
+    await salvarBlob("dados_robo", CHAVE_STATUS, statusDaExecucao(resumo, fila));
+  }
   if (!simular) {
     const dia = (dias) => new Date(Date.now() - dias * 86400000).toISOString();
     await removerMaisAntigosQue("cache_consultas_publicas", "atualizado_em", dia(RETENCAO_DIAS_CACHE));
@@ -232,4 +273,4 @@ if (require.main === module) {
   main().catch((e) => { console.error(`[pre-consulta] ${String(e?.message || e)}`); process.exitCode = 1; });
 }
 
-module.exports = { escolherTermos, consultarTermo, executar, esperaDepoisDo429, proximosPendentes, TERMOS_INICIAIS };
+module.exports = { escolherTermos, consultarTermo, executar, esperaDepoisDo429, proximosPendentes, alvosPorUf, proximaExecucao, statusDaExecucao, TERMOS_INICIAIS };

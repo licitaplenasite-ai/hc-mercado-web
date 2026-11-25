@@ -171,9 +171,9 @@
   // Planilha das compras na tela: valores em reais como número (Excel soma), vindo de centavos inteiros.
   function linhasPlanilha(itens) {
     const reaisNum = (c) => (c === null || c === undefined ? '' : Number(reais(c)));
-    return [['Data', 'Órgão', 'UF', 'Município', 'Esfera', 'Produto do catálogo', 'Descrição', 'Marca', 'Modelo', 'Fornecedor vencedor', 'CNPJ', 'Quantidade', 'Unidade', 'Valor unitário (R$)', 'Valor total (R$)', 'Link da compra', 'Nº do item na compra'],
+    return [['Data', 'Órgão', 'UF', 'Município', 'Esfera', 'Produto do catálogo', 'Descrição', 'Marca', 'Modelo', 'Fornecedor vencedor', 'CNPJ', 'Quantidade', 'Unidade', 'Valor unitário (R$)', 'Valor total (R$)', 'Link da compra', 'Nº do item na compra', 'Fonte'],
       ...(itens || []).map((i) => [dataBr(i.dataResultado), i.orgao, i.uf, i.municipio, ESFERAS[i.esfera] || '', i.produtoCatalogo, i.descricaoItem, i.marca, i.modelo, i.fornecedor, cnpj(i.documentoFornecedor),
-        Number(i.quantidade) || '', i.unidadeNome || i.unidade, reaisNum(i.valorUnitarioCentavos), reaisNum(totalCentavos(i)), i.link, numeroDoItem(i) || ''].map((c) => (typeof c === 'number' ? c : celulaSegura(c))))];
+        Number(i.quantidade) || '', i.unidadeNome || i.unidade, reaisNum(i.valorUnitarioCentavos), reaisNum(totalCentavos(i)), i.link, numeroDoItem(i) || '', i.fonte || 'Compras.gov'].map((c) => (typeof c === 'number' ? c : celulaSegura(c))))];
   }
 
   // Zero compras com consulta que falhou não é "nenhuma compra": a fonte não respondeu (visto no E2E de 19/11/2026).
@@ -217,21 +217,36 @@
     const campo = h('input', { type: 'search', id: `${id}-termo`, maxlength: 100, autocomplete: 'off', placeholder: 'Ex.: notebook, papel A4, cadeira giratória, café, pneu' });
     campo.value = termo;
     const botao = h('button', { type: 'submit', classe: 'btn primario', texto: 'Buscar' });
+    // UF ao lado da busca, sempre visível (25/11): antes ficava nos filtros, que sumiam com "nenhuma compra" e prendiam a
+    // tela no estado escolhido (geladeira em AM). Padrão: o Brasil inteiro.
+    const ufCampo = h('select', { id: `${id}-uf`, 'aria-label': 'Estado (UF)' }, h('option', { value: '', texto: 'Todo o Brasil' }), ...UFS.map((u) => h('option', { value: u, texto: u })));
+    const sugestoesEl = h('div', { classe: 'mercado-sugestoes', role: 'group', 'aria-label': 'Você quis dizer', hidden: true });
     const status = h('p', { classe: 'nota', role: 'status', 'aria-live': 'polite' });
     const chipsEl = h('div', { classe: 'mercado-chips', role: 'group', 'aria-label': 'Produto do catálogo', hidden: true });
     const filtros = h('div', { classe: 'mercado-filtros', hidden: true });
     const resumoEl = h('div', { classe: 'mercado-resumo', 'aria-live': 'polite' });
     const marcasEl = h('div', { classe: 'mercado-marcas-caixa' });
     const lista = h('div', { classe: 'mercado-compras' });
-    const form = h('form', { classe: 'mercado-busca', role: 'search' }, h('label', { for: campo.id, texto: 'Produto' }), h('div', { classe: 'mercado-linha' }, campo, botao));
-    alvo.replaceChildren(form, status, chipsEl, filtros, resumoEl, marcasEl, lista,
-      h('p', { classe: 'nota', texto: 'Fonte: Pesquisa de Preços e Catálogo do Compras.gov (dados abertos): compras homologadas no Compras.gov, principalmente de órgãos federais e dos estaduais e municipais que usam o sistema. Preço homologado pago pelo órgão: serve de referência, não é o seu custo. Marca e modelo são o que o fornecedor vencedor declarou.' }));
+    const form = h('form', { classe: 'mercado-busca', role: 'search' }, h('label', { for: campo.id, texto: 'Produto' }), h('div', { classe: 'mercado-linha' }, campo, ufCampo, botao));
+    alvo.replaceChildren(form, sugestoesEl, status, chipsEl, filtros, resumoEl, marcasEl, lista,
+      h('p', { classe: 'nota', texto: 'Fonte: Pesquisa de Preços e Catálogo do Compras.gov (dados abertos), de todos os estados: compras homologadas no Compras.gov, principalmente de órgãos federais e dos estaduais e municipais que usam o sistema. Quando ele traz pouco, entram também resultados homologados publicados no PNCP por estados e municípios (marcados "PNCP"; essa fonte não informa marca). Preço homologado pago pelo órgão: serve de referência, não é o seu custo. Marca e modelo são o que o fornecedor vencedor declarou.' }));
+    // "geladeira" -> o catálogo do governo chama de "Refrigerador doméstico": diz o que foi buscado e oferece as outras opções.
+    const nomeSugestao = (s) => String(s).charAt(0).toLocaleUpperCase('pt-BR') + String(s).slice(1);
+    function desenharSugestoes(j, termoBusca) {
+      const sugestoes = Array.isArray(j?.sugestoes) ? j.sugestoes.map(String).filter((s) => s && s !== j.buscaCatalogo) : [];
+      const usado = j?.buscaCatalogo ? String(j.buscaCatalogo) : '';
+      sugestoesEl.hidden = !usado && !sugestoes.length;
+      sugestoesEl.replaceChildren(
+        usado ? h('p', { classe: 'nota', texto: `Mostrando "${nomeSugestao(usado)}": é o nome no catálogo do governo para "${termoBusca}".` }) : null,
+        sugestoes.length ? h('span', { classe: 'mercado-chips-rotulo', texto: 'Você quis dizer:' }) : null,
+        ...sugestoes.map((s) => h('button', { type: 'button', classe: 'mercado-chip', 'data-mercado-sugestao': s, texto: nomeSugestao(s) })));
+    }
 
     const pdmAtual = () => estado.catalogos.find((c) => String(c.codigo) === estado.pdm);
     const unidadePrincipal = () => contar(porEspecificacao(estado.itens).base, 'unidade')[0]?.[0] || '';
     function select(nome, rotulo, opcoes) {
       const s = h('select', { id: `${id}-${nome}`, 'data-filtro': nome });
-      const atual = nome === 'uf' ? estado.uf : estado.filtro[nome];
+      const atual = estado.filtro[nome];
       for (const [valor, texto] of opcoes) { const o = h('option', { value: valor, texto }); if (valor === atual) o.selected = true; s.append(o); }
       return h('div', { classe: 'mercado-campo' }, h('label', { for: s.id, texto: rotulo }), s);
     }
@@ -253,6 +268,8 @@
       a?.setAttribute('aria-label', `Ver ficha do órgão ${orgao}`);
       return a || null;
     };
+    // Linha do PNCP abre a contratação no PNCP, não no Compras.gov.
+    const tituloLink = (i, nItem) => `Abre a compra no ${i.fonte === 'PNCP' ? 'PNCP' : 'Compras.gov'} (nova aba).${nItem ? ` Procure o item ${nItem}.` : ''}`;
     const ultimoTexto = (i) => (i ? `${brl(i.valorUnitarioCentavos)} em ${dataBr(i.dataResultado)}` : '—');
 
     // Uma compra: quem ganhou, onde, quando, quanto. mediana = da unidade da compra, para o selo "fora da curva" (null nas recolhidas).
@@ -264,8 +281,8 @@
       return h('tr', {},
         // Link na célula da data: sem coluna só para ele, a tabela cabe nos 1280 px do painel.
         // O Compras.gov não abre direto no item: o nº do item vai em destaque para o usuário achar na página da compra.
-        td('Data', dataBr(i.dataResultado), nItem ? h('span', { classe: 'mercado-item-num', title: 'Número do item dentro desta compra', texto: `Item nº ${nItem}` }) : null,
-          i.link ? h('a', { classe: 'mercado-desc', href: i.link, target: '_blank', rel: 'noopener noreferrer', title: nItem ? `Abre a compra no Compras.gov (nova aba). Procure o item ${nItem}.` : 'Abre a compra no Compras.gov (nova aba).', texto: 'Ver compra' }) : null),
+        td('Data', dataBr(i.dataResultado), i.fonte === 'PNCP' ? h('span', { classe: 'mercado-item-num', title: 'Resultado homologado publicado no PNCP (sem marca na fonte)', texto: 'PNCP' }) : null, nItem ? h('span', { classe: 'mercado-item-num', title: 'Número do item dentro desta compra', texto: `Item nº ${nItem}` }) : null,
+          i.link ? h('a', { classe: 'mercado-desc', href: i.link, target: '_blank', rel: 'noopener noreferrer', title: tituloLink(i, nItem), texto: 'Ver compra' }) : null),
         td('Órgão', i.orgao ? botaoFoco('orgao', chaveOrgao(i), `${i.orgao}${i.uf ? `/${i.uf}` : ''}`, 'Ver só as compras deste órgão') : 'Órgão não informado', i.orgao ? fichaOrgao(i.orgao) : null, i.esfera ? h('span', { classe: 'mercado-desc', texto: ESFERAS[i.esfera] || i.esfera }) : null),
         td('Marca e modelo', h('strong', { texto: marcaTexto(i) }), h('span', { classe: 'mercado-desc', texto: String(i.descricaoItem || '').slice(0, 110) })),
         td('Vencedor', i.fornecedor || i.documentoFornecedor ? botaoFoco('fornecedor', chaveFornecedor(i), i.fornecedor || cnpj(i.documentoFornecedor), 'Ver todas as vitórias desta empresa') : 'Não informado',
@@ -394,7 +411,6 @@
       estado.visiveis = visiveis;
       filtros.hidden = !estado.catalogos.length;
       filtros.replaceChildren(
-        select('uf', 'UF', [['', 'Todas'], ...UFS.map((u) => [u, u])]),
         select('meses', 'Período', [['', 'Tudo'], ['12', 'Últimos 12 meses'], ['24', 'Últimos 24 meses']]),
         select('esfera', 'Esfera', [['', 'Todas'], ['F', 'Federal'], ['E', 'Estadual'], ['M', 'Municipal']]),
         select('unidade', 'Unidade', [['', 'Todas'], ...unidades]),
@@ -479,8 +495,14 @@
         estado.termo = termoBusca; estado.catalogos = catalogos; estado.falhas = j.consultasComFalha || 0;
         estado.dados = dadosDaResposta(r);
         estado.atributos = Array.isArray(j.atributos) ? j.atributos.map(String) : [];
-        estado.porPdm = new Map(catalogos.map((c) => [String(c.codigo), { itens: itens.filter((i) => String(i.codigoPdm) === String(c.codigo)), carregadas: 0, paginas: null }]));
-        if (!catalogos.length) { estado.pdm = ''; status.textContent = mensagemBusca(0, 0, estado.falhas); desenhar(); return; }
+        // fixo: produto que já veio inteiro na busca (compras do PNCP), sem páginas para pedir à fonte.
+        estado.porPdm = new Map(catalogos.map((c) => [String(c.codigo), { itens: itens.filter((i) => String(i.codigoPdm) === String(c.codigo)), carregadas: c.fixo ? 1 : 0, paginas: c.fixo ? 1 : null }]));
+        desenharSugestoes(j, termoBusca);
+        if (!catalogos.length) {
+          estado.pdm = '';
+          status.textContent = estado.uf && !estado.falhas ? `Nenhuma compra deste produto em ${estado.uf}. Escolha "Todo o Brasil" para ver as compras dos outros estados.` : mensagemBusca(0, 0, estado.falhas);
+          desenhar(); return;
+        }
         estado.buscando = false; botao.disabled = false;
         await escolherProduto(catalogos[0].codigo); // o servidor já põe primeiro o produto principal mais comprado
       } catch (e) {
@@ -524,10 +546,15 @@
       const b = ev.target?.closest?.('[data-mercado-pdm]');
       if (b && b.dataset.mercadoPdm !== estado.pdm) void escolherProduto(b.dataset.mercadoPdm);
     });
+    // UF vai para a fonte: com o estado filtrado lá, as 600 compras carregadas alcançam datas mais antigas.
+    ufCampo.addEventListener('change', () => { estado.uf = ufCampo.value; if (estado.termo || campo.value.trim()) void buscar(estado.termo || campo.value); });
+    sugestoesEl.addEventListener('click', (ev) => {
+      const b = ev.target?.closest?.('[data-mercado-sugestao]'); if (!b) return;
+      campo.value = b.dataset.mercadoSugestao;
+      void buscar(campo.value);
+    });
     filtros.addEventListener('change', (ev) => {
       const nome = ev.target?.dataset?.filtro; if (!nome) return;
-      // UF vai para a fonte: com o estado filtrado lá, as 600 compras carregadas alcançam datas mais antigas.
-      if (nome === 'uf') { estado.uf = ev.target.value; void buscar(estado.termo); return; }
       estado.filtro[nome] = ev.target.value; estado.mostrar = MOSTRAR;
       if (nome === 'unidade') estado.filtro.marca = '';
       desenhar();
@@ -566,6 +593,7 @@
       Object.assign(estado, { termo: f.termo, uf: f.uf || '', catalogos: f.catalogos, pdm: String(f.pdm || ''), atributos: f.atributos || [],
         filtro: { ...estado.filtro, ...f.filtro }, mostrar: f.mostrar || MOSTRAR, todasMarcas: f.todasMarcas, grafico: f.grafico, falhas: f.falhas || 0, dados: f.dados || undefined,
         porPdm: new Map(f.porPdm.map(([k, g]) => [String(k), { itens: g.itens || [], carregadas: g.carregadas || 0, paginas: g.paginas || null }])) });
+      ufCampo.value = estado.uf;
       status.textContent = f.status || '';
       desenhar();
       return true;

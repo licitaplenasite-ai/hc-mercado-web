@@ -1,6 +1,9 @@
 /* "Buscar no mercado (Compras.gov)": catálogo (operacao.html) e preço por item (sistema.html). Tokens de ds-tokens.css. */
 .mercado-busca label{display:block;font-weight:600;margin-bottom:4px}
 .mercado-linha{display:flex;gap:8px}
+.mercado-linha select{min-height:40px;padding:8px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--surface-default);color:var(--text-primary);font:inherit;max-width:42%}
+.mercado-sugestoes{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0}
+.mercado-sugestoes .nota{flex-basis:100%;margin:0}
 .mercado-linha input{flex:1;min-width:0;min-height:40px}
 .mercado-filtros{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:8px 0}
 .mercado-campo label{display:block;font-size:13px;color:var(--text-secondary)}

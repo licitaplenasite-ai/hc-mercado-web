@@ -1,42 +1,105 @@
-/* Chat com IA (chat-ia-ui.js): botão "IA · BETA" no canto de baixo à direita e a conversa na gaveta lateral
-   (gaveta-lateral.css). Só tokens do Design System (ds-tokens.css). Mudança visual: aguarda aprovação do dono. */
+/* Plena, a IA do LicitaPlena (chat-ia-ui.js): botão "Plena" no canto de baixo à direita e a conversa na gaveta lateral
+   (gaveta-lateral.css). Paleta A (ds-tokens.css): marinho/royal no degradê da marca e o ciano #22D3EE só no brilho
+   do ícone e no destaque, com parcimônia. Mudança visual: aguarda aprovação do dono. */
 .lp-chat-flutuante { position: fixed; right: 16px; bottom: 16px; z-index: 150; /* abaixo dos modais do painel (200) */
-  display: inline-flex; align-items: center; gap: 6px; min-height: 48px; padding: 0 16px; border: 0; border-radius: 999px;
+  display: inline-flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 18px 0 8px; border: 1px solid rgba(34,211,238,.35); border-radius: 999px;
   /* 23/11: degradê da marca; o verde de "sucesso" no tema escuro é claro e o texto branco ficava ilegível (1,7:1). */
-  background-color: #123aa8; background-image: var(--grad-marca, none); color: #fff; font: 700 16px/1 var(--font-sans); box-shadow: var(--shadow-overlay); cursor: pointer; }
-.lp-chat-flutuante:hover { filter: brightness(1.08); }
+  background-color: #123aa8; background-image: var(--grad-marca, none); color: #fff; font: 700 16px/1 var(--font-sans); letter-spacing: .01em;
+  box-shadow: var(--shadow-overlay), 0 0 0 4px rgba(34,211,238,.08); cursor: pointer; transition: transform .15s ease, box-shadow .15s ease; }
+.lp-chat-flutuante:hover { transform: translateY(-1px); box-shadow: var(--shadow-overlay), 0 0 0 5px rgba(34,211,238,.16); }
 .lp-chat-flutuante:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
-.lp-chat-beta { font: 700 10px/1 var(--font-sans); letter-spacing: .04em; padding: 3px 6px; border-radius: 999px; background: rgba(255,255,255,.22); }
-.lp-chat .lp-chat-beta { background: var(--attention-bg); color: var(--attention-text); border: 1px solid var(--attention-border); vertical-align: middle; }
-/* Os outros flutuantes (ajuda "?" e celular) sobem para não ficar embaixo do chat. */
+@media (prefers-reduced-motion: reduce) { .lp-chat-flutuante { transition: none; } .lp-chat-flutuante:hover { transform: none; } }
+.lp-plena-avatar { display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; flex: none;
+  background: radial-gradient(circle at 30% 25%, #1f4fd8 0%, #0a1b4f 75%); box-shadow: inset 0 0 0 1px rgba(34,211,238,.45); }
+.lp-plena-icone { width: 18px; height: 18px; fill: var(--destaque, #22d3ee); }
+.lp-plena-icone-mini { width: 16px; height: 16px; fill: var(--action-strong); flex: none; }
+.lp-chat-beta { font: 600 10px/1 var(--font-sans); letter-spacing: .06em; text-transform: uppercase; padding: 3px 6px; border-radius: 999px; background: rgba(255,255,255,.22); }
+.lp-chat .lp-chat-beta { background: var(--action-tint); color: var(--action-text); border: 1px solid transparent; vertical-align: middle; }
+/* Os outros flutuantes (ajuda "?" e celular) sobem para não ficar embaixo do botão da Plena. */
 body.lp-com-chat-ia .lp-ajuda-flutuante { bottom: 72px; }
 body.lp-com-chat-ia .lp-celular-flutuante { bottom: 128px; }
 /* Celular (23/11): botão menor e folga no fim da página para os flutuantes não cobrirem o último campo/cartão. */
 @media (max-width: 768px) {
-  .lp-chat-flutuante { right: 12px; bottom: 12px; min-height: 40px; padding: 0 12px; font-size: 14px; }
+  .lp-chat-flutuante { right: 12px; bottom: 12px; min-height: 40px; padding: 0 14px 0 5px; font-size: 14px; }
+  .lp-chat-flutuante .lp-plena-avatar { width: 30px; height: 30px; }
   body.lp-com-chat-ia .lp-ajuda-flutuante { bottom: 60px; }
   body.lp-com-chat-ia .lp-celular-flutuante { bottom: 108px; }
   html body.lp-com-chat-ia { padding-bottom: 120px; } /* vence a folga só do "?" (gaveta-lateral.css) */
 }
 
-.lp-chat-aviso { margin: var(--space-12) var(--space-24) 0; font: var(--text-label); }
+/* Topo da gaveta: avatar + nome; "Nova conversa" discreto. */
+.lp-plena .lp-gaveta-topo h2 { display: flex; align-items: center; gap: var(--space-8); }
+.lp-plena .lp-gaveta-topo .lp-plena-nova { min-height: 36px; padding: 4px 12px; font-size: 13px; border-color: var(--border-default); }
+.lp-plena-barra { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); padding: var(--space-8) var(--space-24); background: var(--surface-sunken); border-bottom: 1px solid var(--border-default); }
+.lp-plena-barra[hidden] { display: none; }
+.lp-plena-barra p { flex: 1 1 200px; margin: 0; min-width: 0; font: var(--text-label); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lp-plena-objeto-curto { font-weight: 600; color: var(--text-primary); }
+.lp-plena-alvo { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 999px; overflow: hidden; }
+.lp-gaveta .lp-plena-alvo button { min-height: 32px; padding: 4px 12px; border: 0; border-radius: 0; font-size: 13px; background: transparent; }
+.lp-gaveta .lp-plena-alvo button[aria-pressed="true"] { background: var(--action-strong); color: var(--action-on); }
+.lp-gaveta .lp-plena-sair { width: 32px; min-height: 32px; padding: 0; border-radius: 50%; }
+
+.lp-chat-aviso { margin: var(--space-12) var(--space-24) 0; font: var(--text-label); color: var(--text-secondary); }
 .lp-chat-lista { display: flex; flex-direction: column; gap: var(--space-8); }
 .lp-chat-msg { max-width: 88%; padding: var(--space-8) var(--space-12); border-radius: var(--radius-card); border: 1px solid var(--border-default); overflow-wrap: anywhere; }
 .lp-chat-msg p { margin: 0; white-space: pre-line; }
-.lp-chat-usuario { align-self: flex-end; background: var(--surface-sunken); }
+.lp-chat-usuario { align-self: flex-end; background: var(--action-tint); border-color: transparent; }
 .lp-chat-ia { align-self: flex-start; background: var(--surface-default); }
 .lp-chat-erro { align-self: flex-start; border-color: var(--error-border); background: var(--error-bg); color: var(--error-text); }
+.lp-plena-pensando { display: flex; align-items: center; gap: var(--space-8); color: var(--text-secondary); }
+.lp-plena-pensando .lp-plena-icone-mini { animation: lp-plena-pulso 1.2s ease-in-out infinite; }
+@keyframes lp-plena-pulso { 50% { opacity: .35; transform: scale(.85); } }
+@media (prefers-reduced-motion: reduce) { .lp-plena-pensando .lp-plena-icone-mini { animation: none; } }
 .lp-chat-fontes-titulo { margin-top: var(--space-8) !important; font: var(--text-label); color: var(--text-secondary); }
 .lp-chat-fontes { margin: var(--space-4) 0 0; padding-left: 18px; font: var(--text-label); }
-.lp-chat-fontes a { color: var(--action-strong); }
+.lp-chat-fontes a, .lp-plena-fonte a { color: var(--action-text); }
 .lp-chat-msg .lp-dica { margin-top: var(--space-8); }
-.lp-chat-sugestoes { display: flex; flex-wrap: wrap; gap: var(--space-8); margin-top: var(--space-16); }
-.lp-gaveta button.lp-chat-sugestao { min-height: 32px; padding: 4px 12px; border-radius: 999px; font: var(--text-label); }
+
+/* Citação literal do edital: trecho + arquivo, página e link oficial montados pelo servidor. */
+.lp-plena-citacao { margin: var(--space-8) 0 0; }
+.lp-plena-citacao blockquote { margin: 0; padding: var(--space-8) var(--space-12); border-left: 3px solid var(--action-strong); background: var(--surface-sunken); border-radius: 0 var(--radius-control) var(--radius-control) 0; white-space: pre-line; }
+.lp-plena-fonte { margin: var(--space-4) 0 0 !important; font: var(--text-label); color: var(--text-secondary); }
+
+/* Cartão curto do edital (10 campos). */
+.lp-plena-cartao { align-self: stretch; border: 1px solid transparent; border-top-width: 3px; border-radius: var(--radius-card); padding: var(--space-12) var(--space-16);
+  background: linear-gradient(var(--surface-default), var(--surface-default)) padding-box, var(--grad-marca, var(--action-strong)) border-box; }
+.lp-plena-cartao h3 { display: flex; align-items: center; gap: var(--space-8); margin: 0 0 var(--space-8); font: 600 15px/22px var(--font-sans); }
+.lp-plena-cartao dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: var(--space-4) var(--space-12); }
+.lp-plena-cartao dt { font: var(--text-label); color: var(--text-secondary); padding-top: 2px; }
+.lp-plena-cartao dd { margin: 0; overflow-wrap: anywhere; }
+.lp-plena-cartao dd.lp-plena-objeto { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.lp-plena-arquivos { list-style: none; margin: var(--space-4) 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font: var(--text-label); }
+.lp-plena-arquivos li { display: flex; justify-content: space-between; gap: var(--space-8); padding: 4px 0; border-bottom: 1px dashed var(--border-default); }
+.lp-plena-arquivos small { color: var(--text-secondary); white-space: nowrap; }
+.lp-plena-arquivos li.lido small { color: var(--success-text); font-weight: 600; }
+.lp-plena-status { margin-top: var(--space-8) !important; }
+.lp-plena-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); margin-top: var(--space-8); }
+
+/* Chips: prontas + minhas perguntas (com ✕ para apagar). */
+.lp-plena-chips { margin-top: var(--space-16); }
+.lp-chat-sugestoes { display: flex; flex-wrap: wrap; gap: var(--space-8); margin-top: var(--space-4); }
+.lp-gaveta button.lp-chat-sugestao { min-height: 32px; padding: 4px 12px; border-radius: 999px; font: var(--text-label); border-color: var(--border-default); background: var(--surface-default); }
+.lp-gaveta button.lp-chat-sugestao:hover:not(:disabled) { border-color: var(--action-strong); color: var(--action-text); }
+.lp-plena-chip-salva { display: inline-flex; align-items: center; }
+.lp-plena-chip-salva .lp-chat-sugestao { border-radius: 999px 0 0 999px !important; }
+.lp-gaveta .lp-plena-chip-salva .lp-plena-apagar { min-height: 32px; width: 30px; padding: 0; border-radius: 0 999px 999px 0; border-left: 0; border-color: var(--border-default); font-size: 12px; }
+.lp-plena-duvida { display: flex; flex-direction: column; gap: var(--space-8); margin-top: var(--space-8); }
+
 .lp-chat-form { display: flex; gap: var(--space-8); align-items: flex-end; }
 .lp-chat-form textarea { flex: 1; min-height: 48px; }
+.lp-chat-form button[hidden] { display: none; }
 .lp-chat-opcoes { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); }
 .lp-chat-uso { margin: 0; }
 @media (max-width: 600px) {
   .lp-chat-aviso { margin-left: var(--space-16); margin-right: var(--space-16); }
+  .lp-plena-barra { padding-left: var(--space-16); padding-right: var(--space-16); }
   .lp-chat-msg { max-width: 100%; }
+  /* Rodapé compacto no celular: a conversa fica com mais da metade da tela. */
+  .lp-plena .lp-gaveta-rodape { padding-top: var(--space-8); padding-bottom: var(--space-8); }
+  .lp-gaveta .lp-chat-opcoes { gap: var(--space-4) var(--space-8); }
+  .lp-gaveta .lp-chat-opcoes button, .lp-gaveta .lp-chat-opcoes .lp-opcao { min-height: 32px; padding: 4px 10px; font-size: 13px; }
+  .lp-chat-aviso { margin-top: var(--space-8); font-size: 12px; }
 }
+/* Botão "Plena" dentro dos cartões de licitação (painel e processos): mesma marca do flutuante, menor. */
+.btn-plena { display: inline-flex; align-items: center; gap: 6px; }
+.btn-plena .lp-plena-icone-mini, .btn-plena svg { fill: currentColor; }

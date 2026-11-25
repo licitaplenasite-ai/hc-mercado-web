@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       so_termos:
-        description: "Só estes termos, separados por vírgula (vazio = os ~200 de sempre)"
+        description: "Só estes termos, separados por vírgula (vazio = os ~400 de sempre + os por UF)"
         required: false
         default: ""
 
@@ -22,8 +22,9 @@ permissions:
 jobs:
   pre-consultar:
     runs-on: ubuntu-latest
-    # O limite interno (LIMITE_MINUTOS) para antes e grava o que já fez.
-    timeout-minutes: 45
+    # O limite interno (LIMITE_MINUTOS) para antes e grava o que já fez. 25/11: lista de ~200 para ~400 termos (dicionário
+    # de sinônimos) + 30 por UF; o que não couber volta na frente da fila na noite seguinte. Repositório público: sem custo de minutos.
+    timeout-minutes: 105
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -32,16 +33,26 @@ jobs:
       - name: Consultar e guardar as respostas prontas
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          LIMITE_MINUTOS: "35"
-          TOTAL_TERMOS: "200"
+          LIMITE_MINUTOS: "90"
+          TOTAL_TERMOS: "450"
+          # Dono em Manaus: a busca filtrada por AM também sai pronta. Mais UFs: "AM,SP,..." (cada uma soma 30 consultas).
+          UFS_PRE_CONSULTA: "AM"
+          TERMOS_POR_UF: "30"
           PAGINAS_PRODUTO: "3"
-          INTERVALO_MS: "2500"
+          # 24/11: 17 respostas 429 em 22 min com 2500 ms; mais folga entre termos.
+          INTERVALO_MS: "4000"
           CONCORRENCIA_TERMOS: "2"
           PAUSA_429_MS: "15000"
           ESPERA_MAX_MS: "120000"
           JITTER: "0.3"
           TENTATIVAS_429: "3"
-          MAX_BLOQUEIOS: "4"
+          MAX_BLOQUEIOS: "6"
           MAX_RETOMADAS: "3"
           SO_TERMOS: ${{ github.event.inputs.so_termos }}
         run: node scripts/pre_consultar_precos.js
+      # Batimento para a aba "Saúde do sistema" do admin (o status detalhado o próprio robô grava em dados_robo).
+      - name: Registrar sucesso
+        if: success()
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/registrar_robo.js precos

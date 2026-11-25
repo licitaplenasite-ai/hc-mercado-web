@@ -28,7 +28,7 @@ test("sem registro não vira 'parado' e explica quando aparece", () => {
 });
 
 test("todos os robôs pedidos estão no catálogo, com nome e frase em português", () => {
-  assert.deepEqual(A.ROBOS.map((r) => r.codigo), ["pncp", "ufs", "mercado", "prospeccao", "sancoes", "boletim", "lembretes", "cobranca", "bases_obra", "vigia_normas"]);
+  assert.deepEqual(A.ROBOS.map((r) => r.codigo), ["pncp", "ufs", "mercado", "prospeccao", "sancoes", "boletim", "lembretes", "cobranca", "bases_obra", "vigia_normas", "precos", "fontes_extras"]);
   for (const r of A.ROBOS) { assert.ok(r.nome && r.faz && r.prazoHoras > 0); assert.doesNotMatch(r.nome, /\bUF|base\b/); }
 });
 
@@ -66,4 +66,22 @@ test("alarmes da Saúde: pedido de processo há mais de 1 h e coleta do PNCP atr
   assert.match(varios[0], /^3 processos de clientes esperam/);
   assert.match(varios[1], /^Busca de editais atrasada: .*MG, PI/);
   assert.match(varios[2], /^Contratos assinados atrasada: /);
+});
+
+test('resumoPreConsulta: última rodada, cobertura, 429 e próxima em português; sem registro avisa', () => {
+  const { resumoPreConsulta } = require('./admin-painel');
+  const agora = new Date('2026-11-25T12:00:00Z').getTime();
+  assert.match(resumoPreConsulta(null, agora), /ainda sem registro/);
+  const t = resumoPreConsulta({ em: '2026-11-25T07:00:00Z', proxima: '2026-11-26T05:41:00Z', consultas: 200, completos: 157, ufs: ['AM'], bloqueios429: 17, falhas: 4, paraProxima: 43, parouCedo: '429' }, agora);
+  assert.match(t, /há 5 horas, 157 de 200 buscas prontas \(79%\), incluindo as de AM; 17 pedido\(s\) de calma \(429\), 4 falha\(s\), 43 para a próxima rodada\./);
+  assert.match(t, /pediu calma/);
+  assert.match(t, /Próxima rodada a partir de/);
+});
+
+test('resumoFontesExtras: portais que responderam, editais abertos e quem falhou', () => {
+  const { resumoFontesExtras } = require('./admin-painel');
+  const agora = new Date('2026-11-25T12:00:00Z').getTime();
+  assert.match(resumoFontesExtras(null, agora), /ainda sem registro/);
+  assert.equal(resumoFontesExtras({ em: '2026-11-25T10:00:00Z', fontes: { aadc: { ok: true, abertas: 3 }, bll: { ok: false, erro: 'x' } } }, agora),
+    'Editais fora do PNCP: última rodada há 2 horas, 1 de 2 portais responderam, 3 edital(is) aberto(s). Sem resposta: bll.');
 });

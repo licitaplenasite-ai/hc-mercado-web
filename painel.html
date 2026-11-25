@@ -902,7 +902,7 @@
   .kanban-card-prazo.vencido { background: rgba(232,97,122,0.18); color: var(--vermelho-texto); }
   .kanban-card-esteira { margin-left: 4px; }
   .kanban-card-esteira.lendo { background: rgba(46,141,255,0.12); color: var(--azul-texto); }
-  .kanban-card-acoes { display: flex; gap: 6px; margin-top: 10px; }
+  .kanban-card-acoes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
   .kanban-card-acoes button {
     flex: 1; font-size: 11px; font-weight: 700; padding: 6px 4px; border-radius: 7px;
     border: 1px solid var(--borda); background: var(--fundo-fraco); color: var(--texto); cursor: pointer;
@@ -2652,6 +2652,8 @@
   }
   // DOMContentLoaded: os outros scripts já ligaram os seus cliques no menu (ex.: Boletim).
   document.addEventListener("DOMContentLoaded", abrirSecaoDoHash);
+  // "Ver resumo completo" da Plena (chat-ia-ui.js, carregado com defer) abre o mesmo modal do Resumo do edital.
+  document.addEventListener("DOMContentLoaded", () => { if (window.LicitaPlenaChatIa) window.LicitaPlenaChatIa.abrirResumo = abrirModalIA; });
   window.addEventListener("hashchange", abrirSecaoDoHash);
 
   // "Ver detalhes do edital" fica fechado na tela; na impressão/PDF os detalhes saem completos.
@@ -5453,6 +5455,7 @@
         <div class="kanban-card-acoes">
           <button type="button" class="kanban-btn-dossie" data-id="${escapeHtml(id)}"><svg class='icone-ph'><use href='#ph-folder-open'></use></svg> Dossiê</button>
           <button type="button" class="kanban-btn-resumir" data-id="${escapeHtml(id)}"><svg class='icone-ph'><use href='#ph-robot'></use></svg> Resumo</button>
+          <button type="button" class="kanban-btn-plena btn-plena" data-id="${escapeHtml(id)}" data-recurso-esconder="chat_ia" title="Perguntar à Plena sobre este edital"><svg class="lp-plena-icone-mini" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5c.6 4.6 2.9 6.9 7.5 7.5-4.6.6-6.9 2.9-7.5 7.5-.6-4.6-2.9-6.9-7.5-7.5 4.6-.6 6.9-2.9 7.5-7.5Z"/></svg> Plena</button>
           <button type="button" class="kanban-btn-abrir" data-id="${escapeHtml(id)}"><svg class='icone-ph'><use href='#ph-arrow-square-out'></use></svg> PNCP</button>
           ${(edital.numeroControlePNCP && edital.encerramento) ? `<button type="button" class="btn-criar-lembrete" title="Ser avisado por e-mail antes do prazo final de propostas" aria-label="Criar lembrete do prazo" data-numero-controle="${escapeHtml(edital.numeroControlePNCP)}" data-encerramento="${escapeHtml(edital.encerramento)}" data-objeto="${escapeHtml((edital.objeto || "").slice(0, 200))}"><svg class='icone-ph'><use href='#ph-bell'></use></svg></button>` : ""}
         </div>
@@ -6157,6 +6160,13 @@
       });
     });
 
+    alvo.querySelectorAll(".kanban-btn-plena").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const edital = lerMapa("kanban-editais")[btn.dataset.id];
+        if (edital) window.LicitaPlenaChatIa?.abrirEdital(edital, { portal: PortalOrigem.portalDe(edital).nome || "" });
+      });
+    });
+
     alvo.querySelectorAll(".kanban-btn-resumir").forEach((btn) => {
       btn.addEventListener("click", () => {
         const editaisMapa = lerMapa("kanban-editais");
@@ -6275,8 +6285,9 @@
     });
 
     // O que sobrou no cache (o robô achou, a busca ao vivo não) entra como itens novos.
+    // Fonte fora do PNCP (scripts/coletar_fontes_extras.js) não tem link do PNCP: fica com o link do edital dela.
     const doCacheRestante = Array.from(doRoboPorChave.values())
-      .map((r) => ({ ...r, link: linkPncp(r.numeroControlePNCP) }));
+      .map((r) => ({ ...r, link: linkPncp(r.numeroControlePNCP) || r.link || null }));
     return completos.concat(doCacheRestante);
   }
 
@@ -6719,11 +6730,12 @@
           <div class="boletim-rodape">
             <div class="boletim-acoes-principais">
               <button class="btn-ia-edital" type="button" title="Resumo documental e perguntas sobre este edital"><svg class='icone-ph'><use href='#ph-robot'></use></svg> Resumir edital</button>
+              <button class="btn-ia-edital btn-plena" type="button" data-recurso-esconder="chat_ia" title="Perguntar à Plena sobre este edital"><svg class="lp-plena-icone-mini" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5c.6 4.6 2.9 6.9 7.5 7.5-4.6.6-6.9 2.9-7.5 7.5-.6-4.6-2.9-6.9-7.5-7.5 4.6-.6 6.9-2.9 7.5-7.5Z"/></svg> Plena</button>
               <button class="btn-ia-edital btn-acompanhar" type="button" aria-expanded="false" aria-controls="acomp-${lote}-${i}" title="Marcar o status deste edital no Funil da empresa selecionada">${escapeHtml(rotuloBotaoAcompanhar(statusAtual))}</button>
               <button class="btn-ia-edital btn-anotar" type="button" aria-expanded="${anotacaoAtual ? "true" : "false"}" aria-controls="anot-${lote}-${i}">${anotacaoAtual ? "Anotação" : "+ Anotar"}</button>
               ${r.numeroControlePNCP ? `<button class="btn-ia-edital btn-sem-interesse" type="button" title="Não mostrar mais este edital nas minhas buscas"><svg class='icone-ph'><use href='#ph-eye'></use></svg> Sem interesse</button>` : ""}
             </div>
-            ${r.link ? `<a class="link-pncp" href="${escapeHtml(r.link)}" target="_blank" rel="noopener">${r.fonte ? `Ver edital completo (${escapeHtml(r.fonte)}) <svg class='icone-ph'><use href='#ph-arrow-square-out'></use></svg>` : "Ver edital completo no PNCP <svg class='icone-ph'><use href='#ph-arrow-square-out'></use></svg>"}</a>` : "<span></span>"}
+            ${/^https:\/\//i.test(r.link || "") ? `<a class="link-pncp" href="${escapeHtml(r.link)}" target="_blank" rel="noopener">${r.fonte ? `Ver edital completo (${escapeHtml(r.fonte)}) <svg class='icone-ph'><use href='#ph-arrow-square-out'></use></svg>` : "Ver edital completo no PNCP <svg class='icone-ph'><use href='#ph-arrow-square-out'></use></svg>"}</a>` : "<span></span>"}
           </div>
           <div class="boletim-gerenciar">
             <label class="boletim-campo-acompanhar" id="acomp-${lote}-${i}" hidden>Status do acompanhamento
@@ -6968,6 +6980,14 @@
           const usoLido = btnLido.querySelector("use");
           if (usoLido) usoLido.setAttribute("href", ativo ? "#ph-check-circle" : "#ph-eye");
           if (aoAtualizar) aoAtualizar();
+        });
+      }
+      const btnPlena = card.querySelector(".btn-plena");
+      if (btnPlena) {
+        btnPlena.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          const r = resultados[Number(card.dataset.idx)];
+          window.LicitaPlenaChatIa?.abrirEdital(r, { portal: PortalOrigem.portalDe(r).nome || "" });
         });
       }
       const btnIa = card.querySelector(".btn-ia-edital");

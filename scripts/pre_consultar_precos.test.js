@@ -115,3 +115,30 @@ test("proximosPendentes: falhou soma, não rodou mantém, completou sai, desiste
 test("escolherTermos: retomados entram primeiro, sem repetir os mais buscados", () => {
   assert.deepEqual(escolherTermos(["toner", "papel a4", "toner"], 3), ["toner", "papel a4", "caneta"]);
 });
+
+test("lista ampliada: entram os termos populares do dicionário (tv, micro-ondas...) depois da lista inicial", () => {
+  const { alvosPorUf } = require("./pre_consultar_precos");
+  const todos = escolherTermos([], 1000);
+  for (const t of ["geladeira", "tv", "micro ondas", "ar condicionado split", "smart tv", "airfryer"]) assert.ok(todos.includes(t), t);
+  assert.ok(todos.length >= 390, `${todos.length} termos`);
+  assert.equal(new Set(todos).size, todos.length, "sem repetir");
+  assert.deepEqual(alvosPorUf(["geladeira", "tv", "pneu"], ["AM", "SP"], 2), ["geladeira|AM", "tv|AM", "geladeira|SP", "tv|SP"]);
+  assert.deepEqual(alvosPorUf(["geladeira"], [], 30), []);
+});
+
+test("consultarTermo com UF: grava com a mesma chave que a tela usa com o filtro de estado", async () => {
+  const r = await consultarTermo("notebook|AM", { montar: fonte(), agora: () => new Date("2026-11-25T06:00:00Z") });
+  assert.equal(r.linhas[0].chave, chaveDaConsulta({ termo: "notebook", uf: "AM", codigoPdm: null, codigoItem: null, pagina: 1, produto: "" }));
+  assert.equal(r.linhas[1].chave, chaveDaConsulta({ termo: "notebook", uf: "AM", codigoPdm: 8435, codigoItem: null, pagina: 1, produto: "Notebook" }));
+  assert.ok(r.linhas.every((l) => l.termo === "notebook"));
+});
+
+test("status da execução para o admin: próxima rodada às 05:41 UTC e contagens sem dado de usuário", () => {
+  const { proximaExecucao, statusDaExecucao } = require("./pre_consultar_precos");
+  assert.equal(proximaExecucao(new Date("2026-11-25T03:00:00Z")), "2026-11-25T05:41:00.000Z");
+  assert.equal(proximaExecucao(new Date("2026-11-25T16:42:00Z")), "2026-11-26T05:41:00.000Z");
+  const s = statusDaExecucao({ termos: 480, completos: 300, falhas: 4, bloqueios: 17, parouCedo: "429", minutos: 80.2, bytes: 104857600,
+    falharam: ["alcool 70"], naoRodaram: ["a", "b|AM"] }, { "alcool 70": 1, a: 0, "b|AM": 0 }, new Date("2026-11-25T07:00:00Z"));
+  assert.deepEqual([s.em, s.proxima, s.consultas, s.completos, s.bloqueios429, s.parouCedo, s.naoRodaram, s.paraProxima, s.megabytes],
+    ["2026-11-25T07:00:00.000Z", "2026-11-26T05:41:00.000Z", 480, 300, 17, "429", 2, 3, 100]);
+});

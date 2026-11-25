@@ -10,6 +10,9 @@
 
 const URL_GEMINI = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
 const URL_OPENROUTER = "https://openrouter.ai/api/v1/chat/completions";
+const URL_GROQ = "https://api.groq.com/openai/v1/chat/completions";
+// Mesmo modelo padrão das perguntas do ia-edital (lib/ia-edital.js); GROQ_MODEL troca.
+const MODELO_GROQ_PADRAO = "openai/gpt-oss-20b";
 // Um modelo só: uma segunda tentativa no Gemini gastaria o tempo que é das reservas seguintes
 // (GEMINI_MODELOS_PERGUNTA permite acrescentar outro).
 const MODELOS_GEMINI_PADRAO = "gemini-3.8-flash";
@@ -74,13 +77,26 @@ async function chamarCompat(provedor, modelo, mensagens, opcoes, fetchFn, timeou
   }
 }
 
+// Groq pelo endpoint OpenAI-compatível, para quem não passa o chamarGroq do ia-edital (chat, contador, fornecedor,
+// monte-busca). Antes esses chamadores contavam a Groq em haProvedorConfigurado mas nunca a chamavam: com só a
+// GROQ_API_KEY configurada o chat dizia que havia IA e caía sempre no modo base.
+function groqCompat(env, fetchFn) {
+  const provedor = { nome: "groq", url: URL_GROQ, apiKey: env.GROQ_API_KEY };
+  return async (_chave, mensagens, opcoes) => {
+    const texto = await chamarCompat(provedor, (env.GROQ_MODEL || MODELO_GROQ_PADRAO).trim(), mensagens, opcoes, fetchFn, opcoes.timeoutMs || TIMEOUT_CHAMADA_MS);
+    return texto ? { ok: true, texto } : { ok: false };
+  };
+}
+
 // `groq` = chamarGroq já pronto para uso ((apiKey, mensagens, opts) => {ok,texto,erro}).
 // Retorna { ok, texto, provedor, modelo } ou { ok:false, erro } (erro da Groq quando ela falhou,
 // para manter a mensagem ao usuário de antes).
+// opcoes.orcamentoMs: prazo total menor que ORCAMENTO_TOTAL_MS (o chat não pode deixar a pessoa 48 s esperando).
 // opcoes.economico (uso justo do mês passou, consumir_uso_plano): as opções baratas vêm primeiro e o Gemini vira a
 // última reserva. Não bloqueia: se só o Gemini estiver configurado, ele continua respondendo.
 async function responderComFallback(mensagens, opcoes, { env = process.env, fetchFn = fetch, groq, agora = Date.now } = {}) {
-  const prazo = agora() + ORCAMENTO_TOTAL_MS;
+  const prazo = agora() + Math.min(ORCAMENTO_TOTAL_MS, opcoes.orcamentoMs || ORCAMENTO_TOTAL_MS);
+  if (!groq && env.GROQ_API_KEY) groq = groqCompat(env, fetchFn);
   let erroGroq = null;
   const tempoDaTentativa = () => Math.min(TIMEOUT_CHAMADA_MS, prazo - agora());
   const compat = montarProvedoresCompat(env);

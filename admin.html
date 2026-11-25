@@ -485,6 +485,8 @@
       <div class="cartao-lista" style="padding:20px 24px;">
         <div class="linha-titulo"><h3 style="margin:0;">Robôs</h3><button type="button" class="btn-secundario" id="btn-saude-atualizar">Verificar de novo</button></div>
         <p id="saude-cobertura"></p>
+        <p id="saude-precos"></p>
+        <p id="saude-fontes-extras"></p>
         <div class="robos" id="conteudo-saude"><div class="carregando">Carregando...</div></div>
       </div>
       <div class="cartao-lista" style="padding:20px 24px;margin-top:20px;">
@@ -1552,6 +1554,9 @@
     if (error) { alvo.innerHTML = '<div class="vazio">Indisponível: ' + escapeHtml(error.message) + '</div>'; return; }
     const agora = Date.now(), uf = AdminPainel.coberturaEstados(Object.keys(data.cobertura_por_uf || {}).length ? data.ufs_com_falha : null);
     cobertura.textContent = uf.texto;
+    // 25/11: status do robô da Pesquisa de Preços (última rodada, cobertura, 429, próxima).
+    document.getElementById("saude-precos").textContent = AdminPainel.resumoPreConsulta(data.pre_consulta, agora);
+    document.getElementById("saude-fontes-extras").textContent = AdminPainel.resumoFontesExtras(data.fontes_extras, agora);
     document.getElementById("saude-alarmes").innerHTML = AdminPainel.alarmesSaude(data, agora)
       .map((t) => `<p class="alarme-saude">${escapeHtml(t)}</p>`).join("");
     alvo.innerHTML = AdminPainel.ROBOS.map((r) => {

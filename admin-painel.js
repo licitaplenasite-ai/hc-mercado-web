@@ -16,6 +16,8 @@
     { codigo: 'cobranca', nome: 'Cobrança', faz: 'Toda manhã, bloqueia quem passou da carência e manda os lembretes de vencimento.', prazoHoras: 24 },
     { codigo: 'bases_obra', nome: 'Tabelas de preço de obra', faz: 'Confere se saiu tabela nova do SINAPI, SICRO e outras bases oficiais.', prazoHoras: 168 },
     { codigo: 'vigia_normas', nome: 'Vigia de normas de obra', faz: 'Toda terça, procura decisões do TCU e normas novas sobre orçamento de obra.', prazoHoras: 168 },
+    { codigo: 'precos', nome: 'Pesquisa de Preços pronta', faz: 'De madrugada, deixa prontas no Compras.gov as buscas mais comuns (geladeira, notebook, papel A4...), para a tela responder na hora.', prazoHoras: 24 },
+    { codigo: 'fontes_extras', nome: 'Editais fora do PNCP', faz: 'A cada 6 horas, lê os portais de órgãos que não publicam no PNCP (ex.: AADC) e junta os editais ao Boletim.', prazoHoras: 6 },
   ];
   const TOTAL_UFS = 27;
 
@@ -87,7 +89,30 @@
     return alarmes;
   }
 
-  const api = { ROBOS, TOTAL_UFS, haQuanto, classificarRobo, coberturaEstados, motivoFalhaBoletim, alarmesSaude };
+  // Resumo da última pré-consulta (dados_robo.pre_consulta_status, gravado por scripts/pre_consultar_precos.js) em português.
+  // Parar por 429 é a fonte pedindo calma, não falha: o que ficou de fora volta primeiro na noite seguinte.
+  function resumoPreConsulta(s, agora) {
+    if (!s || !s.em) return 'Pesquisa de Preços pronta: ainda sem registro da versão nova do robô.';
+    const n = (v) => Number(v) || 0;
+    const cobertura = n(s.consultas) ? Math.round((n(s.completos) / n(s.consultas)) * 100) : 0;
+    const parou = s.parouCedo === '429' ? ' Parou antes do fim porque o Compras.gov pediu calma (respostas 429).' : s.parouCedo === 'tempo' ? ' Parou antes do fim por tempo.' : '';
+    const proxima = s.proxima ? ` Próxima rodada a partir de ${new Date(s.proxima).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}.` : '';
+    return `Pesquisa de Preços pronta: última rodada ${haQuanto(s.em, agora)}, ${n(s.completos)} de ${n(s.consultas)} buscas prontas (${cobertura}%)`
+      + `${Array.isArray(s.ufs) && s.ufs.length ? `, incluindo as de ${s.ufs.join(', ')}` : ''}; ${n(s.bloqueios429)} pedido(s) de calma (429), ${n(s.falhas)} falha(s), `
+      + `${n(s.paraProxima)} para a próxima rodada.${parou}${proxima}`;
+  }
+
+  // Portais fora do PNCP (dados_robo.fontes_extras_status): quais responderam na última rodada e quantos editais abertos.
+  function resumoFontesExtras(s, agora) {
+    const fontes = s && s.fontes && typeof s.fontes === 'object' ? Object.entries(s.fontes) : [];
+    if (!s || !s.em || !fontes.length) return 'Editais fora do PNCP: ainda sem registro do robô.';
+    const falhas = fontes.filter(([, f]) => !f || !f.ok).map(([id]) => id);
+    const abertas = fontes.reduce((t, [, f]) => t + (Number(f && f.abertas) || 0), 0);
+    return `Editais fora do PNCP: última rodada ${haQuanto(s.em, agora)}, ${fontes.length - falhas.length} de ${fontes.length} portais responderam, ${abertas} edital(is) aberto(s).`
+      + (falhas.length ? ` Sem resposta: ${falhas.join(', ')}.` : '');
+  }
+
+  const api = { ROBOS, TOTAL_UFS, haQuanto, classificarRobo, coberturaEstados, motivoFalhaBoletim, alarmesSaude, resumoPreConsulta, resumoFontesExtras };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof window !== 'undefined') window.AdminPainel = api;
 })();

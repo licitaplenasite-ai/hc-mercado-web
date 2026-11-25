@@ -465,3 +465,29 @@ def test_modo_teste_aceita_codigo_do_cliente(monkeypatch):
     assert [cid for cid in ("c1", "c2", None) if alvo("x@y.com", cid)] == ["c2"]
     por_email = b.destinatarios_do_teste("x@y.com", [], [])
     assert por_email("X@Y.com ", None) and not por_email("z@y.com", "c1")
+
+
+# ---- Oportunidades fora do PNCP (scripts/coletar_fontes_extras.js) entram no pool do boletim ----
+def test_somar_fontes_fora_pncp_converte_e_respeita_uf(monkeypatch):
+    pedidos = []
+    hoje = be.datetime.now(be.timezone(be.timedelta(hours=-3))).strftime("%Y-%m-%dT%H:%M:%S")
+    dado = {"objeto": "Shows pirotécnicos sob demanda", "orgao": "AGENCIA AMAZONENSE DE DESENVOLVIMENTO CULTURAL", "uf": "AM", "municipio": "Manaus",
+            "publicacao": hoje, "encerramento": None, "numeroControlePNCP": "fonte:aadc:PP-017/2026", "link": "https://space/aviso.pdf",
+            "fonte": "Portal do órgão, fora do PNCP"}
+    monkeypatch.setattr(be, "_get_json", lambda caminho: pedidos.append(caminho) or [{"dado": dado}, {"dado": dict(dado, uf="SP")}])
+    pool = be.somar_fontes_fora_pncp({"AM": [_edital(1, "Papel")]}, ["AM"], hoje=be.date(2026, 11, 25))
+    assert "chave=like.fonte:*" in pedidos[0] and "publicacao=gte.2026-11-18" in pedidos[0]
+    assert len(pool["AM"]) == 2 and "SP" not in pool
+    e = pool["AM"][1]
+    assert e["orgaoEntidade"]["razaoSocial"] == "AGENCIA AMAZONENSE DE DESENVOLVIMENTO CULTURAL"
+    assert be.filtrar_por_palavra_chave(be.filtrar_por_uf_exata(be.filtrar_por_publicacao_recente([e]), ["AM"]), ["pirotecnico"]) == [e]
+    assert be.link_pncp(e) == "https://space/aviso.pdf"
+    assert be.itens_prospecta([e], ["pirotecnico"]) == []  # Prospecta segue só com processo do PNCP
+
+
+def test_somar_fontes_fora_pncp_falha_sem_derrubar(monkeypatch):
+    def falha(caminho):
+        raise RuntimeError("sem chave")
+    monkeypatch.setattr(be, "_get_json", falha)
+    pool = {"AM": [_edital(1, "Papel")]}
+    assert be.somar_fontes_fora_pncp(pool, ["AM"]) == pool

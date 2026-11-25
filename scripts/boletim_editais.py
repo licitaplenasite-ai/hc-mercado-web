@@ -532,6 +532,47 @@ def buscar_pool_por_uf(lista_ufs):
             log("ERRO ao buscar UF " + uf + ": " + str(e))
             pool[uf] = []
         time.sleep(1.2)
+    return somar_fontes_fora_pncp(pool, lista_ufs)
+
+
+# Fontes fora do PNCP (portais de orgao como o da AADC): scripts/coletar_fontes_extras.js grava em
+# oportunidades_abertas com chave "fonte:<id>:...". Entram no mesmo pool, no formato da API do PNCP, e
+# passam pelos mesmos filtros (publicacao recente, UF, palavras). Falha aqui nao derruba o boletim do PNCP.
+DIAS_FONTES_FORA_PNCP = 7
+
+
+def edital_fora_do_pncp(dado):
+    return {
+        "objetoCompra": dado.get("objeto") or "",
+        "dataPublicacaoPncp": dado.get("publicacao"),
+        "dataEncerramentoProposta": dado.get("encerramento"),
+        "numeroControlePNCP": dado.get("numeroControlePNCP"),
+        "modalidadeNome": dado.get("modalidadeNome"),
+        "srp": dado.get("srp"),
+        "orgaoEntidade": {"razaoSocial": dado.get("orgao") or ""},
+        "unidadeOrgao": {"ufSigla": (dado.get("uf") or "").upper(), "municipioNome": dado.get("municipio") or ""},
+        "usuarioNome": dado.get("usuarioNome"),
+        "linkSistemaOrigem": dado.get("linkSistemaOrigem"),
+        "link": dado.get("link"),
+        "fonte": dado.get("fonte"),
+    }
+
+
+def somar_fontes_fora_pncp(pool, lista_ufs, hoje=None):
+    corte = ((hoje or date.today()) - timedelta(days=DIAS_FONTES_FORA_PNCP)).isoformat()
+    try:
+        linhas = _get_json("oportunidades_abertas?select=dado&chave=like.fonte:*&publicacao=gte." + corte)
+    except Exception as e:
+        log("AVISO: oportunidades fora do PNCP nao carregadas (" + str(e) + ").")
+        return pool
+    somadas = 0
+    for linha in linhas:
+        edital = edital_fora_do_pncp(linha.get("dado") or {})
+        uf = edital["unidadeOrgao"]["ufSigla"]
+        if uf in lista_ufs:
+            pool.setdefault(uf, []).append(edital)
+            somadas += 1
+    log("Oportunidades fora do PNCP somadas ao boletim: " + str(somadas) + ".")
     return pool
 
 
@@ -611,7 +652,8 @@ def montar_link_pncp(e):
     if m:
         cnpj, seq, ano = m.group(1), str(int(m.group(2))), m.group(3)
         return "https://pncp.gov.br/app/editais/" + cnpj + "/" + ano + "/" + seq
-    return "https://pncp.gov.br"
+    # Oportunidade fora do PNCP (somar_fontes_fora_pncp) traz o link do edital no portal do orgao.
+    return e.get("link") or "https://pncp.gov.br"
 
 
 def link_pncp(e):

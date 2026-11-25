@@ -11,6 +11,8 @@ function comLogin(fetchDoTeste, status = "aprovado") {
     if (u.startsWith(`${SUPABASE}/rest/v1/clientes?`)) return new Response(JSON.stringify([{ status }]));
     // Pré-consulta da Pesquisa de Preços (comprasgov-marcas-produto): vazia, o teste segue para a fonte simulada.
     if (u.startsWith(`${SUPABASE}/rest/v1/cache_consultas_publicas?`)) return new Response("[]");
+    // Fonte complementar do PNCP (comprasgov_resultados): vazia, o teste vê só o Compras.gov.
+    if (u.startsWith(`${SUPABASE}/rest/v1/comprasgov_resultados?`)) return new Response("[]");
     return fetchDoTeste(url, op);
   };
 }

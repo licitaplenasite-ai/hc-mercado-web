@@ -21,41 +21,82 @@ function prepararFontesPergunta(texto, pergunta, limite = 22000) {
   return { fontes, selecaoParcial: fontes.reduce((n, p) => n + p.texto.length, 0) < paginas.reduce((n, p) => n + p.texto.length, 0) };
 }
 
-function responderPagamento(texto, pergunta) {
+function clausulasPagamento(texto, pergunta) {
   if (!/pagamento|liquida[cç][aã]o/i.test(pergunta) || /banco|ag[eê]ncia|conta (?:banc[aá]ria|corrente)/i.test(pergunta)) return null;
   const clausulas = clausulasDaFonte(texto);
   const ancoras = clausulas.filter((c) => /pagamento ser[aá] efetuado|prazo de \d+(?:\s*\([^)]*\))? dias [uú]teis para (?:fins de )?liquida[cç][aã]o/i.test(c.texto));
   if (!ancoras.length) return null;
   // Inclui o capítulo inteiro para conservar condições e exceções junto dos prazos.
   const grupos = new Set(ancoras.map((c) => JSON.stringify([c.documento, c.numero.split('.')[0]])));
-  const trechos = clausulas.filter((c) => grupos.has(JSON.stringify([c.documento, c.numero.split('.')[0]])));
+  return clausulas.filter((c) => grupos.has(JSON.stringify([c.documento, c.numero.split('.')[0]])));
+}
+
+function responderPagamento(texto, pergunta) {
+  const trechos = clausulasPagamento(texto, pergunta);
+  if (!trechos) return null;
   return 'Trechos das regras de pagamento, separados por fonte. Confira com o órgão o alcance de cada regra; não foi escolhida uma regra de prevalência.\n\n' +
     trechos.map((c) => `${c.texto}\n[${c.documento}${c.pagina ? `, página ${c.pagina}` : ''}, cláusula ${c.numero}]`).join('\n\n');
 }
 
-function formatarRespostaDocumental(texto, fontes) {
+// Mesmas cláusulas de responderPagamento, como citações da Plena (resposta sem IA: o texto é o da própria fonte).
+function citacoesPagamento(texto, pergunta, numeroControlePNCP) {
+  return (clausulasPagamento(texto, pergunta) || []).map((c) => ({ trecho: c.texto, documento: c.documento, pagina: c.pagina || '', clausula: c.numero || '', url: urlDocumentoPncp(numeroControlePNCP, c.documento) }));
+}
+
+const NAO_LOCALIZADO = 'Não encontrei no edital a resposta para esta pergunta (nos trechos analisados). Isso não comprova que ela inexista no edital. Confira os documentos oficiais.';
+
+// Confere a saída da IA contra as fontes: null = inválida; [] = não localizado; senão os trechos literais, cada um
+// com documento/página/cláusula da FONTE (nunca do texto da IA). Base da resposta em texto e das citações da Plena.
+function evidenciasValidadas(texto, fontes) {
   if (typeof texto !== 'string' || texto.length > 30000) return null;
   let dados;
   try { dados = JSON.parse(texto.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')); } catch (_) { return null; }
   if (!dados || typeof dados.naoLocalizado !== 'boolean' || !Array.isArray(dados.evidencias) || dados.evidencias.length > 6) return null;
-  if (dados.naoLocalizado) return dados.evidencias.length ? null : 'Não encontrei no edital a resposta para esta pergunta (nos trechos analisados). Isso não comprova que ela inexista no edital. Confira os documentos oficiais.';
+  if (dados.naoLocalizado) return dados.evidencias.length ? null : [];
   if (!dados.evidencias.length) return null;
-  const trechos = [];
+  const itens = [];
   for (const e of dados.evidencias) {
     const fonte = fontes.find((f) => f.id === e?.id);
     if (!fonte || typeof e.trecho !== 'string') return null;
     const trecho = normalizar(e.trecho);
     if (trecho.length < 15 || trecho.length > 3500 || !fonte.texto.includes(trecho)) return null;
-    trechos.push(`${trecho}\n[${fonte.documento}${fonte.pagina ? `, página ${fonte.pagina}` : ''}${fonte.numero ? `, cláusula ${fonte.numero}` : ''}]`);
+    itens.push({ trecho, documento: fonte.documento, pagina: fonte.pagina || '', clausula: fonte.numero || '' });
   }
-  return `Trechos localizados para sua pergunta:\n\n${[...new Set(trechos)].join('\n\n')}`;
+  return itens;
+}
+const rotuloFonte = (c) => `${c.documento}${c.pagina ? `, página ${c.pagina}` : ''}${c.clausula ? `, cláusula ${c.clausula}` : ''}`;
+
+function formatarRespostaDocumental(texto, fontes) {
+  const itens = evidenciasValidadas(texto, fontes);
+  if (!itens) return null;
+  if (!itens.length) return NAO_LOCALIZADO;
+  return `Trechos localizados para sua pergunta:\n\n${[...new Set(itens.map((c) => `${c.trecho}\n[${rotuloFonte(c)}]`))].join('\n\n')}`;
 }
 
-function avisarCobertura(resposta, leituraParcial, selecaoParcial) {
+// Link oficial do arquivo no PNCP a partir do rótulo "Título (#3)" que buscarTextoEdital grava na fonte.
+function urlDocumentoPncp(numeroControlePNCP, documento) {
+  const id = /^(\d{14})-\d+-(\d+)\/(\d{4})$/.exec(String(numeroControlePNCP || ''));
+  const seq = /\(#(\d{1,4})\)/.exec(String(documento || ''));
+  return id && seq ? `https://pncp.gov.br/pncp-api/v1/orgaos/${id[1]}/compras/${id[3]}/${Number(id[2])}/arquivos/${seq[1]}` : null;
+}
+
+// Citações estruturadas para a Plena: montadas aqui, no servidor, a partir das fontes validadas.
+function citacoesDocumentais(texto, fontes, numeroControlePNCP) {
+  const itens = evidenciasValidadas(texto, fontes) || [];
+  const vistos = new Set();
+  return itens.filter((c) => !vistos.has(c.trecho) && vistos.add(c.trecho))
+    .map((c) => ({ ...c, url: urlDocumentoPncp(numeroControlePNCP, c.documento) }));
+}
+
+function avisosDeCobertura(leituraParcial, selecaoParcial) {
   const avisos = [];
   if (leituraParcial) avisos.push('Atenção: a leitura dos documentos é parcial. Confira também o material não lido.');
   if (selecaoParcial) avisos.push('Esta resposta usa uma seleção de trechos da fonte armazenada; não equivale à análise integral do edital.');
-  return [...avisos, resposta].join('\n\n');
+  return avisos;
 }
 
-module.exports = { prepararFontesPergunta, responderPagamento, formatarRespostaDocumental, avisarCobertura };
+function avisarCobertura(resposta, leituraParcial, selecaoParcial) {
+  return [...avisosDeCobertura(leituraParcial, selecaoParcial), resposta].join('\n\n');
+}
+
+module.exports = { prepararFontesPergunta, responderPagamento, citacoesPagamento, formatarRespostaDocumental, citacoesDocumentais, urlDocumentoPncp, avisosDeCobertura, avisarCobertura };

@@ -15,6 +15,7 @@
 
 const { cabecalhosPadrao, exigirAprovadoComLimite, SUPABASE_URL, SUPABASE_ANON_KEY } = require("./_auth");
 const { comCache, cabecalhosDoCache } = require("./_cache_publico");
+const { traduzirTermo } = require("./_sinonimos_precos");
 const CATALOGO_URL = "https://cnbs.estaleiro.serpro.gov.br/cnbs-api/material/v1/palavra";
 const PRECO_URL = "https://dadosabertos.compras.gov.br/modulo-pesquisa-preco/1_consultarMaterial";
 const LINK_COMPRA = "https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/public/landing?destino=acompanhamento-compra&compra=";
@@ -297,11 +298,43 @@ async function consultarComPrazo(promessas, prazoMs = PRAZO_PARCIAL_MS) {
   return estados.map((e) => e || { status: "pendente" });
 }
 
+// Linguagem popular -> nome do catálogo ("geladeira" -> "refrigerador domestico"), só com o produto inteiro reconhecido.
+// Sem tradução automática, o termo vai como veio; as sugestões do dicionário viram "Você quis dizer" na tela.
+function buscaDoCatalogo(termo) {
+  const produto = separarEspecificacao(termo).produto || semAcento(textoSeguro(termo));
+  const traducao = traduzirTermo(produto);
+  return { busca: traducao?.automatico ? traducao.termo : termo, traducao };
+}
+
+// Nada no catálogo com o nome inteiro ("geladeira consul frost"): tenta as palavras do produto, da mais longa para a
+// mais curta (até MAX_PARTES, cada uma é 1 subrequisição), cada uma também pelo dicionário ("geladeira" -> refrigerador).
+const MAX_PARTES = 2;
+async function catalogoPorPartes(termo, signal) {
+  const produto = separarEspecificacao(termo).produto || semAcento(textoSeguro(termo));
+  const partes = [...new Set(palavras(produto).filter((p) => p.length >= 4))].sort((a, b) => b.length - a.length);
+  if (partes.length < 2) return null;
+  for (const parte of partes.slice(0, MAX_PARTES)) {
+    const { busca } = buscaDoCatalogo(parte);
+    const pdms = selecionarPdms(await buscarJson(`${CATALOGO_URL}?${new URLSearchParams({ palavra: busca })}`, signal), busca);
+    if (pdms.length) return { pdms, parte: busca };
+  }
+  return null;
+}
+
 // Busca por termo (sem produto escolhido): catálogo + 1 página de cada produto. Devolve o corpo JSON e se é parcial.
 async function buscarPorTermo(termo, uf, atributos, signal, prazoParcialMs = PRAZO_PARCIAL_MS) {
-  const catalogo = await buscarJson(`${CATALOGO_URL}?${new URLSearchParams({ palavra: termo })}`, signal);
-  const pdms = selecionarPdms(catalogo, termo);
-  if (!pdms.length) return { corpo: JSON.stringify({ ok: true, itens: [], catalogos: [], atributos }), parcial: false };
+  const { busca, traducao } = buscaDoCatalogo(termo);
+  const catalogo = await buscarJson(`${CATALOGO_URL}?${new URLSearchParams({ palavra: busca })}`, signal);
+  let pdms = selecionarPdms(catalogo, busca === termo ? termo : busca);
+  let buscaUsada = busca === termo ? null : busca;
+  if (!pdms.length) {
+    const porPartes = await catalogoPorPartes(termo, signal);
+    if (porPartes) ({ pdms, parte: buscaUsada } = porPartes);
+  }
+  // "Você quis dizer": o nome do catálogo usado e as outras opções do dicionário, para a tela mostrar como botões.
+  const sugestoes = traducao ? traducao.sugestoes : [];
+  const extras = { ...(buscaUsada ? { buscaCatalogo: buscaUsada } : {}), ...(sugestoes.length ? { sugestoes } : {}) };
+  if (!pdms.length) return { corpo: JSON.stringify({ ok: true, itens: [], catalogos: [], atributos, ...extras }), parcial: false };
   const tamanhoPagina = Math.max(10, Math.floor(MAX_LINHAS / pdms.length));
   const consultas = await consultarComPrazo(pdms.map((pdm) => paginaDoPdm(pdm, { tamanhoPagina, uf, signal })), prazoParcialMs);
   const grupos = consultas.filter((consulta) => consulta.status === "fulfilled").map((consulta) => consulta.value);
@@ -315,14 +348,21 @@ async function buscarPorTermo(termo, uf, atributos, signal, prazoParcialMs = PRA
   const falhas = consultas.filter((c) => c.status !== "fulfilled").length;
   const bloqueios = consultas.filter((c) => c.status === "rejected" && c.reason?.status === 429);
   return {
-    corpo: JSON.stringify({ ok: true, fonte: "Catálogo e Pesquisa de Preços do Compras.gov", catalogos: ordem.filter((p) => p.total !== 0), atributos, itens, consultasComFalha: falhas }),
+    corpo: JSON.stringify({ ok: true, fonte: "Catálogo e Pesquisa de Preços do Compras.gov", catalogos: ordem.filter((p) => p.total !== 0), atributos, itens, consultasComFalha: falhas, ...extras }),
     parcial: falhas > 0,
     esperarS: bloqueios.length ? Math.max(10, ...bloqueios.map((c) => c.reason.esperarS || 0)) : null,
   };
 }
 
 // Parâmetros da tela já validados -> chave do cache (a mesma da tabela cache_consultas_publicas, que o robô grava).
-const chaveDaConsulta = (p) => ["marcas-produto", semAcento(p.termo), p.uf || "", p.codigoPdm ?? "", p.codigoItem ?? "", p.pagina || 1, p.produto || ""].join("|");
+// Termo traduzido pelo dicionário ("geladeira>refrigerador domestico"): a resposta guardada antes do dicionário (só peças
+// de geladeira, 25/11) não serve mais, e mudar a tradução troca a chave sozinho. Termo sem tradução mantém a chave antiga.
+function chaveDaConsulta(p) {
+  const porTermo = (p.codigoPdm ?? null) === null && (p.codigoItem ?? null) === null;
+  const busca = porTermo ? buscaDoCatalogo(p.termo).busca : p.termo;
+  const termo = busca === p.termo ? semAcento(p.termo) : `${semAcento(p.termo)}>${semAcento(busca)}`;
+  return ["marcas-produto", termo, p.uf || "", p.codigoPdm ?? "", p.codigoItem ?? "", p.pagina || 1, p.produto || ""].join("|");
+}
 
 // Uma resposta pronta para a tela: página de um produto/CATMAT, ou a busca por termo. Usada pela função e pelo robô.
 // prazoParcialMs: a tela não espera produto lento (3,5 s); o robô de madrugada espera (resposta completa para guardar).
@@ -365,6 +405,88 @@ async function lerPreConsulta(chave, event) {
   }
 }
 
+// Fonte complementar (25/11, dono: "mais dados, de todos os estados"): resultados homologados de contratações publicadas
+// no PNCP (Lei 14.133, inclusive estados e municípios fora do Compras.gov) que scripts/coletar_comprasgov_resultados.js
+// guarda em comprasgov_resultados. A API ao vivo por produto (2_consultarItensContratacoes_PNCP_14133?codigoPdm=) deu
+// 504 depois de 240 s em 25/11: só a tabela própria cabe na tela. Entra só quando o Compras.gov trouxe pouco, como um
+// produto à parte ("pncp"), sem marca (a fonte não informa) e sem repetir compra que o Compras.gov já trouxe.
+const POUCAS_COMPRAS = 40;
+const LIMITE_PNCP = 100;
+const PRODUTO_PNCP = "Outras compras no PNCP (estados e municípios)";
+// Uma palavra só, a mais longa do produto, como foi escrita (com acento): o índice trigram de descricao_item precisa de
+// trechos literais (curinga "_" no lugar das vogais varreria os 785 MB) e o ILIKE diferencia acento ("domestico" não
+// casa "DOMÉSTICO"); a mais longa é o nome do produto ("refrigerador", "condicionado", "televisor").
+// shortcut: uma palavra casa também acessório ("borracha refrigerador"); por isso o PNCP aparece como produto à parte.
+// Palavra curta ("pão", "sal") casaria quase tudo: sem palavra de 5+ letras, a fonte complementar não roda.
+function padraoDescricao(busca) {
+  const doProduto = new Set(palavras(separarEspecificacao(busca).produto));
+  const p = String(busca || "").toLocaleLowerCase("pt-BR").split(/[^\p{L}\d]+/u).filter((x) => x.length >= 5 && doProduto.has(semAcento(x)))
+    .sort((a, b) => b.length - a.length)[0];
+  return p ? `*${p}*` : null;
+}
+// "00394460000141-1-000123/2025" -> página da contratação no PNCP.
+function linkPncp(numeroControle) {
+  const m = /^(\d{14})-\d+-(\d+)\/(\d{4})$/.exec(String(numeroControle || ""));
+  return m ? `https://pncp.gov.br/app/editais/${m[1]}/${m[3]}/${Number(m[2])}` : null;
+}
+function normalizarPncp(linha) {
+  const item = linha.item || {}, resultado = linha.resultado || {}, fornecedor = linha.fornecedor || {}, compra = linha.compra || {};
+  const cnpjOrgao = textoSeguro(compra.cnpjOrgao, 14);
+  return {
+    marca: null, modelo: null, fabricante: null, produtoCatalogo: PRODUTO_PNCP, codigoPdm: "pncp", ordemCatalogo: 999,
+    descricaoItem: textoSeguro(linha.descricao_item, 500),
+    fornecedor: textoSeguro(fornecedor.nome || fornecedor.documento, 240),
+    documentoFornecedor: textoSeguro(fornecedor.documento, 30),
+    valorUnitario: Number(resultado.valorUnitarioHomologado) || null,
+    valorUnitarioCentavos: centavosDoPreco(resultado.valorUnitarioHomologado),
+    quantidade: Number(resultado.quantidadeHomologada) || null,
+    esfera: null,
+    unidade: textoSeguro(item.unidadeMedida, 20).toUpperCase(),
+    unidadeNome: textoSeguro(item.unidadeMedida, 60),
+    embalagem: null,
+    dataResultado: textoSeguro(linha.data_resultado, 20),
+    uf: textoSeguro(linha.uf, 2).toUpperCase(),
+    municipio: "",
+    orgao: /^\d{14}$/.test(cnpjOrgao) ? `Órgão CNPJ ${cnpjOrgao.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5")}` : "",
+    compra: textoSeguro(compra.id, 30),
+    itemCompra: textoSeguro(linha.id_compra_item, 30),
+    numeroItem: Number.isSafeInteger(Number(item.numero)) && Number(item.numero) > 0 ? Number(item.numero) : null,
+    catalogoCodigo: textoSeguro(item.catalogoCodigo, 20),
+    link: linkPncp(compra.numeroControlePncp),
+    fonte: "PNCP",
+  };
+}
+async function lerResultadosPncp(busca, uf, event) {
+  const padrao = padraoDescricao(busca);
+  const auth = event.headers?.authorization || event.headers?.Authorization || "";
+  if (!padrao || !auth) return [];
+  const q = new URLSearchParams({ select: "id_compra_item,descricao_item,uf,data_resultado,item:dado->item,resultado:dado->resultado,fornecedor:dado->fornecedor,compra:dado->compra",
+    descricao_item: `ilike.${padrao}`, order: "data_resultado.desc.nullslast", limit: String(LIMITE_PNCP) });
+  if (uf) q.set("uf", `eq.${uf}`);
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/comprasgov_resultados?${q}`, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: auth, Accept: "application/json" }, signal: globalThis.AbortSignal.timeout(3000),
+    });
+    if (!r.ok) return [];
+    const linhas = await r.json();
+    return Array.isArray(linhas) ? linhas.map(normalizarPncp).filter((i) => i.valorUnitarioCentavos) : [];
+  } catch {
+    return []; // fonte complementar: fora do ar ou lenta, a tela segue só com o Compras.gov
+  }
+}
+// Corpo da busca por termo + compras do PNCP quando o Compras.gov trouxe menos de POUCAS_COMPRAS. Sem repetir: a mesma
+// compra (idCompraItem) que veio do Compras.gov fica só uma vez, com a marca que ele informa.
+async function complementarComPncp(corpo, consulta, event, ler = lerResultadosPncp) {
+  let dados;
+  try { dados = JSON.parse(corpo); } catch { return corpo; }
+  if (!dados?.ok || !Array.isArray(dados.itens) || dados.itens.length >= POUCAS_COMPRAS) return corpo;
+  const vistos = new Set(dados.itens.map((i) => i.itemCompra).filter(Boolean));
+  const extras = (await ler(dados.buscaCatalogo || consulta.termo, consulta.uf, event)).filter((i) => !i.itemCompra || !vistos.has(i.itemCompra));
+  if (!extras.length) return corpo;
+  return JSON.stringify({ ...dados, itens: [...dados.itens, ...extras], fontes: ["Compras.gov", "PNCP"],
+    catalogos: [...(dados.catalogos || []), { codigo: "pncp", descricao: PRODUTO_PNCP, total: extras.length, fixo: true }] });
+}
+
 // Soma 1 no termo (só o termo; nunca quem buscou). Sem chave de serviço ou com o banco fora, não conta e não atrapalha.
 async function registrarBusca(termo) {
   const chave = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -405,15 +527,18 @@ exports.handler = async (event) => {
   if (!(Number.isSafeInteger(pagina) && pagina >= 1 && pagina <= MAX_PAGINA)) return { statusCode: 400, headers, body: JSON.stringify({ ok: false, erro: "Página inválida." }) };
 
   // Só a busca por termo entra na contagem dos mais buscados (páginas e CATMAT são desdobramentos dela).
-  const contagem = codigoPdm === null && codigoItem === null && pagina === 1 ? registrarBusca(termo) : Promise.resolve();
+  const contagemDaBusca = codigoPdm === null && codigoItem === null && pagina === 1;
+  const contagem = contagemDaBusca ? registrarBusca(termo) : Promise.resolve();
   const controlador = new AbortController();
   const timeout = setTimeout(() => controlador.abort(), 25000);
   let parcial = false;
   try {
     // 1º a pré-consulta da madrugada (resposta na hora, com a data); depois o cache compartilhado; depois o portal.
     const pre = await leituraPre;
+    // Só a busca por termo recebe o PNCP; a paginação de um produto do Compras.gov segue igual.
+    const complementar = (corpo) => (contagemDaBusca ? complementarComPncp(corpo, consulta, event) : corpo);
     if (pre) {
-      return { statusCode: 200, headers: { ...headers, "Cache-Control": CACHE, ...cabecalhosDoCache({ origem: "pre-consulta", guardadoEm: new Date(pre.atualizado_em).toISOString() }) }, body: pre.corpo };
+      return { statusCode: 200, headers: { ...headers, "Cache-Control": CACHE, ...cabecalhosDoCache({ origem: "pre-consulta", guardadoEm: new Date(pre.atualizado_em).toISOString() }) }, body: await complementar(pre.corpo) };
     }
     const r = await comCache(chave, async () => {
       const busca = await montarCorpo(consulta, { signal: controlador.signal });
@@ -425,7 +550,7 @@ exports.handler = async (event) => {
       statusCode: 200,
       // Resposta parcial (alguma consulta falhou ou ficou pendente) não fica em cache: a próxima busca tenta de novo.
       headers: { ...headers, ...(parcial ? {} : { "Cache-Control": CACHE }), ...cabecalhosDoCache(r) },
-      body: r.valor,
+      body: await complementar(r.valor),
     };
   } catch (erro) {
     return { statusCode: 502, headers, body: JSON.stringify({ ok: false, erro: "Não foi possível consultar as fontes públicas agora." }) };
@@ -448,3 +573,8 @@ module.exports.consultarComPrazo = consultarComPrazo;
 module.exports.montarCorpo = montarCorpo;
 module.exports.chaveDaConsulta = chaveDaConsulta;
 module.exports.termoParaContagem = termoParaContagem;
+module.exports.buscaDoCatalogo = buscaDoCatalogo;
+module.exports.complementarComPncp = complementarComPncp;
+module.exports.normalizarPncp = normalizarPncp;
+module.exports.padraoDescricao = padraoDescricao;
+module.exports.linkPncp = linkPncp;

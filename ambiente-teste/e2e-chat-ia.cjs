@@ -18,11 +18,11 @@ async function zerarCota() {
 }
 
 async function perguntar(p, texto) {
-  const antes = await p.locator('.lp-chat-msg.lp-chat-ia, .lp-chat-msg.lp-chat-erro').count();
+  const antes = await p.locator('.lp-chat-msg.lp-chat-ia:not(.lp-plena-pensando), .lp-chat-msg.lp-chat-erro').count();
   await p.fill('#lp-chat-campo', texto);
   await p.click('.lp-chat-form button[type=submit]');
-  await p.waitForFunction((n) => document.querySelectorAll('.lp-chat-msg.lp-chat-ia, .lp-chat-msg.lp-chat-erro').length > n
-    && !/Pensando/.test([...document.querySelectorAll('.lp-chat-msg')].pop().textContent), antes, { timeout: 30000 });
+  await p.waitForFunction((n) => document.querySelectorAll('.lp-chat-msg.lp-chat-ia:not(.lp-plena-pensando), .lp-chat-msg.lp-chat-erro').length > n
+    && !document.querySelector('.lp-plena-pensando'), antes, { timeout: 30000 });
   return (await p.locator('.lp-chat-msg').last().textContent()) || '';
 }
 
@@ -43,11 +43,11 @@ async function main() {
   const navegador = await chromium.launch({ channel: process.env.NAVEGADOR === 'chrome' ? 'chrome' : 'msedge', headless: true });
   const p = await novaPagina(navegador, seed.usuarios.gestor);
   try {
-    await passo('botão IA · BETA nas telas logadas', null, async () => {
+    await passo('botão Plena (antes IA · BETA) nas telas logadas', null, async () => {
       for (const tela of ['/painel.html', '/processos.html', '/sistema']) {
         await p.goto(SITE + tela);
         await p.waitForSelector('#chat-ia-btn', { timeout: 15000 });
-        exigir(/BETA/.test(await p.textContent('#chat-ia-btn')), `${tela}: sem selo BETA`);
+        exigir(/Plena/.test(await p.textContent('#chat-ia-btn')), `${tela}: sem o nome Plena`);
       }
     });
     await p.goto(SITE + '/painel.html');
@@ -84,7 +84,7 @@ async function main() {
       exigir(!/123\.456\.789-09/.test(meus[0].pergunta), 'CPF gravado no histórico');
       const outro = JSON.parse((await comoUsuario(seed.usuarios.outra_org, '/rest/v1/ia_conversas?select=id')).corpo);
       exigir(Array.isArray(outro) && outro.length === 0, 'outra conta vê o histórico');
-      await p.click('text=Ver histórico salvo');
+      await p.click('.lp-chat-opcoes button:has-text("Ver histórico")');
       await p.waitForTimeout(800);
       exigir(/impugna/i.test(await p.textContent('.lp-chat-lista')), 'histórico salvo não aparece na tela');
     });

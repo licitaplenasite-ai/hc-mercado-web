@@ -298,6 +298,7 @@ test("pré-consulta do robô: responde da tabela sem ir à fonte, com a data; ve
       assert.ok(u.includes(encodeURIComponent(chaveDaConsulta({ termo: "papel a4", uf: "", codigoPdm: null, codigoItem: null, pagina: 1, produto: "" }))));
       return Response.json([{ corpo: corpoGuardado, atualizado_em: atualizado }]);
     }
+    if (u.includes("/rest/v1/comprasgov_resultados?")) return Response.json([]);
     if (u.includes("/rpc/registrar_busca_termo")) { contadas.push(JSON.parse(op.body)); return new Response("", { status: 204 }); }
     if (u.includes("/rpc/")) return Response.json(1);
     chamadas.push("fonte");

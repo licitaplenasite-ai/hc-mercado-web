@@ -71,9 +71,13 @@ grant execute on function public.admin_boletim_resumo(integer), public.admin_bol
 -- Batimento: o último passo de cada workflow (scripts/registrar_robo.js) grava "deu certo agora". Sem isso, robôs que só
 -- mandam e-mail (lembretes, cobrança) ou só gravam quando há novidade (vigia de normas) não deixam rastro nenhum.
 create table if not exists public.robos_batimento (
-  robo text primary key check (robo in ('pncp', 'ufs', 'mercado', 'prospeccao', 'sancoes', 'boletim', 'lembretes', 'cobranca', 'bases_obra', 'vigia_normas')),
+  robo text primary key check (robo in ('pncp', 'ufs', 'mercado', 'prospeccao', 'sancoes', 'boletim', 'lembretes', 'cobranca', 'bases_obra', 'vigia_normas', 'precos', 'fontes_extras')),
   ultimo_sucesso timestamptz not null default now()
 );
+-- 25/11: robôs novos (pré-consulta da Pesquisa de Preços e fontes fora do PNCP). O create table acima não muda uma tabela
+-- que já existe: o check é trocado aqui (o nome é o que o Postgres dá ao check da coluna).
+alter table public.robos_batimento drop constraint if exists robos_batimento_robo_check;
+alter table public.robos_batimento add constraint robos_batimento_robo_check check (robo in ('pncp', 'ufs', 'mercado', 'prospeccao', 'sancoes', 'boletim', 'lembretes', 'cobranca', 'bases_obra', 'vigia_normas', 'precos', 'fontes_extras'));
 alter table public.robos_batimento enable row level security;
 revoke all on public.robos_batimento from anon, authenticated;
 grant select, insert, update on public.robos_batimento to service_role;
@@ -102,11 +106,15 @@ grant execute on function public.robo_registrar_sucesso(text) to service_role;
 -- 'interesse') sem dossiê há mais de 1 h. fila_dossies não tem policy (só service_role): o admin vê só a contagem.
 create or replace function public.admin_saude_robos() returns jsonb
 language plpgsql stable security definer set search_path = public as $$
-declare v_meta jsonb; v jsonb; v_alarme jsonb; v_fila jsonb;
+declare v_meta jsonb; v jsonb; v_alarme jsonb; v_fila jsonb; v_pre jsonb; v_extras jsonb;
 begin
   if not public.admin_planos_autorizado() then raise exception 'Saúde do sistema exige o proprietário com 2 fatores' using errcode = '42501'; end if;
   select dado into v_meta from public.dados_robo where chave = 'oportunidades_meta';
   select dado into v_alarme from public.dados_robo where chave = 'coleta_alarme';
+  -- 25/11: resumo da última execução da pré-consulta da Pesquisa de Preços (scripts/pre_consultar_precos.js).
+  select dado into v_pre from public.dados_robo where chave = 'pre_consulta_status';
+  -- Fontes fora do PNCP (scripts/coletar_fontes_extras.js): situação de cada portal na última rodada.
+  select dado into v_extras from public.dados_robo where chave = 'fontes_extras_status';
   -- execute: a função continua valendo num banco em que fila_dossies.sql ainda não foi aplicado.
   if to_regclass('public.fila_dossies') is not null then
     execute $q$select jsonb_build_object('esperando', count(*), 'mais_antigo', min(pedido_em))
@@ -125,13 +133,17 @@ begin
       'lembretes', (v ->> 'lembretes')::timestamptz,
       'cobranca', (v ->> 'cobranca')::timestamptz,
       'bases_obra', greatest((v ->> 'bases_obra')::timestamptz, (select max(coletado_em) from public.bases_preco_versoes)),
-      'vigia_normas', greatest((v ->> 'vigia_normas')::timestamptz, (select max(criado_em) from public.orcamento_normas_novidades)))),
+      'vigia_normas', greatest((v ->> 'vigia_normas')::timestamptz, (select max(criado_em) from public.orcamento_normas_novidades)),
+      'precos', greatest((v ->> 'precos')::timestamptz, (v_pre ->> 'em')::timestamptz),
+      'fontes_extras', (v ->> 'fontes_extras')::timestamptz)),
     'ufs_com_falha', coalesce(v_meta -> 'ufsComFalha', '[]'::jsonb),
     'cobertura_por_uf', (select coalesce(jsonb_object_agg(k, x ->> 'atualizadoEm'), '{}'::jsonb)
       from jsonb_each(coalesce(v_meta -> 'coberturaPorUf', '{}'::jsonb)) as e(k, x) where jsonb_typeof(x) = 'object'),
     'normas_para_revisar', (select count(*) from public.orcamento_normas_novidades where situacao = 'para_revisar'),
     'coleta_alarme', v_alarme,
-    'dossies_interesse_atrasados', v_fila);
+    'dossies_interesse_atrasados', v_fila,
+    'pre_consulta', v_pre,
+    'fontes_extras', v_extras);
 end $$;
 revoke all on function public.admin_saude_robos() from public, anon;
 grant execute on function public.admin_saude_robos() to authenticated;

@@ -195,7 +195,9 @@ test('numeroDoItem: campo do servidor; resposta antiga sai do idCompraItem; sem 
   assert.equal(M.numeroDoItem(null), null);
   // A planilha leva o nº do item na última coluna.
   const [cab, linha] = M.linhasPlanilha([item(100, { itemCompra: '1530380590045202500021' })]);
-  assert.deepEqual([cab.at(-1), linha.at(-1)], ['Nº do item na compra', 21]);
+  assert.deepEqual([cab.at(-2), linha.at(-2)], ['Nº do item na compra', 21]);
+  // Última coluna: de onde veio a linha (o PNCP entra quando o Compras.gov traz pouco).
+  assert.deepEqual([cab.at(-1), linha.at(-1), M.linhasPlanilha([{ fonte: 'PNCP' }])[1].at(-1)], ['Fonte', 'Compras.gov', 'PNCP']);
 });
 
 test('filtrar por empresa (CNPJ junta grafias do nome) e por órgão (sem diferença de caixa, por UF)', () => {
