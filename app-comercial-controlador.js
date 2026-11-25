@@ -874,6 +874,7 @@
 
     return {
       iniciar,
+      haAlteracoesNaoSalvas,
       entrar,
       sair,
       selecionarIndice,

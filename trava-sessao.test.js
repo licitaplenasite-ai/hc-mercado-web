@@ -59,7 +59,7 @@ function token(id) { return JSON.stringify({ access_token: 'a', user: { id } });
 
 // confirmar: undefined = Supabase nunca responde (para ver o que aparece antes da confirmação).
 function rodar({ local = {}, sessao = {}, confirmar, pathname = '/painel', head = null }) {
-  const ida = [], ouvintes = {};
+  const ida = [], ouvintes = {}, janela = {};
   const raiz = { style: { visibility: '' } };
   const pendente = new Promise(() => {});
   const ctx = {
@@ -74,9 +74,10 @@ function rodar({ local = {}, sessao = {}, confirmar, pathname = '/painel', head 
     }) },
   };
   ctx.window = ctx;
+  ctx.addEventListener = (t, f) => { janela[t] = f; };
   vm.runInNewContext(fonteTrava, ctx);
   const visivelNaHora = raiz.style.visibility === '';
-  return new Promise((r) => setImmediate(() => r({ ida, raiz, ctx, ouvintes, visivelNaHora })));
+  return new Promise((r) => setImmediate(() => r({ ida, raiz, ctx, ouvintes, janela, visivelNaHora })));
 }
 const agora = () => Date.now();
 
@@ -91,6 +92,19 @@ test('marca de outro usuário, vencida ou com validade inflada não libera antes
     const { raiz } = await rodar({ local: { 'sb-abc-auth-token': token('u1') }, sessao: { [MARCA]: typeof marca === 'string' ? marca : JSON.stringify(marca) } });
     assert.equal(raiz.style.visibility, 'hidden', JSON.stringify(marca));
   }
+});
+
+// 25/11 (revisão da casca): voltar depois de Sair pode restaurar a página guardada (bfcache) com dados de quem saiu.
+test('página restaurada do bfcache sem token guardado se esconde e vai ao login', async () => {
+  const { ida, raiz, ctx, janela } = await rodar({ local: { 'sb-abc-auth-token': token('u1') }, sessao: { [MARCA]: JSON.stringify({ usuario: 'u1', ate: agora() + 60000 }) } });
+  assert.deepEqual(ida, []);
+  janela.pageshow({ persisted: false });
+  assert.deepEqual(ida, []);
+  ctx.localStorage.removeItem('sb-abc-auth-token'); // Sair apaga o token
+  janela.pageshow({ persisted: true });
+  assert.equal(raiz.style.visibility, 'hidden');
+  assert.equal(ida.length, 1);
+  assert.match(ida[0], /^login\.html\?voltar=/);
 });
 
 test('sem token guardado vai ao login na hora mesmo com marca válida', async () => {

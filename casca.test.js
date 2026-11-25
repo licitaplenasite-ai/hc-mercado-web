@@ -57,6 +57,14 @@ test('descarta a tela usada há mais tempo, nunca a visível nem a pedida', () =
   assert.equal(C.MAX_VIVAS, 8);
 });
 
+test('tela com alteração não salva nunca é descartada (a casca passa de 8 se preciso)', () => {
+  const a = { usadaEm: 1, sujo: true }, b = { usadaEm: 2 }, c = { usadaEm: 3, sujo: true };
+  const sujo = (t) => t.sujo === true;
+  assert.equal(C.maisAntiga([a, b, c], [], sujo), b);
+  assert.equal(C.maisAntiga([a, b, c], [b], sujo), null);
+  assert.equal(C.maisAntiga([a, c], [], sujo), null);
+});
+
 test('app.html carrega a trava e a casca, e o _headers só libera moldura do mesmo site para as telas', () => {
   const html = fs.readFileSync('app.html', 'utf8');
   assert.match(html, /<script src="trava-sessao\.js"><\/script>/);

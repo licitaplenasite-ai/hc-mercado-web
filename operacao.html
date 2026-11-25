@@ -191,6 +191,7 @@ input::placeholder,textarea::placeholder{color:var(--text-secondary);opacity:1}
   const temAlteracoes = () => identificacao.temAlteracoesNaoSalvas() || perfilEmpresa.temAlteracoesNaoSalvas();
   const podeDescartar = () => !temAlteracoes() || confirm("Você tem alterações não salvas em Dados da empresa. Se continuar, elas serão perdidas. Para guardar, cancele e clique em “Salvar dados da empresa”.");
   window.addEventListener("beforeunload", e => { if (temAlteracoes()) { e.preventDefault(); e.returnValue = ""; } });
+  window.__lpTemAlteracoes = temAlteracoes; // casca única (casca.js): tela com alteração não salva nunca é descartada
   sb.auth.onAuthStateChange((_evento, sessao) => {
     if (usuarioIdentificacao !== undefined && sessao?.user?.id !== usuarioIdentificacao) {
       sessaoIdentificacaoAlterada = true;

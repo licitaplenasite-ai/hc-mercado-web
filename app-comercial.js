@@ -105,6 +105,7 @@
   });
 
   ctrl.iniciar();
+  globalThis.__lpTemAlteracoes = () => ctrl.haAlteracoesNaoSalvas(); // casca única (casca.js): não descarta o Hoje com alteração
   // Bloco do Hoje com as mudanças de edital dos últimos 7 dias; o próprio módulo some sem dados ou sem a tabela.
   if (cliente) void globalThis.LicitaMonitorProcesso?.montarHoje({ alvo: doc.getElementById('hoje-monitor'), cliente, abrir: (e, p) => ctrl.abrirProcesso(e, p) });
 })();

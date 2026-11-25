@@ -59,10 +59,12 @@
     if (tela && tela === telaAtual) return null;
     return TELAS.has(tela) ? 'tela' : 'sair';
   }
-  // Qual tela viva descartar para caber a nova: a usada há mais tempo, nunca a visível nem a pedida agora.
-  function maisAntiga(vivas, protegidas) {
+  // Qual tela viva descartar para caber a nova: a usada há mais tempo, nunca a visível, a pedida agora nem uma com
+  // alteração não salva (tirar o iframe não dispara beforeunload: o que foi digitado sumiria sem aviso). Sem
+  // candidata, devolve null e a casca fica com mais de MAX_VIVAS telas.
+  function maisAntiga(vivas, protegidas, temAlteracoes = () => false) {
     let velha = null;
-    for (const t of vivas) if (!protegidas.includes(t) && (!velha || t.usadaEm < velha.usadaEm)) velha = t;
+    for (const t of vivas) if (!protegidas.includes(t) && !temAlteracoes(t) && (!velha || t.usadaEm < velha.usadaEm)) velha = t;
     return velha;
   }
 
@@ -90,6 +92,22 @@
     return t;
   }
 
+  // Recarga de uma tela viva. Se ela for cancelada (a tela perguntou "sair sem salvar?" e a pessoa ficou), o documento
+  // antigo continua lá e nunca avisa "pronta": depois de 1,5 s com o mesmo documento, a casca segue com ele, sem
+  // deixar a barra de carregando 10 s na tela. Carga lenta que só troca depois disso aparece no lugar quando chegar.
+  function recarregar(t, ir) {
+    const antes = t.frame.contentDocument, inicio = Date.now();
+    t.pronta = false;
+    ir(t.frame.contentWindow);
+    const conferir = () => {
+      if (t.pronta) return;
+      let mesmo = false;
+      try { mesmo = t.frame.contentDocument === antes; } catch { /* outro documento */ }
+      if (!mesmo) return;
+      if (Date.now() - inicio >= 1500) marcarPronta(t); else setTimeout(conferir, 250);
+    };
+    setTimeout(conferir, 250);
+  }
   function quandoPronta(t, fn) {
     if (t.pronta) { fn(); return; }
     $('casca-carregando').hidden = false;
@@ -116,8 +134,7 @@
       const atual = urlDa(t);
       if (!atual || (u.search && u.search !== atual.search)) {
         // Parâmetros novos (link "Abrir no Funil", ficha de outro órgão): só esta tela carrega de novo; a casca não.
-        t.pronta = false;
-        t.frame.contentWindow.location.replace(destino);
+        recarregar(t, (w) => w.location.replace(destino));
       } else if (u.hash && u.hash !== atual.hash) {
         // Só a seção (#boletim, #kanban): navegação dentro da mesma página, sem recarregar nem criar entrada.
         t.frame.contentWindow.location.replace(atual.pathname + atual.search + u.hash);
@@ -167,9 +184,13 @@
     } catch { /* tela ainda sem corpo: fica o foco do navegador */ }
   }
 
+  // Telas com formulário expõem window.__lpTemAlteracoes(); se não der para perguntar, a tela fica (não perde nada).
+  function comAlteracoes(t) {
+    try { const f = t.frame.contentWindow.__lpTemAlteracoes; return typeof f === 'function' && f() === true; } catch { return true; }
+  }
   function descartarSobras() {
     while (vivas.size > MAX_VIVAS) {
-      const velha = maisAntiga(vivas.values(), [ativa, pedida]);
+      const velha = maisAntiga(vivas.values(), [ativa, pedida], comAlteracoes);
       if (!velha) return;
       vivas.delete(velha.tela);
       velha.frame.remove();
@@ -197,9 +218,8 @@
     t.vistaEm = Date.now();
     // Tela que sabe se atualizar sem recarregar (mantém filtros e o que foi digitado) usa o próprio caminho.
     if (!$('casca-aviso').dataset.empresa && typeof w.__lpAtualizar === 'function') { w.__lpAtualizar(); return; }
-    t.pronta = false;
     pedida = t;
-    w.location.reload();
+    recarregar(t, (w) => w.location.reload());
     quandoPronta(t, () => {});
   }
 

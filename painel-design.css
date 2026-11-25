@@ -173,7 +173,8 @@
     .header-usuario-nome { display: none; }
     .shell { display: block; }
     nav {
-      position: fixed; top: 0; left: 0; bottom: 0; height: auto; z-index: 300;
+      /* Altura pela tela visível (dvh): com top/bottom 0 o WebKit do iPhone deixava a gaveta mais alta que a tela (25/11). */
+      position: fixed; top: 0; left: 0; bottom: auto; height: 100vh; height: 100dvh; z-index: 300;
       width: min(280px, 86vw); max-width: none; padding: 16px 8px;
       flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 2px;
       overflow-x: hidden; overflow-y: auto; border-right: 1px solid var(--border-default); border-bottom: 0;

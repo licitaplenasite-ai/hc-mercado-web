@@ -83,6 +83,18 @@
   }
   if (window.supabase && typeof SUPABASE_URL !== "undefined") conferir();
   else document.addEventListener("DOMContentLoaded", conferir);
+  // Voltar do navegador depois de Sair pode devolver a página guardada inteira na memória (bfcache), com os dados de
+  // quem saiu (na casca, todas as telas vivas). Volta assim: esconde e confere de novo; sem token guardado vai ao login.
+  if (typeof window.addEventListener === "function") window.addEventListener("pageshow", function (ev) {
+    if (!ev.persisted) return;
+    var ainda = false;
+    try {
+      for (var j = 0; j < localStorage.length; j++) if (/^sb-.+-auth-token$/.test(localStorage.key(j) || "")) { ainda = true; break; }
+    } catch (e) { ainda = true; }
+    raiz.style.visibility = "hidden";
+    if (!ainda) { irParaLogin(); return; }
+    conferir();
+  });
 })();
 
 /* Navegação do menu (24/11): pré-busca o HTML da tela ao passar o mouse no item do menu (Speculation Rules; navegadores

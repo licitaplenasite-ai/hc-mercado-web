@@ -1,4 +1,4 @@
-/* global document, window, location, localStorage -- usados só dentro de p.evaluate (navegador) */
+/* global document, window, location, localStorage, getComputedStyle -- usados só dentro de p.evaluate (navegador) */
 // E2E 25/11 (casca única, app.html): troca de tela pelo menu sem recarregar e voltando igual, links internos, endereço
 // direto, voltar/avançar, tema, menu recolhido, aviso de dados de outra tela, impressão, título, sair e limite de telas.
 //   PORTA_TESTE=8831 node ambiente-teste/servidor.cjs   (opcional: proxy que imita o Pages na frente, ex. :8832)
@@ -9,13 +9,16 @@ const { passo, exigir, seed, SITE, PRINTS, resultados } = require('./e2e.cjs');
 const pw = require(process.env.PLAYWRIGHT_CORE || 'C:/Users/harre/AppData/Local/npm-cache/_npx/e41f203b7505f1fb/node_modules/playwright-core');
 const IPHONE = process.env.NAVEGADOR === 'webkit';
 
-const ativo = async (p) => (await p.$('.casca-tela.ativa')).contentFrame();
+const ativo = async (p) => (await p.waitForSelector('.casca-tela.ativa', { state: 'attached', timeout: 30000 })).contentFrame();
 // Espera a casca mostrar a tela (e a seção do painel), com a página dela já liberada pela trava.
 const naTela = (p, tela, secao) => p.waitForFunction(([tela, secao]) => {
-  const fr = document.querySelector('.casca-tela.ativa');
-  const w = fr && fr.contentWindow, d = fr && fr.contentDocument;
-  if (!d || w.location.pathname.replace(/\.html$/, '') !== '/' + tela || d.documentElement.style.visibility === 'hidden' || !d.body) return false;
-  return !secao || !!d.querySelector(`main section#${secao}.ativa`);
+  // Durante a troca o iframe pode estar entre documentos (sem documentElement/body ainda): conta como "ainda não".
+  try {
+    const fr = document.querySelector('.casca-tela.ativa');
+    const w = fr && fr.contentWindow, d = fr && fr.contentDocument;
+    if (!w || !d || !d.documentElement || !d.body || w.location.pathname.replace(/\.html$/, '') !== '/' + tela || d.documentElement.style.visibility === 'hidden') return false;
+    return !secao || !!d.querySelector(`main section#${secao}.ativa`);
+  } catch { return false; }
 }, [tela, secao || null], { timeout: 30000 });
 async function menu(p, titulo, tela, secao) {
   if (await p.isVisible('#casca-aviso')) await p.click('#casca-aviso-fechar'); // aviso legítimo de passo anterior (ex.: Abrir no Funil trocou a empresa)
@@ -214,6 +217,18 @@ async function main() {
       return n + ' iframes';
     });
 
+    await passo('tela com alteração não salva nunca é descartada (passa de 8 se preciso)', p, async () => {
+      // Todas as telas vivas fingem ter alteração (como operacao.html com Dados da empresa editados): nenhuma pode sair.
+      await p.evaluate(() => { for (const fr of document.querySelectorAll('.casca-tela')) fr.contentWindow.__lpTemAlteracoes = () => true; });
+      const antes = await p.evaluate(() => [...document.querySelectorAll('.casca-tela')].map((f) => f.title));
+      await (await ativo(p)).evaluate(() => { location.href = 'bdi.html'; });
+      await naTela(p, 'bdi');
+      const depois = await p.evaluate(() => [...document.querySelectorAll('.casca-tela')].map((f) => f.title));
+      exigir(antes.every((t) => depois.includes(t)) && depois.length === antes.length + 1, `antes ${antes} / depois ${depois}`);
+      await p.evaluate(() => { for (const fr of document.querySelectorAll('.casca-tela')) fr.contentWindow.__lpTemAlteracoes = () => false; });
+      return depois.length + ' iframes, nenhuma tela com alteração descartada';
+    });
+
     await passo('link direto fora da casca continua sozinho; o menu dele entra na casca', p, async () => {
       await p.goto(SITE + '/painel.html#precos');
       await p.waitForSelector('#precos.ativa', { timeout: 30000 });
@@ -232,6 +247,13 @@ async function main() {
       await p.waitForURL(/\/login/, { timeout: 20000 });
       exigir(await p.evaluate(() => !document.querySelector('.casca-tela')), 'login dentro da casca');
       return p.url().replace(SITE, '');
+    });
+    await passo('voltar depois de Sair não mostra a casca com os dados de quem saiu', p, async () => {
+      await p.goBack().catch(() => null);
+      await p.waitForTimeout(1500);
+      const r = await p.evaluate(() => ({ url: location.pathname, visivel: getComputedStyle(document.documentElement).visibility !== 'hidden' && !!document.querySelector('.casca-tela.ativa') }));
+      exigir(!r.visivel, 'casca visível depois de sair: ' + JSON.stringify(r));
+      return JSON.stringify(r);
     });
     await p.screenshot({ path: path.join(PRINTS, 'fim.png') });
     await passo('sem erro de JavaScript', null, async () => { exigir(!erros.length, erros.join(' | ')); });
