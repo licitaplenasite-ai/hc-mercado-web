@@ -196,7 +196,11 @@
      Menu, à esquerda; tema e Sair vão para o menu da conta (HC), e a ajuda "?" já tem o botão flutuante. */
   .menu-conta-item.so-celular { display: none; }
   @media (max-width: 480px) {
-    #header-ajuda-btn, #header-tema-btn, .header-sair { display: none; }
+    /* 25/11 (dono): uma linha só — ícone de menu, logo e o botão da conta; ajuda, sino, celular, tema e Sair no menu dela. */
+    #header-ajuda-btn, #header-tema-btn, .header-sair, #header-bell-btn, .header-acoes .header-badge, #header-user-nome { display: none; }
+    .header-acoes #celular-btn, .lp-ajuda-flutuante.so-celular { display: none !important; } /* ajuda e celular estão no menu da conta */
+    .header-topo { flex-wrap: nowrap; min-height: 44px; }
+    #nav-gaveta-btn { width: 44px; min-width: 44px; padding: 0; font-size: 22px; }
     .menu-conta-item.so-celular { display: block; }
     .header-topo { justify-content: flex-start; }
     .header-acoes { margin-left: auto; }
@@ -777,3 +781,7 @@
   .btn-buscar:hover:not(:disabled), .dash-card:hover, .dash-atalho:hover, .angulo-card:hover, .hc-acao-explorar:hover { transform: none; }
   .btn-buscar::after { display: none; }
 }
+/* Mesma logo, tamanho e nome do topo do site público (index.html + marca.css: símbolo 28 px, nome em 700) em todos os
+   topos internos (25/11, dono: "a logo de dentro está diferente da do site"). */
+html :is(.header-placa, .app-marca-placa, .marca-placa) img { width: 28px; height: 28px; }
+html :is(.header-nome, .app-marca, header .marca) { font-weight: 700; letter-spacing: -0.01em; }

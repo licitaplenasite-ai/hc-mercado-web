@@ -92,3 +92,41 @@ header .header-sair {
 }
 header .header-icone-btn:focus-visible, header .header-sair:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 @media (max-width: 768px) { .topo-conta { display: none; } }
+/* Topo do celular numa linha (25/11, menu-lateral.js topoCelular): ícone de menu, logo e o botão da conta; as ações do
+   topo ficam no menu da conta. Altura fixa, nada quebra linha de 320 a 768 px. */
+#topo-conta-btn { display: none; }
+/* Mesma altura de topo em todas as telas (57 px, a do painel): na casca a troca de tela não mexe o conteúdo de lugar. */
+header.topo-1linha { min-height: 57px; box-sizing: border-box; padding-top: 8px; padding-bottom: 8px; }
+header.topo-1linha .acoes { margin: 0; }
+@media (min-width: 1024px) { header.topo-1linha { height: 57px; padding-top: 0; padding-bottom: 0; flex-wrap: nowrap; } }
+.topo-conta-menu[hidden] { display: none !important; }
+@media (max-width: 768px) {
+  header.topo-1linha { display: flex !important; flex-wrap: nowrap !important; align-items: center !important; justify-content: space-between !important;
+    gap: 8px !important; height: 56px; min-height: 56px; box-sizing: border-box; padding-top: 0 !important; padding-bottom: 0 !important; }
+  header.topo-1linha > :first-child { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1 1 auto; flex-wrap: nowrap; }
+  header.topo-1linha > :first-child > a { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  header.topo-1linha .acoes, header.topo-1linha .app-controles { flex: none; display: flex; flex-wrap: nowrap; gap: 0; margin: 0 !important; width: auto !important; }
+  header.topo-1linha #nav-gaveta-btn { width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 0; font-size: 22px; border-radius: 12px; }
+  #topo-conta-btn { display: inline-flex; font-size: 22px; width: 44px !important; height: 44px !important; }
+  .topo-conta-menu {
+    position: fixed; right: 8px; z-index: 320; display: flex; flex-direction: column; align-items: stretch; gap: 4px;
+    width: min(280px, calc(100vw - 16px)); max-height: calc(100dvh - 80px); overflow-y: auto; box-sizing: border-box; padding: 8px;
+    background: var(--surface-default); border: 1px solid var(--border-default); border-radius: 14px; box-shadow: var(--shadow-overlay, 0 12px 32px rgba(0,0,0,.25));
+  }
+  .topo-conta-menu > button, .topo-conta-menu > a {
+    display: flex !important; align-items: center; justify-content: flex-start !important; gap: 10px; width: 100% !important; height: auto !important;
+    min-height: 44px !important; padding: 0 12px !important; margin: 0 !important; border-radius: 10px !important; font: 500 15px/20px var(--font-sans) !important;
+    text-align: left; position: static !important;
+  }
+  .topo-conta-menu > [data-rotulo]:not([data-rotulo=""])::after { content: attr(data-rotulo); }
+  .topo-conta-menu > .topo-conta { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 8px 8px; border-bottom: 1px solid var(--border-default); }
+  .topo-conta-menu > .topo-conta:not(:has(:not(:empty))) { display: none; }
+  .topo-conta-menu > label { display: flex; flex-direction: column; gap: 4px; padding: 4px 8px; font: 500 13px/18px var(--font-sans); }
+  .topo-conta-menu > label[hidden] { display: none; }
+  .topo-conta-menu > label select { width: 100%; min-height: 40px; }
+}
+
+/* Mesma logo, tamanho e nome do topo do site público (index.html + marca.css: símbolo 28 px, nome em 700) em todos os
+   topos internos (25/11, dono: "a logo de dentro está diferente da do site"). */
+html :is(.header-placa, .app-marca-placa, .marca-placa) img { width: 28px; height: 28px; }
+html :is(.header-nome, .app-marca, header .marca) { font-weight: 700; letter-spacing: -0.01em; }

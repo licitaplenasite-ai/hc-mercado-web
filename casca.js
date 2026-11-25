@@ -1,13 +1,15 @@
-/* global window, document, location, history, module, setTimeout, clearTimeout -- script de navegador (funções puras testadas no Node) */
+/* global window, document, location, history, module, setTimeout, clearTimeout, CSS -- script de navegador (funções puras testadas no Node) */
 // Casca única (25/11, dono aprovou): app.html abre cada tela do sistema num iframe da mesma origem e mantém vivas as já
 // visitadas (só esconde/mostra). Clicar no menu de novo numa tela visitada não pede nada ao servidor e volta exatamente
 // como estava (filtros, resultado, rolagem, aba, item aberto), porque a página nunca saiu da memória.
 // - Endereço: /app#/<tela>?<parâmetros>#<seção>, ex.: /app#/painel?edicao=2026-11-24#boletim. Hash e não caminho:
 //   funciona no Cloudflare Pages sem regra de reescrita e não muda nenhum link antigo (/painel.html?... continua
 //   abrindo a tela sozinha, como hoje; o 1º clique no menu dessa tela já entra na casca, ver trava-sessao.js).
-// - Topo e menu: cada tela continua com o próprio topo e menu (eles têm ações da tela: "+ Processo", sino, conta).
-//   Como a tela já está desenhada na memória, a troca não pisca; recolher o menu e o tema seguem entre as telas pelo
-//   evento "storage" (trava-sessao.js).
+// - Menu: UM só menu lateral, o da casca (app.html, 25/11, dono: "menu FIXO, parado, igual ao Effecti"). Ele é
+//   desenhado uma vez e nunca redesenhado nem rolado: trocar de tela só move a classe "ativo" de um item para outro.
+//   Dentro da casca cada tela esconde o próprio menu (trava-sessao.js, classe lp-na-casca); sozinha continua com ele.
+// - Topo: cada tela continua com o próprio topo (ele tem ações da tela: "+ Processo", sino, conta, empresa ativa),
+//   sem o logo, que fica no menu. No celular o botão "Menu" do topo da tela abre a gaveta da casca.
 // - Histórico: cada troca de tela é uma entrada (pushState) da casca; modais das telas continuam com as entradas
 //   próprias (voltar-fecha-modal.js), no mesmo histórico conjunto do navegador.
 // - Memória: no máximo MAX_VIVAS telas vivas; passou disso, descarta a usada há mais tempo (volta a carregar se
@@ -22,6 +24,9 @@
     prospeccao: 'Prospecção', 'orcamento-obra': 'Orçamento de obra', sinapi: 'Preços SINAPI', bdi: 'Calculadora de BDI',
     'mao-de-obra': 'Mão de obra', orgao: 'Órgãos', 'normas-obra': 'Normas de obra', ajuda: 'Central de Ajuda', 'resumo-processo': 'Resumo do processo' };
   const MAX_VIVAS = 8;
+  // Telas fora do menu marcam o item de onde se chega a elas; seções-atalho do painel marcam a seção que as contém.
+  const ITEM_DE = { sinapi: 'orcamento-obra', bdi: 'orcamento-obra', 'mao-de-obra': 'orcamento-obra', 'normas-obra': 'orcamento-obra', 'resumo-processo': 'processos' };
+  const SECAO_DE = { calendario: 'boletim', 'licitacao-anterior': 'diagnostico' };
   const ESPERA_MAX_MS = 10000;
 
   // "/painel.html" e "/painel" -> "painel"; "/" -> "index"; caminho com pasta -> "" (não é tela).
@@ -68,7 +73,15 @@
     return velha;
   }
 
-  const puras = { TELAS, MAX_VIVAS, telaDe, rotaDe, urlDaRota, saidaDe, destinoDe, maisAntiga };
+  // Item do menu (data-rota) da tela: "orgao", "painel#boletim". secao: id da seção visível do painel ou o #hash.
+  function itemDoMenu(tela, secao) {
+    if (tela !== 'painel') return ITEM_DE[tela] || tela;
+    let s = String(secao || '').replace(/^#/, '');
+    try { s = decodeURIComponent(s); } catch { s = ''; }
+    return 'painel#' + (SECAO_DE[s] || s || 'dashboard');
+  }
+
+  const puras = { TELAS, MAX_VIVAS, telaDe, rotaDe, urlDaRota, saidaDe, destinoDe, maisAntiga, itemDoMenu };
   if (typeof module !== 'undefined' && module.exports) { module.exports = puras; return; }
 
   const doc = document, origem = location.origin;
@@ -137,14 +150,41 @@
         recarregar(t, (w) => w.location.replace(destino));
       } else if (u.hash && u.hash !== atual.hash) {
         // Só a seção (#boletim, #kanban): navegação dentro da mesma página, sem recarregar nem criar entrada.
-        t.frame.contentWindow.location.replace(atual.pathname + atual.search + u.hash);
+        // O popstate/hashchange que a troca de # dispara na tela (trava-sessao.js -> urlMudou) não pode reescrever o
+        // endereço da casca antes do pushState abaixo: o voltar perderia a seção anterior (Analisar concorrente -> Boletim).
+        // Seção com botão no menu (escondido) da tela: o clique dele troca a seção na hora (sem quadro da seção antiga) e
+        // sem o navegador rolar até a <section> de mesmo id. Atalhos (#calendario) seguem pelo # (hashchange da tela).
+        t.trocandoSecao = true;
+        try {
+          const botao = t.frame.contentDocument.querySelector(`#menu-principal button[data-alvo="${CSS.escape(decodeURIComponent(u.hash.slice(1)))}"]`);
+          if (botao) botao.click(); else t.frame.contentWindow.location.replace(atual.pathname + atual.search + u.hash);
+        } catch { t.frame.contentWindow.location.replace(atual.pathname + atual.search + u.hash); } finally { t.trocandoSecao = false; }
       }
     }
     pedida = t;
-    quandoPronta(t, () => { if (pedida === t) exibir(t, historico); });
+    marcarMenu(itemDoMenu(tela, u.hash || (tela === 'painel' && u.searchParams.has('edicao') ? 'boletim' : '')));
+    quandoPronta(t, () => { if (pedida === t) exibir(t, historico, u.hash ? rotaDe(u) : ''); });
   }
 
-  function exibir(t, historico) {
+  // Só troca a classe de dois itens: nada é redesenhado, nada rola, nada muda de tamanho.
+  let marcado = null;
+  function marcarMenu(chave) {
+    const item = $('casca-menu').querySelector(`a[data-rota="${chave}"]:not(.casca-marca)`);
+    if (item === marcado) return;
+    if (marcado) { marcado.classList.remove('ativo'); marcado.removeAttribute('aria-current'); }
+    if (item) { item.classList.add('ativo'); item.setAttribute('aria-current', 'page'); }
+    marcado = item;
+  }
+  function marcarDaTela(t) {
+    let secao = '';
+    if (t.tela === 'painel') {
+      // O #hash primeiro: a seção do painel só troca no hashchange, depois desta marca. Sem hash (?edicao=), a seção visível.
+      try { secao = t.frame.contentWindow.location.hash || (t.frame.contentDocument.querySelector('main section.ativa') || {}).id; } catch { /* entre documentos */ }
+    }
+    marcarMenu(itemDoMenu(t.tela, secao));
+  }
+
+  function exibir(t, historico, pedidaRota) {
     const antes = ativa;
     if (antes && antes !== t) {
       antes.frame.classList.remove('ativa');
@@ -156,12 +196,16 @@
     t.usadaEm = Date.now();
     ativa = t;
     const atual = urlDa(t);
-    const rota = atual ? rotaDe(atual) : t.tela;
+    // A rota pedida, não a do iframe: a troca de seção do painel (location.replace do #) ainda não aparece no endereço do
+    // iframe neste instante, e a troca de Analisar concorrente para Boletim virava replace (o voltar pulava a seção).
+    // Sem # pedido vale o endereço do iframe (guarda ?cnpj= da ficha aberta e afins).
+    const rota = pedidaRota || (atual ? rotaDe(atual) : t.tela);
     if (historico === 'push' && ('#/' + rota) !== location.hash) {
       history.pushState({ rota }, '', '#/' + rota);
       casca.trocas++;
     } else if (historico !== 'nenhum' || ('#/' + rota) !== location.hash) history.replaceState({ rota }, '', '#/' + rota);
     atualizarTitulo();
+    if (pedidaRota) marcarMenu(itemDoMenu(t.tela, pedidaRota.split('#')[1])); else marcarDaTela(t);
     if (antes !== t) {
       $('casca-anuncio').textContent = 'Tela: ' + (NOMES[t.tela] || t.tela);
       focar(t);
@@ -173,11 +217,13 @@
   function atualizarTitulo() {
     try { doc.title = (ativa && ativa.frame.contentDocument.title) || 'LicitaPlena'; } catch { doc.title = 'LicitaPlena'; }
   }
-  // Foco no item ativo do menu da tela nova (quem usa teclado continua no menu, como antes de trocar de página).
+  // Quem clicou no menu da casca continua nele (teclado segue no menu); troca vinda de dentro da tela ou do voltar põe o
+  // foco no conteúdo da tela nova.
   function focar(t) {
+    if ($('casca-menu').contains(doc.activeElement)) return;
     try {
       const d = t.frame.contentDocument;
-      const alvo = d.querySelector('#menu-principal .ativo') || d.querySelector('main') || d.body;
+      const alvo = d.querySelector('main') || d.body;
       if (alvo === d.querySelector('main') && !alvo.hasAttribute('tabindex')) alvo.setAttribute('tabindex', '-1');
       t.frame.contentWindow.focus();
       alvo.focus({ preventScroll: true });
@@ -264,10 +310,11 @@
   }
   function urlMudou(win) {
     const t = donaDe(win);
-    if (!t || t !== ativa) return;
+    if (!t || t !== ativa || t.trocandoSecao) return;
     const u = urlDa(t);
     if (u && TELAS.has(telaDe(u.pathname))) history.replaceState({ rota: rotaDe(u) }, '', '#/' + rotaDe(u));
     atualizarTitulo();
+    marcarDaTela(t);
   }
   // A tela recebeu o evento "storage" da empresa ativa: foi outra tela que trocou (quem grava não recebe o evento).
   function empresaMudou(win) { const t = donaDe(win); if (t && t !== ativa) t.empresaMudou = true; }
@@ -279,7 +326,55 @@
     location.replace('login.html?voltar=' + encodeURIComponent('/app#/' + (u ? rotaDe(u) : 'painel')));
   }
 
-  const casca = global.__casca = { trocas: 0, abrir, desviar, urlMudou, dadosMudaram, empresaMudou, pronta, irAoLogin, vivas };
+  // Menu da casca: clique simples troca de tela aqui; Ctrl/meio-clique abre /app#/... em outra aba pelo próprio link.
+  const menuEl = $('casca-menu'), fundo = $('casca-gaveta-fundo'), recolher = $('casca-recolher');
+  const celular = global.matchMedia('(max-width: 768px)');
+  function gaveta(aberta) {
+    // Reabrir logo depois de fechar: a volta que tira a entrada da gaveta anterior ainda não terminou e fecharia esta.
+    if (aberta && global.__lpVoltaPendente) { depoisDaVolta(global, () => gaveta(true)); return; }
+    menuEl.classList.toggle('gaveta-aberta', aberta);
+    fundo.hidden = !aberta;
+    // A gaveta abre sempre do mesmo jeito: do topo, sem rolar até o item ativo.
+    if (aberta) { menuEl.scrollTop = 0; (marcado || menuEl.querySelector('a[data-rota]')).focus({ preventScroll: true }); }
+  }
+  menuEl.addEventListener('click', (ev) => {
+    const a = ev.target.closest('a');
+    const aberta = menuEl.classList.contains('gaveta-aberta');
+    if (!a || !a.dataset.rota || ev.button !== 0 || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) { if (a && aberta) gaveta(false); return; }
+    ev.preventDefault();
+    const ir = () => abrir('/' + a.dataset.rota);
+    if (!aberta) { ir(); return; }
+    marcarMenu(a.dataset.rota);
+    gaveta(false);
+    // A gaveta fechada tira a entrada dela do histórico (history.back(), voltar-fecha-modal.js, no observador logo após
+    // este clique): a tela nova só entra depois dessa volta, senão a volta a desfaria.
+    Promise.resolve().then(() => depoisDaVolta(global, ir));
+  });
+  fundo.addEventListener('click', () => gaveta(false));
+  global.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && menuEl.classList.contains('gaveta-aberta')) gaveta(false); });
+  celular.addEventListener('change', () => gaveta(false));
+  if (typeof global.criarPilhaVoltar === 'function') {
+    global.criarPilhaVoltar(global, [{ el: menuEl, aberto: () => menuEl.classList.contains('gaveta-aberta'), fechar: () => gaveta(false) }]);
+  }
+  function aplicarRecolhido(sim) {
+    doc.documentElement.classList.toggle('menu-recolhido', sim);
+    recolher.title = sim ? 'Expandir menu' : 'Recolher menu';
+    recolher.setAttribute('aria-expanded', sim ? 'false' : 'true');
+    recolher.querySelector('.nav-label').textContent = sim ? 'Expandir' : 'Recolher';
+  }
+  aplicarRecolhido(doc.documentElement.classList.contains('menu-recolhido'));
+  recolher.addEventListener('click', () => {
+    const sim = !doc.documentElement.classList.contains('menu-recolhido');
+    aplicarRecolhido(sim);
+    try { global.localStorage.setItem('hc_sidebar_colapsada', sim ? '1' : '0'); } catch { /* segue sem lembrar */ }
+  });
+  // Tema e menu recolhido mudados em outra aba (ou o tema numa tela): a casca acompanha.
+  global.addEventListener('storage', (ev) => {
+    if (ev.key === 'licitaplena_tema') doc.documentElement.dataset.theme = ev.newValue === 'escuro' ? 'dark' : 'light';
+    else if (ev.key === 'hc_sidebar_colapsada') aplicarRecolhido(ev.newValue === '1');
+  });
+
+  const casca = global.__casca = { trocas: 0, abrir, desviar, urlMudou, dadosMudaram, empresaMudou, pronta, irAoLogin, vivas, gaveta: () => gaveta(!menuEl.classList.contains('gaveta-aberta')) };
 
   global.addEventListener('popstate', (ev) => {
     const rota = (ev.state && ev.state.rota) || location.hash.replace(/^#\/?/, '');

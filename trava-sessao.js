@@ -159,6 +159,19 @@
     return;
   }
   var raiz = document.documentElement;
+  // Menu único (25/11): na casca o menu lateral é o dela (app.html), fixo. Aqui some o menu da tela, a margem dele e o
+  // logo do topo (o conteúdo ocupa a área à direita); no celular o botão "Menu" do topo abre a gaveta da casca.
+  raiz.classList.add("lp-na-casca");
+  var estilo = document.createElement("style");
+  estilo.textContent = ".lp-na-casca #menu-principal,.lp-na-casca #nav-gaveta-fundo{display:none!important}"
+    + "@media (min-width:769px){.lp-na-casca #nav-gaveta-btn,.lp-na-casca header .header-marca,.lp-na-casca header .app-marca,.lp-na-casca header .topo-marca-linha>.marca{display:none!important}}";
+  (document.head || raiz).appendChild(estilo);
+  document.addEventListener("click", function (ev) {
+    if (!(ev.target && ev.target.closest && ev.target.closest("#nav-gaveta-btn"))) return;
+    ev.stopImmediatePropagation();
+    ev.preventDefault();
+    casca.gaveta();
+  }, true);
   ["pushState", "replaceState"].forEach(function (m) {
     var original = history[m];
     history[m] = function () { var r = original.apply(this, arguments); casca.urlMudou(window); return r; };

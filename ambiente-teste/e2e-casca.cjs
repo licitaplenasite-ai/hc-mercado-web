@@ -22,13 +22,9 @@ const naTela = (p, tela, secao) => p.waitForFunction(([tela, secao]) => {
 }, [tela, secao || null], { timeout: 30000 });
 async function menu(p, titulo, tela, secao) {
   if (await p.isVisible('#casca-aviso')) await p.click('#casca-aviso-fechar'); // aviso legítimo de passo anterior (ex.: Abrir no Funil trocou a empresa)
-  const f = await ativo(p);
-  if (IPHONE) { await f.click('#nav-gaveta-btn'); await f.waitForSelector('#menu-principal.gaveta-aberta'); }
-  // Clique do mouse na posição do item, como a pessoa faz: o click() do Playwright rola a página até a posição original
-  // do menu grudado (sticky) e estragaria a conferência da rolagem.
-  const caixa = await f.locator(`#menu-principal [title^="${titulo}"]`).first().boundingBox();
-  if (IPHONE) await f.locator(`#menu-principal [title^="${titulo}"]`).first().click(); // no WebKit a caixa do iframe não casa com o mouse da página
-  else await p.mouse.click(caixa.x + caixa.width / 2, caixa.y + caixa.height / 2);
+  // Menu único (25/11): o menu é o da casca, fixo; no celular a gaveta dela abre pelo botão Menu do topo da tela.
+  if (IPHONE) { await (await ativo(p)).click('#nav-gaveta-btn'); await p.waitForSelector('#casca-menu.gaveta-aberta'); }
+  await p.locator(`#casca-menu a[title^="${titulo}"]:not(.casca-marca)`).first().click();
   await naTela(p, tela, secao);
 }
 // Pedidos de rede de verdade (fora do cache) durante fn, pela CDP no Chromium; no WebKit conta todos os pedidos.
@@ -156,23 +152,26 @@ async function main() {
 
     await passo('tema escuro numa tela vale para as outras telas vivas e para a casca', p, async () => {
       const f = await ativo(p);
+      // No celular o tema fica no menu da conta do topo (topo numa linha, 25/11).
+      if (IPHONE) { await f.click('#topo-conta-btn'); await f.waitForSelector('#topo-conta-menu:not([hidden])'); }
       await f.click('#btn-tema');
       await p.waitForTimeout(300);
       const temas = await p.evaluate(() => [...document.querySelectorAll('.casca-tela')].map((fr) => fr.contentDocument.documentElement.dataset.theme));
       await menu(p, 'Quadros', 'quadros');
       exigir(temas.every((t) => t === 'dark'), 'temas: ' + temas);
+      if (IPHONE) { await (await ativo(p)).click('#topo-conta-btn'); await (await ativo(p)).waitForSelector('#topo-conta-menu:not([hidden])'); }
       await (await ativo(p)).click('#btn-tema'); await p.waitForTimeout(300);
       const depois = await p.evaluate(() => [...document.querySelectorAll('.casca-tela')].map((fr) => fr.contentDocument.documentElement.dataset.theme));
       exigir(depois.every((t) => t !== 'dark'), 'claro: ' + depois);
       return temas.join(',');
     });
 
-    if (!IPHONE) await passo('recolher o menu numa tela recolhe nas outras', p, async () => {
-      await (await ativo(p)).click('#nav-colapsar-btn'); await p.waitForTimeout(300);
-      const c = await p.evaluate(() => [...document.querySelectorAll('.casca-tela')].map((fr) => fr.contentDocument.getElementById('menu-principal')?.classList.contains('colapsada')));
-      await (await ativo(p)).click('#nav-colapsar-btn'); await p.waitForTimeout(300);
-      exigir(c.every(Boolean), 'colapsada: ' + c);
-      return c.length + ' telas';
+    if (!IPHONE) await passo('recolher o menu da casca: trilho de ícones, telas ocupam o resto, lembrado', p, async () => {
+      await p.click('#casca-recolher'); await p.waitForTimeout(100);
+      const r = await p.evaluate(() => ({ menu: document.getElementById('casca-menu').getBoundingClientRect().width, tela: document.querySelector('.casca-tela.ativa').getBoundingClientRect().left, chave: localStorage.getItem('hc_sidebar_colapsada') }));
+      await p.click('#casca-recolher'); await p.waitForTimeout(100);
+      exigir(r.menu === 64 && r.tela === 64 && r.chave === '1', JSON.stringify(r));
+      return JSON.stringify(r);
     });
 
     await passo('gravação numa tela: ao mostrar outra tela viva aparece o aviso com Atualizar (sem recarregar sozinha)', p, async () => {

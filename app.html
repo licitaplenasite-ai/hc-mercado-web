@@ -8,29 +8,90 @@
 <!-- Ícone embutido: o navegador busca o ícone de novo a cada troca de endereço (pushState); assim trocar de tela não faz pedido. -->
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjE3NSAxNzAgMTE1MSAxMTUxIj48c3R5bGU+LmF7ZmlsbDojMDcxYjcwfS5ie2ZpbGw6IzM3NzJmOH1AbWVkaWEgKHByZWZlcnMtY29sb3Itc2NoZW1lOmRhcmspey5he2ZpbGw6I2ZmZn0uYntmaWxsOiNiY2QyZmZ9fTwvc3R5bGU+PHBhdGggY2xhc3M9ImEiIGQ9Ik0gNzAyIDIwMyBMIDI2NiA2MzkgQyAyNjUgNjQxIDI2MyA2NDIgMjYyIDY0NCBDIDI2MSA2NDUgMjU5IDY0NyAyNTggNjQ5IEMgMjU3IDY1MSAyNTYgNjUyIDI1NSA2NTQgQyAyNTQgNjU2IDI1MyA2NTggMjUyIDY2MCBDIDI1MiA2NjIgMjUxIDY2NCAyNTAgNjY2IEMgMjUwIDY2OCAyNDkgNjcwIDI0OSA2NzIgQyAyNDggNjc0IDI0OCA2NzYgMjQ4IDY3OCBDIDI0OCA2ODAgMjQ3IDY4MiAyNDcgNjg0IEMgMjQ3IDY4NiAyNDggNjg4IDI0OCA2OTAgQyAyNDggNjkzIDI0OCA2OTUgMjQ5IDY5NyBDIDI0OSA2OTkgMjQ5IDcwMSAyNTAgNzAzIEMgMjUxIDcwNSAyNTEgNzA3IDI1MiA3MDkgQyAyNTMgNzExIDI1NCA3MTIgMjU1IDcxNCBDIDI1NiA3MTYgMjU3IDcxOCAyNTggNzIwIEMgMjU5IDcyMSAyNjAgNzIzIDI2MiA3MjUgQyAyNjMgNzI2IDI2NCA3MjggMjY2IDcyOSBMIDU5MSAxMDU5IEMgNTkyIDEwNjAgNTkzIDEwNjAgNTkzIDEwNjEgQyA1OTQgMTA2MiA1OTUgMTA2MiA1OTYgMTA2MyBDIDU5NyAxMDY0IDU5NyAxMDY0IDU5OCAxMDY1IEMgNTk5IDEwNjYgNjAwIDEwNjYgNjAxIDEwNjcgQyA2MDIgMTA2OCA2MDMgMTA2OCA2MDQgMTA2OSBDIDYwNCAxMDY5IDYwNSAxMDcwIDYwNiAxMDcwIEMgNjA3IDEwNzEgNjA4IDEwNzEgNjA5IDEwNzIgQyA2MTAgMTA3MiA2MTEgMTA3MiA2MTIgMTA3MyBDIDYxMyAxMDczIDYxNCAxMDc0IDYxNSAxMDc0IEMgNjE2IDEwNzQgNjE3IDEwNzUgNjE4IDEwNzUgQyA2MTkgMTA3NSA2MjAgMTA3NiA2MjEgMTA3NiBDIDYyMiAxMDc2IDYyMyAxMDc2IDYyNCAxMDc3IEMgNjI1IDEwNzcgNjI2IDEwNzcgNjI3IDEwNzcgQyA2MjggMTA3NyA2MjkgMTA3NyA2MzAgMTA3OCBDIDYzMSAxMDc4IDYzMiAxMDc4IDYzMyAxMDc4IEMgNjM0IDEwNzggNjM1IDEwNzggNjM2IDEwNzggQyA2MzggMTA3OCA2MzkgMTA3OCA2NDAgMTA3OCBDIDY0MSAxMDc4IDY0MiAxMDc4IDY0MyAxMDc4IEMgNjQ0IDEwNzggNjQ1IDEwNzcgNjQ2IDEwNzcgQyA2NDcgMTA3NyA2NDggMTA3NyA2NDkgMTA3NyBDIDY1MCAxMDc2IDY1MSAxMDc2IDY1MiAxMDc2IEMgNjUzIDEwNzYgNjU0IDEwNzUgNjU1IDEwNzUgQyA2NTYgMTA3NSA2NTcgMTA3NSA2NTggMTA3NCBDIDY1OSAxMDc0IDY2MCAxMDczIDY2MSAxMDczIEMgNjYyIDEwNzMgNjYzIDEwNzIgNjY0IDEwNzIgQyA2NjUgMTA3MSA2NjYgMTA3MSA2NjcgMTA3MCBDIDY2OCAxMDcwIDY2OSAxMDY5IDY3MCAxMDY5IEMgNjcwIDEwNjggNjcxIDEwNjggNjcyIDEwNjcgQyA2NzMgMTA2NyA2NzQgMTA2NiA2NzUgMTA2NSBDIDY3NiAxMDY1IDY3NiAxMDY0IDY3NyAxMDYzIEMgNjc4IDEwNjMgNjc5IDEwNjIgNjgwIDEwNjEgQyA2ODAgMTA2MSA2ODEgMTA2MCA2ODIgMTA1OSBMIDg3MiA4NjkgTCA5MTggODIzIEwgODI3IDczMyBMIDYzNyA5MjMgTCA0MDIgNjg1IEwgNzQ3IDMzOSBMIDc5MiAyOTQgWiBNIDcwMiAyMDMgIi8+PHBhdGggY2xhc3M9ImIiIGQ9Ik0gODY4IDQxOCBDIDg2NCA0MTcgODYwIDQxOCA4NTYgNDE5IEMgODUxIDQxOSA4NDcgNDIxIDg0MyA0MjIgQyA4MzkgNDI0IDgzNiA0MjYgODMyIDQyOCBDIDgyOSA0MzEgODI1IDQzMyA4MjIgNDM2IEwgNjI2IDYzMiBMIDU4MSA2NzcgTCA2NzEgNzY4IEwgODY2IDU3MyBMIDExMDEgODIxIEwgNzcxIDExNTQgTCA3MjYgMTE5OSBMIDgxNiAxMjg5IEwgODYxIDEyNDQgTCAxMjM1IDg2NyBDIDEyMzcgODY2IDEyMzggODY0IDEyNDAgODYzIEMgMTI0MSA4NjEgMTI0MiA4NTkgMTI0MyA4NTggQyAxMjQ0IDg1NiAxMjQ1IDg1NCAxMjQ2IDg1MiBDIDEyNDcgODUxIDEyNDggODQ5IDEyNDkgODQ3IEMgMTI1MCA4NDUgMTI1MSA4NDMgMTI1MSA4NDEgQyAxMjUyIDgzOSAxMjUyIDgzNyAxMjUzIDgzNSBDIDEyNTMgODMzIDEyNTMgODMxIDEyNTQgODI5IEMgMTI1NCA4MjcgMTI1NCA4MjUgMTI1NCA4MjMgQyAxMjU0IDgyMSAxMjU0IDgxOSAxMjU0IDgxNyBDIDEyNTQgODE1IDEyNTMgODEzIDEyNTMgODExIEMgMTI1MyA4MDkgMTI1MiA4MDcgMTI1MiA4MDUgQyAxMjUxIDgwMyAxMjUwIDgwMSAxMjUwIDc5OSBDIDEyNDkgNzk3IDEyNDggNzk1IDEyNDcgNzkzIEMgMTI0NiA3OTEgMTI0NSA3OTAgMTI0NCA3ODggQyAxMjQzIDc4NiAxMjQyIDc4NCAxMjQwIDc4MyBDIDEyMzkgNzgxIDEyMzggNzgwIDEyMzYgNzc4IEwgOTE0IDQzNyBDIDkxMSA0MzQgOTA4IDQzMiA5MDQgNDI5IEMgOTAxIDQyNyA4OTcgNDI1IDg5MyA0MjMgQyA4ODkgNDIxIDg4NSA0MjAgODgxIDQxOSBDIDg3NyA0MTggODczIDQxOCA4NjggNDE4IFogTSA4NjggNDE4ICIvPjwvc3ZnPg==">
 <!-- Casca única (casca.js): as telas do sistema abrem em iframes vivos daqui; a trava manda ao login quem não tem sessão. -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" crossorigin="anonymous"></script><script src="supabase-config.js"></script><script src="trava-sessao.js"></script><noscript><meta http-equiv="refresh" content="0;url=login.html"></noscript>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" crossorigin="anonymous"></script><script src="supabase-config.js"></script><script src="trava-sessao.js"></script><script src="voltar-fecha-modal.js"></script><noscript><meta http-equiv="refresh" content="0;url=login.html"></noscript>
+<script>try{if(localStorage.getItem("hc_sidebar_colapsada")==="1")document.documentElement.classList.add("menu-recolhido")}catch(e){}</script>
 <style>
+/* Menu único da casca (25/11, dono: "menu lateral é FIXO, parado, igual ao Effecti"): um só elemento, desenhado aqui uma
+   vez, nunca redesenhado nem rolado pelo código; a troca de tela só move a marca do item ativo. Sem transição. */
+:root{--casca-menu:232px}
+:root.menu-recolhido{--casca-menu:64px}
 html,body{margin:0;height:100%;overflow:hidden;background:#f4f7fb;font:14px Inter,Arial,sans-serif}
 [data-theme="dark"] body{background:#0a121c}
-.casca-tela{position:fixed;inset:0;width:100%;height:100%;border:0;visibility:hidden;background:transparent}
+.casca-tela{position:fixed;top:0;bottom:0;left:var(--casca-menu);width:calc(100% - var(--casca-menu));height:100%;border:0;visibility:hidden;background:transparent}
 .casca-tela.ativa{visibility:visible}
-#casca-carregando{position:fixed;top:0;left:0;height:3px;width:40%;background:#22d3ee;z-index:3;animation:casca-ir 1s ease-in-out infinite}
+#casca-menu{position:fixed;top:0;left:0;bottom:0;z-index:5;width:var(--casca-menu);box-sizing:border-box;display:flex;flex-direction:column;gap:2px;padding:10px 8px 12px;background:#0A1B4F;border-right:1px solid #16307a;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#2a4592 transparent}
+#casca-menu a,#casca-menu button{display:flex;align-items:center;gap:10px;flex-shrink:0;min-height:32px;width:100%;box-sizing:border-box;margin:0;padding:5px 10px;border:0;border-radius:8px;background:none;color:#d6e2ff;font:500 14px/20px Inter,Arial,sans-serif;text-align:left;text-decoration:none;cursor:pointer}
+#casca-menu a:hover,#casca-menu button:hover{background:rgba(255,255,255,.09);color:#fff}
+/* Mesmo peso de letra do item comum: negrito no ativo mudava a quebra de linha (e a altura) de nomes longos. */
+#casca-menu a.ativo{background:#22D3EE;color:#0A1B4F}
+#casca-menu a:focus-visible,#casca-menu button:focus-visible{outline:2px solid #22D3EE;outline-offset:1px}
+#casca-menu a.ativo:focus-visible{outline-color:#fff}
+#casca-menu .nav-ico{width:22px;height:22px;flex:none;display:inline-flex;align-items:center;justify-content:center;font-size:18px}
+#casca-menu .icone-ph{width:1em;height:1em;fill:currentColor;flex:none}
+#casca-menu .nav-externo-ico{width:14px;height:14px;margin-left:auto;opacity:.7}
+#casca-menu .casca-marca{gap:8px;min-height:40px;margin-bottom:4px;color:#fff;font:700 16px/24px Inter,Arial,sans-serif;letter-spacing:-.01em}
+#casca-menu .casca-marca:hover{background:none}
+/* Logo livre, como no site público: sem placa, e branca sobre o marinho (igual ao tema escuro do site). */
+.casca-placa{width:32px;height:32px;flex:none;display:inline-flex;align-items:center;justify-content:center}
+.casca-placa img{width:28px;height:28px;filter:brightness(0) invert(1)}
+#casca-recolher{color:#9fb3e6!important;font-size:12px!important;border-bottom:1px solid #1d3784!important;border-radius:8px 8px 0 0!important;margin-bottom:4px!important}
+:root.menu-recolhido #casca-menu{padding:10px 6px 12px}
+:root.menu-recolhido #casca-menu a,:root.menu-recolhido #casca-menu button{justify-content:center;padding:5px 0}
+:root.menu-recolhido #casca-menu .nav-label,:root.menu-recolhido #casca-menu .nav-externo-ico{display:none}
+:root.menu-recolhido #casca-recolher .nav-ico{transform:scaleX(-1)}
+#casca-gaveta-fundo{position:fixed;inset:0;z-index:4;background:rgba(0,0,0,.45)}
+#casca-gaveta-fundo[hidden]{display:none}
+/* Celular/tablet: o menu vira gaveta (aberta pelo botão "Menu" do topo de cada tela); as telas ocupam a largura toda. */
+@media (max-width:768px){
+  :root,:root.menu-recolhido{--casca-menu:0px}
+  #casca-menu{width:min(280px,86vw);height:100vh;height:100dvh;bottom:auto;padding:16px 8px;visibility:hidden;transform:translateX(-105%);box-shadow:0 12px 32px rgba(0,0,0,.35)}
+  #casca-menu.gaveta-aberta{visibility:visible;transform:none}
+  #casca-menu a{min-height:44px;padding:8px 10px}
+  #casca-recolher{display:none!important}
+  :root.menu-recolhido #casca-menu a{justify-content:flex-start;padding:8px 10px}
+  :root.menu-recolhido #casca-menu .nav-label{display:inline}
+}
+#casca-carregando{position:fixed;top:0;left:var(--casca-menu);height:3px;width:40%;background:#22d3ee;z-index:3;animation:casca-ir 1s ease-in-out infinite}
 @keyframes casca-ir{from{transform:translateX(-100%)}to{transform:translateX(250%)}}
 @media (prefers-reduced-motion:reduce){#casca-carregando{animation:none;width:100%;opacity:.6}}
-#casca-aviso{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:4;display:flex;flex-wrap:wrap;align-items:center;gap:8px;max-width:calc(100% - 32px);box-sizing:border-box;padding:10px 12px;border-radius:10px;background:#15253a;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+#casca-aviso{position:fixed;left:calc(50% + var(--casca-menu) / 2);bottom:16px;transform:translateX(-50%);z-index:4;display:flex;flex-wrap:wrap;align-items:center;gap:8px;max-width:calc(100% - 32px);box-sizing:border-box;padding:10px 12px;border-radius:10px;background:#15253a;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.25)}
 #casca-aviso[hidden],#casca-carregando[hidden]{display:none}
 #casca-aviso button{min-height:36px;padding:0 12px;border-radius:8px;border:1px solid #fff;background:transparent;color:#fff;font:600 14px Inter,Arial,sans-serif;cursor:pointer}
 #casca-aviso #casca-aviso-atualizar{background:#fff;color:#15253a}
 #casca-aviso button:focus-visible{outline:2px solid #22d3ee;outline-offset:2px}
 .sr{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-@media print{#casca-aviso,#casca-carregando,.casca-tela:not(.ativa){display:none}}
+@media print{#casca-menu,#casca-gaveta-fundo,#casca-aviso,#casca-carregando,.casca-tela:not(.ativa){display:none}.casca-tela{left:0;width:100%}}
 </style>
 </head>
-<body>
+<body data-sem-ajuda>
+<nav id="casca-menu" aria-label="Menu principal">
+  <a class="casca-marca" href="/app#/painel#dashboard" data-rota="painel#dashboard" title="LicitaPlena" aria-label="LicitaPlena: Dashboard"><span class="casca-placa"><img src="logo-icone.svg" alt=""></span><span class="nav-label">LicitaPlena</span></a>
+  <button id="casca-recolher" type="button" title="Recolher menu" aria-controls="casca-menu" aria-expanded="true"><span class="nav-ico" aria-hidden="true">&#171;</span><span class="nav-label">Recolher</span></button>
+  <a href="/app#/sistema" data-rota="sistema" title="Hoje"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-house"></use></svg></span><span class="nav-label">Hoje</span></a>
+  <a href="/app#/painel#dashboard" data-rota="painel#dashboard" title="Dashboard"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-squares-four"></use></svg></span><span class="nav-label">Dashboard</span></a>
+  <a href="/app#/painel#boletim" data-rota="painel#boletim" title="Boletim"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-clipboard-text"></use></svg></span><span class="nav-label">Boletim</span></a>
+  <a href="/app#/painel#oportunidades" data-rota="painel#oportunidades" title="Encontrar Licitações"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-magnifying-glass"></use></svg></span><span class="nav-label">Encontrar Licitações</span></a>
+  <a href="/app#/painel#diagnostico" data-rota="painel#diagnostico" title="Inteligência de Mercado"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-chart-bar"></use></svg></span><span class="nav-label">Inteligência de Mercado</span></a>
+  <a href="/app#/prospeccao" data-rota="prospeccao" title="Prospecção"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-target"></use></svg></span><span class="nav-label">Prospecção</span></a>
+  <a href="/app#/painel#empresa" data-rota="painel#empresa" title="Analisar concorrente"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-buildings"></use></svg></span><span class="nav-label">Analisar concorrente</span></a>
+  <a href="/app#/orgao" data-rota="orgao" title="Órgãos"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-bank"></use></svg></span><span class="nav-label">Órgãos</span></a>
+  <a href="/app#/painel#transparencia" data-rota="painel#transparencia" title="Convênios e Emendas Federais"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-handshake"></use></svg></span><span class="nav-label">Convênios e Emendas Federais</span></a>
+  <a href="/app#/painel#precos" data-rota="painel#precos" title="Pesquisa de Preços"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-coins"></use></svg></span><span class="nav-label">Pesquisa de Preços</span></a>
+  <a href="/app#/orcamento-obra" data-rota="orcamento-obra" title="Orçamento de obra"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-toolbox"></use></svg></span><span class="nav-label">Orçamento de obra</span></a>
+  <a href="/app#/painel#kanban" data-rota="painel#kanban" title="Funil"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-funnel"></use></svg></span><span class="nav-label">Funil</span></a>
+  <a href="/app#/quadros" data-rota="quadros" title="Quadros"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-kanban"></use></svg></span><span class="nav-label">Quadros</span></a>
+  <a href="/app#/processos" data-rota="processos" title="Processos"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-folder-open"></use></svg></span><span class="nav-label">Processos</span></a>
+  <a href="/app#/operacao" data-rota="operacao" title="Minhas empresas e documentos"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-files"></use></svg></span><span class="nav-label">Minhas empresas e documentos</span></a>
+  <a href="extensao.html" target="_blank" rel="noopener" title="Extensão (abre em nova guia)" aria-label="Extensão (abre em nova guia)"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-puzzle-piece"></use></svg></span><span class="nav-label">Extensão</span><svg class="icone-ph nav-externo-ico" aria-hidden="true"><use href="menu-icones.svg#ph-arrow-square-out"></use></svg></a>
+  <a href="/app#/painel#juridico" data-rota="painel#juridico" title="Jurídico &amp; Dúvidas"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-scales"></use></svg></span><span class="nav-label">Jurídico &amp; Dúvidas</span></a>
+  <a href="hc.html" target="_blank" rel="noopener" data-hc-site title="Consultoria"><span class="nav-ico"><svg class="icone-ph" aria-hidden="true"><use href="menu-icones.svg#ph-briefcase"></use></svg></span><span class="nav-label">Consultoria</span></a>
+</nav>
+<div id="casca-gaveta-fundo" hidden></div>
 <div id="casca-telas"></div>
 <div id="casca-carregando" hidden></div>
 <div id="casca-aviso" role="status" hidden><span id="casca-aviso-texto"></span><button type="button" id="casca-aviso-atualizar">Atualizar esta tela</button><button type="button" id="casca-aviso-fechar">Agora não</button></div>
 <p id="casca-anuncio" class="sr" aria-live="polite"></p>
+<script src="ajuda-ui.js"></script>
 <script src="casca.js"></script>
 </body>
 </html>

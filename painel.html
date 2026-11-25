@@ -350,6 +350,9 @@
   }
 
   main { flex: 1; min-width: 0; padding: 28px 40px 70px; }
+  /* O #seção do endereço é o id da <section>: o navegador rolava a página até ela ao abrir (topo e menu subiam ~80 px).
+     A margem gigante faz a rolagem automática parar no topo; a seção certa é mostrada pelo próprio painel. */
+  main > section[id] { scroll-margin-top: 200vh; }
   section { display: none; }
   section.ativa { display: block; }
 
@@ -1546,7 +1549,7 @@
   
 <header>
   <div class="header-topo">
-    <button id="nav-gaveta-btn" class="header-icone-btn" type="button" aria-controls="menu-principal" aria-expanded="false">Menu</button>
+    <button id="nav-gaveta-btn" class="header-icone-btn" type="button" aria-controls="menu-principal" aria-expanded="false" aria-label="Menu" title="Menu"><svg class="icone-ph" viewBox="0 0 256 256" aria-hidden="true"><path d="M224,128a8,8,0,0,1-8,8H40a8,8,0,0,1,0-16H216A8,8,0,0,1,224,128ZM40,72H216a8,8,0,0,0,0-16H40a8,8,0,0,0,0,16ZM216,184H40a8,8,0,0,0,0,16H216a8,8,0,0,0,0-16Z"/></svg></button>
     <a href="painel.html" class="header-marca">
       <span class="header-placa"><img src="logo-icone.svg" alt="" class="header-logo"></span>
       <span class="header-nome">LicitaPlena</span>
@@ -1593,6 +1596,9 @@
   <button type="button" class="menu-conta-item" data-acao="planos">Planos e pre&ccedil;os</button>
   <button type="button" class="menu-conta-item" data-acao="feedback">Envie seu feedback</button>
   <!-- No celular o topo não cabe tema e Sair ao lado do nome LicitaPlena: eles aparecem aqui (painel-design.css, max-width 480px). -->
+  <button type="button" class="menu-conta-item so-celular" data-acao="ajuda">Ajuda e d&uacute;vidas</button>
+  <button type="button" class="menu-conta-item so-celular" data-acao="notificacoes">Notifica&ccedil;&otilde;es</button>
+  <button type="button" class="menu-conta-item so-celular" data-acao="celular">LicitaPlena no celular</button>
   <button type="button" class="menu-conta-item so-celular" data-acao="tema">Tema claro/escuro</button>
   <button type="button" class="menu-conta-item so-celular" data-acao="sair">Sair</button>
 </div>
@@ -1636,7 +1642,7 @@
   <button data-alvo="kanban" title="Funil"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-funnel'></use></svg></span><span class="nav-label">Funil</span></button>
   <a href="quadros.html" title="Quadros"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-kanban'></use></svg></span><span class="nav-label">Quadros</span></a>
   <a href="processos.html" title="Processos"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-folder-open'></use></svg></span><span class="nav-label">Processos</span></a>
-  <a href="operacao.html" class="nav-externo" title="Minhas empresas e documentos (abre outra página)"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-files'></use></svg></span><span class="nav-label">Minhas empresas e documentos</span><svg class='icone-ph nav-externo-ico' aria-hidden="true"><use href='#ph-arrow-square-out'></use></svg></a>
+  <a href="operacao.html" title="Minhas empresas e documentos"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-files'></use></svg></span><span class="nav-label">Minhas empresas e documentos</span></a>
   <a href="extensao.html" target="_blank" rel="noopener" class="nav-externo" title="Extensão (abre em nova guia)" aria-label="Extensão (abre em nova guia)"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-puzzle-piece'></use></svg></span><span class="nav-label">Extensão</span><svg class='icone-ph nav-externo-ico' aria-hidden="true"><use href='#ph-arrow-square-out'></use></svg></a>
   <button data-alvo="juridico" title="Jurídico &amp; Dúvidas"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-scales'></use></svg></span><span class="nav-label">Jurídico &amp; Dúvidas</span></button>
   <a href="hc.html" target="_blank" rel="noopener" data-hc-site title="Consultoria"><span class="nav-ico"><svg class='icone-ph'><use href='#ph-briefcase'></use></svg></span><span class="nav-label">Consultoria</span></a>
@@ -2619,7 +2625,8 @@
       document.getElementById(b.dataset.alvo).classList.add("ativa");
       if (bannerLimiteEl) bannerLimiteEl.style.display = (MOSTRAR_BANNER_LIMITE && SECOES_COM_BANNER_LIMITE.has(b.dataset.alvo)) ? "flex" : "none";
       // O endereço acompanha a seção (painel.html#precos) sem criar entrada no histórico.
-      if (location.hash !== "#" + b.dataset.alvo) history.replaceState(null, "", "#" + b.dataset.alvo);
+      // history.state fica: apagá-lo tirava o marcador da gaveta/modal aberto (voltar-fecha-modal.js) e sobrava entrada.
+      if (location.hash !== "#" + b.dataset.alvo) history.replaceState(history.state, "", "#" + b.dataset.alvo);
       if (!secoesAbertas.has(b.dataset.alvo)) {
         secoesAbertas.add(b.dataset.alvo);
         for (let i = esperandoSecao.length - 1; i >= 0; i--) {
@@ -2641,7 +2648,7 @@
     if (atalho === "licitacao-anterior") document.querySelector('#dg-subabas [data-subaba="licitacao-anterior"]').click();
     else document.getElementById("bol-calendario").scrollIntoView({ block: "start" });
     // Volta o endereço para a seção: clicar de novo no mesmo atalho dispara outro hashchange.
-    history.replaceState(null, "", "#" + id);
+    history.replaceState(history.state, "", "#" + id);
   }
   // DOMContentLoaded: os outros scripts já ligaram os seus cliques no menu (ex.: Boletim).
   document.addEventListener("DOMContentLoaded", abrirSecaoDoHash);
@@ -10104,6 +10111,13 @@ window.__preencherIdentidadeUsuario();
         }
       } else if (acao === "feedback") {
         abrirMensagemEquipe("Meu feedback sobre o LicitaPlena: ");
+      } else if (acao === "ajuda") {
+        document.getElementById("header-ajuda-btn")?.click();
+      } else if (acao === "notificacoes") {
+        // O sino fica escondido no celular: abre a lista dele ancorada no botão da conta (depois deste clique terminar).
+        setTimeout(() => { bellBtn?.click(); if (bellDropdown && btn) posicionarFlutuante(bellDropdown, btn); }, 0);
+      } else if (acao === "celular") {
+        setTimeout(() => document.getElementById("celular-btn")?.click(), 0);
       } else if (acao === "tema") {
         document.getElementById("header-tema-btn")?.click();
       } else if (acao === "sair") {

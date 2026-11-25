@@ -79,3 +79,27 @@ test('app.html carrega a trava e a casca, e o _headers só libera moldura do mes
   assert.doesNotMatch(h, /frame-ancestors \*|ALLOW-FROM/);
   assert.ok(!h.split(/\n(?=\S)/).some((b) => /^\/(app|index|login)/.test(b)), 'casca e públicas continuam DENY');
 });
+
+test('item do menu da casca: tela, seção do painel, atalhos e telas fora do menu', () => {
+  assert.equal(C.itemDoMenu('orgao'), 'orgao');
+  assert.equal(C.itemDoMenu('painel', '#precos'), 'painel#precos');
+  assert.equal(C.itemDoMenu('painel', 'kanban'), 'painel#kanban');
+  assert.equal(C.itemDoMenu('painel', ''), 'painel#dashboard');
+  assert.equal(C.itemDoMenu('painel', '#calendario'), 'painel#boletim');
+  assert.equal(C.itemDoMenu('painel', '#licitacao-anterior'), 'painel#diagnostico');
+  assert.equal(C.itemDoMenu('painel', '#%E0'), 'painel#dashboard');
+  for (const t of ['sinapi', 'bdi', 'mao-de-obra', 'normas-obra']) assert.equal(C.itemDoMenu(t), 'orcamento-obra');
+  assert.equal(C.itemDoMenu('resumo-processo'), 'processos');
+});
+
+test('menu da casca tem os mesmos itens, na mesma ordem, do menu das telas, e cada rota é tela da casca', () => {
+  const rotulos = (nav) => [...nav.matchAll(/<span class="nav-label">([^<]+)<\/span>/g)].map((m) => m[1]).filter((r) => !['Recolher', 'LicitaPlena'].includes(r));
+  const casca = fs.readFileSync('app.html', 'utf8').match(/<nav id="casca-menu"[\s\S]*?<\/nav>/)[0];
+  const tela = fs.readFileSync('sistema.html', 'utf8').match(/<nav id="menu-principal"[\s\S]*?<\/nav>/)[0];
+  assert.deepEqual(rotulos(casca), rotulos(tela));
+  const rotas = [...casca.matchAll(/data-rota="([^"]+)"/g)].map((m) => m[1]);
+  assert.equal(new Set(rotas).size, 16); // 16 itens internos (o logo repete o Dashboard)
+  for (const r of rotas) assert.ok(C.urlDaRota(r, O), r);
+  assert.ok(casca.includes('<a href="hc.html" target="_blank" rel="noopener" data-hc-site title="Consultoria">'), 'Consultoria');
+  assert.match(fs.readFileSync('app.html', 'utf8'), /<script src="voltar-fecha-modal\.js"><\/script>/);
+});

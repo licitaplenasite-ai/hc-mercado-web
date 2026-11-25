@@ -13,6 +13,7 @@
   medir();
   window.addEventListener('resize', medir);
   montarTopo();
+  topoCelular();
 
   const recolher = document.getElementById('nav-colapsar-btn');
   if (recolher) {
@@ -82,6 +83,68 @@
       new MutationObserver(desenhar).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class'] });
     }
     preencherConta();
+  }
+
+  // Topo do celular numa linha só (25/11, dono: "Menu à esquerda, logo, e embaixo ?, celular, tema e Sair — bagunçado"):
+  // ícone de menu, logo e um único botão de conta à direita. Até 768px as ações do topo (ajuda, celular, tema, Sair,
+  // empresa ativa...) MUDAM de lugar para o menu da conta, com os mesmos botões e cliques; no computador voltam ao topo.
+  function topoCelular() {
+    const acoes = topo && topo.querySelector('.acoes, .app-controles');
+    const menuBtn = document.getElementById('nav-gaveta-btn');
+    if (!acoes) return;
+    if (menuBtn) {
+      menuBtn.innerHTML = '<svg class="icone-ph" viewBox="0 0 256 256" aria-hidden="true"><path d="M224,128a8,8,0,0,1-8,8H40a8,8,0,0,1,0-16H216A8,8,0,0,1,224,128ZM40,72H216a8,8,0,0,0,0-16H40a8,8,0,0,0,0,16ZM216,184H40a8,8,0,0,0,0,16H216a8,8,0,0,0,0-16Z"/></svg>';
+      menuBtn.setAttribute('aria-label', 'Menu');
+      menuBtn.title = 'Menu';
+    }
+    topo.classList.add('topo-1linha');
+    const conta = document.createElement('button');
+    conta.type = 'button'; conta.id = 'topo-conta-btn'; conta.className = 'header-icone-btn';
+    conta.title = 'Conta e opções'; conta.setAttribute('aria-label', 'Conta e opções');
+    conta.setAttribute('aria-haspopup', 'true'); conta.setAttribute('aria-expanded', 'false'); conta.setAttribute('aria-controls', 'topo-conta-menu');
+    conta.innerHTML = '<svg class="icone-ph" viewBox="0 0 256 256" aria-hidden="true"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24ZM74.08,197.5a64,64,0,0,1,107.84,0,87.83,87.83,0,0,1-107.84,0ZM96,120a32,32,0,1,1,32,32A32,32,0,0,1,96,120Zm97.76,66.41a79.66,79.66,0,0,0-36.06-28.75,48,48,0,1,0-59.4,0,79.66,79.66,0,0,0-36.06,28.75,88,88,0,1,1,131.52,0Z"/></svg>';
+    const caixa = document.createElement('div');
+    caixa.id = 'topo-conta-menu'; caixa.className = 'topo-conta-menu'; caixa.hidden = true;
+    acoes.append(conta);
+    topo.append(caixa);
+    const celular = window.matchMedia('(max-width: 768px)');
+    // Rótulo visível para os botões só de ícone; ordem pedida pelo dono: conta, ajuda, celular, tema, sino, Sair.
+    const ROTULOS = { 'btn-tema': 'Tema claro/escuro', tema: 'Tema claro/escuro', 'ajuda-btn': 'Ajuda', 'celular-btn': 'LicitaPlena no celular' };
+    const ORDEM = ['topo-conta', 'app-empresa', 'ajuda-btn', 'celular-btn', 'btn-tema', 'tema'];
+    const posicao = (el) => { const i = ORDEM.findIndex((k) => el.id === k || el.classList.contains(k)); return i < 0 ? (/sair/i.test(el.className + el.id) ? 99 : 50) : i; };
+    const rotular = (el) => {
+      if (el.nodeType !== 1 || el.dataset.rotulo !== undefined) return;
+      const texto = (el.textContent || '').trim();
+      el.dataset.rotulo = ROTULOS[el.id] || (texto.length > 2 && !/^[☾☀]/.test(texto) ? '' : (el.getAttribute('aria-label') || el.title || ''));
+      if (ROTULOS[el.id]) el.setAttribute('aria-label', ROTULOS[el.id]);
+    };
+    function arrumar() {
+      if (celular.matches) {
+        for (const el of [...acoes.children]) if (el !== conta) caixa.append(el);
+        const itens = [...caixa.children];
+        itens.forEach(rotular);
+        itens.sort((x, y) => posicao(x) - posicao(y)).forEach((el) => caixa.append(el));
+      } else {
+        for (const el of [...caixa.children]) acoes.insertBefore(el, conta);
+        abrir(false);
+      }
+    }
+    function abrir(sim) {
+      caixa.hidden = !sim;
+      conta.setAttribute('aria-expanded', sim ? 'true' : 'false');
+      if (sim) caixa.style.top = Math.round(conta.getBoundingClientRect().bottom + 6) + 'px';
+    }
+    // Ajuda e celular entram no topo depois (ajuda-ui.js, avisos-celular.js): no celular vão direto para o menu da conta.
+    new MutationObserver(() => { if (celular.matches && [...acoes.children].some((el) => el !== conta)) arrumar(); }).observe(acoes, { childList: true });
+    // O botão do celular entra ao lado da ajuda, que no celular já está no menu da conta.
+    new MutationObserver(() => { if (celular.matches && [...caixa.children].some((el) => el.dataset.rotulo === undefined)) arrumar(); }).observe(caixa, { childList: true });
+    celular.addEventListener('change', arrumar);
+    arrumar();
+    conta.addEventListener('click', (ev) => { ev.stopPropagation(); abrir(caixa.hidden); });
+    // Clique num item faz a ação dele e fecha o menu; select da empresa ativa fica aberto para escolher.
+    caixa.addEventListener('click', (ev) => { if (ev.target.closest('button, a')) abrir(false); });
+    document.addEventListener('click', (ev) => { if (!caixa.hidden && !caixa.contains(ev.target)) abrir(false); });
+    document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && !caixa.hidden) { abrir(false); conta.focus(); } });
   }
 
   function sessaoGuardada() {
