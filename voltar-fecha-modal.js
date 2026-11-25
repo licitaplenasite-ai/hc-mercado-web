@@ -6,16 +6,21 @@
   // itens: [{ el, aberto: () => bool, fechar: () => void }]. Mudança de classe/hidden/open no el = abriu ou fechou.
   function criarPilhaVoltar(win, itens) {
     const pilha = [];
+    // Casca única (app.html): trocas de tela da casca entram no mesmo histórico. Se houve troca depois de a janela abrir,
+    // o history.back() do ✕ voltaria a tela da casca, então fica a entrada (no máximo um "voltar" sem efeito).
+    const trocas = () => { try { return (win.parent && win.parent !== win && win.parent.__casca && win.parent.__casca.trocas) || 0; } catch { return 0; } };
+    const trocasAoAbrir = new Map();
     function mudou(item) {
       const i = pilha.indexOf(item);
       if (item.aberto() && i < 0) {
         pilha.push(item);
+        trocasAoAbrir.set(item, trocas());
         win.history.pushState({ voltarFecha: pilha.length }, "", win.location.href);
       } else if (!item.aberto() && i >= 0) {
         pilha.splice(i, 1);
         // Só desfaz a entrada se ela ainda está no topo (fechou pelo ✕); se veio do voltar, ela já saiu.
         const nivel = (win.history.state && win.history.state.voltarFecha) || 0;
-        if (nivel > pilha.length) win.history.back();
+        if (nivel > pilha.length && trocasAoAbrir.get(item) === trocas()) win.history.back();
       }
     }
     function aoVoltar() {

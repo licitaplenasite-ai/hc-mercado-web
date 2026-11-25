@@ -8,7 +8,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const INTERNAS = ['painel', 'sistema', 'processos', 'operacao', 'quadros', 'prospeccao', 'orcamento-obra', 'sinapi',
-  'mao-de-obra', 'bdi', 'normas-obra', 'resumo-processo', 'assinar', 'ajuda', 'orgao'];
+  'mao-de-obra', 'bdi', 'normas-obra', 'resumo-processo', 'assinar', 'ajuda', 'orgao', 'app'];
 
 for (const p of INTERNAS) {
   test(`${p}.html tem a trava de sessão no head, depois do Supabase`, () => {

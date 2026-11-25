@@ -135,6 +135,6 @@
     }
     // Garante a saída mesmo sem rede: sem o token guardado, a trava de sessão manda para o login.
     try { Object.keys(localStorage).filter((k) => /^sb-.+-auth-token$/.test(k)).forEach((k) => localStorage.removeItem(k)); } catch { /* segue */ }
-    window.location.href = 'login.html';
+    window.top.location.href = 'login.html'; // dentro da casca (app.html), sai a aba inteira
   }
 })();

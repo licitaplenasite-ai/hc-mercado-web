@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="robots" content="noindex, nofollow">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LicitaPlena</title>
+<link rel="icon" type="image/png" href="favicon.png?v=3"><link rel="icon" type="image/svg+xml" href="favicon.svg">
+<!-- Casca única (casca.js): as telas do sistema abrem em iframes vivos daqui; a trava manda ao login quem não tem sessão. -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" crossorigin="anonymous"></script><script src="supabase-config.js"></script><script src="trava-sessao.js"></script><noscript><meta http-equiv="refresh" content="0;url=login.html"></noscript>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#f4f7fb;font:14px Inter,Arial,sans-serif}
+[data-theme="dark"] body{background:#0a121c}
+.casca-tela{position:fixed;inset:0;width:100%;height:100%;border:0;visibility:hidden;background:transparent}
+.casca-tela.ativa{visibility:visible}
+#casca-carregando{position:fixed;top:0;left:0;height:3px;width:40%;background:#22d3ee;z-index:3;animation:casca-ir 1s ease-in-out infinite}
+@keyframes casca-ir{from{transform:translateX(-100%)}to{transform:translateX(250%)}}
+@media (prefers-reduced-motion:reduce){#casca-carregando{animation:none;width:100%;opacity:.6}}
+#casca-aviso{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:4;display:flex;flex-wrap:wrap;align-items:center;gap:8px;max-width:calc(100% - 32px);box-sizing:border-box;padding:10px 12px;border-radius:10px;background:#15253a;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+#casca-aviso[hidden],#casca-carregando[hidden]{display:none}
+#casca-aviso button{min-height:36px;padding:0 12px;border-radius:8px;border:1px solid #fff;background:transparent;color:#fff;font:600 14px Inter,Arial,sans-serif;cursor:pointer}
+#casca-aviso #casca-aviso-atualizar{background:#fff;color:#15253a}
+#casca-aviso button:focus-visible{outline:2px solid #22d3ee;outline-offset:2px}
+.sr{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media print{#casca-aviso,#casca-carregando,.casca-tela:not(.ativa){display:none}}
+</style>
+</head>
+<body>
+<div id="casca-telas"></div>
+<div id="casca-carregando" hidden></div>
+<div id="casca-aviso" role="status" hidden><span id="casca-aviso-texto"></span><button type="button" id="casca-aviso-atualizar">Atualizar esta tela</button><button type="button" id="casca-aviso-fechar">Agora não</button></div>
+<p id="casca-anuncio" class="sr" aria-live="polite"></p>
+<script src="casca.js"></script>
+</body>
+</html>
