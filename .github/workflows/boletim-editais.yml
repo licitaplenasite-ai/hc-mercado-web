@@ -23,10 +23,10 @@ jobs:
     timeout-minutes: 60
     steps:
       - name: Checkout do repositorio
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7.0.1
 
       - name: Configurar Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7.1.0
         with:
           python-version: "3.12"
       - name: Instalar dependencias

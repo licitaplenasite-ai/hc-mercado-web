@@ -26,8 +26,8 @@ jobs:
     # de sinônimos) + 30 por UF; o que não couber volta na frente da fila na noite seguinte. Repositório público: sem custo de minutos.
     timeout-minutes: 105
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7
         with:
           node-version: "20"
       - name: Consultar e guardar as respostas prontas
