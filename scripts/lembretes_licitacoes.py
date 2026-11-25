@@ -130,7 +130,7 @@ def montar_link_pncp(numero_controle_pncp):
 # ---------- Moldura dos e-mails (paleta A, 23/11) ----------
 # Mesma técnica do boletim: coluna de 600px em tabelas com estilo inline (Gmail/Outlook), fontes do sistema e,
 # nas áreas de cor da marca, background-image de cor única: o Gmail escuro troca background-color, mas não a
-# imagem, então a faixa marinho e o botão royal continuam com texto branco legível. Usada também pela cobrança.
+# imagem, então o botão royal continua com texto branco legível. Usada também pela cobrança.
 URL_LOGO = "https://licitaplena.com.br/logo.png"  # PNG branco 1000x1000 (SVG não abre no Gmail/Outlook)
 MARINHO, ROYAL, CIANO, CLARO = "#0A1B4F", "#1F4FD8", "#22D3EE", "#F2F7FF"
 COR_TEXTO, COR_SUAVE, COR_LINHA = "#14213D", "#4A5878", "#DCE5F5"
@@ -178,11 +178,13 @@ def moldura_email(rotulo, titulo, corpo_html, motivo):
         '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="' + CLARO + '"><tr>'
         '<td align="center" style="padding:24px 10px;">'
         '<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;">'
-        '<tr><td bgcolor="' + MARINHO + '" style="' + _fundo_fixo(MARINHO) + 'padding:18px 28px;border-radius:14px 14px 0 0;">'
+        # 25/11: topo claro com texto marinho; texto branco sobre marinho "protegido" escurecia no Gmail iOS escuro.
+        '<tr><td bgcolor="#ffffff" style="background-color:#ffffff;padding:16px 28px;border-radius:14px 14px 0 0;">'
         '<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>'
-        '<td valign="middle" style="padding-right:10px;"><img src="' + URL_LOGO + '" width="30" height="30" alt="LicitaPlena" '
-        'style="display:block;border:0;width:30px;height:30px;"></td>'
-        '<td valign="middle" class="lp-fixo" style="' + f + 'color:#ffffff;font-size:19px;font-weight:bold;letter-spacing:.2px;">LicitaPlena</td>'
+        '<td valign="middle" bgcolor="' + MARINHO + '" style="' + _fundo_fixo(MARINHO) + 'padding:5px;border-radius:9px;">'
+        '<img src="' + URL_LOGO + '" width="28" height="28" alt="LicitaPlena" '
+        'style="display:block;border:0;width:28px;height:28px;"></td>'
+        '<td valign="middle" style="' + f + 'color:' + MARINHO + ';font-size:19px;font-weight:bold;letter-spacing:.2px;padding-left:10px;">LicitaPlena</td>'
         '</tr></table></td></tr>'
         '<tr><td height="3" bgcolor="' + CIANO + '" style="' + _fundo_fixo(CIANO) + 'font-size:0;line-height:0;height:3px;">&nbsp;</td></tr>'
         '<tr><td bgcolor="#ffffff" style="background-color:#ffffff;padding:28px 28px 12px 28px;border-radius:0 0 14px 14px;">'

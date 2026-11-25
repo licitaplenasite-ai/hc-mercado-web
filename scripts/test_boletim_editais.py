@@ -441,7 +441,12 @@ def test_layout_resiste_ao_gmail_escuro_e_tem_cabecalho_em_tabela():
     # 23/11: no Gmail escuro do iPhone a faixa e o botão viravam lilás; no computador o cabeçalho ficava desalinhado.
     html = b.montar_email_html("HCM LTDA", "papel", EDICAO, 3, LINK, ["2 em AM"], CAB)
     fixo = lambda cor: "background-image:linear-gradient(" + cor + "," + cor + ")"
-    assert html.count(fixo("#0A1B4F")) == 2  # paleta A: topo e faixa "Edição nº" em marinho
+    assert html.count(fixo("#0A1B4F")) == 1  # paleta A: marinho protegido só no quadrado da logo
+    # 25/11: no Gmail iOS escuro o texto branco sobre marinho protegido escurecia. Topo e faixa ficam claros com
+    # texto marinho, e o único texto branco do e-mail é o do botão (fundo royal).
+    topo = html[html.index("<body"):html.index("Identificação do cliente")]
+    assert "#ffffff;font-size" not in topo and "lp-fixo" not in topo
+    assert len(re.findall(r"[;\"]color:#ffffff", html)) == 1
     assert html.count(fixo("#1F4FD8")) == 1  # botão "Acessar o boletim" em royal
     assert html.count(fixo("#22D3EE")) == 1  # fio ciano sob o cabeçalho
     assert "#0b3b6f" not in html.lower()  # azul antigo não volta

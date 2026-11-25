@@ -785,13 +785,15 @@ def _processado(cab):
 
 
 # Layout de 23/11 (dono: no Gmail do computador estava "bagunçado" e no Gmail escuro do iPhone a faixa e o botão
-# viravam lilás). Coluna única de 600px em tabelas com estilo inline (Gmail/Outlook) e fontes do sistema. As áreas de
-# cor da marca levam também background-image de cor única: o Gmail escuro troca background-color, mas não a imagem
-# de fundo, então a faixa e o botão continuam azul-marinho com texto branco. Mesmo arranjo do ConLicitação: faixa
-# "Edição nº / Data do processamento", identificação do cliente em 2 colunas, "Aos cuidados de" e o botão.
+# viravam lilás). Coluna única de 600px em tabelas com estilo inline (Gmail/Outlook) e fontes do sistema. Mesmo
+# arranjo do ConLicitação: faixa "Edição nº / Data do processamento", identificação do cliente em 2 colunas,
+# "Aos cuidados de" e o botão.
+# 25/11 (print do dono, Gmail iOS escuro): o Gmail calcula a cor do texto contra o background-color invertido e
+# ignora o background-image, então texto branco sobre marinho "protegido" virava escuro sobre escuro. Cabeçalho e
+# faixa passam a ser claros com texto marinho: o Gmail inverte os dois juntos e o texto continua legível. O marinho
+# protegido fica só no quadrado da logo (imagem branca, que o Gmail não mexe).
 FONTE_EMAIL = "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;"
 COR_TEXTO, COR_ROTULO, COR_LINHA, COR_CORPO = "#14213D", "#4A5878", "#DCE5F5", "#2B3A5C"
-COR_ROTULO_FAIXA = "#AFC2EE"  # rótulo claro sobre o marinho (contraste 9:1)
 
 
 def _fundo_fixo(cor):
@@ -814,14 +816,14 @@ def montar_email_html(nome_empresa, filtro, edicao, quantidade, link, resumo=Non
     f = FONTE_EMAIL
     faixa = ""
     if cab.get("numero") or cab.get("processado_em"):
-        celula = '<td valign="top" style="' + f + 'font-size:13px;line-height:19px;color:#ffffff;padding:10px 28px;">'
-        faixa = ('<tr><td bgcolor="' + MARINHO + '" style="' + _fundo_fixo(MARINHO) + 'border-top:1px solid #1C3170;">'
+        celula = '<td valign="top" style="' + f + 'font-size:13px;line-height:19px;color:' + MARINHO + ';padding:10px 28px;">'
+        faixa = ('<tr><td bgcolor="' + CLARO + '" style="background-color:' + CLARO + ';border-top:1px solid ' + COR_LINHA + ';">'
                  '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>'
                  + (celula.replace('valign="top"', 'valign="top" width="1%"').replace('padding:10px 28px', 'white-space:nowrap;padding:10px 28px')
-                    + '<span class="lp-fixo" style="color:' + COR_ROTULO_FAIXA + ';">Edição nº</span><br><b class="lp-fixo" style="color:#ffffff;font-size:15px;">'
+                    + '<span style="color:' + COR_ROTULO + ';">Edição nº</span><br><b style="color:' + MARINHO + ';font-size:15px;">'
                     + esc(str(cab["numero"])) + '</b></td>' if cab.get("numero") else "")
-                 + (celula.replace('padding:10px 28px', 'padding:10px 28px 10px 0') + '<span class="lp-fixo" style="color:' + COR_ROTULO_FAIXA + ';">Data do processamento</span><br>'
-                    '<b class="lp-fixo" style="color:#ffffff;font-size:15px;">' + esc(_processado(cab)) + '</b></td>' if cab.get("processado_em") else "")
+                 + (celula.replace('padding:10px 28px', 'padding:10px 28px 10px 0') + '<span style="color:' + COR_ROTULO + ';">Data do processamento</span><br>'
+                    '<b style="color:' + MARINHO + ';font-size:15px;">' + esc(_processado(cab)) + '</b></td>' if cab.get("processado_em") else "")
                  + '</tr></table></td></tr>')
     linhas = _linhas_cabecalho(nome_empresa, filtro, cab)
     borda = 'border-bottom:1px solid ' + COR_LINHA + ';'
@@ -900,11 +902,12 @@ def montar_email_html(nome_empresa, filtro, edicao, quantidade, link, resumo=Non
         '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="' + CLARO + '"><tr>'
         '<td align="center" style="padding:24px 10px;">'
         '<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;">'
-        '<tr><td bgcolor="' + MARINHO + '" style="' + _fundo_fixo(MARINHO) + 'padding:18px 28px;border-radius:14px 14px 0 0;">'
+        '<tr><td bgcolor="#ffffff" style="background-color:#ffffff;padding:16px 28px;border-radius:14px 14px 0 0;">'
         '<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>'
-        '<td valign="middle" style="padding-right:10px;"><img src="' + URL_LOGO + '" width="32" height="32" alt="LicitaPlena" '
-        'style="display:block;border:0;width:32px;height:32px;"></td>'
-        '<td valign="middle" class="lp-fixo" style="' + f + 'color:#ffffff;font-size:20px;font-weight:bold;">LicitaPlena</td>'
+        '<td valign="middle" bgcolor="' + MARINHO + '" style="' + _fundo_fixo(MARINHO) + 'padding:5px;border-radius:9px;">'
+        '<img src="' + URL_LOGO + '" width="30" height="30" alt="LicitaPlena" '
+        'style="display:block;border:0;width:30px;height:30px;"></td>'
+        '<td valign="middle" style="' + f + 'color:' + MARINHO + ';font-size:20px;font-weight:bold;padding-left:10px;">LicitaPlena</td>'
         '</tr></table></td></tr>' + faixa +
         '<tr><td height="3" bgcolor="' + CIANO + '" style="' + _fundo_fixo(CIANO) + 'font-size:0;line-height:0;height:3px;">&nbsp;</td></tr>'
         '<tr><td bgcolor="#ffffff" style="background-color:#ffffff;border-radius:0 0 14px 14px;">'
