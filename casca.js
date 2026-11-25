@@ -229,9 +229,18 @@
     let u;
     try { u = new URL(href, win.location.href); } catch { return false; }
     const d = destinoDe(u, t && t.tela, origem);
-    if (d === 'tela') { abrir(u.href); return true; }
+    if (d === 'tela') { depoisDaVolta(win, () => abrir(u.href)); return true; }
     if (d === 'sair') { location.assign(saidaDe(u, origem)); return true; }
     return false;
+  }
+  // Link clicado na gaveta do menu (celular): a gaveta fecha e voltar-fecha-modal.js tira a entrada dela com
+  // history.back(). Empilhar a tela nova antes dessa volta terminar faria a volta desfazer a troca de tela.
+  function depoisDaVolta(win, fn) {
+    if (!win.__lpVoltaPendente) { fn(); return; }
+    let feito = false;
+    const ir = () => { if (!feito) { feito = true; fn(); } };
+    win.addEventListener('popstate', ir, { once: true });
+    setTimeout(ir, 500);
   }
   function urlMudou(win) {
     const t = donaDe(win);

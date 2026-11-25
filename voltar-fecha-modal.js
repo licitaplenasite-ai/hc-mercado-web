@@ -20,10 +20,14 @@
         pilha.splice(i, 1);
         // Só desfaz a entrada se ela ainda está no topo (fechou pelo ✕); se veio do voltar, ela já saiu.
         const nivel = (win.history.state && win.history.state.voltarFecha) || 0;
-        if (nivel > pilha.length && trocasAoAbrir.get(item) === trocas()) win.history.back();
+        if (nivel > pilha.length && trocasAoAbrir.get(item) === trocas()) {
+          win.__lpVoltaPendente = true; // a casca espera esta volta antes de empilhar a próxima tela (casca.js)
+          win.history.back();
+        }
       }
     }
     function aoVoltar() {
+      win.__lpVoltaPendente = false;
       const nivel = (win.history.state && win.history.state.voltarFecha) || 0;
       pilha.slice(nivel).reverse().forEach((item) => { pilha.splice(pilha.indexOf(item), 1); item.fechar(); });
     }
