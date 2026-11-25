@@ -142,6 +142,7 @@
   let abaAtual = 'pca';
   let carga = 0; // só a última consulta pinta a tela: resposta atrasada (carga inicial x busca do usuário) não sobrescreve
   const cache = new Map();
+  let ultimaChave = '';
 
   function aviso(texto, tipo) { const a = $('aviso'); a.textContent = texto || ''; a.className = texto ? `aviso ${tipo || 'info'}` : 'aviso'; }
   function filtros() {
@@ -168,6 +169,7 @@
     if (f.palavras) q.set('palavras', f.palavras);
     if (f.catmat) q.set('catmat', f.catmat);
     const chave = q.toString();
+    ultimaChave = chave;
     try {
       let dados = cache.get(chave);
       if (!dados) {
@@ -215,8 +217,27 @@
     try { localStorage.setItem('licitaplena_tema', claro ? 'claro' : 'escuro'); } catch { /* segue sem persistir */ }
   });
 
+  // Volta para a tela (24/11, dono: "trocar de tela tem que continuar do jeito que tá"): filtros, aba e resultado
+  // desta aba voltam na hora (estado-tela.js); passou de 15 min, consulta de novo como antes.
+  window.addEventListener('pagehide', () => {
+    if (!window.EstadoTela) return;
+    window.EstadoTela.guardar('prospeccao', { campos: filtros(), aba: abaAtual, chave: ultimaChave, dados: cache.get(ultimaChave) || null });
+  });
+  function restaurarGuardado() {
+    const g = window.EstadoTela && window.EstadoTela.ler('prospeccao');
+    const d = g && g.dado;
+    if (!d || !d.campos) return false;
+    $('f-uf').value = d.campos.uf || ''; $('f-palavras').value = d.campos.palavras || ''; $('f-catmat').value = d.campos.catmat || '';
+    if (d.campos.dias) $('f-dias').value = d.campos.dias;
+    if (d.dados && !g.velho) cache.set(d.chave, d.dados);
+    carregar(d.aba || 'pca');
+    return true;
+  }
+
+  // Antes da conferência do login (que continua em segundo plano e manda ao login se reprovar): a tela volta na hora.
+  const restaurado = restaurarGuardado();
   autenticar().then(async (cliente) => {
-    if (!cliente) return;
+    if (!cliente || restaurado) return;
     // O filtro do Boletim agora fica por empresa (boletim_filtros_empresa); o da conta é o formato antigo.
     let filtro = cliente.boletim_filtro;
     if (!filtro || !filtro.palavrasRaw) {

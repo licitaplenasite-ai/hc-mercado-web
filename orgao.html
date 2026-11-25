@@ -81,7 +81,7 @@ input::placeholder{color:var(--text-secondary);opacity:1}
   .tabela td.item{max-width:none}
 }
 </style>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&display=swap" rel="stylesheet"><link rel="stylesheet" href="interno-premium.css"><link rel="stylesheet" href="crm-orgao.css?v=20261124b">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&display=swap" rel="stylesheet"><link rel="stylesheet" href="interno-premium.css"><link rel="stylesheet" href="crm-orgao.css?v=20261124c"><link rel="stylesheet" href="orgaos-navegacao.css?v=20261124a">
 </head>
 <body>
 <header><div class="topo-marca-linha"><button id="nav-gaveta-btn" type="button" aria-controls="menu-principal" aria-expanded="false">Menu</button><a class="marca" href="painel.html" title="Voltar ao painel principal"><span class="marca-placa"><img src="logo-icone.svg" alt=""></span>LicitaPlena</a></div><div class="acoes"><button class="btn tema-icone" id="btn-tema" type="button" title="Alternar tema claro/escuro" aria-label="Alternar tema claro/escuro">☾</button></div></header>
@@ -117,7 +117,8 @@ input::placeholder{color:var(--text-secondary);opacity:1}
   <div id="fo-conteudo"><p class="fo-carregando">Carregando a ficha do órgão…</p></div>
 </main>
 </div>
-<script src="ficha-orgao.js?v=20261124b"></script>
+<script src="ficha-orgao.js?v=20261124c"></script>
+<script src="orgaos-navegacao.js?v=20261124a"></script>
 <script>
 (() => {
   'use strict';
@@ -129,7 +130,7 @@ input::placeholder{color:var(--text-secondary);opacity:1}
   const data = (d) => (d ? new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC' }).format(new Date(String(d).slice(0, 10) + 'T00:00:00Z')) : '—');
   const hoje = new Date(Date.now() - 3 * 36e5).toISOString().slice(0, 10); // dia de Brasília (UTC-3, sem horário de verão)
   const ETAPAS = { triagem: 'Triagem', preparacao: 'Preparação', proposta_enviada: 'Proposta enviada', sessao: 'Sessão', habilitacao: 'Habilitação', recurso: 'Recurso', homologado: 'Homologado', contratado: 'Contratado', perdido: 'Perdido', arquivado: 'Arquivado' };
-  const estado = { orgId: null, podeEscrever: false, alvo: F.lerParametros(location.search), cnpj: null, nome: '', chave: null, chaves: [], registros: [], registrosOk: true, empresas: new Map(), ficha: null, fichaLocal: null, processos: [], sugestoesNome: [], pncp: null };
+  const estado = { orgId: null, podeEscrever: false, alvo: F.lerParametros(location.search), cnpj: null, nome: '', chave: null, chaves: [], registros: [], registrosOk: true, empresas: new Map(), ficha: null, processos: [], sugestoesNome: [], pncp: null, releitura: 0 };
   const UFS = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'];
   const ESFERAS = { M: 'Municipal', E: 'Estadual', F: 'Federal', D: 'Distrital' };
 
@@ -168,20 +169,20 @@ input::placeholder{color:var(--text-secondary);opacity:1}
   }
 
   // ---------- Sem órgão no link: busca e órgãos acompanhados ----------
+  // Sem órgão no link: busca + relação de órgãos para escolher sem digitar (orgaos-navegacao.js).
   async function mostrarInicio() {
-    document.title = 'Ficha do órgão — LicitaPlena';
+    document.title = 'Órgãos — LicitaPlena';
     const r = await sb.from('operacao_orgaos_registros').select('id,orgao_chave,orgao_nome,criado_em').eq('organizacao_id', estado.orgId).eq('tipo', 'acompanhar').order('orgao_nome');
-    const lista = r.error ? [] : r.data || [];
     $('fo-conteudo').innerHTML = `
-      <section class="fo-cabeca"><div><span class="fo-rotulo">Ficha do órgão</span><h1>Qual órgão você quer conhecer?</h1>
-        <p>Licitações abertas, contratos, atas, quem vende para ele e o seu histórico, num lugar só.</p></div></section>
-      <section class="fo-secao"><h2>Abrir a ficha</h2>${formBusca(estado.alvo.nome)}</section>
-      <section class="fo-secao"><h2>Órgãos que você acompanha</h2>
-        ${r.error ? '<p class="nota">A lista de órgãos acompanhados fica disponível depois da atualização do banco.</p>' : lista.length
-          ? `<ul class="fo-lista">${lista.map((o) => { const c = /^cnpj:(\d{14})$/.exec(o.orgao_chave)?.[1]; return `<li><div><strong><a href="${esc(F.linkFicha({ cnpj: c, nome: o.orgao_nome }))}">${esc(o.orgao_nome || F.formatarCnpj(c) || 'Órgão')}</a></strong><small>${c ? 'CNPJ ' + esc(F.formatarCnpj(c)) + ' · ' : ''}acompanhando desde ${esc(data(o.criado_em))}</small></div></li>`; }).join('')}</ul>`
-          : '<p class="nota">Nenhum ainda. Abra a ficha de um órgão (pelo Funil ou pelo processo) e clique em "Acompanhar este órgão".</p>'}
-      </section>`;
+      <section class="fo-cabeca"><div><span class="fo-rotulo">Órgãos</span><h1>Qual órgão você quer conhecer?</h1>
+        <p>Escolha o estado e veja a relação de órgãos, ou digite o nome, a cidade, a sigla, a UASG ou o CNPJ. Licitações abertas, contratos, atas e o seu histórico, num lugar só.</p></div></section>
+      <section class="fo-secao"><h2>Procurar ou escolher pelo estado</h2>${formBusca(estado.alvo.nome)}</section>
+      <div id="on-raiz"></div>`;
     ligarBusca();
+    await window.LicitaOrgaosNavegacao.montar({
+      sb, F, esc, orgId: estado.orgId, raiz: $('on-raiz'), campoTermo: $('fo-busca-termo'), campoUf: $('fo-busca-uf'),
+      acompanhados: r.error ? null : (r.data || []).map((o) => ({ cnpj: /^cnpj:(\d{14})$/.exec(o.orgao_chave)?.[1] || null, nome: o.orgao_nome, desde: data(o.criado_em) })),
+    });
   }
 
   // ---------- Busca com autocompletar (catálogo de órgãos; PNCP ao vivo de reserva) ----------
@@ -190,7 +191,7 @@ input::placeholder{color:var(--text-secondary);opacity:1}
       <div class="fo-busca-campo"><label for="fo-busca-termo">Nome, cidade, sigla, UASG ou CNPJ do órgão</label>
         <input id="fo-busca-termo" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="fo-sugestoes" aria-describedby="fo-busca-status" maxlength="120" value="${esc(valor || '')}" placeholder="Ex.: prefeitura de manaus, ufam, sec saude amazonas ou 04.312.369/0001-90" autocomplete="off" spellcheck="false">
         <ul id="fo-sugestoes" class="fo-sugestoes" role="listbox" aria-label="Órgãos encontrados" hidden></ul></div>
-      <div><label for="fo-busca-uf">UF (opcional)</label><select id="fo-busca-uf"><option value="">Todas</option>${UFS.map((u) => `<option>${u}</option>`).join('')}</select></div>
+      <div><label for="fo-busca-uf">Estado (UF)</label><select id="fo-busca-uf"><option value="">Todas</option>${UFS.map((u) => `<option>${u}</option>`).join('')}</select></div>
       <button class="btn primario" type="submit">Abrir ficha do órgão</button>
       <p class="fo-dica inteiro" id="fo-busca-status" role="status" aria-live="polite"></p>
       <p class="fo-erro inteiro" id="fo-busca-erro" role="alert"></p>
@@ -267,10 +268,12 @@ input::placeholder{color:var(--text-secondary);opacity:1}
   }
 
   // ---------- Ficha ----------
-  async function lerProcessos(cnpj, nomes) {
+  // raiz: 8 primeiros dígitos do CNPJ (o órgão com todas as unidades). Processo achado só pelo nome fica marcado na tabela
+  // (pode ser de um órgão com nome igual em outra cidade).
+  async function lerProcessos(raiz, nomes) {
     const campos = 'id,empresa_id,objeto,numero,orgao,status,decisao,situacao_resultado,valor_homologado,valor_estimado,data_sessao,criado_em,origem_externa_id';
     const consultas = [];
-    if (cnpj) consultas.push(sb.from('operacao_processos').select(campos).eq('organizacao_id', estado.orgId).like('origem_externa_id', cnpj + '-%').limit(200));
+    if (raiz) consultas.push(sb.from('operacao_processos').select(campos).eq('organizacao_id', estado.orgId).like('origem_externa_id', raiz + '______-%').limit(200));
     for (const n of new Set(nomes.filter((x) => x && x.trim().length >= 3))) consultas.push(sb.from('operacao_processos').select(campos).eq('organizacao_id', estado.orgId).ilike('orgao', F.padraoIlike(n)).limit(200));
     const respostas = await Promise.all(consultas);
     const erro = respostas.find((r) => r.error);
@@ -284,12 +287,18 @@ input::placeholder{color:var(--text-secondary);opacity:1}
     estado.registros = r.error ? [] : r.data || [];
   }
 
+  // Ficha do órgão inteiro (raiz do CNPJ) ou de uma unidade (estado.alvo.uasg). false = não deu para ler.
+  async function lerFicha() {
+    const { cnpj, nome, uasg } = estado.alvo;
+    const f = await sb.rpc('ficha_orgao', { p_cnpj: estado.ficha?.cnpj || cnpj, p_nome: estado.ficha?.cnpj ? null : nome || null, p_uasg: uasg || null });
+    if (f.error) return false;
+    estado.ficha = f.data;
+    return true;
+  }
   async function carregarFicha() {
     const { cnpj, nome } = estado.alvo;
-    const f = await sb.rpc('ficha_orgao', { p_cnpj: cnpj, p_nome: nome || null });
-    if (f.error) aviso('Os dados públicos do órgão não puderam ser lidos agora (licitações, contratos e atas). O seu histórico e as anotações aparecem abaixo. Tente de novo em instantes.', 'erro');
-    estado.ficha = estado.fichaLocal = f.error ? null : f.data;
-    estado.cnpj = estado.ficha?.cnpj || cnpj || null;
+    if (!await lerFicha()) aviso('Os dados públicos do órgão não puderam ser lidos agora (licitações, contratos e atas). O seu histórico e as anotações aparecem abaixo. Tente de novo em instantes.', 'erro');
+    estado.cnpj = estado.ficha?.cnpj_principal || estado.ficha?.cnpj || cnpj || null;
     // Nome sem órgão conhecido: oferece os parecidos do catálogo em vez de uma ficha vazia.
     if (!estado.cnpj && nome) {
       const s = await sb.rpc('buscar_orgaos', { p_termo: nome, p_uf: null, p_limite: 5 });
@@ -297,30 +306,45 @@ input::placeholder{color:var(--text-secondary);opacity:1}
     }
     estado.nome = estado.ficha?.dados?.nome || nome || '';
     estado.chave = F.chaveOrgao({ cnpj: estado.cnpj, nome: estado.nome });
-    // Anotação feita quando só havia o nome continua aparecendo depois que o CNPJ é descoberto.
-    estado.chaves = [...new Set([estado.chave, F.chaveOrgao({ nome: estado.nome }), F.chaveOrgao({ nome })].filter(Boolean))];
-    const [proc] = await Promise.all([lerProcessos(estado.cnpj, [nome, estado.nome]), estado.chaves.length ? lerRegistros() : null]);
+    // Anotação feita quando só havia o nome (ou pela unidade/filial) continua aparecendo: grava no CNPJ principal, lê todos.
+    estado.chaves = [...new Set([estado.chave, F.chaveOrgao({ cnpj }), F.chaveOrgao({ cnpj: estado.ficha?.cnpj }), F.chaveOrgao({ nome: estado.nome }), F.chaveOrgao({ nome })].filter(Boolean))];
+    const raiz = estado.ficha?.raiz || (estado.cnpj ? estado.cnpj.slice(0, 8) : null);
+    const [proc] = await Promise.all([lerProcessos(raiz, [nome, estado.nome]), estado.chaves.length ? lerRegistros() : null]);
     if (proc.erro) aviso('Não foi possível ler os seus processos com este órgão agora. Recarregue a página em instantes.', 'erro');
-    estado.processos = proc.lista;
+    estado.processos = proc.lista.map((p) => ({ ...p, peloNome: !raiz || !String(p.origem_externa_id || '').startsWith(raiz) }));
     document.title = `${estado.nome || 'Órgão'} — Ficha do órgão — LicitaPlena`;
     desenhar();
-    if (F.precisaPncp(estado.fichaLocal || { cnpj: estado.cnpj, abertas: [], atas: [] })) carregarPncp();
+    if (F.precisaPncp(estado.ficha, Date.now())) carregarPncp();
   }
 
-  // PNCP ao vivo: completa a ficha sem duplicar (F.mesclarFicha). Não redesenha por cima de um formulário sendo preenchido.
+  // PNCP ao vivo: o /api/orgao-pncp grava no banco e a tela relê a ficha_orgao (que junta sem duplicar). O que não chegou no
+  // prazo continua no servidor: relê mais 2 vezes. Não redesenha por cima de um formulário sendo preenchido.
+  const preenchendo = () => [...document.querySelectorAll('#fo-conteudo form input, #fo-conteudo form textarea')].some((x) => x.value.trim());
+  async function reler() {
+    if (!await lerFicha()) return;
+    if (!estado.nome && estado.ficha.dados?.nome) { estado.nome = estado.ficha.dados.nome; document.title = `${estado.nome} — Ficha do órgão — LicitaPlena`; }
+    if (preenchendo()) { estado.pncp = { ...estado.pncp, esperando: true }; mostrarPncp(); } else desenhar();
+  }
   async function carregarPncp() {
     if (!estado.cnpj || estado.pncp?.carregando) return;
     estado.pncp = { carregando: true };
     mostrarPncp();
     try {
-      const vivo = await chamarPncp({ acao: 'ficha', cnpj: estado.cnpj });
-      estado.pncp = { vivo, aviso: F.avisoPncp(vivo, Date.now()) };
-      estado.ficha = F.mesclarFicha(estado.fichaLocal || { cnpj: estado.cnpj }, vivo, hoje);
-      if (!estado.nome && estado.ficha.dados?.nome) { estado.nome = estado.ficha.dados.nome; document.title = `${estado.nome} — Ficha do órgão — LicitaPlena`; }
-      const preenchendo = [...document.querySelectorAll('#fo-conteudo form input, #fo-conteudo form textarea')].some((x) => x.value.trim());
-      if (preenchendo) { estado.pncp.esperando = true; mostrarPncp(); } else desenhar();
+      const vivo = await chamarPncp({ acao: 'ficha', cnpj: estado.cnpj, pular: F.pularPncp(estado.ficha, Date.now()) });
+      estado.pncp = { vivo };
+      await reler();
+      if (vivo.pendentes) {
+        const vez = ++estado.releitura;
+        for (const ms of [20000, 30000]) {
+          await new Promise((ok) => setTimeout(ok, ms));
+          if (vez !== estado.releitura) return; // outra consulta começou
+          await reler();
+        }
+        estado.pncp = { vivo: { ...vivo, pendentes: 0 } };
+        mostrarPncp();
+      }
     } catch (e) {
-      estado.pncp = { erro: true, aviso: { tipo: 'atencao', texto: `${e.message || 'O PNCP não respondeu agora.'} Mostrando os dados já coletados.` } };
+      estado.pncp = { vivo: { erro: e.message || 'O PNCP não respondeu agora.' } };
       mostrarPncp();
     }
   }
@@ -328,8 +352,9 @@ input::placeholder{color:var(--text-secondary);opacity:1}
     const caixa = $('fo-pncp');
     if (!caixa) return;
     const p = estado.pncp || {};
-    const texto = p.carregando ? 'Buscando dados ao vivo no PNCP… (o PNCP pode levar até 1 minuto)' : p.esperando ? 'Chegaram dados novos do PNCP.' : p.aviso?.texto || 'Dados já coletados pelo robô do LicitaPlena.';
-    caixa.className = 'fo-pncp ' + (p.carregando ? 'carregando' : p.aviso?.tipo || 'neutro');
+    p.aviso = F.avisoPncp(estado.ficha, p.vivo || null, Date.now());
+    const texto = p.carregando ? 'Buscando dados ao vivo no PNCP… Os contratos dos últimos 12 meses chegam em até meio minuto.' : p.esperando ? 'Chegaram dados novos do PNCP.' : p.aviso.texto;
+    caixa.className = 'fo-pncp ' + (p.carregando ? 'carregando' : p.aviso.tipo);
     caixa.innerHTML = `<span>${esc(texto)}</span>${p.carregando ? '' : p.esperando ? '<button type="button" class="btn" id="fo-pncp-mostrar">Mostrar agora</button>' : `<button type="button" class="btn" id="fo-pncp-btn">${p.vivo ? 'Consultar o PNCP de novo' : 'Buscar dados novos no PNCP'}</button>`}`;
     $('fo-pncp-btn')?.addEventListener('click', carregarPncp);
     $('fo-pncp-mostrar')?.addEventListener('click', () => { estado.pncp.esperando = false; desenhar(); });
@@ -340,6 +365,34 @@ input::placeholder{color:var(--text-secondary);opacity:1}
     ? `<div class="fo-tabela-wrap" tabindex="0" role="region" aria-label="${esc(cabecalho[0])}"><table class="fo-tabela"><thead><tr>${cabecalho.map((c) => `<th scope="col">${esc(c)}</th>`).join('')}</tr></thead><tbody>${linhas.join('')}</tbody></table></div>`
     : `<p class="nota">${vazio}</p>`;
   const linkExterno = (url, texto) => (url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(texto)}</a>` : '');
+  // Gráficos simples em CSS (crm-orgao.css), sem biblioteca: o número vai sempre escrito ao lado (nunca só o tamanho).
+  const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  const compacto = (v) => (Number.isFinite(Number(v)) ? Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact', maximumFractionDigits: 1 }) : '—');
+  const nomeMes = (aaaamm) => `${MESES[Number(aaaamm.slice(5, 7)) - 1]}/${aaaamm.slice(2, 4)}`;
+  const largura = (v, max) => Math.max(2, Math.round((Number(v) || 0) / (max || 1) * 100));
+  function barras(itens, rotulo, valor, numero) {
+    const max = Math.max(0, ...itens.map(valor));
+    return `<ul class="fo-barras">${itens.map((x) => `<li><span class="fo-barra-rotulo">${esc(rotulo(x))}</span><span class="fo-barra-trilho" aria-hidden="true"><span style="width:${largura(valor(x), max)}%"></span></span><span class="fo-barra-num">${esc(numero(x))}</span></li>`).join('')}</ul>`;
+  }
+  // Colunas por mês. resumo vira o rótulo acessível; cada coluna tem o número no title e embaixo.
+  function colunas(itens, rotulo, valor, numero, resumo) {
+    const max = Math.max(0, ...itens.map(valor));
+    return `<div class="fo-colunas" role="img" aria-label="${esc(resumo)}">${itens.map((x) => `<div class="fo-coluna" title="${esc(rotulo(x) + ': ' + numero(x))}"><b>${valor(x) ? esc(numero(x)) : ''}</b><span class="fo-coluna-trilho"><span style="height:${valor(x) ? largura(valor(x), max) : 0}%"></span></span><small>${esc(rotulo(x))}</small></div>`).join('')}</div>`;
+  }
+  // Série completa (mês sem contrato = 0): n meses terminando no mês de hoje (AAAA-MM) ou começando nele.
+  function serieMeses(lista, n, paraFrente) {
+    const mapa = new Map((lista || []).map((m) => [m.mes, m]));
+    let a = Number(hoje.slice(0, 4)), m = Number(hoje.slice(5, 7));
+    const meses = [];
+    for (let i = 0; i < n; i++) {
+      const chave = `${a}-${String(m).padStart(2, '0')}`;
+      meses.push(mapa.get(chave) || { mes: chave, contratos: 0, itens: 0, valor: 0 });
+      m += paraFrente ? 1 : -1;
+      if (m > 12) { m = 1; a += 1; } else if (m < 1) { m = 12; a -= 1; }
+    }
+    return paraFrente ? meses : meses.reverse();
+  }
+  const maior = (lista, campo) => (lista || []).reduce((x, y) => (Number(y[campo]) > Number(x?.[campo] || 0) ? y : x), null);
 
   function desenhar() {
     const fi = estado.ficha || {};
@@ -349,34 +402,80 @@ input::placeholder{color:var(--text-secondary);opacity:1}
     const acompanhando = estado.registros.find((r) => r.tipo === 'acompanhar');
     const contatos = estado.registros.filter((r) => r.tipo === 'contato');
     const anotacoes = estado.registros.filter((r) => r.tipo === 'anotacao');
-    const local = [fi.dados?.municipio, fi.dados?.uf].filter(Boolean).join(' / ');
-    const uasgs = (fi.uasgs || []).slice(0, 6);
-    const subtitulo = [estado.cnpj ? 'CNPJ ' + F.formatarCnpj(estado.cnpj) : 'CNPJ não identificado', local, ESFERAS[fi.esfera] ? 'Esfera ' + ESFERAS[fi.esfera].toLowerCase() : '', uasgs.length ? 'UASG ' + uasgs.join(', ') : ''].filter(Boolean).join(' · ');
-    // Só afirma "o PNCP não tem" para a fonte que respondeu.
-    const falhouPncp = new Set(estado.pncp?.vivo?.falharam || []), doPncp = (fonte) => !!estado.pncp?.vivo && !falhouPncp.has(fonte);
+    const unidades = fi.unidades || [];
+    // Órgão federal com várias unidades (Forças Armadas, universidades): a cidade da última compra não é "a cidade do órgão".
+    const local = fi.esfera === 'F' && unidades.length > 1 ? '' : [fi.dados?.municipio, fi.dados?.uf].filter(Boolean).join(' / ');
+    const unidade = fi.unidade ? unidades.find((u) => u.uasg === fi.unidade) || { uasg: fi.unidade } : null;
+    const nomeUnidade = (u) => (u.nome ? `${u.nome} (UASG ${u.uasg})` : `UASG ${u.uasg}`);
+    const subtitulo = [estado.cnpj ? 'CNPJ ' + F.formatarCnpj(estado.cnpj) : 'CNPJ não identificado', fi.cnpjs > 1 ? `${fi.cnpjs} CNPJs de unidades no cadastro do PNCP` : '',
+      local, ESFERAS[fi.esfera] ? 'Esfera ' + ESFERAS[fi.esfera].toLowerCase() : ''].filter(Boolean).join(' · ');
+    // Só afirma "o PNCP não tem" quando há consulta guardada da fonte.
+    const doPncp = (fonte) => (fi.pncp || []).some((l) => l.fonte === fonte);
     const naoAchou = estado.ficha && estado.ficha.encontrado === false;
+    const abertasTotal = Number(fi.abertas_total ?? abertas.length);
     const proximaAberta = abertas[0] ? F.prazoAberta(abertas[0].encerramento, hoje) : null;
+    const cp = fi.compras_publicadas || { quantidade: 0 }, pca = fi.pca || { itens: 0 }, irp = fi.irp || [];
+    const pct = (n, total) => (total ? Math.round((n / total) * 100) + '%' : '—');
+    const porMes = serieMeses(fi.por_mes, 24), pcaMeses = serieMeses(pca.por_mes, 12, true);
+    const mesTop = maior(fi.meses_do_ano, 'contratos'), anoMes = maior(porMes, 'contratos');
+    const mesesCheios = (fi.pncp || []).filter((l) => l.fonte === 'contratos' && l.total > l.itens).length; // trimestres
+    const abertaPorOutro = estado.alvo.cnpj && fi.cnpj_principal && estado.alvo.cnpj !== fi.cnpj_principal;
+    const colUnidade = !unidade && unidades.length > 1;
 
     $('fo-conteudo').innerHTML = `
       <section class="fo-cabeca" aria-labelledby="fo-titulo"><div><span class="fo-rotulo">Ficha do órgão</span><h1 id="fo-titulo">${esc(estado.nome || F.formatarCnpj(estado.cnpj) || 'Órgão')}</h1><p>${esc(subtitulo)}</p></div>
         ${estado.chave && estado.registrosOk && estado.podeEscrever ? `<button type="button" class="fo-acompanhar" id="fo-acompanhar" aria-pressed="${acompanhando ? 'true' : 'false'}">${acompanhando ? '✓ Acompanhando este órgão' : 'Acompanhar este órgão'}</button>` : ''}</section>
+      ${unidades.length ? `<div class="fo-unidade"><label for="fo-unidade">Ver</label><select id="fo-unidade"><option value="">Todas as unidades (${unidades.length})</option>${unidades.map((u) => `<option value="${esc(u.uasg)}"${u.uasg === fi.unidade ? ' selected' : ''}>${esc(nomeUnidade(u))}</option>`).join('')}</select>
+        <p class="nota">${unidade ? 'Só desta unidade. Entram os registros que trazem a unidade: contratos antigos coletados pelo robô não trazem e ficam de fora.' : `Somando todas as unidades do órgão (mesma raiz do CNPJ, ${esc(fi.raiz || '')}).${abertaPorOutro ? ` Você abriu pelo CNPJ ${esc(F.formatarCnpj(estado.alvo.cnpj))}, de uma unidade: a ficha mostra o órgão inteiro.` : ''}`}</p></div>` : ''}
       ${estado.cnpj ? '<div id="fo-pncp" class="fo-pncp" role="status" aria-live="polite"></div>' : ''}
-      ${naoAchou ? `<section class="aviso info fo-nao-achou" style="display:block"><p>Não achamos um órgão com o nome "${esc(estado.alvo.nome)}". O seu histórico, os contatos e as anotações continuam valendo.</p>
-        ${estado.sugestoesNome.length ? `<p><b>Você quis dizer:</b></p><ul class="fo-lista">${estado.sugestoesNome.map((o) => `<li><div><strong><a href="${esc(F.linkFicha({ cnpj: o.cnpj, nome: o.nome }))}">${esc(o.nome)}</a></strong><small>${esc(F.descreverOrgao(o))}</small></div></li>`).join('')}</ul>` : '<p>Procure pelo nome, a cidade ou o CNPJ em <a href="orgao.html">Órgãos</a>.</p>'}</section>` : ''}
+      ${naoAchou ? `<section class="aviso info fo-nao-achou" style="display:block"><p>${estado.ficha.ambiguo ? `Há ${Number(estado.ficha.orgaos) || 'vários'} órgãos com o nome "${esc(estado.alvo.nome)}" (em cidades ou estados diferentes). Escolha o certo para não misturar os dados.` : `Não achamos um órgão com o nome "${esc(estado.alvo.nome)}".`} O seu histórico, os contatos e as anotações continuam valendo.</p>
+        ${estado.sugestoesNome.length ? `<p><b>${estado.ficha.ambiguo ? 'Qual deles?' : 'Você quis dizer:'}</b></p><ul class="fo-lista">${estado.sugestoesNome.map((o) => `<li><div><strong><a href="${esc(F.linkFicha({ cnpj: o.cnpj, nome: o.nome }))}">${esc(o.nome)}</a></strong><small>${esc(F.descreverOrgao(o))}</small></div></li>`).join('')}</ul>` : '<p>Procure pelo nome, a cidade ou o CNPJ em <a href="orgao.html">Órgãos</a>.</p>'}</section>` : ''}
       <h2 class="fo-pergunta">Vale a pena disputar com este órgão?</h2>
       <div class="fo-kpis">
-        <div class="fo-kpi destaque"><span>Licitações abertas agora</span><b>${abertas.length}</b><small>${proximaAberta ? esc(proximaAberta.texto.replace('Aberta: ', 'A próxima: ')) : 'Nenhuma aberta no momento'}</small></div>
+        <div class="fo-kpi destaque"><span>Licitações abertas agora</span><b>${abertasTotal}</b><small>${proximaAberta ? esc(proximaAberta.texto.replace('Aberta: ', 'A próxima: ')) : 'Nenhuma aberta no momento'}</small></div>
         <div class="fo-kpi"><span>Seu histórico aqui</span><b>${resumo.ganhou} de ${resumo.ganhou + resumo.perdeu}</b><small>${resumo.taxaVitoria == null ? 'Nenhuma disputa decidida ainda' : `disputas ganhas (${resumo.taxaVitoria}%) · ${resumo.andamento} em andamento`}</small></div>
         <div class="fo-kpi"><span>Valor que você ganhou</span><b>${resumo.valorGanho ? esc(dinheiro(resumo.valorGanho)) : 'R$ 0,00'}</b><small>${resumo.ganhosSemValor ? `${resumo.ganhosSemValor} vitória(s) sem valor homologado informado` : 'soma do valor homologado à empresa'}</small></div>
-        <div class="fo-kpi"><span>Contratos publicados pelo órgão</span><b>${Number(cr.quantidade || 0)}</b><small>${cr.quantidade ? (cr.doPncp ? `nos últimos 12 meses no PNCP${cr.parcial ? ` (somados os ${contratos.length} mais recentes: ${esc(dinheiro(cr.valor))})` : `: ${esc(dinheiro(cr.valor))}`}` : `${esc(dinheiro(cr.valor))} desde ${esc(data(cr.desde))}`) : doPncp('contratos') ? 'Nenhum contrato no PNCP nos últimos 12 meses' : 'Sem contrato nos dados coletados'}</small></div>
+        <div class="fo-kpi"><span>Contratos publicados pelo órgão</span><b>${Number(cr.quantidade || 0).toLocaleString('pt-BR')}</b><small>${cr.quantidade ? `${esc(dinheiro(cr.valor))} desde ${esc(data(cr.desde))}` : doPncp('contratos') ? 'Nenhum contrato no PNCP nos últimos 12 meses' : 'Sem contrato nos dados coletados'}</small></div>
       </div>
+      <div class="fo-kpis fo-kpis-2">
+        <div class="fo-kpi"><span>Ticket médio por contrato</span><b>${cr.ticket_medio ? esc(compacto(cr.ticket_medio)) : '—'}</b><small>${cr.ticket_medio ? `${esc(dinheiro(cr.ticket_medio))}, média dos contratos com valor` : 'Sem contrato com valor informado'}</small></div>
+        <div class="fo-kpi"><span>Plano de compras (PCA)</span><b>${pca.itens ? esc(compacto(pca.valor)) : '—'}</b><small>${pca.itens ? `${Number(pca.itens).toLocaleString('pt-BR')} itens que ele pretende comprar a partir de hoje` : 'Sem plano de compras nos dados coletados'}</small></div>
+        <div class="fo-kpi"><span>Dispensas</span><b>${esc(pct(cp.dispensas, cp.quantidade))}</b><small>${cp.quantidade ? `das ${cp.quantidade} licitações publicadas desde ${esc(data(cp.desde))}${cp.inexigibilidades ? ` · inexigibilidade: ${esc(pct(cp.inexigibilidades, cp.quantidade))}` : ''}` : 'Sem licitação publicada nos últimos meses'}</small></div>
+        <div class="fo-kpi"><span>Prazo médio para a proposta</span><b>${cp.prazo_medio_dias != null ? `${cp.prazo_medio_dias} dias` : '—'}</b><small>entre a publicação e o fim do envio de propostas</small></div>
+      </div>
+      <div id="fo-mesmo-ente"></div>
 
-      <section class="fo-secao" aria-labelledby="fo-h-abertas"><h2 id="fo-h-abertas">Licitações abertas agora</h2><p class="nota">${doPncp('abertas') ? 'Do PNCP (coletadas pelo robô e consultadas ao vivo).' : 'Do PNCP, coletadas pelo robô do LicitaPlena.'} Confira sempre o edital no link oficial.</p>
-        ${tabela(['Objeto', 'Modalidade', 'Valor estimado', 'Propostas até', 'Situação', 'Link'], abertas.map((a) => { const s = F.prazoAberta(a.encerramento, hoje); return `<tr><td><span class="fo-objeto">${esc(a.objeto)}</span></td><td>${esc(a.modalidade || '—')}</td><td class="num">${esc(dinheiro(a.valor))}</td><td>${esc(data(a.encerramento))}</td><td>${chip(s.classe, s.texto)}</td><td>${linkExterno(F.linkPncp(a.numero_controle_pncp), 'Ver no PNCP')}</td></tr>`; }), doPncp('abertas') ? 'Nenhuma licitação aberta deste órgão no PNCP agora.' : 'Nenhuma licitação aberta deste órgão nos dados coletados.')}
+      <section class="fo-secao" aria-labelledby="fo-h-abertas"><h2 id="fo-h-abertas">Licitações abertas agora</h2><p class="nota">${doPncp('abertas') ? 'Do PNCP (coletadas pelo robô e consultadas ao vivo).' : 'Do PNCP, coletadas pelo robô do LicitaPlena.'}${abertasTotal > abertas.length ? ` Mostrando as ${abertas.length} que fecham primeiro.` : ''} Confira sempre o edital no link oficial.</p>
+        ${tabela(['Objeto', ...(colUnidade ? ['Unidade'] : []), 'Modalidade', 'Valor estimado', 'Propostas até', 'Situação', 'Link'], abertas.map((a) => { const s = F.prazoAberta(a.encerramento, hoje); return `<tr><td><span class="fo-objeto">${esc(a.objeto)}</span></td>${colUnidade ? `<td>${esc(a.unidade || (a.uasg ? 'UASG ' + a.uasg : '—'))}</td>` : ''}<td>${esc(a.modalidade || '—')}</td><td class="num">${esc(dinheiro(a.valor))}</td><td>${esc(data(a.encerramento))}</td><td>${chip(s.classe, s.texto)}</td><td>${linkExterno(F.linkPncp(a.numero_controle_pncp), 'Ver no PNCP')}</td></tr>`; }), doPncp('abertas') ? 'Nenhuma licitação aberta deste órgão no PNCP agora.' : 'Nenhuma licitação aberta deste órgão nos dados coletados.')}
+      </section>
+
+      <section class="fo-secao" aria-labelledby="fo-h-pca"><h2 id="fo-h-pca">O que ele pretende comprar</h2>
+        <p class="nota">Plano de Contratações Anual (PCA) publicado no PNCP e, nos órgãos federais, o planejamento do Compras.gov (PGC). Só itens com data desejada a partir de hoje. É intenção de compra: a licitação pode mudar de data ou não acontecer.</p>
+        ${pca.itens ? `<div class="fo-duas fo-graficos">
+          <div><h3>Quando pretende comprar (próximos 12 meses)</h3>${colunas(pcaMeses, (m) => nomeMes(m.mes), (m) => Number(m.valor), (m) => compacto(m.valor), `Valor do plano de compras por mês, próximos 12 meses. Total ${compacto(pca.valor)}.`)}</div>
+          <div><h3>Itens de maior valor no plano</h3>${barras((pca.principais || []).slice(0, 8), (x) => x.descricao, (x) => Number(x.valor), (x) => compacto(x.valor))}</div></div>
+          <h3>Próximos itens do plano</h3>
+          ${tabela(['Item', ...(colUnidade ? ['Unidade'] : []), 'Quantidade', 'Valor estimado', 'Data desejada', 'Link'], (pca.proximos || []).map((x) => `<tr><td><span class="fo-objeto">${esc(x.descricao || x.objeto || 'Item sem descrição')}</span>${x.descricao && x.objeto ? `<small>${esc(x.objeto)}</small>` : ''}</td>${colUnidade ? `<td>${esc(x.unidade || '—')}</td>` : ''}<td class="num">${Number(x.quantidade) > 0 ? esc(Number(x.quantidade).toLocaleString('pt-BR')) : '—'}</td><td class="num">${esc(dinheiro(x.valor_total))}</td><td>${esc(data(x.data_ref))}</td><td>${linkExterno(x.link, 'Ver o plano')}</td></tr>`), '')}`
+          : '<p class="nota">Nenhum item do plano de compras deste órgão nos dados coletados. O robô da Prospecção lê o plano dos órgãos que publicam contratos e atas no PNCP; órgão que não publica o PCA no PNCP não aparece aqui.</p>'}
+        ${irp.length ? `<h3>Intenções de registro de preços (IRP) abertas</h3><p class="nota">O órgão está montando uma ata e aceita a participação de outros órgãos até a data.</p>
+          ${tabela(['Item', 'Quantidade', 'Valor estimado', 'Manifestação até', 'Link'], irp.map((x) => `<tr><td><span class="fo-objeto">${esc(x.descricao || x.objeto || 'Item sem descrição')}</span></td><td class="num">${Number(x.quantidade) > 0 ? esc(Number(x.quantidade).toLocaleString('pt-BR')) : '—'}</td><td class="num">${esc(dinheiro(x.valor_total))}</td><td>${esc(data(x.data_ref))}</td><td>${linkExterno(x.link, 'Ver no PNCP')}</td></tr>`), '')}` : ''}
+      </section>
+
+      <section class="fo-secao" aria-labelledby="fo-h-como"><h2 id="fo-h-como">Como este órgão compra</h2>
+        <p class="nota">Pelos contratos publicados no PNCP (robô do LicitaPlena, até 2 anos, e consulta ao vivo dos últimos 12 meses), sem contar o mesmo contrato duas vezes.${mesesCheios ? ` Em ${mesesCheios} ${mesesCheios === 1 ? 'trimestre' : 'trimestres'} o PNCP tem mais de 1.500 contratos: entram os 1.500 primeiros.` : ''}</p>
+        ${cr.quantidade ? `<div class="fo-duas fo-graficos">
+          <div><h3>Contratos por mês (últimos 24 meses)</h3>${colunas(porMes, (m) => (m.mes.endsWith('-01') ? nomeMes(m.mes) : MESES[Number(m.mes.slice(5, 7)) - 1]), (m) => Number(m.contratos), (m) => String(m.contratos), `Contratos assinados por mês nos últimos 24 meses. Mês com mais contratos: ${anoMes ? nomeMes(anoMes.mes) + ', ' + anoMes.contratos : 'nenhum'}.`)}</div>
+          <div><h3>Meses do ano em que mais contrata</h3>${colunas(MESES.map((nome, i) => (fi.meses_do_ano || []).find((m) => m.mes === i + 1) || { mes: i + 1, contratos: 0 }), (m) => MESES[m.mes - 1], (m) => Number(m.contratos), (m) => String(m.contratos), `Contratos por mês do ano. O mês que mais contrata é ${mesTop ? MESES[mesTop.mes - 1] : 'indefinido'}.`)}
+            <p class="nota">${mesTop ? `Mais contratos em <b>${esc(MESES[mesTop.mes - 1])}</b>. Prepare a documentação antes.` : ''}</p></div>
+          <div><h3>Valor contratado por ano</h3>${barras(fi.por_ano || [], (x) => String(x.ano), (x) => Number(x.valor), (x) => `${compacto(x.valor)} · ${x.contratos} contratos`)}</div>
+          <div><h3>O que mais compra (categoria do PNCP)</h3>${(fi.categorias || []).length ? barras(fi.categorias, (x) => x.nome, (x) => Number(x.valor), (x) => `${compacto(x.valor)} · ${x.contratos}`) : '<p class="nota">A categoria vem da consulta ao vivo do PNCP; aparece depois dela.</p>'}</div>
+          <div><h3>Modalidades usadas</h3>${(cp.modalidades || []).length ? barras(cp.modalidades, (x) => x.nome, (x) => Number(x.quantidade), (x) => `${x.quantidade} · ${pct(x.quantidade, cp.quantidade)}`) + `<p class="nota">Licitações publicadas desde ${esc(data(cp.desde))} (abertas e já encerradas).</p>` : '<p class="nota">Sem licitação publicada nos últimos meses nos dados coletados.</p>'}</div>
+          <div><h3>Maiores contratos dos últimos 12 meses</h3>${(fi.maiores_contratos || []).length ? `<ul class="fo-lista">${fi.maiores_contratos.map((c) => `<li><div><strong>${esc(dinheiro(c.valor))}</strong><small>${esc(c.objeto)}\n${esc(c.fornecedor || 'Fornecedor não informado')} · ${esc(data(c.data_assinatura))}</small></div>${linkExterno(F.linkPncp(c.numero_controle_pncp), 'Ver')}</li>`).join('')}</ul>` : '<p class="nota">Sem contrato com valor nos últimos 12 meses.</p>'}</div>
+        </div>` : '<p class="nota">Sem contratos deste órgão nos dados coletados.</p>'}
       </section>
 
       <section class="fo-secao" aria-labelledby="fo-h-historico"><h2 id="fo-h-historico">Seu histórico com este órgão</h2><p class="nota">Processos da sua organização com este órgão, de todas as empresas que você acompanha.</p>
-        ${tabela(['Processo', 'Empresa', 'Etapa', 'Resultado', 'Valor', ''], estado.processos.map((p) => { const s = F.situacaoProcesso(p); const valor = s.chave === 'ganhou' ? p.valor_homologado : p.valor_estimado; return `<tr><td><span class="fo-objeto">${esc(p.objeto)}</span>${p.numero ? `<small>${esc(p.numero)}</small>` : ''}</td><td>${esc(estado.empresas.get(p.empresa_id) || '—')}</td><td>${esc(ETAPAS[p.status] || p.status)}</td><td>${chip(s.chave, s.texto)}</td><td class="num">${esc(dinheiro(valor))}<small>${s.chave === 'ganhou' ? 'homologado' : 'estimado'}</small></td><td><a href="processos.html?empresa=${encodeURIComponent(p.empresa_id)}&amp;processo=${encodeURIComponent(p.id)}">Abrir processo</a></td></tr>`; }), 'A sua organização ainda não tem processo com este órgão. Quando você colocar uma licitação dele no Funil, ela aparece aqui.')}
+        ${tabela(['Processo', 'Empresa', 'Etapa', 'Resultado', 'Valor', ''], estado.processos.map((p) => { const s = F.situacaoProcesso(p); const valor = s.chave === 'ganhou' ? p.valor_homologado : p.valor_estimado; return `<tr><td><span class="fo-objeto">${esc(p.objeto)}</span>${p.numero ? `<small>${esc(p.numero)}</small>` : ''}${p.peloNome ? '<small class="fo-pelo-nome">Achado pelo nome do órgão: pode ser de um órgão com nome parecido.</small>' : ''}</td><td>${esc(estado.empresas.get(p.empresa_id) || '—')}</td><td>${esc(ETAPAS[p.status] || p.status)}</td><td>${chip(s.chave, s.texto)}</td><td class="num">${esc(dinheiro(valor))}<small>${s.chave === 'ganhou' ? 'homologado' : 'estimado'}</small></td><td><a href="processos.html?empresa=${encodeURIComponent(p.empresa_id)}&amp;processo=${encodeURIComponent(p.id)}">Abrir processo</a></td></tr>`; }), 'A sua organização ainda não tem processo com este órgão. Quando você colocar uma licitação dele no Funil, ela aparece aqui.')}
       </section>
 
       <div class="fo-duas">
@@ -403,17 +502,19 @@ input::placeholder{color:var(--text-secondary);opacity:1}
         </section>
       </div>
 
-      <section class="fo-secao" aria-labelledby="fo-h-fornecedores"><h2 id="fo-h-fornecedores">Quem mais vende para este órgão</h2><p class="nota">${cr.doPncp && !(estado.fichaLocal?.fornecedores || []).length ? 'Pelos contratos mais recentes consultados no PNCP.' : 'Pelos contratos publicados no PNCP nos últimos 2 anos.'}</p>
-        ${tabela(['Fornecedor', 'Contratos', 'Valor somado'], fornecedores.map((x) => `<tr><td>${esc(x.nome)}</td><td class="num">${Number(x.contratos)}</td><td class="num">${esc(dinheiro(x.valor))}</td></tr>`), 'Sem contratos nos dados coletados.')}
+      <section class="fo-secao" aria-labelledby="fo-h-fornecedores"><h2 id="fo-h-fornecedores">Quem mais vende para este órgão</h2><p class="nota">Os 10 fornecedores com mais valor contratado, nos mesmos contratos de "Como este órgão compra". A fatia é sobre o total do órgão (${esc(dinheiro(cr.valor))}).</p>
+        ${tabela(['Fornecedor', 'Contratos', 'Valor somado', 'Fatia do valor'], fornecedores.map((x) => `<tr><td>${esc(x.nome)}</td><td class="num">${Number(x.contratos)}</td><td class="num">${esc(dinheiro(x.valor))}</td><td class="num">${esc(pct(Number(x.valor), Number(cr.valor)))}</td></tr>`), 'Sem contratos nos dados coletados.')}
       </section>
       <section class="fo-secao" aria-labelledby="fo-h-contratos"><h2 id="fo-h-contratos">Contratos recentes</h2>
-        ${tabela(['Objeto', 'Fornecedor', 'Assinatura', 'Valor', 'Link'], contratos.map((c) => `<tr><td><span class="fo-objeto">${esc(c.objeto)}</span></td><td>${esc(c.fornecedor || '—')}</td><td>${esc(data(c.data_assinatura))}</td><td class="num">${esc(dinheiro(c.valor))}</td><td>${linkExterno(F.linkPncp(c.numero_controle_pncp), 'Ver no PNCP')}</td></tr>`), 'Nenhum contrato nos dados coletados.')}
+        ${tabela(['Objeto', 'Fornecedor', ...(colUnidade ? ['Unidade'] : []), 'Assinatura', 'Valor', 'Link'], contratos.map((c) => `<tr><td><span class="fo-objeto">${esc(c.objeto)}</span>${c.categoria ? `<small>${esc(c.categoria)}</small>` : ''}</td><td>${esc(c.fornecedor || '—')}</td>${colUnidade ? `<td>${esc(c.unidade || (c.uasg ? 'UASG ' + c.uasg : '—'))}</td>` : ''}<td>${esc(data(c.data_assinatura))}</td><td class="num">${esc(dinheiro(c.valor))}</td><td>${linkExterno(F.linkPncp(c.numero_controle_pncp), 'Ver no PNCP')}</td></tr>`), 'Nenhum contrato nos dados coletados.')}
       </section>
-      <section class="fo-secao" aria-labelledby="fo-h-atas"><h2 id="fo-h-atas">Atas de registro de preços</h2>
-        ${tabela(['Objeto', 'Assinatura', 'Vigência até', 'Situação', 'Link'], atas.map((a) => { const vigente = !a.cancelado && a.vigencia_fim && a.vigencia_fim >= hoje; return `<tr><td><span class="fo-objeto">${esc(a.objeto)}</span></td><td>${esc(data(a.data_assinatura))}</td><td>${esc(data(a.vigencia_fim))}</td><td>${a.cancelado ? chip('atrasado', 'Cancelada') : vigente ? chip('emdia', 'Vigente') : chip('neutro', 'Encerrada')}</td><td>${linkExterno(F.linkPncp(a.numero_controle_pncp_ata), 'Ver no PNCP')}</td></tr>`; }), 'Nenhuma ata nos dados coletados.')}
+      <section class="fo-secao" aria-labelledby="fo-h-atas"><h2 id="fo-h-atas">Atas de registro de preços</h2>${fi.atas_total ? `<p class="nota">${Number(fi.atas_total).toLocaleString('pt-BR')} atas nos dados (${Number(fi.atas_vigentes || 0).toLocaleString('pt-BR')} vigentes)${(fi.pncp || []).some((l) => l.fonte === 'atas' && l.total > l.itens) ? `; no PNCP, ${Number(fi.pncp.find((l) => l.fonte === 'atas').total).toLocaleString('pt-BR')} nos últimos 12 meses` : ''}.${Number(fi.atas_total) > atas.length ? ' Mostrando as 30 mais recentes.' : ''}</p>` : ''}
+        ${tabela(['Objeto', 'Assinatura', 'Vigência até', 'Situação', 'Link'], atas.map((a) => { const vigente = !a.cancelado && a.vigencia_fim && a.vigencia_fim >= hoje; return `<tr><td><span class="fo-objeto">${esc(a.objeto)}</span>${colUnidade && a.unidade ? `<small>${esc(a.unidade)}</small>` : ''}</td><td>${esc(data(a.data_assinatura))}</td><td>${esc(data(a.vigencia_fim))}</td><td>${a.cancelado ? chip('atrasado', 'Cancelada') : vigente ? chip('emdia', 'Vigente') : chip('neutro', 'Encerrada')}</td><td>${linkExterno(F.linkPncp(a.numero_controle_pncp_ata), 'Ver no PNCP')}</td></tr>`; }), 'Nenhuma ata nos dados coletados.')}
       </section>`;
     ligar();
     mostrarPncp();
+    // Prefeitura/câmara/governo: secretarias e fundos da mesma cidade (ou do estado), que publicam os contratos (orgaos-navegacao.js).
+    window.LicitaOrgaosNavegacao.montarMesmoEnte({ sb, F, esc, cnpj: estado.cnpj, alvo: $('fo-mesmo-ente') });
   }
 
   // Validação na hora: erro aparece no envio, junto do campo, e some assim que a pessoa corrige.
@@ -430,6 +531,15 @@ input::placeholder{color:var(--text-secondary);opacity:1}
   const base = () => ({ organizacao_id: estado.orgId, orgao_chave: estado.chave, orgao_nome: (estado.nome || F.formatarCnpj(estado.cnpj)).slice(0, 300) });
 
   function ligar() {
+    // Unidade: relê a ficha só daquela UASG (ou do órgão inteiro) e guarda no link, para voltar e compartilhar.
+    $('fo-unidade')?.addEventListener('change', async (ev) => {
+      estado.alvo.uasg = ev.target.value || null;
+      const u = new URL(location.href);
+      if (estado.alvo.uasg) u.searchParams.set('uasg', estado.alvo.uasg); else u.searchParams.delete('uasg');
+      history.replaceState(null, '', u);
+      ev.target.disabled = true;
+      if (await lerFicha()) { desenhar(); $('fo-unidade')?.focus(); } else { aviso('Não foi possível trocar a unidade agora. Tente de novo.', 'erro'); ev.target.disabled = false; }
+    });
     $('fo-acompanhar')?.addEventListener('click', async (ev) => {
       const b = ev.currentTarget; b.disabled = true;
       const atual = estado.registros.find((r) => r.tipo === 'acompanhar');

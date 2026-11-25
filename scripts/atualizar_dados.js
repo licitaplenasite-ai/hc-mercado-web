@@ -21,6 +21,7 @@
 //   LIMITE_HORAS_UF_PENDENTE=24   -> UF sem coleta concluída há mais que isso aparece como pendente no painel
 //   LIMITE_HORAS_SEM_COBERTURA=48 -> UF (ou scan nacional) parada há mais que isso vira ALARME (::warning:: no
 //                                    Actions + dados_robo.coleta_alarme na Saúde do sistema), sem derrubar o job
+//   LOTE_UPSERT_OPORTUNIDADES=200 -> linhas por upsert em oportunidades_abertas (ver sincronizarOportunidadesNoSupabase)
 //   MODO_SECO=1, UFS_SECO=RR,AP   -> teste local sem chave e sem gravar nada (ver modoSeco())
 //
 // IMPORTANTE: a partir desta versão o robô é INCREMENTAL — ele não re-varre tudo do zero
@@ -57,6 +58,10 @@ const TAMANHO_PAGINA = parseInt(process.env.TAMANHO_PAGINA_CONTRATOS || "500", 1
 const INTERVALO_MS_CONTRATOS = parseInt(process.env.INTERVALO_MS_CONTRATOS || "1000", 10);
 // Idem para a fase de atas (rotas /orgaos/{cnpj}/compras/... do PNCP). Ver cadenciaMercado.
 const INTERVALO_MS_MERCADO = parseInt(process.env.INTERVALO_MS_MERCADO || "300", 10);
+// 24/11: lotes de 500 em oportunidades_abertas estouravam o statement timeout com frequência
+// (cada linha atualiza 7 índices, entre eles trigram em objeto e expressão sobre dado->>orgao),
+// e cada estouro custa a espera inteira antes de dividir. 200 já nasce abaixo do ponto de falha.
+const LOTE_UPSERT_OPORTUNIDADES = parseInt(process.env.LOTE_UPSERT_OPORTUNIDADES || "200", 10);
 
 const UFS = [
   "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS",
@@ -434,6 +439,9 @@ async function coletarContratosComplementarPorUf(registrosExistentes, anteriores
           valor: Number(detalhe.valorGlobal || item.valor_global || 0),
           dataAssinatura: detalhe.dataAssinatura || item.data_assinatura || null,
           numeroControlePNCP: numero,
+          // Unidade (UASG) e categoria: a ficha do órgão filtra por unidade e mostra o que o órgão mais compra.
+          codigoUnidade: (detalhe.unidadeOrgao && detalhe.unidadeOrgao.codigoUnidade) || null,
+          categoria: (detalhe.categoriaProcesso && detalhe.categoriaProcesso.nome) || null,
           segmentos: segmentosQueBatem(objeto),
         });
       }
@@ -502,6 +510,9 @@ async function coletarContratos(caminhoArquivo) {
         valor: Number(item.valorGlobal || item.valorInicial || 0),
         dataAssinatura: item.dataAssinatura || item.dataVigenciaInicio || null,
         numeroControlePNCP: item.numeroControlePNCP || null,
+        // Unidade (UASG) e categoria: a ficha do órgão filtra por unidade e mostra o que o órgão mais compra.
+        codigoUnidade: (item.unidadeOrgao && item.unidadeOrgao.codigoUnidade) || null,
+        categoria: (item.categoriaProcesso && item.categoriaProcesso.nome) || null,
         segmentos: segmentosQueBatem(objeto),
       });
     }
@@ -1412,7 +1423,7 @@ async function hidratarContratosDoSupabase(caminhoArquivo, caminhoMeta) {
     console.log("[supabase] Sem metadado anterior de contratos — tratando como 1ª execução.");
     return;
   }
-  const linhas = await baixarTodasAsLinhas("contratos", "dado");
+  const linhas = await baixarTodasAsLinhas("contratos", "dado", "numero_controle_pncp");
   const registros = linhas.map((l) => l.dado);
   const pendente = await buscarBlob("dados_robo", "contratos_coleta_pendente");
   if (pendente && pendente.atualizadoEm === meta.atualizadoEm) {
@@ -1490,7 +1501,7 @@ async function hidratarMercadoDoSupabase(caminhoArquivo, caminhoMeta) {
     console.log("[supabase] Sem metadado anterior de mercado/atas — tratando como 1ª execução.");
     return;
   }
-  const linhas = await baixarTodasAsLinhas("mercado_atas", "dado");
+  const linhas = await baixarTodasAsLinhas("mercado_atas", "dado", "numero_controle_pncp_ata");
   const atas = linhas.map((l) => l.dado);
   const pendente = await buscarBlob("dados_robo", "mercado_coleta_pendente");
   if (pendente && pendente.atualizadoEm === meta.atualizadoEm && (!pendente.progressoAtas || pendente.hash !== hashProgressoAtas(pendente.progressoAtas))) {
@@ -1571,7 +1582,7 @@ async function sincronizarOportunidadesNoSupabase(oportunidades) {
   // Quem chama precisa saber se a sincronização falhou, porque o metadado de
   // cobertura (coberturaPorUf) só pode ser gravado depois que estas linhas realmente
   // chegaram no banco — ver comentário em main() logo antes da chamada.
-  const enviadas = await upsertEmLotes("oportunidades_abertas", linhas, "chave");
+  const enviadas = await upsertEmLotes("oportunidades_abertas", linhas, "chave", LOTE_UPSERT_OPORTUNIDADES);
   console.log(`[supabase] ${enviadas} oportunidade(s) sincronizada(s) na tabela "oportunidades_abertas".`);
   // Só remove encerramentos comprovadamente antigos; SQL lt preserva os null desconhecidos.
   const limiteRetencaoIso = new Date(Date.now() - RETENCAO_DIAS_OPORTUNIDADES * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);

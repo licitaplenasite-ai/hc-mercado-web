@@ -40,7 +40,7 @@ async function banco() {
     alter table public.oportunidades_abertas enable row level security; alter table public.contratos enable row level security;
     alter table public.mercado_atas enable row level security;
     create table public.prospeccao_itens(id text primary key, tipo text, uf text, orgao_cnpj text, orgao_nome text, unidade_codigo text,
-      unidade_nome text, municipio text, data_inicio date);
+      unidade_nome text, municipio text, data_inicio date, objeto text, descricao text, quantidade numeric, valor_total numeric, data_ref date, link text);
     -- Como no Supabase: authenticated tem privilégio de tabela; quem filtra é a RLS.
     grant select, insert, update, delete on all tables in schema public to authenticated;`);
   for (const n of [101, 102, 103, 104]) {
@@ -170,5 +170,70 @@ test("crm_orgao_linha_tempo.sql: ficha_orgao junta abertas, contratos e atas pel
     const pf = await ficha(CNPJ);
     assert.equal(pf.contratos[0].fornecedor, "Pessoa física");
     assert.ok(!JSON.stringify(pf).includes("Fulano"), "nome da pessoa física não sai da ficha");
+  } finally { await db.close(); }
+});
+
+// Ficha completa (24/11/2026): o dono abriu "Comando da Aeronáutica" por uma filial (00.394.429/0179-33) e veio tudo zerado,
+// porque as compras saem pelo CNPJ da matriz. Agora a ficha é do órgão (raiz do CNPJ), com filtro por unidade (UASG).
+test("crm_orgao_linha_tempo.sql: ficha soma as unidades da raiz, junta o PNCP guardado e o PCA, e não adivinha homônimo", async () => {
+  const db = await banco();
+  const MATRIZ = "00394429000100", FILIAL = "00394429017933";
+  const d = (n) => new Date(Date.now() - 3 * 36e5 + n * 864e5).toISOString().slice(0, 10); // dia de Brasília + n
+  try {
+    await db.query(`select carregar_cadastro_orgaos($1::jsonb)`, [JSON.stringify([
+      { cnpj: MATRIZ, nome: "COMANDO DA AERONAUTICA", esfera: "F", poder: "E" }, { cnpj: FILIAL, nome: "COMANDO DA AERONAUTICA", esfera: "F", poder: "E" },
+      { cnpj: "11111111000191", nome: "MUNICIPIO DE BOM JESUS", esfera: "M" }, { cnpj: "22222222000191", nome: "MUNICIPIO DE BOM JESUS", esfera: "M" }])]);
+    // Robô: contratos pela matriz (um antigo sem unidade, um novo com unidade e categoria), licitações e plano de compras.
+    await db.query(`insert into contratos(numero_controle_pncp, objeto, uf, data_assinatura, dado) values
+      ('${MATRIZ}-2-000001/2026', 'Contrato 1 (robô)', 'SP', $1, '{"orgao":"COMANDO DA AERONAUTICA","nomeFornecedor":"Fornecedora A","valor":1000}'),
+      ('${MATRIZ}-2-000002/2026', 'Contrato 2', 'RJ', $2, '{"orgao":"COMANDO DA AERONAUTICA","nomeFornecedor":"Fornecedora B","valor":3000,"codigoUnidade":"120623","categoria":"Compras"}')`, [d(-40), d(-10)]);
+    await db.query(`insert into oportunidades_abertas(chave, numero_controle_pncp, objeto, uf, publicacao, encerramento, dado) values
+      ('x1', '${MATRIZ}-1-000050/2026', 'Pregão aberto', 'RJ', $1, $2, '{"orgao":"COMANDO DA AERONAUTICA","modalidadeNome":"Pregão - Eletrônico","codigoUnidade":"120623"}'),
+      ('x2', '${MATRIZ}-1-000051/2026', 'Dispensa encerrada', 'SP', $3, $4, '{"orgao":"COMANDO DA AERONAUTICA","modalidadeNome":"Dispensa","codigoUnidade":"120016"}')`, [d(-5), d(10), d(-30), d(-20)]);
+    await db.query(`insert into prospeccao_itens(id, tipo, uf, orgao_cnpj, orgao_nome, unidade_codigo, unidade_nome, descricao, quantidade, valor_total, data_ref, link) values
+      ('p1', 'pca', 'RJ', '${FILIAL}', 'COMANDO DA AERONAUTICA', '120623', 'GRUPAMENTO DE APOIO DOS AFONSOS', 'Café', 100, 5000, $1, 'https://pncp.gov.br/app/pca/x'),
+      ('p2', 'pca', 'SP', '${MATRIZ}', 'COMANDO DA AERONAUTICA', '120016', 'GAP SAO JOSE', 'Café', 40, 2000, $2, 'https://pncp.gov.br/app/pca/y'),
+      ('p3', 'irp', 'SP', '${MATRIZ}', 'COMANDO DA AERONAUTICA', '120016', 'GAP SAO JOSE', 'Papel A4', 10, 300, $3, 'https://pncp.gov.br/app/irps/z')`, [d(60), d(90), d(15)]);
+    await db.query("select atualizar_orgaos_catalogo()");
+    // PNCP ao vivo guardado pelo /api/orgao-pncp: o contrato 1 repetido (vale o do PNCP, que traz a unidade) e um novo.
+    await db.query("select gravar_pncp_orgao($1, $2::jsonb)", [MATRIZ, JSON.stringify([
+      { fonte: "contratos", periodo: "202611", total: 2, itens: [
+        { numero_controle_pncp: `${MATRIZ}-2-000001/2026`, objeto: "Contrato 1 (PNCP)", data_assinatura: d(-40), fornecedor: "Fornecedora A", valor: 1000, uasg: "120016", unidade: "GAP SAO JOSE", categoria: "Serviços" },
+        { numero_controle_pncp: `${MATRIZ}-2-000003/2026`, objeto: "Contrato 3", data_assinatura: d(-20), fornecedor: "Fornecedora B", valor: 500, uasg: "120623", unidade: "GRUPAMENTO DE APOIO DOS AFONSOS", categoria: "Compras" }] },
+      { fonte: "orgao", periodo: "", total: 1, itens: [{ nome: "COMANDO DA AERONAUTICA", esfera: "F" }] }])]);
+    await assert.rejects(db.query("select gravar_pncp_orgao($1, '[]'::jsonb)", ["123"]), /CNPJ do órgão inválido/);
+    const ficha = async (cnpj, nome, uasg) => (await db.query("select ficha_orgao($1, $2, $3) as f", [cnpj, nome || null, uasg || null])).rows[0].f;
+    await como(db, id(103));
+    await assert.rejects(db.query("select gravar_pncp_orgao($1, '[]'::jsonb)", [MATRIZ]), /permission denied/, "o navegador não grava o cache");
+    await assert.rejects(db.query("select * from orgaos_pncp_cache"), /permission denied/, "nem lê a tabela direto");
+
+    const f = await ficha(FILIAL);
+    assert.deepEqual([f.cnpj, f.cnpj_principal, f.raiz, f.cnpjs], [FILIAL, MATRIZ, "00394429", 2], "aberta pela filial, a ficha é do órgão todo");
+    assert.equal(f.dados.nome, "COMANDO DA AERONAUTICA");
+    assert.deepEqual([f.contratos_resumo.quantidade, Number(f.contratos_resumo.valor), Number(f.contratos_resumo.ticket_medio), f.contratos_resumo.ao_vivo], [3, 4500, 1500, 2]);
+    assert.deepEqual(f.contratos.map((c) => c.objeto), ["Contrato 2", "Contrato 3", "Contrato 1 (PNCP)"], "sem repetir o contrato do robô e do PNCP");
+    assert.deepEqual(f.fornecedores.map((x) => [x.nome, x.contratos, Number(x.valor)]), [["Fornecedora B", 2, 3500], ["Fornecedora A", 1, 1000]]);
+    assert.deepEqual(f.categorias.map((x) => [x.nome, Number(x.valor)]), [["Compras", 3500], ["Serviços", 1000]]);
+    assert.equal(f.maiores_contratos[0].objeto, "Contrato 2");
+    assert.equal(f.por_mes.reduce((s, m) => s + m.contratos, 0), 3);
+    assert.equal(f.meses_do_ano.reduce((s, m) => s + m.contratos, 0), 3);
+    assert.deepEqual([f.abertas.map((a) => a.objeto), f.abertas_total], [["Pregão aberto"], 1]);
+    assert.deepEqual([f.compras_publicadas.quantidade, f.compras_publicadas.dispensas, Number(f.compras_publicadas.prazo_medio_dias)], [2, 1, 13], "prazo médio (15 + 10) / 2");
+    assert.deepEqual(f.compras_publicadas.modalidades.map((m) => m.nome).sort(), ["Dispensa", "Pregão - Eletrônico"]);
+    assert.deepEqual([f.pca.itens, Number(f.pca.valor), f.pca.principais.map((p) => [p.descricao, p.itens])], [2, 7000, [["Café", 2]]], "PCA da matriz e da filial");
+    assert.equal(f.pca.proximos[0].unidade, "GRUPAMENTO DE APOIO DOS AFONSOS");
+    assert.deepEqual(f.irp.map((x) => x.descricao), ["Papel A4"]);
+    assert.deepEqual(f.unidades.map((u) => u.uasg).sort(), ["120016", "120623"]);
+    assert.equal(f.unidades.find((u) => u.uasg === "120623").nome, "GRUPAMENTO DE APOIO DOS AFONSOS");
+    assert.deepEqual(f.pncp.map((p) => [p.fonte, p.periodo, p.itens]), [["contratos", "202611", 2], ["orgao", "", 1]]);
+
+    const u = await ficha(FILIAL, null, "120623");
+    assert.equal(u.unidade, "120623");
+    assert.deepEqual(u.contratos.map((c) => c.objeto), ["Contrato 2", "Contrato 3"], "só os contratos que trazem a unidade");
+    assert.deepEqual([u.abertas_total, u.compras_publicadas.quantidade, u.pca.itens, Number(u.pca.valor), u.irp.length], [1, 1, 1, 5000, 0]);
+    assert.equal(u.unidades.length, 2, "o seletor continua com todas as unidades");
+    await assert.rejects(ficha(MATRIZ, null, "12a"), /Unidade \(UASG\) inválida/);
+    assert.deepEqual(await ficha(null, "Prefeitura de Bom Jesus"), { encontrado: false, cnpj: null, ambiguo: true, orgaos: 2 }, "homônimo não é adivinhado");
+    assert.equal((await ficha(null, "Comando da Aeronáutica")).cnpj_principal, MATRIZ, "nome com várias unidades do mesmo órgão não é homônimo");
   } finally { await db.close(); }
 });

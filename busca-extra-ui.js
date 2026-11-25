@@ -168,9 +168,10 @@
   // --- Início: faixa "publicadas hoje" + última novidade ---
   const novidade = (window.__muralNovidades || [])[0];
   if (novidade) $("dash-faixa-novidade").innerHTML = `<span class="mural-tag mural-tag-${esc(novidade.tag)}">Novidade</span> ${esc(novidade.titulo)} <a href="#mural-novidades">ver todas</a>`;
-  sb().then((cliente) => cliente.from("oportunidades_abertas").select("chave", { count: "exact", head: true }).eq("publicacao", hojeBrasilia()))
+  // Só quando o Dashboard abre (painel.html, carga preguiçosa de 24/11).
+  (window.__quandoAbrirSecao || ((_, fn) => fn()))(['dashboard'], () => sb().then((cliente) => cliente.from("oportunidades_abertas").select("chave", { count: "exact", head: true }).eq("publicacao", hojeBrasilia()))
     .then(({ count, error }) => { if (!error && typeof count === "number") $("dash-faixa-publicadas").textContent = count.toLocaleString("pt-BR"); })
-    .catch(() => { /* faixa fica com "–" */ });
+    .catch(() => { /* faixa fica com "–" */ }));
 
   window.BuscaExtraUI = { filtrarSemDisputa, filtrarPorItens };
 })();

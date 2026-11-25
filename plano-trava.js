@@ -106,12 +106,27 @@
     });
   }
 
+  // Selo do plano sem "piscar" vazio na troca de tela (24/11): repete o da última tela desta aba enquanto meu_plano
+  // responde. Só o texto do selo; as travas continuam esperando a resposta do servidor. Preso ao token da sessão.
+  const CHAVE_SELO = "lp_selo_plano";
+  function seloGuardado(token) {
+    try {
+      const g = JSON.parse(sessionStorage.getItem(CHAVE_SELO) || "null");
+      return g && token && g.t === token.slice(-24) ? g.nome : "";
+    } catch (_) { return ""; }
+  }
+
   async function iniciar() {
+    const token = tokenDaSessao();
+    const selo = document.getElementById("header-badge-plano");
+    const nomeGuardado = seloGuardado(token);
+    if (selo && nomeGuardado && !selo.textContent) selo.textContent = nomeGuardado;
     let plano = await lerPlano();
     // Sessão vencida no armazenamento: a página renova o token logo depois; tenta de novo uma vez.
     if (!plano) { await new Promise((ok) => setTimeout(ok, 3000)); plano = await lerPlano(); }
     aplicar(plano);
     if (!plano) return;
+    try { if (token && window.__nomePlanoConta) sessionStorage.setItem(CHAVE_SELO, JSON.stringify({ t: token.slice(-24), nome: window.__nomePlanoConta })); } catch (_) { /* segue */ }
     let agendado = false;
     new MutationObserver(() => {
       if (agendado) return;

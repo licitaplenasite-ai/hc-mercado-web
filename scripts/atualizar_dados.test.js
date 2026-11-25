@@ -290,9 +290,9 @@ test("persistência poda pela data de encerramento e preserva encerramento desco
   let linhas;
   let poda;
   const ambiente = vm.createContext({
-    Date: DataRetencaoFixa, RETENCAO_DIAS_OPORTUNIDADES: 120, LIMITE_HORAS_UF_PENDENTE: 24, console: { log() {} },
+    Date: DataRetencaoFixa, RETENCAO_DIAS_OPORTUNIDADES: 120, LIMITE_HORAS_UF_PENDENTE: 24, LOTE_UPSERT_OPORTUNIDADES: 200, console: { log() {} },
     chaveOportunidade: (r) => r.numeroControlePNCP,
-    upsertEmLotes: async (_tabela, valores) => { linhas = valores; return valores.length; },
+    upsertEmLotes: async (_tabela, valores, _chave, lote) => { assert.equal(lote, 200); linhas = valores; return valores.length; },
     removerMaisAntigosQue: async (...args) => { poda = args; },
   });
   const inicioSync = codigo.indexOf("async function sincronizarOportunidadesNoSupabase(");

@@ -30,7 +30,7 @@
 <link rel="stylesheet" href="paginacao.css">
 <link rel="stylesheet" href="mercado-comprasgov.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" crossorigin="anonymous"></script>
-<script src="supabase-config.js"></script><script src="trava-sessao.js"></script><noscript><meta http-equiv="refresh" content="0;url=login.html"></noscript><script src="plano-trava.js" defer></script>
+<script src="supabase-config.js"></script><script src="trava-sessao.js"></script><script src="estado-tela.js"></script><noscript><meta http-equiv="refresh" content="0;url=login.html"></noscript><script src="plano-trava.js" defer></script>
 <script src="fetch-sessao.js"></script>
 <script src="resumo-modelo.js?v=d3ae47f64437"></script>
 <script src="resumo-email.js?v=bac81f5d9b2d"></script>
@@ -2590,8 +2590,29 @@
   const MOSTRAR_BANNER_LIMITE = false;
   const SECOES_COM_BANNER_LIMITE = new Set(["boletim", "oportunidades"]);
   const bannerLimiteEl = document.getElementById("banner-limite-diario");
+  // Carga preguiçosa (24/11, dono: "trocar de menu fica atualizando como se buscasse tudo de novo"): o painel abria
+  // consultando Boletim, Dashboard, Funil e filtros mesmo quando a pessoa ia direto para a Inteligência de Mercado
+  // (~40 pedidos). Cada bloco agora espera a 1ª abertura de uma das seções que o usam (__quandoAbrirSecao).
+  const ATALHOS_DO_HASH = { calendario: "boletim", "licitacao-anterior": "diagnostico" };
+  function secaoDoHash(hash, alvos) {
+    let id = String(hash || "").replace(/^#/, "");
+    try { id = decodeURIComponent(id); } catch (e) { return null; }
+    return alvos.includes(id) ? id : null;
+  }
+  const idsSecoes = Array.from(botoesNav, (b) => b.dataset.alvo);
+  const secaoInicial = ATALHOS_DO_HASH[secaoDoHash(location.hash, Object.keys(ATALHOS_DO_HASH))]
+    || secaoDoHash(location.hash, idsSecoes) || (new URLSearchParams(location.search).has("edicao") ? "boletim" : "dashboard");
+  const secoesAbertas = new Set([secaoInicial]);
+  const esperandoSecao = [];
+  window.__quandoAbrirSecao = (ids, fn) => {
+    if (ids.some((id) => secoesAbertas.has(id))) fn();
+    else esperandoSecao.push({ ids, fn });
+  };
   botoesNav.forEach((b) => {
     b.addEventListener("click", () => {
+      const anterior = document.querySelector("main section.ativa");
+      // Rolagem por seção: quem volta para uma seção cai onde estava (estado-tela.js).
+      if (anterior && anterior.id !== b.dataset.alvo) window.EstadoTela?.guardarRolagem(location.pathname + "#" + anterior.id);
       botoesNav.forEach((x) => x.classList.remove("ativo"));
       document.querySelectorAll("main section").forEach((s) => s.classList.remove("ativa"));
       b.classList.add("ativo");
@@ -2599,17 +2620,18 @@
       if (bannerLimiteEl) bannerLimiteEl.style.display = (MOSTRAR_BANNER_LIMITE && SECOES_COM_BANNER_LIMITE.has(b.dataset.alvo)) ? "flex" : "none";
       // O endereço acompanha a seção (painel.html#precos) sem criar entrada no histórico.
       if (location.hash !== "#" + b.dataset.alvo) history.replaceState(null, "", "#" + b.dataset.alvo);
+      if (!secoesAbertas.has(b.dataset.alvo)) {
+        secoesAbertas.add(b.dataset.alvo);
+        for (let i = esperandoSecao.length - 1; i >= 0; i--) {
+          if (esperandoSecao[i].ids.includes(b.dataset.alvo)) esperandoSecao.splice(i, 1)[0].fn();
+        }
+      }
+      if (anterior && anterior.id !== b.dataset.alvo) window.EstadoTela?.restaurarRolagem(location.pathname + "#" + b.dataset.alvo);
     });
   });
 
   // Abre a seção pedida no endereço (painel.html#precos) pelo mesmo caminho do clique no menu.
-  function secaoDoHash(hash, alvos) {
-    let id = String(hash || "").replace(/^#/, "");
-    try { id = decodeURIComponent(id); } catch (e) { return null; }
-    return alvos.includes(id) ? id : null;
-  }
   // Atalhos do menu para uma parte de seção: #calendario (dentro do Boletim) e #licitacao-anterior (aba da Inteligência de Mercado).
-  const ATALHOS_DO_HASH = { calendario: "boletim", "licitacao-anterior": "diagnostico" };
   function abrirSecaoDoHash() {
     const atalho = secaoDoHash(location.hash, Object.keys(ATALHOS_DO_HASH));
     const id = atalho ? ATALHOS_DO_HASH[atalho] : secaoDoHash(location.hash, Array.from(botoesNav, (b) => b.dataset.alvo));
@@ -5225,7 +5247,7 @@
   async function salvarStatusAcompanhamento(id, edital, status, etapa = null) {
     // A recarga (ex.: ao voltar para a aba) desliga empresaAcompanhamentoPronta por alguns instantes com o
     // seletor ainda na tela: a primeira escolha falhava com "Escolha uma empresa". Espera a recarga terminar.
-    if (!empresaAcompanhamentoPronta && carregamentoAcompanhamento) await carregamentoAcompanhamento;
+    if (!empresaAcompanhamentoPronta) await (carregamentoAcompanhamento || carregarEmpresasAcompanhamento());
     if (!empresaAcompanhamentoPronta || !empresaOperacionalId) throw new Error(semEmpresaCadastrada ? "Cadastre sua empresa em Minhas empresas e documentos para acompanhar o edital." : "Escolha uma empresa antes de acompanhar o edital.");
     const empresaId = empresaOperacionalId;
     let empresaNome = "a empresa selecionada", pendencia = null;
@@ -5372,9 +5394,11 @@
     }
     if (empresaOperacionalId === empresaId) atualizarStatusAcompanhamentoNaTela();
   });
-  void carregarEmpresasAcompanhamento();
+  // Empresas e acompanhamentos: só nas seções com seletor de empresa/Funil (quem grava um status sem eles carrega na hora).
+  window.__quandoAbrirSecao(["dashboard", "boletim", "oportunidades", "kanban"], () => void carregarEmpresasAcompanhamento());
   let ultimaVerificacaoEmpresas = Date.now();
   window.addEventListener("focus", () => {
+    if (!carregamentoAcompanhamento) return; // ainda não precisou: não carrega só porque a janela voltou ao foco
     const preferida = localStorage.getItem("licitaplena_empresa_operacional_id");
     if (preferida === empresaOperacionalId && Date.now() - ultimaVerificacaoEmpresas < 15000) return;
     ultimaVerificacaoEmpresas = Date.now();
@@ -6277,6 +6301,10 @@
     // disparar uma publicação completa do site a cada execução do robô (só o dado
     // muda, o código do site não).
     async function carregarBlobSupabase(chave) {
+      // Dado do robô (convênios, Sistema S, meta): muda poucas vezes por dia. Nesta aba vale 15 min (estado-tela.js),
+      // então voltar para Convênios ou para o Boletim não baixa de novo; blob maior que o limite só não é guardado.
+      const guardado = window.EstadoTela?.ler("blob:" + chave);
+      if (guardado && !guardado.velho && guardado.dado) return guardado.dado;
       try {
         await aguardarSupabaseAutenticado();
         const { data, error } = await window.__sbClient
@@ -6285,6 +6313,8 @@
           .eq("chave", chave)
           .maybeSingle();
         if (error || !data) return null;
+        // Só os pequenos (até ~300 mil caracteres): um blob grande tiraria espaço da pesquisa guardada das telas.
+        if (data.dado && JSON.stringify(data.dado).length < 300000) window.EstadoTela?.guardar("blob:" + chave, data.dado);
         return data.dado || null;
       } catch (e) {
         return null;
@@ -7924,15 +7954,19 @@
     ["bol-atualizar", "bol-salvar"].forEach((id) => document.getElementById(id).addEventListener("click", () => {
       if (window.__bolEdicaoAberta) { window.__bolEdicaoAberta = false; desenharEdicoes(null); }
     }));
-    carregarEdicoes().catch(() => { window.__bolEdicaoAberta = false; gerarBoletim(); });
+    window.__quandoAbrirSecao(["boletim"], () => carregarEdicoes().catch(() => { window.__bolEdicaoAberta = false; gerarBoletim(); }));
   }
 
   // Gera o boletim automaticamente já na primeira carga da página (aba inicial),
   // igual ao ConLicitação abrir direto na tela de boletins.
-  window.__filtroBoletimPronto = carregarFiltroBoletimConta().catch(() => {
+  // O filtro da conta só é lido quando uma seção que o usa abre (quem espera __filtroBoletimPronto antes disso espera a abertura).
+  let lerFiltroDaConta;
+  window.__filtroBoletimPronto = new Promise((ok) => { lerFiltroDaConta = ok; }).then(() => carregarFiltroBoletimConta()).catch(() => {
     document.getElementById("bol-filtro-status").textContent = "Não foi possível recuperar o filtro da conta. Usando o cache deste login; tente novamente ao recarregar.";
   });
-  window.__filtroBoletimPronto.then(() => gerarBoletim());
+  window.__quandoAbrirSecao(["dashboard", "boletim", "oportunidades"], () => lerFiltroDaConta());
+  // Só quando o Boletim ou o Dashboard (que mostra os números do boletim) abre; o clique no Boletim também confere.
+  window.__quandoAbrirSecao(["dashboard", "boletim"], () => window.__filtroBoletimPronto.then(() => { if (!bolJaGerado) gerarBoletim(); }));
 
   // ---------- Oportunidades ----------
   // Classifica a esfera (federal/estadual/municipal) de uma oportunidade. Preferência total
@@ -8232,7 +8266,9 @@
     avisarSincronizacaoOperacional("Editais restaurados nas suas buscas.");
   });
   window.__recarregarFiltrosSalvos = carregarFiltrosSalvos;
-  if (window.__clientePronto) window.__clientePronto.then(async (c) => { if (c && window.__sbClient) { await window.__filtroBoletimPronto; void carregarFiltrosSalvos(); void carregarSemInteresse(); } });
+  window.__quandoAbrirSecao(["dashboard", "boletim", "oportunidades"], () => {
+    if (window.__clientePronto) window.__clientePronto.then(async (c) => { if (c && window.__sbClient) { await window.__filtroBoletimPronto; void carregarFiltrosSalvos(); void carregarSemInteresse(); } });
+  });
 
   // "Monte minha busca com IA": a sugestão só vai para os campos quando o usuário confirma em "Usar na busca".
   const iaCaixas = (id, lista) => { $op(id).innerHTML = lista.map((t) => `<label class="op-ia-opcao"><input type="checkbox" checked value="${escapeHtml(t)}"> ${escapeHtml(t)}</label>`).join("") || '<span class="dica-clique">Nada sugerido.</span>'; };
@@ -8924,7 +8960,16 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
 
-  async function pesquisarMercado() {
+  // Volta para a Inteligência de Mercado (24/11, dono): campos, resultado, aba e filtro da última pesquisa desta aba
+  // aparecem na hora, sem consultar de novo; passou de 15 min, confere em segundo plano sem apagar a tela.
+  function mkGuardar() {
+    const campos = { termo: document.getElementById("mk-termo").value, uf: document.getElementById("mk-uf").value, dias: document.getElementById("mk-dias").value };
+    const subaba = document.querySelector("#dg-subabas .btn-subaba.ativo")?.dataset.subaba || "";
+    const resultado = mkAtual ? { ...mkAtual, vivo: mkAtual.vivo ? { ...mkAtual.vivo, carregando: false } : null } : null;
+    if (resultado || campos.termo) window.EstadoTela?.guardar("mercado", { campos, subaba, resultado });
+  }
+
+  async function pesquisarMercado({ silencioso = false } = {}) {
     const termo = document.getElementById("mk-termo").value.trim();
     const uf = document.getElementById("mk-uf").value.trim().toUpperCase();
     const dias = parseInt(document.getElementById("mk-dias").value, 10) || 365;
@@ -8938,7 +8983,7 @@
     salvarFiltroDiagnostico(termo, uf, dias);
     const seq = ++mkBuscaSeq;
     btn.disabled = true;
-    alvo.innerHTML = '<div class="carregando">Pesquisando contratos e preços pagos pelos órgãos...</div>';
+    if (!silencioso) alvo.innerHTML = '<div class="carregando">Pesquisando contratos e preços pagos pelos órgãos...</div>';
     try {
       const palavras = termo.split(",").map((p) => p.trim()).filter(Boolean);
       const falha = { registros: [], erro: true };
@@ -8976,18 +9021,21 @@
           proxima: catalogos.length ? { indice: 0, pagina: catalogos.length === 1 ? 2 : 1 } : null };
         return { vendas, avisos, vivo };
       };
-      mkAtual = { termo, uf, dias, ...montarResultado(null), filtro: null, aba: mkAtual && MK_ABAS.some(([id]) => id === mkAtual.aba) ? mkAtual.aba : "correspondencias",
+      // silencioso (conferência de um resultado guardado e velho): a tela atual fica até tudo chegar, com o mesmo filtro.
+      const novo = { termo, uf, dias, ...montarResultado(null), filtro: silencioso && mkAtual ? mkAtual.filtro : null, aba: mkAtual && MK_ABAS.some(([id]) => id === mkAtual.aba) ? mkAtual.aba : "correspondencias",
         modo: (mkAtual && mkAtual.modo) || "tabela", pca: null };
-      const atual = mkAtual;
+      const atual = silencioso ? novo : (mkAtual = novo);
       // Nada guardado: em vez de "Nenhuma compra" provisório, segue o carregando até o ao vivo responder.
-      if (atual.vendas.length) renderPesquisaMercado(alvo, atual);
+      if (silencioso) { /* nada muda na tela até o fim */ } else if (atual.vendas.length) renderPesquisaMercado(alvo, atual);
       else alvo.innerHTML = '<div class="carregando">Nada guardado ainda para este produto; buscando ao vivo no Compras.gov...</div>';
       mkCarregarContratacaoFutura(atual);
       const aoVivo = await aoVivoPromessa;
       // Mesmo objeto (aba, filtro e o PCA que já chegou continuam): só entram as vendas e os avisos com o ao vivo.
-      if (seq !== mkBuscaSeq || mkAtual !== atual) return;
+      if (seq !== mkBuscaSeq || (!silencioso && mkAtual !== atual)) return;
+      if (silencioso) { atual.aba = mkAtual ? mkAtual.aba : atual.aba; atual.modo = mkAtual ? mkAtual.modo : atual.modo; mkAtual = atual; }
       Object.assign(atual, montarResultado(aoVivo));
       renderPesquisaMercado(alvo, atual);
+      mkGuardar();
     } catch (e) {
       if (seq === mkBuscaSeq) alvo.innerHTML = `<div class="aviso">Não foi possível pesquisar agora: ${escapeHtml(String(e && e.message || e))}</div>`;
     } finally {
@@ -9367,6 +9415,11 @@
     document.getElementById("emp-buscar").click();
   } }) : null;
   ppMercado?.campo.form.addEventListener("submit", () => { ppJaBuscado = true; salvarFiltroPrecos(ppMercado.campo.value.trim()); });
+  // Saindo da tela (menu para outra página): guarda o que está na Pesquisa de Preços e na Inteligência de Mercado.
+  window.addEventListener("pagehide", () => {
+    if (ppMercado && (ppJaBuscado || ppMercado.campo.value)) window.EstadoTela?.guardar("precos", ppMercado.foto());
+    mkGuardar();
+  });
 
   // ---------- Restaura o último filtro de cada ferramenta ao carregar a página ----------
   // Mesma ideia usada no Boletim e no Encontrar Licitações: ninguém devia precisar preencher
@@ -9375,6 +9428,29 @@
   // continua em branco normalmente (primeira visita).
 
   async function restaurarDiagnostico() {
+    const guardado = window.EstadoTela?.ler("mercado");
+    const g = guardado && guardado.dado;
+    if (g && g.campos) {
+      document.getElementById("mk-termo").value = g.campos.termo || "";
+      document.getElementById("mk-uf").value = g.campos.uf || "";
+      if (g.campos.dias) document.getElementById("mk-dias").value = g.campos.dias;
+      if (g.subaba && g.subaba !== "pesquisa") document.querySelector(`#dg-subabas [data-subaba="${g.subaba}"]`)?.click();
+      if (!g.resultado || !Array.isArray(g.resultado.vendas)) { dgJaBuscado = !!g.campos.termo; return; }
+      dgJaBuscado = true;
+      mkAtual = g.resultado;
+      renderPesquisaMercado(document.getElementById("mk-resultado"), mkAtual);
+      if (!mkAtual.pca || mkAtual.pca.estado === "carregando") mkCarregarContratacaoFutura(mkAtual);
+      // Velho: confere de novo com o que estava pesquisado (não com o que foi digitado depois sem buscar).
+      if (guardado.velho) {
+        document.getElementById("mk-termo").value = mkAtual.termo; document.getElementById("mk-uf").value = mkAtual.uf || "";
+        document.getElementById("mk-dias").value = String(mkAtual.dias);
+        void pesquisarMercado({ silencioso: true }).then(() => {
+          document.getElementById("mk-termo").value = g.campos.termo || ""; document.getElementById("mk-uf").value = g.campos.uf || "";
+          if (g.campos.dias) document.getElementById("mk-dias").value = g.campos.dias;
+        });
+      }
+      return;
+    }
     const filtro = lerFiltroDiagnostico();
     if (!filtro || !filtro.termo) return;
     document.getElementById("mk-termo").value = filtro.termo;
@@ -9450,6 +9526,9 @@
   });
 
   function restaurarPrecos() {
+    // Volta para a tela: a última pesquisa desta aba desenha na hora; passou de 15 min, busca de novo como antes.
+    const guardado = ppMercado && window.EstadoTela?.ler("precos");
+    if (guardado && ppMercado.restaurar(guardado.dado) && !guardado.velho) { ppJaBuscado = true; return; }
     const filtro = lerFiltroPrecos();
     if (!filtro || !filtro.termo || !ppMercado) return;
     ppJaBuscado = true;
@@ -9558,12 +9637,13 @@
   let mercadoGeralJaCarregado = false;
   async function carregarVisaoGeralMercado() {
     if (mercadoGeralJaCarregado) return;
+    mercadoGeralJaCarregado = true; // antes do await: duas chamadas seguidas consultavam tudo duas vezes
     try {
       await aguardarSupabaseAutenticado();
     } catch (e) {
+      mercadoGeralJaCarregado = false;
       return;
     }
-    mercadoGeralJaCarregado = true;
 
     const elTotal = document.getElementById("dash-mercado-total");
     const elNovasHoje = document.getElementById("dash-mercado-novas-hoje");
@@ -9599,6 +9679,7 @@
   }
 
 window.__atualizarDashboard = function () {
+  if (!secoesAbertas.has("dashboard")) return; // Dashboard ainda não aberto: desenha quando abrir (abaixo)
   carregarVisaoGeralMercado();
   void window.LicitaCrmRelatorios?.atualizar?.();
   const elOp = document.getElementById("dash-num-oportunidades");
@@ -9683,6 +9764,7 @@ window.__atualizarDashboard = function () {
     }
   } catch (e) {}
 };
+window.__quandoAbrirSecao(["dashboard"], () => window.__atualizarDashboard());
 
 </script>
 

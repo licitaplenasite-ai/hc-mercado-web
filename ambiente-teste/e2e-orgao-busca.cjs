@@ -82,7 +82,7 @@ async function digitar(p, termo) {
       await p.screenshot({ path: path.join(PRINTS, '05-ficha-buscando-no-pncp.png') });
       await p.waitForFunction(() => { const c = document.getElementById('fo-pncp'); return c && !c.classList.contains('carregando'); }, null, { timeout: 90000 });
       const aviso = await p.textContent('#fo-pncp');
-      exigir(/Atualizado agora do PNCP|Do PNCP, consultado|PNCP está lento|não respondeu/.test(aviso), 'aviso da origem: ' + aviso);
+      exigir(/Inclui o PNCP consultado|não respondeu/.test(aviso), 'aviso da origem: ' + aviso);
       const titulo = await p.textContent('#fo-titulo');
       exigir(titulo === 'MUNICIPIO DE APUI', 'título: ' + titulo);
       exigir(/Esfera municipal/.test(await p.textContent('.fo-cabeca p')), 'esfera no subtítulo');

@@ -26,9 +26,11 @@ test('link da ficha e leitura dos parâmetros', () => {
   assert.match(h, /^<a class="link-ficha-orgao extra" href="orgao\.html\?nome=Pref\+%3Cx%3E" title="Ver ficha do órgão">Pref <span class="link-ficha-fim">&lt;x&gt;<svg/);
   assert.match(h, /ph-arrow-square-out/);
   assert.equal(F.linkFichaHtml({}), '');
-  assert.deepEqual(F.lerParametros('?cnpj=12.345.678/0001-90&nome=Prefeitura'), { cnpj: '12345678000190', nome: 'Prefeitura' });
-  assert.deepEqual(F.lerParametros('?controle=12345678000190-1-000083/2026'), { cnpj: '12345678000190', nome: '' });
-  assert.deepEqual(F.lerParametros('?cnpj=123'), { cnpj: null, nome: '' });
+  assert.deepEqual(F.lerParametros('?cnpj=12.345.678/0001-90&nome=Prefeitura'), { cnpj: '12345678000190', nome: 'Prefeitura', uasg: null });
+  assert.deepEqual(F.lerParametros('?controle=12345678000190-1-000083/2026'), { cnpj: '12345678000190', nome: '', uasg: null });
+  assert.deepEqual(F.lerParametros('?cnpj=123'), { cnpj: null, nome: '', uasg: null });
+  assert.equal(F.lerParametros('?cnpj=00394429000100&uasg=120623').uasg, '120623', 'unidade escolhida no link');
+  assert.equal(F.lerParametros('?uasg=123456789').uasg, null);
   assert.equal(F.formatarCnpj('12345678000190'), '12.345.678/0001-90');
   assert.equal(F.formatarCnpj(null), '');
 });
@@ -109,49 +111,35 @@ test('termo da busca de órgãos: CNPJ abre direto, número vai para UASG/raiz, 
   assert.equal(F.descreverOrgao({ cnpj: '22812960000199' }), 'CNPJ 22.812.960/0001-99 · sem compras nos dados coletados');
 });
 
-test('PNCP ao vivo só quando o banco local tem pouco do órgão', () => {
-  const C = '22812960000199';
-  assert.equal(F.precisaPncp(null), false);
-  assert.equal(F.precisaPncp({ encontrado: false, cnpj: null }), false, 'sem CNPJ não há o que consultar');
-  assert.equal(F.precisaPncp({ cnpj: C, abertas: [], contratos_resumo: { quantidade: 0 }, atas: [] }), true);
-  assert.equal(F.precisaPncp({ cnpj: C, abertas: [{}], contratos_resumo: { quantidade: 8 }, atas: [] }), true, '9 registros: pouco');
-  assert.equal(F.precisaPncp({ cnpj: C, abertas: [{}], contratos_resumo: { quantidade: 8 }, atas: [{}] }), false, '10 registros: basta o local');
-});
-
-test('ficha mesclada: local + PNCP sem duplicar, só abertas vigentes, maior contagem de contratos', () => {
-  const C = '22812960000199', hoje = '2026-11-24';
-  const local = { encontrado: true, cnpj: C, dados: { nome: 'MUNICIPIO DE APUI', uf: 'AM', municipio: null }, esfera: 'M',
-    abertas: [{ numero_controle_pncp: `${C}-1-000010/2026`, objeto: 'Local', encerramento: '2026-12-10' }],
-    contratos: [{ numero_controle_pncp: `${C}-2-000001/2026`, objeto: 'Contrato local', data_assinatura: '2026-03-01', fornecedor: 'X', valor: 100 }],
-    contratos_resumo: { quantidade: 1, valor: 100, desde: '2026-03-01' }, fornecedores: [{ nome: 'X', contratos: 1, valor: 100 }], atas: [] };
-  const vivo = { orgao: { nome: 'MUNICIPIO DE APUI', esfera: 'M' }, origem: 'ao-vivo', falharam: [], totais: { contratos: 40 },
-    abertas: [{ numero_controle_pncp: `${C}-1-000010/2026`, objeto: 'Repetida do PNCP', encerramento: '2026-12-10' },
-      { numero_controle_pncp: `${C}-1-000011/2026`, objeto: 'Nova', encerramento: '2026-11-30', municipio: 'Apuí', uf: 'AM' },
-      { numero_controle_pncp: `${C}-1-000005/2026`, objeto: 'Já fechou', encerramento: '2026-11-01' }],
-    contratos: [{ numero_controle_pncp: `${C}-2-000001/2026`, objeto: 'Repetido', data_assinatura: '2026-03-01', valor: 100 },
-      { numero_controle_pncp: `${C}-2-000002/2026`, objeto: 'Novo', data_assinatura: '2026-09-01', fornecedor: 'Y', valor: 'n/d' }],
-    atas: [{ numero_controle_pncp_ata: `${C}-1-000003/2026-000001`, objeto: 'Ata', data_assinatura: '2026-05-01' }] };
-  const m = F.mesclarFicha(local, vivo, hoje);
-  assert.deepEqual(m.abertas.map((a) => a.objeto), ['Nova', 'Local'], 'sem repetida, sem encerrada, ordem do prazo');
-  assert.deepEqual(m.contratos.map((c) => c.objeto), ['Novo', 'Contrato local']);
-  assert.deepEqual([m.contratos_resumo.quantidade, m.contratos_resumo.valor, m.contratos_resumo.parcial], [40, 100, true], 'PNCP tem mais: vale a contagem dele');
-  assert.equal(m.atas.length, 1);
-  assert.equal(m.dados.municipio, 'Apuí', 'o que faltava no local vem do PNCP');
-  assert.deepEqual(m.fornecedores, local.fornecedores, 'fornecedores locais (2 anos) ficam');
-  // Órgão só no PNCP: a ficha local não achou nada.
-  const so = F.mesclarFicha({ encontrado: true, cnpj: C, abertas: [], contratos: [], atas: [], contratos_resumo: { quantidade: 0, valor: 0 }, fornecedores: [], dados: {} }, vivo, hoje);
-  assert.equal(so.dados.nome, 'MUNICIPIO DE APUI');
-  assert.deepEqual(so.fornecedores.map((f) => f.nome), ['Fornecedor não informado', 'Y'], 'fornecedores dos contratos do PNCP');
-  assert.equal(F.mesclarFicha(local, null, hoje), local, 'sem PNCP fica o local');
-  const muito = { ...local, contratos_resumo: { quantidade: 500, valor: 9, desde: '2025-01-01' } };
-  assert.equal(F.mesclarFicha(muito, vivo, hoje).contratos_resumo.quantidade, 500, 'local maior vence');
+test('PNCP ao vivo só com a consulta guardada velha ou faltando, pulando o que já está guardado', () => {
+  const C = '00394429000100', agora = Date.parse('2026-11-24T15:00:00Z');
+  const lote = (fonte, periodo, horas) => ({ fonte, periodo, total: 1, itens: 1, em: new Date(agora - horas * 36e5).toISOString() });
+  const tri = (horasAtual, horasFechados, n = 5) => ['202610', '202607', '202604', '202601', '202510'].slice(0, n).map((p, i) => lote('contratos', p, i ? horasFechados : horasAtual));
+  const ficha = (pncp) => ({ encontrado: true, cnpj: '00394429017933', cnpj_principal: C, pncp });
+  assert.equal(F.precisaPncp(null, agora), false);
+  assert.equal(F.precisaPncp({ encontrado: false, cnpj: null }, agora), false, 'sem CNPJ não há o que consultar');
+  assert.equal(F.precisaPncp(ficha([]), agora), true, 'nunca consultado');
+  assert.equal(F.precisaPncp(ficha([lote('abertas', '', 1), ...tri(1, 200)]), agora), false, 'abertas e trimestre atual de 1 h: não vai ao PNCP');
+  assert.equal(F.precisaPncp(ficha([lote('abertas', '', 7), ...tri(1, 1)]), agora), true, 'abertas com mais de 6 h');
+  assert.equal(F.precisaPncp(ficha([lote('abertas', '', 1), ...tri(7, 1)]), agora), true, 'trimestre atual com mais de 6 h');
+  assert.equal(F.precisaPncp(ficha([lote('abertas', '', 1), ...tri(1, 1, 3)]), agora), true, 'faltam trimestres (o PNCP não respondeu)');
+  assert.equal(F.precisaPncp(ficha([{ ...lote('abertas', '', 1), em: 'x' }, ...tri(1, 1)]), agora), true, 'data ilegível conta como velha');
+  // Só o que mudou vai ao PNCP: cadastro e trimestres fechados de menos de 30 dias ficam de fora.
+  assert.deepEqual(F.pularPncp(ficha([lote('orgao', '', 10), lote('abertas', '', 10), ...tri(10, 24 * 10, 4), lote('contratos', '202510', 24 * 40)]), agora),
+    ['orgao', '202607', '202604', '202601'], 'nem o trimestre atual, nem as abertas, nem o fechado há 40 dias');
+  assert.deepEqual(F.pularPncp(null, agora), []);
 });
 
 test('aviso da origem dos dados do PNCP', () => {
   const agora = Date.parse('2026-11-24T15:00:00Z');
-  assert.equal(F.avisoPncp(null, agora), null);
-  assert.deepEqual(F.avisoPncp({ origem: 'ao-vivo', falharam: [] }, agora), { tipo: 'ok', texto: 'Atualizado agora do PNCP.' });
-  assert.match(F.avisoPncp({ origem: 'ao-vivo', falharam: ['contratos'] }, agora).texto, /não respondeu a tempo: contratos/);
-  assert.equal(F.avisoPncp({ origem: 'cache', falharam: [], guardadoEm: '2026-11-24T14:40:00Z' }, agora).texto, 'Do PNCP, consultado há 20 min.');
-  assert.match(F.avisoPncp({ origem: 'guardado', falharam: [], guardadoEm: '2026-11-23T14:40:00Z' }, agora).texto, /lento agora: mostrando a consulta guardada de 23\/11/);
+  const guardada = { pncp: [{ fonte: 'abertas', em: '2026-11-24T14:40:00Z' }, { fonte: 'contratos', em: '2026-11-24T14:30:00Z' }] };
+  assert.deepEqual(F.avisoPncp({ pncp: [] }, null, agora), { tipo: 'neutro', texto: 'Dados coletados pelo robô do LicitaPlena.' });
+  assert.deepEqual(F.avisoPncp(guardada, null, agora), { tipo: 'ok', texto: 'Inclui o PNCP consultado há 20 min, guardado para a sua equipe e para os próximos acessos.' });
+  assert.match(F.avisoPncp({ pncp: [{ fonte: 'abertas', em: '2026-11-23T14:40:00Z' }] }, null, agora).texto, /consultado em 23\/11/);
+  const parcial = F.avisoPncp(guardada, { pendentes: 2, falharam: ['contratos', 'atas'], gravado: true }, agora);
+  assert.equal(parcial.tipo, 'atencao');
+  assert.match(parcial.texto, /ainda está chegando/);
+  assert.match(parcial.texto, /não respondeu a tempo: contratos de alguns trimestres, atas/);
+  assert.match(F.avisoPncp(guardada, { pendentes: 0, falharam: [], gravado: false }, agora).texto, /não pôde ser guardada/);
+  assert.match(F.avisoPncp(guardada, { erro: 'O PNCP não respondeu agora.' }, agora).texto, /^O PNCP não respondeu agora\. Inclui o PNCP/);
 });

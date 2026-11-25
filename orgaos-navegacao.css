@@ -1,0 +1,82 @@
+/* Órgãos sem digitar (24/11/2026): lista por estado e blocos de início de orgao.html (orgaos-navegacao.js).
+   Só tokens de ds-tokens.css (paleta A, claro e escuro). Situação sempre com texto além da cor. */
+.on-cabeca-lista{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.on-cabeca-lista h2{margin:0}
+.on-limpar{min-height:36px;padding:0 12px;font-size:13px}
+.on-filtros{display:grid;grid-template-columns:minmax(180px,1.4fr) minmax(130px,1fr) minmax(170px,1fr) auto;gap:12px;align-items:end;margin:12px 0}
+.on-filtros select:disabled{opacity:.6;cursor:not-allowed}
+.on-check{display:flex;align-items:center;gap:8px;min-height:40px;margin:0;font:500 14px/20px var(--font-sans);color:var(--text-primary);cursor:pointer}
+.on-check input{width:20px;height:20px;min-height:0;margin:0;accent-color:var(--action-strong)}
+/* Botões de tipo: escolhido = ciano com texto marinho + marca ✓ (não só cor). */
+.on-tipos{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 12px}
+.on-tipo{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 12px;border:1px solid var(--border-strong);border-radius:99px;background:var(--surface-default);color:var(--text-primary);font:500 13px/16px var(--font-sans);cursor:pointer}
+.on-tipo span{font-variant-numeric:tabular-nums;color:var(--text-secondary);font-weight:600}
+.on-tipo:hover{background:var(--surface-sunken)}
+.on-tipo[aria-pressed="true"]{background:var(--destaque);border-color:var(--destaque);color:var(--destaque-texto);font-weight:700}
+.on-tipo[aria-pressed="true"]::before{content:"✓"}
+.on-tipo[aria-pressed="true"] span{color:var(--destaque-texto)}
+.on-titulo{font:600 15px/22px var(--font-sans);color:var(--marca-titulo);margin:4px 0 8px}
+[data-theme="dark"] .on-titulo{color:var(--text-primary)}
+.on-titulo:empty{display:none}
+.on-grupo{display:flex;align-items:baseline;gap:8px;margin:20px 0 8px;padding-bottom:6px;border-bottom:2px solid var(--destaque);font:600 16px/24px var(--font-sans);color:var(--text-primary)}
+.on-grupo span{font:500 13px/18px var(--font-sans);color:var(--text-secondary)}
+.on-itens{list-style:none;margin:0;padding:0;border:1px solid var(--border-default);border-radius:var(--radius-card);overflow:hidden}
+.on-item{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px 16px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border-default);background:var(--surface-default)}
+.on-item:last-child{border-bottom:0}
+.on-item:hover{background:var(--surface-sunken)}
+.on-item-nome{min-width:0}
+.on-item-nome a{color:var(--text-primary);font:600 14px/20px var(--font-sans);text-decoration:none;overflow-wrap:anywhere}
+.on-item-nome a:hover{color:var(--action-text);text-decoration:underline}
+.on-item-nome small{display:block;color:var(--text-secondary);font-size:12px;line-height:18px;margin-top:2px;overflow-wrap:anywhere}
+.on-item-numeros{display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap;justify-content:flex-end}
+.on-num{font-size:13px;color:var(--text-secondary);white-space:nowrap}
+.on-num b{color:var(--text-primary);font-variant-numeric:tabular-nums}
+.on-abrir{min-height:36px;padding:0 14px;font-size:13px;white-space:nowrap}
+.on-mais{display:flex;justify-content:center;margin-top:16px}
+/* .btn tem display próprio, que venceria o atributo hidden ("Mostrar mais (1 de 1)"). */
+#on-raiz [hidden]{display:none!important}
+.on-mais .btn:disabled{opacity:.6;cursor:wait}
+.on-vazio{padding:20px;border:1px dashed var(--border-strong);border-radius:var(--radius-card);text-align:center;color:var(--text-secondary)}
+.on-vazio p{margin:0 0 12px;line-height:1.5}
+.on-vazio.erro{border-style:solid;border-color:var(--error-border);background:var(--error-bg);color:var(--error-text)}
+#on-lista[aria-busy="true"]{opacity:.55;transition:opacity .15s}
+/* Lista: atalho da prefeitura para as secretarias e fundos da cidade */
+.on-secretarias{display:inline-block;margin-top:4px;padding:2px 0;font-size:13px}
+/* Ficha: órgãos do mesmo município/governo. Soma destacada, com o aviso de que são órgãos diferentes. */
+.fo-ente-soma{margin:8px 0 12px;padding:12px 16px;border:1px solid var(--destaque);border-radius:var(--radius-card);box-shadow:inset 4px 0 0 var(--destaque);background:var(--surface-default)}
+.fo-ente-soma span{display:block;font:500 13px/18px var(--font-sans);color:var(--text-secondary)}
+.fo-ente-soma b{display:block;font:700 22px/30px var(--font-sans);color:var(--marca-titulo);margin:2px 0}
+[data-theme="dark"] .fo-ente-soma b{color:var(--text-primary)}
+.fo-ente-soma small{display:block;color:var(--text-secondary);font-size:12px;line-height:18px}
+.fo-mesmo-ente .on-abrir{min-height:32px;padding:0 12px}
+/* Início */
+.on-ufs{display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:8px;margin-top:12px}
+.on-uf{min-height:44px;border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--surface-default);color:var(--text-primary);font:700 14px/16px var(--font-sans);letter-spacing:.04em;cursor:pointer}
+.on-uf:hover{background:var(--action-tint);border-color:var(--action-strong)}
+.on-uf.meu{background:var(--marca-titulo);border-color:var(--marca-titulo);color:#fff;box-shadow:inset 0 -3px 0 var(--destaque)}
+[data-theme="dark"] .on-uf.meu{background:var(--destaque);border-color:var(--destaque);color:var(--destaque-texto);box-shadow:none}
+.on-legenda{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px}
+.on-legenda .on-uf{display:inline-grid;place-content:center;min-height:24px;width:36px;font-size:11px;cursor:default}
+.on-blocos{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.on-blocos>.fo-secao{margin:0}
+.on-bloco.destaque{grid-row:span 2;border-color:var(--destaque);box-shadow:inset 4px 0 0 var(--destaque)}
+.on-bloco h3{margin:12px 0 4px;font:600 13px/18px var(--font-sans);letter-spacing:.04em;text-transform:uppercase;color:var(--text-secondary)}
+.on-mini{list-style:none;margin:0 0 8px;padding:0}
+.on-mini li{padding:8px 0;border-bottom:1px solid var(--border-default)}
+.on-mini li:last-child{border-bottom:0}
+.on-mini a{color:var(--text-primary);font-weight:600;text-decoration:none;overflow-wrap:anywhere}
+.on-mini a:hover{color:var(--action-text);text-decoration:underline}
+.on-mini small{display:block;color:var(--text-secondary);font-size:12px;line-height:18px}
+.on-link{background:none;border:0;padding:6px 0;color:var(--action-text);font:600 14px/20px var(--font-sans);cursor:pointer;text-align:left;text-decoration:underline;text-underline-offset:3px}
+.on-links{display:flex;flex-direction:column;align-items:flex-start;margin:4px 0 0}
+@media(max-width:900px){.on-filtros{grid-template-columns:1fr 1fr}.on-blocos{grid-template-columns:1fr}.on-bloco.destaque{grid-row:auto}}
+@media(max-width:640px){
+  .on-filtros{grid-template-columns:1fr}
+  /* Tipos numa faixa que rola de lado dentro do quadro (13 botões empilhados ocupavam a tela inteira). */
+  .on-tipos{flex-wrap:nowrap;overflow-x:auto;margin-right:-16px;padding:2px 16px 6px 2px;scrollbar-width:thin}
+  .on-tipo{flex:none}
+  .on-item{grid-template-columns:1fr;padding:12px}
+  .on-item-numeros{justify-content:flex-start}
+  .on-abrir{width:100%}
+  .on-ufs{grid-template-columns:repeat(6,minmax(0,1fr))}
+}

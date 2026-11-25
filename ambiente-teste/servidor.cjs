@@ -35,7 +35,8 @@ function cabecalhosDe(caminho) {
   const h = {};
   let casa = false;
   for (const linha of fs.readFileSync(path.join(RAIZ, '_headers'), 'utf8').split(/\r?\n/)) {
-    if (/^\//.test(linha)) { const p = linha.trim(); casa = p.endsWith('*') ? caminho.startsWith(p.slice(0, -1)) : caminho === p; continue; }
+    // Splat em qualquer posição, como no Pages ("/data/*", "/*.js").
+    if (/^\//.test(linha)) { const p = linha.trim(); casa = new RegExp('^' + p.split('*').map((s) => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$').test(caminho); continue; }
     if (!casa || !/^\s+\S/.test(linha) || /^\s*#/.test(linha)) continue;
     const t = linha.trim();
     if (t.startsWith('!')) { delete h[t.slice(1).trim().toLowerCase()]; continue; }

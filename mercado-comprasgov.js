@@ -550,7 +550,27 @@
       // Linha da marca: a referência é a mediana da marca na unidade dela; modelo fica de fora (a marca vende vários).
       if (m) aoUsar({ ...m.representante, marca: m.nome, modelo: null }, { ...m.resumo, marca: m.nome });
     });
-    return { buscar, campo, estado };
+    // Volta para a tela (24/11, dono: "trocar de tela tem que continuar do jeito que tá"): o que está na tela vira um
+    // objeto simples (estado-tela.js guarda na aba) e volta desenhado igual, sem consultar o Compras.gov de novo.
+    function foto() {
+      if (!estado.catalogos.length) return { campo: campo.value };
+      return { campo: campo.value, status: status.textContent, termo: estado.termo, uf: estado.uf, catalogos: estado.catalogos, pdm: estado.pdm,
+        porPdm: [...estado.porPdm].map(([k, g]) => [k, { itens: g.itens, carregadas: g.carregadas, paginas: g.paginas }]),
+        atributos: estado.atributos, filtro: estado.filtro, mostrar: estado.mostrar, todasMarcas: !!estado.todasMarcas, grafico: !!estado.grafico,
+        falhas: estado.falhas, dados: estado.dados || null };
+    }
+    function restaurar(f) {
+      if (!f) return false;
+      campo.value = f.campo || '';
+      if (!Array.isArray(f.catalogos) || !f.catalogos.length || !Array.isArray(f.porPdm)) return false;
+      Object.assign(estado, { termo: f.termo, uf: f.uf || '', catalogos: f.catalogos, pdm: String(f.pdm || ''), atributos: f.atributos || [],
+        filtro: { ...estado.filtro, ...f.filtro }, mostrar: f.mostrar || MOSTRAR, todasMarcas: f.todasMarcas, grafico: f.grafico, falhas: f.falhas || 0, dados: f.dados || undefined,
+        porPdm: new Map(f.porPdm.map(([k, g]) => [String(k), { itens: g.itens || [], carregadas: g.carregadas || 0, paginas: g.paginas || null }])) });
+      status.textContent = f.status || '';
+      desenhar();
+      return true;
+    }
+    return { buscar, campo, estado, foto, restaurar };
   }
 
   const api = { termoDoItem, mensagemBusca, resumoPrecos, marcasDe, filtrar, porEspecificacao, foraDaCurva, resumoMarcas, SEM_MARCA, produtoParaCatalogo, brl, montar,

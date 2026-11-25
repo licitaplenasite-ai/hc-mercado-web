@@ -106,7 +106,12 @@
       const e = document.getElementById('topo-empresa');
       if (e) { e.textContent = empresa || ''; e.title = empresa || ''; }
     };
-    escrever('', '');
+    // Troca de tela sem o topo "piscar" vazio (24/11): nome/empresa da última tela desta aba aparecem na hora e a
+    // consulta abaixo confirma/atualiza. Preso ao id do usuário; sessionStorage some ao fechar a aba.
+    const CHAVE_TOPO = 'lp_topo_' + ((s && s.user && s.user.id) || '');
+    let guardado = null;
+    try { guardado = JSON.parse(sessionStorage.getItem(CHAVE_TOPO) || 'null'); } catch { /* sem armazenamento */ }
+    escrever(guardado ? guardado.nome : '', guardado ? guardado.empresa : '');
     /* global SUPABASE_URL, SUPABASE_ANON_KEY */
     if (!s || !s.user || typeof SUPABASE_URL === 'undefined') return;
     try {
@@ -114,7 +119,11 @@
         headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + s.access_token },
       });
       const c = r.ok ? (await r.json())[0] : null;
-      if (c) escrever(String(c.nome || '').trim(), String(c.empresa || '').trim());
+      if (c) {
+        const atual = { nome: String(c.nome || '').trim(), empresa: String(c.empresa || '').trim() };
+        escrever(atual.nome, atual.empresa);
+        try { sessionStorage.setItem(CHAVE_TOPO, JSON.stringify(atual)); } catch { /* segue sem guardar */ }
+      }
     } catch (e) { console.warn('Topo: não foi possível ler o cadastro', e); }
   }
 

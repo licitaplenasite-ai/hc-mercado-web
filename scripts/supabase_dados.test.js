@@ -55,3 +55,48 @@ test("REST usa prazo finito também para upsert", async () => {
   });
   await api.upsertEmLotes("teste", [{ chave: "a" }], "chave");
 });
+
+// 24/11: hidratação de contratos por offset estourou o statement timeout (57014).
+function tabelaFalsa(total, { timeoutAcimaDe = Infinity } = {}) {
+  const chaves = Array.from({ length: total }, (_, i) => `00000000000191-2-${String(i).padStart(6, "0")}/2025`);
+  const urls = [];
+  const fetch = async (url) => {
+    urls.push(url);
+    const q = new URL(url).searchParams;
+    const limite = Number(q.get("limit"));
+    if (limite > timeoutAcimaDe) return { ok: false, status: 500, text: async () => '{"code":"57014","message":"canceling statement due to statement timeout"}' };
+    const depois = q.get("numero_controle_pncp");
+    const resto = depois ? chaves.filter((c) => c > depois.slice(3)) : chaves;
+    return { ok: true, json: async () => resto.slice(0, limite).map((c) => ({ numero_controle_pncp: c, dado: { id: c } })) };
+  };
+  return { chaves, urls, fetch };
+}
+
+test("hidratação pagina pela chave primária, sem offset, e traz cada linha uma vez", async () => {
+  const t = tabelaFalsa(2500);
+  const linhas = await carregar(t.fetch).baixarTodasAsLinhas("contratos", "dado", "numero_controle_pncp");
+  assert.deepEqual(Array.from(linhas, (l) => l.dado.id), t.chaves);
+  assert.equal(t.urls.length, 3);
+  for (const url of t.urls) {
+    assert.match(url, /select=dado%2Cnumero_controle_pncp&order=numero_controle_pncp\.asc&limit=1000/);
+    assert.doesNotMatch(url, /offset/);
+  }
+  assert.doesNotMatch(t.urls[0], /gt\./);
+  assert.ok(new URL(t.urls[1]).searchParams.get("numero_controle_pncp") === `gt.${t.chaves[999]}`, "chave com / vai codificada e intacta");
+});
+
+test("hidratação com página múltipla exata termina na página vazia", async () => {
+  const t = tabelaFalsa(2000);
+  assert.equal((await carregar(t.fetch).baixarTodasAsLinhas("contratos", "dado", "numero_controle_pncp")).length, 2000);
+  assert.equal(t.urls.length, 3);
+});
+
+test("timeout numa página de leitura repete pela metade em vez de derrubar o robô", async () => {
+  const t = tabelaFalsa(700, { timeoutAcimaDe: 300 });
+  const linhas = await carregar(t.fetch).baixarTodasAsLinhas("contratos", "dado", "numero_controle_pncp");
+  assert.deepEqual(Array.from(linhas, (l) => l.dado.id), t.chaves);
+  const negado = carregar(async () => ({ ok: false, status: 401, text: async () => "JWT expired" }));
+  await assert.rejects(negado.baixarTodasAsLinhas("contratos", "dado", "numero_controle_pncp"), /HTTP 401/);
+  const sempre = tabelaFalsa(10, { timeoutAcimaDe: 0 });
+  await assert.rejects(carregar(sempre.fetch).baixarTodasAsLinhas("contratos", "dado", "numero_controle_pncp"), /57014/);
+});

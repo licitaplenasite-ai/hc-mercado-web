@@ -75,20 +75,44 @@ async function enviarLote(tabela, lote, chaveConflito) {
 // Baixa todas as linhas de uma tabela em páginas (Postgrest limita a 1000 linhas
 // por padrão). Usado pra reconstruir o array completo que o algoritmo incremental
 // do robô espera (antes ele lia isso de um arquivo local comitado no git).
-async function baixarTodasAsLinhas(tabela, selecao = "*", ordenarPor = null) {
+// Com `chave` (a primary key), pagina por chave (`chave > última`, pelo índice da PK) em vez
+// de offset: em 24/11 o offset sobre contratos (~165 mil linhas com dado jsonb) fazia cada
+// página reler e descartar todas as anteriores e estourou o statement timeout (57014).
+// Página que ainda assim estoura é pedida de novo pela metade, até LOTE_MINIMO.
+async function baixarTodasAsLinhas(tabela, selecao = "*", chave = null) {
   const linhas = [];
   const tamanhoPagina = 1000;
-  let inicio = 0;
+  if (!chave) {
+    let inicio = 0;
+    for (;;) {
+      const resp = await restFetch(`${tabela}?select=${encodeURIComponent(selecao)}`, {
+        headers: { Range: `${inicio}-${inicio + tamanhoPagina - 1}` },
+      });
+      const pagina = await resp.json();
+      linhas.push(...pagina);
+      if (pagina.length < tamanhoPagina) break;
+      inicio += tamanhoPagina;
+    }
+    return linhas;
+  }
+  const colunas = selecao === "*" || selecao.split(",").includes(chave) ? selecao : `${selecao},${chave}`;
+  let ultima = null;
+  let limite = tamanhoPagina;
   for (;;) {
-    let caminho = `${tabela}?select=${encodeURIComponent(selecao)}`;
-    if (ordenarPor) caminho += `&order=${encodeURIComponent(ordenarPor)}`;
-    const resp = await restFetch(caminho, {
-      headers: { Range: `${inicio}-${inicio + tamanhoPagina - 1}` },
-    });
-    const pagina = await resp.json();
+    let caminho = `${tabela}?select=${encodeURIComponent(colunas)}&order=${encodeURIComponent(chave)}.asc&limit=${limite}`;
+    if (ultima !== null) caminho += `&${encodeURIComponent(chave)}=gt.${encodeURIComponent(ultima)}`;
+    let pagina;
+    try {
+      pagina = await (await restFetch(caminho)).json();
+    } catch (e) {
+      if (limite <= LOTE_MINIMO || !ehTimeout(e)) throw e;
+      limite = Math.ceil(limite / 2);
+      console.warn(`[supabase] ${tabela}: timeout lendo uma página; repetindo com ${limite} linhas.`);
+      continue;
+    }
     linhas.push(...pagina);
-    if (pagina.length < tamanhoPagina) break;
-    inicio += tamanhoPagina;
+    if (pagina.length < limite) break;
+    ultima = pagina[pagina.length - 1][chave];
   }
   return linhas;
 }

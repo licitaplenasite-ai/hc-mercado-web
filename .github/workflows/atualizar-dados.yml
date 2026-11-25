@@ -78,10 +78,14 @@ jobs:
 
       # Catálogo de órgãos (supabase/orgaos_catalogo.sql): cadastro inteiro do PNCP, 1 vez por semana (~2 min; nas outras
       # rodadas sai na hora). Falha aqui não derruba a coleta: a busca de órgãos segue com o cadastro da semana anterior.
+      # A UF/cidade pelas unidades do PNCP fica no orgaos-local.yml (este job já está perto do limite de tempo).
       - name: Cadastro de órgãos do PNCP
+        # Independe da coleta: em 24/11 a coleta caiu por timeout em contratos e o cadastro nem rodou.
+        if: ${{ !cancelled() }}
         continue-on-error: true
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          CADASTRO_ORGAOS_LOCAL_MINUTOS: "0"
         run: node scripts/atualizar_cadastro_orgaos.js
 
       - name: Consolidar base de empresas (Fase 1)

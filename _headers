@@ -20,6 +20,28 @@
   ! Cache-Control
   Cache-Control: public, max-age=300, stale-while-revalidate=3600
 
+# Troca de tela rápida (24/11). No Pages todo /x.html é só um 308 para /x (a página mesma vem da URL limpa), e com o
+# no-cache de /* o navegador refazia esse desvio a cada clique do menu (+1 ida e volta). O desvio é fixo: guarda 1 dia.
+/*.html
+  ! Cache-Control
+  Cache-Control: public, max-age=86400
+
+# JS/CSS/SVG: a zona já guarda 4 h no navegador (Browser Cache TTL). Depois disso usa a cópia guardada na hora e
+# confere em segundo plano, em vez de esperar 1 ida e volta por arquivo. Os <script>/<link> das telas levam ?v=<hash>
+# (scripts/montar_publico.js), então publicação nova muda o endereço e não depende disto. Antes de /cliente*, que
+# desanexa o Cache-Control e mantém o no-store do portal.
+/*.js
+  ! Cache-Control
+  Cache-Control: public, max-age=14400, stale-while-revalidate=604800
+
+/*.css
+  ! Cache-Control
+  Cache-Control: public, max-age=14400, stale-while-revalidate=604800
+
+/*.svg
+  ! Cache-Control
+  Cache-Control: public, max-age=14400, stale-while-revalidate=604800
+
 # Pacote da extensão (publico/extensao/*.zip, montado por scripts/montar_publico.js): baixa como arquivo.
 /extensao/*
   Content-Type: application/zip

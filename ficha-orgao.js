@@ -64,8 +64,9 @@
   }
   function lerParametros(busca) {
     const p = new URLSearchParams(busca || '');
-    const cnpj = digitos(p.get('cnpj'));
-    return { cnpj: CNPJ.test(cnpj) ? cnpj : cnpjDeControle(p.get('controle')), nome: String(p.get('nome') || '').trim().slice(0, 300) };
+    const cnpj = digitos(p.get('cnpj')), uasg = digitos(p.get('uasg'));
+    return { cnpj: CNPJ.test(cnpj) ? cnpj : cnpjDeControle(p.get('controle')), nome: String(p.get('nome') || '').trim().slice(0, 300),
+      uasg: /^\d{1,8}$/.test(uasg) ? uasg : null };
   }
   function formatarCnpj(c) {
     return CNPJ.test(c || '') ? c.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') : '';
@@ -158,71 +159,51 @@
     return [local, CNPJ.test(o?.cnpj || '') ? 'CNPJ ' + formatarCnpj(o.cnpj) : '', contagens.join(', ') || 'sem compras nos dados coletados'].filter(Boolean).join(' · ');
   }
 
-  // Banco local com pouco do órgão: a tela completa com o PNCP ao vivo (/api/orgao-pncp). Com bastante, só se pedirem.
-  const POUCO_DADO_LOCAL = 10;
-  function precisaPncp(ficha) {
-    if (!ficha || !CNPJ.test(ficha.cnpj || '')) return false;
-    return (ficha.abertas?.length || 0) + Number(ficha.contratos_resumo?.quantidade || 0) + (ficha.atas?.length || 0) < POUCO_DADO_LOCAL;
+  // PNCP ao vivo (/api/orgao-pncp) só com dado guardado velho ou faltando: o que ele lê fica no banco para todos
+  // (orgaos_pncp_cache) e volta pela ficha_orgao em ficha.pncp = [{ fonte, periodo, total, itens, em }].
+  // agora em ms (Date.now()). 6 h: as licitações abertas mudam no dia; os contratos de meses fechados quase não mudam.
+  const FRESCO_MS = 6 * 36e5;
+  const FECHADO_MS = 30 * 864e5;
+  // Trimestre de calendário do dia (AAAA-MM-DD) no formato do lote de contratos (orgao-pncp.js): AAAAMM do 1º mês.
+  const trimestre = (dia) => dia.slice(0, 4) + String(Math.floor((Number(dia.slice(5, 7)) - 1) / 3) * 3 + 1).padStart(2, '0');
+  const diaBrasilia = (ms) => new Date(ms - 3 * 36e5).toISOString().slice(0, 10);
+  const idade = (l, agora) => { const t = Date.parse(l.em); return Number.isFinite(t) ? agora - t : Infinity; };
+  function precisaPncp(ficha, agora) {
+    if (!ficha || ficha.encontrado === false || !CNPJ.test(ficha.cnpj_principal || ficha.cnpj || '')) return false;
+    const lotes = ficha.pncp || [], atual = trimestre(diaBrasilia(agora));
+    const fresco = (l) => !!l && idade(l, agora) < FRESCO_MS;
+    return !fresco(lotes.find((l) => l.fonte === 'abertas')) || !fresco(lotes.find((l) => l.fonte === 'contratos' && l.periodo === atual))
+      || lotes.filter((l) => l.fonte === 'contratos').length < 4;
   }
-  const unirPor = (chave, ...listas) => { const m = new Map(); for (const l of listas) for (const x of l || []) if (x?.[chave] && !m.has(x[chave])) m.set(x[chave], x); return [...m.values()]; };
-  const valorNumero = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
-  // Ficha local (RPC ficha_orgao) + PNCP ao vivo, sem duplicar (mesmo número de controle = mesmo registro; o local vence,
-  // é o que o resto do sistema mostra). hoje = 'AAAA-MM-DD' de Brasília.
-  function mesclarFicha(local, vivo, hoje) {
-    const base = local && local.encontrado !== false ? local : { cnpj: local?.cnpj || null };
-    if (!vivo) return base;
-    const abertas = unirPor('numero_controle_pncp', base.abertas, vivo.abertas)
-      .filter((a) => !a.encerramento || String(a.encerramento).slice(0, 10) >= hoje)
-      .sort((a, b) => String(a.encerramento || '9999').localeCompare(String(b.encerramento || '9999')));
-    const contratos = unirPor('numero_controle_pncp', base.contratos, vivo.contratos)
-      .sort((a, b) => String(b.data_assinatura || '').localeCompare(String(a.data_assinatura || '')));
-    const atas = unirPor('numero_controle_pncp_ata', base.atas, vivo.atas)
-      .sort((a, b) => String(b.data_assinatura || '').localeCompare(String(a.data_assinatura || '')));
-    // Contratos: a contagem local cobre 2 anos; a do PNCP, 12 meses. Vale a maior; sem a soma local, soma o que veio.
-    const r = base.contratos_resumo || { quantidade: 0, valor: 0, desde: null };
-    const totalVivo = Number(vivo.totais?.contratos || 0);
-    const resumoVivo = () => {
-      const lista = contratos.filter((c) => valorNumero(c.valor) != null);
-      return { quantidade: Math.max(totalVivo, contratos.length), valor: lista.reduce((s, c) => s + Number(c.valor), 0),
-        desde: contratos.map((c) => c.data_assinatura).filter(Boolean).sort()[0] || null, parcial: totalVivo > contratos.length, doPncp: true };
-    };
-    const contratosResumo = Number(r.quantidade || 0) >= Math.max(totalVivo, contratos.length) ? r : resumoVivo();
-    let fornecedores = base.fornecedores || [];
-    if (!fornecedores.length && contratos.length) {
-      const soma = new Map();
-      for (const c of contratos) {
-        const nome = c.fornecedor || 'Fornecedor não informado', x = soma.get(nome) || { nome, contratos: 0, valor: 0 };
-        x.contratos += 1; x.valor += valorNumero(c.valor) || 0; soma.set(nome, x);
-      }
-      fornecedores = [...soma.values()].sort((a, b) => b.valor - a.valor).slice(0, 5);
-    }
-    const primeiro = [...(vivo.abertas || []), ...(vivo.contratos || [])].find((x) => x.municipio || x.uf) || {};
-    const dados = {
-      nome: base.dados?.nome || vivo.orgao?.nome || null,
-      uf: base.dados?.uf || primeiro.uf || null,
-      municipio: base.dados?.municipio || primeiro.municipio || null,
-    };
-    return { ...base, encontrado: true, cnpj: base.cnpj, dados, esfera: base.esfera || vivo.orgao?.esfera || null,
-      abertas: abertas.slice(0, 30), contratos: contratos.slice(0, 30), atas: atas.slice(0, 30), contratos_resumo: contratosResumo, fornecedores };
+  // O que o /api/orgao-pncp pode pular (o PNCP aceita ~20 chamadas por minuto): o cadastro e os trimestres já fechados,
+  // consultados há menos de 30 dias.
+  function pularPncp(ficha, agora) {
+    const atual = trimestre(diaBrasilia(agora));
+    return (ficha?.pncp || []).filter((l) => (l.fonte === 'orgao' || (l.fonte === 'contratos' && l.periodo !== atual)) && idade(l, agora) < FECHADO_MS)
+      .map((l) => (l.fonte === 'orgao' ? 'orgao' : l.periodo));
   }
-  // Selo da origem dos dados ao vivo. agora em ms (Date.now()).
-  function avisoPncp(vivo, agora) {
-    if (!vivo) return null;
-    const hora = (iso) => new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
-    const NOMES = { orgao: 'cadastro', abertas: 'licitações abertas', contratos: 'contratos', atas: 'atas' };
-    const falhou = (vivo.falharam || []).map((f) => NOMES[f] || f);
-    const resto = falhou.length ? ` O PNCP não respondeu a tempo: ${falhou.join(', ')} (mostrando o que já tínhamos).` : '';
-    if (vivo.origem === 'ao-vivo') return { tipo: falhou.length ? 'atencao' : 'ok', texto: 'Atualizado agora do PNCP.' + resto };
-    const quando = vivo.guardadoEm && Number.isFinite(Date.parse(vivo.guardadoEm)) ? hora(vivo.guardadoEm) : null;
-    const minutos = quando ? Math.round((agora - Date.parse(vivo.guardadoEm)) / 6e4) : null;
-    if (vivo.origem === 'cache') return { tipo: falhou.length ? 'atencao' : 'ok', texto: `Do PNCP, consultado ${minutos != null && minutos < 60 ? `há ${Math.max(minutos, 1)} min` : `em ${quando}`}.` + resto };
-    return { tipo: 'atencao', texto: `O PNCP está lento agora: mostrando a consulta guardada de ${quando || 'antes'}.` + resto };
+  // Selo da origem dos dados. vivo = resposta do /api/orgao-pncp nesta visita (ou { erro }), null se não consultou.
+  const NOMES_FONTE = { orgao: 'cadastro', abertas: 'licitações abertas', contratos: 'contratos de alguns trimestres', atas: 'atas' };
+  function avisoPncp(ficha, vivo, agora) {
+    const hora = (ms) => new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(ms));
+    const ems = (ficha?.pncp || []).map((l) => Date.parse(l.em)).filter(Number.isFinite);
+    const ultimo = ems.length ? Math.max(...ems) : null;
+    const minutos = ultimo == null ? null : Math.round((agora - ultimo) / 6e4);
+    const base = ultimo == null ? 'Dados coletados pelo robô do LicitaPlena.'
+      : `Inclui o PNCP consultado ${minutos < 1 ? 'agora' : minutos < 60 ? `há ${minutos} min` : `em ${hora(ultimo)}`}, guardado para a sua equipe e para os próximos acessos.`;
+    if (vivo?.erro) return { tipo: 'atencao', texto: `${vivo.erro} ${base}` };
+    const avisos = [];
+    if (vivo?.pendentes) avisos.push('Parte do PNCP ainda está chegando: a ficha se completa sozinha em instantes.');
+    const falhou = (vivo?.falharam || []).map((f) => NOMES_FONTE[f] || f);
+    if (falhou.length) avisos.push(`O PNCP não respondeu a tempo: ${falhou.join(', ')}. Tente de novo mais tarde.`);
+    if (vivo && vivo.gravado === false) avisos.push('A consulta ao PNCP não pôde ser guardada agora.');
+    return { tipo: avisos.length ? 'atencao' : ultimo == null ? 'neutro' : 'ok', texto: [base, ...avisos].join(' ') };
   }
 
   const api = {
     cnpjDeControle, normalizarNome, chaveOrgao, linkFicha, linkFichaHtml, linkFichaElemento, lerParametros, formatarCnpj,
     situacaoProcesso, resumirRelacionamento, prazoAberta, validarContato, validarAnotacao, padraoIlike, linkPncp,
-    interpretarTermo, descreverOrgao, precisaPncp, mesclarFicha, avisoPncp,
+    interpretarTermo, descreverOrgao, precisaPncp, pularPncp, avisoPncp,
   };
   raiz.LicitaFichaOrgao = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

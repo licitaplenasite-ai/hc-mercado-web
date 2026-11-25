@@ -100,9 +100,33 @@
 .fo-pncp.atencao{color:var(--attention-text);background:var(--attention-bg);border-color:var(--attention-border)}
 .fo-pncp .btn{min-height:32px;padding:0 12px;font-size:13px}
 .fo-nao-achou p{margin:0 0 8px}
+/* Ficha completa (24/11): seletor de unidade, segunda linha de números e gráficos simples em CSS (o número sempre escrito). */
+.fo-kpis-2{margin-top:12px}
+.fo-unidade{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:12px 0 0;padding:12px 16px;border:1px solid var(--border-default);border-radius:var(--radius-card);background:var(--surface-default)}
+.fo-unidade label{margin:0;font:600 14px/20px var(--font-sans)}
+.fo-unidade select{width:auto;max-width:100%;min-width:260px}
+.fo-unidade .nota{flex:1 1 320px;font-size:13px}
+.fo-secao h3{margin:16px 0 8px;font:600 15px/22px var(--font-sans);color:var(--text-primary)}
+.fo-graficos{gap:8px 24px}
+.fo-graficos>div{min-width:0}
+.fo-graficos h3{margin-top:8px}
+.fo-barras{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.fo-barras li{display:grid;grid-template-columns:minmax(0,38%) 1fr auto;gap:8px;align-items:center;font-size:13px;line-height:18px}
+.fo-barra-rotulo{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-primary)}
+.fo-barra-trilho{height:12px;border-radius:99px;background:var(--surface-sunken);overflow:hidden}
+.fo-barra-trilho span{display:block;height:100%;border-radius:99px;background:var(--action-strong)}
+.fo-barra-num{color:var(--text-secondary);white-space:nowrap;font-variant-numeric:tabular-nums}
+.fo-colunas{display:flex;align-items:stretch;gap:3px;height:150px;overflow-x:auto;padding-bottom:2px}
+.fo-coluna{flex:1 0 18px;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:18px}
+.fo-coluna b{font:600 10px/14px var(--font-sans);color:var(--text-secondary);white-space:nowrap;min-height:14px;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.fo-coluna-trilho{flex:1;width:100%;display:flex;align-items:flex-end;background:var(--surface-sunken);border-radius:4px 4px 0 0}
+.fo-coluna-trilho span{display:block;width:100%;background:var(--action-strong);border-radius:4px 4px 0 0}
+.fo-coluna small{font-size:10px;line-height:14px;color:var(--text-secondary);white-space:nowrap}
+.fo-tabela td small.fo-pelo-nome{color:var(--attention-text)}
 @media(max-width:900px){.fo-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.fo-duas{grid-template-columns:1fr}}
 @media(max-width:640px){
   .fo-cabeca{padding:16px}.fo-cabeca h1{font-size:21px;line-height:28px}.fo-acompanhar{width:100%}
+  .fo-unidade select{min-width:0;width:100%}.fo-barras li{grid-template-columns:1fr auto}.fo-barra-trilho{grid-column:1/-1;grid-row:2}
   .fo-kpi{padding:12px}.fo-kpi b{font-size:18px;line-height:24px;overflow-wrap:normal}.fo-form,.fo-busca{grid-template-columns:1fr}
   .lt-caixa{padding:4px 12px 12px}
 }
