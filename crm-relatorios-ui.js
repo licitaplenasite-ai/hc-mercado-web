@@ -240,7 +240,9 @@
     estado.empresas = empresas || [];
     const ativa = estado.empresas.find((e) => e.id === localStorage.getItem(CHAVE_EMPRESA)) || estado.empresas[0];
     if (!ativa) return false;
-    if (estado.escolha !== 'todas' && !estado.empresas.some((e) => e.id === estado.escolha)) estado.escolha = ativa.id;
+    // Trocou a empresa ativa (seletor do Boletim/Funil): a previsão vai junto; antes ficava na empresa da 1ª carga.
+    if (estado.escolha !== 'todas' && (ativa.id !== estado.ativaVista || !estado.empresas.some((e) => e.id === estado.escolha))) estado.escolha = ativa.id;
+    estado.ativaVista = ativa.id;
     const org = (estado.empresas.find((e) => e.id === estado.escolha) || ativa).organizacao_id;
     estado.empresas = estado.empresas.filter((e) => e.organizacao_id === org);
     const consulta = (comExemplo) => {

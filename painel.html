@@ -1468,7 +1468,7 @@
 <script src="fornecedor-ia-ui.js" defer></script>
 <script src="ajuda-ui.js" defer></script>
 <script src="visualizador-pdf-ui.js" defer></script>
-<script src="chat-ia-ui.js?v=20261125" defer></script>
+<script src="chat-ia-ui.js?v=20261125b" defer></script>
 <script src="avisos-celular.js" defer></script>
 </head>
 <body>
@@ -4634,9 +4634,15 @@
   function chaveArmazenamento(nome) {
     return `hc_${nome}`;
   }
+  // Lidos e favoritos são de cada pessoa e de cada empresa (o Boletim de uma empresa não marca o da outra). Sem marca
+  // ainda nesta empresa, parte da lista antiga sem dono (hc_lidos), para ninguém perder o que já tinha marcado.
+  function chaveConjunto(nome) {
+    const empresa = window.__filtroBoletimEmpresa || empresaOperacionalId;
+    return window.__clienteIdAtual && empresa ? `${chaveArmazenamento(nome)}:${window.__clienteIdAtual}:${empresa}` : chaveArmazenamento(nome);
+  }
   function lerConjunto(nome) {
     try {
-      const bruto = localStorage.getItem(chaveArmazenamento(nome));
+      const bruto = localStorage.getItem(chaveConjunto(nome)) ?? localStorage.getItem(chaveArmazenamento(nome));
       const arr = bruto ? JSON.parse(bruto) : [];
       return new Set(Array.isArray(arr) ? arr : []);
     } catch (e) {
@@ -4645,7 +4651,7 @@
   }
   function salvarConjunto(nome, conjunto) {
     try {
-      localStorage.setItem(chaveArmazenamento(nome), JSON.stringify(Array.from(conjunto)));
+      localStorage.setItem(chaveConjunto(nome), JSON.stringify(Array.from(conjunto)));
     } catch (e) {
       // localStorage indisponível (modo privado etc.) — segue sem persistir
     }
@@ -5212,6 +5218,9 @@
       const anterior = empresaOperacionalId;
       const preferida = localStorage.getItem("licitaplena_empresa_operacional_id");
       empresaOperacionalId = empresas.find(e => e.id === preferida)?.id || empresas.find(e => e.id === anterior)?.id || empresas[0]?.id || null;
+      // Sem empresa guardada, grava a escolhida: a troca seguinte chega às outras telas da casca com valor antigo
+      // (trava-sessao.js só avisa troca de uma empresa para outra, não a 1ª escolha automática).
+      if (empresaOperacionalId && !preferida) try { localStorage.setItem("licitaplena_empresa_operacional_id", empresaOperacionalId); } catch (e) { /* vale só nesta tela */ }
       atualizarSeletoresEmpresa(empresas);
       semEmpresaCadastrada = !empresaOperacionalId;
       document.querySelectorAll(".empresa-convite").forEach((el) => { el.hidden = !semEmpresaCadastrada; });
@@ -5239,7 +5248,9 @@
     empresaOperacionalId = id;
     atualizarCentralDefesa();
     localStorage.setItem("licitaplena_empresa_operacional_id", id);
-    void trocarFiltroBoletimDaEmpresa(); // Boletim e jornais são por empresa
+    // Contrato único da troca de empresa nesta tela: Boletim (filtro, edições, lidos), filtros salvos, Dashboard e Plena
+    // ouvem "lp:empresa-ativa". As outras telas abertas na casca recebem o "storage" da chave acima (trava-sessao.js).
+    window.dispatchEvent(new CustomEvent("lp:empresa-ativa", { detail: { empresaId: id } }));
     try {
       const { organizacaoId, empresas } = await contextoOperacionalPromise;
       atualizarSeletoresEmpresa(empresas);
@@ -7216,6 +7227,18 @@
     if (window.__filtroBoletimEmpresa === undefined) window.__filtroBoletimEmpresa = localStorage.getItem("licitaplena_empresa_operacional_id") || null;
     return window.__clienteIdAtual ? `${window.__clienteIdAtual}:${window.__filtroBoletimEmpresa || "conta"}` : null;
   }
+  // Edições do aviso por e-mail que são da empresa ativa: as do filtro dela (empresa:<id>, boletim_editais.py), os jornais
+  // dela ou sem empresa, e as do filtro antigo da conta (principal). Jornal sem dono conhecido vale para a conta.
+  // Sem empresa ativa (conta sem CNPJ), todas.
+  function edicoesDaEmpresa(lista, empresaId, empresaDoJornal) {
+    if (!empresaId) return lista;
+    return lista.filter((e) => {
+      const f = String(e.filtro_id || "");
+      if (f.startsWith("empresa:")) return f === `empresa:${empresaId}`;
+      if (f.startsWith("jornal:")) { const dona = empresaDoJornal[f.slice(7)]; return !dona || dona === empresaId; }
+      return true;
+    });
+  }
   function chaveFiltroBoletimConta() {
     const dono = donoFiltroBoletim();
     return dono ? `hc_boletim_filtro:${dono}` : null;
@@ -7655,7 +7678,13 @@
     if (typeof window.__ajustarBoletimSemFiltro === "function") window.__ajustarBoletimSemFiltro(!filtro || !filtro.palavrasRaw);
     if (!filtro || !filtro.palavrasRaw) {
       metaEl.textContent = "Escolha estados e palavras-chave uma vez; o boletim passa a ser montado sozinho a cada visita.";
-      alvo.innerHTML = "";
+      // Empresa sem filtro próprio: estado vazio claro, nunca a lista da empresa anterior.
+      const nomeEmpresa = window.__filtroBoletimEmpresaNome;
+      alvo.innerHTML = nomeEmpresa ? `<div class="aviso bol-sem-filtro-empresa"><p><strong>${escapeHtml(nomeEmpresa)}</strong> ainda não tem filtro do boletim. Cada empresa tem o seu: escolha os estados e as palavras do que ela vende.</p><button type="button" class="btn-imprimir" id="bol-configurar-empresa">Configurar filtro desta empresa</button></div>` : "";
+      document.getElementById("bol-configurar-empresa")?.addEventListener("click", () => {
+        document.getElementById("bol-config-painel").scrollIntoView({ behavior: "smooth", block: "start" });
+        document.getElementById("bol-palavras").focus({ preventScroll: true });
+      });
       document.getElementById("bol-calendario").innerHTML = "";
             bolResultadosCompletos = [];
             if (typeof window.__atualizarDashboard === "function") window.__atualizarDashboard();
@@ -7821,12 +7850,14 @@
       document.getElementById("bol-filtro-status").textContent = "Não foi possível carregar o filtro desta empresa. Tente de novo.";
     });
     return window.__filtroBoletimPronto.then(() => {
-      if (document.getElementById("bol-config-painel").style.display !== "none") preencherConfigBoletim();
+      const abriuEdicao = typeof window.__bolEdicoesDaEmpresaAtiva === "function" && window.__bolEdicoesDaEmpresaAtiva();
+      preencherConfigBoletim(); // mesmo fechado: o formulário nunca guarda palavras da empresa anterior
       document.getElementById("bol-filtro-status").textContent = window.__filtroBoletimEmpresaNome ? `Boletim de ${window.__filtroBoletimEmpresaNome}.` : "";
-      void gerarBoletim();
+      if (!abriuEdicao) void gerarBoletim();
       if (typeof window.__recarregarFiltrosSalvos === "function") void window.__recarregarFiltrosSalvos();
     });
   }
+  window.addEventListener("lp:empresa-ativa", () => { void trocarFiltroBoletimDaEmpresa(); }); // Boletim e jornais são por empresa
 
   // Sem filtro, o Boletim é um passo só: o formulário já aberto, sem Atualizar/Imprimir
   // (não há o que atualizar nem imprimir) e com o botão dizendo o que acontece ao salvar.
@@ -7899,7 +7930,31 @@
     if (edicaoDoLink && location.hash === "#boletim") window.__bolEdicaoAberta = true; // antes do boletim do dia começar
     const dataBr = (iso) => String(iso).split("-").reverse().join("/");
     const alvoEdicoes = document.getElementById("bol-edicoes");
-    let edicoesLista = [];
+    let edicoesLista = [], edicoesTodas = [], empresaDoJornal = {}, edicaoPendente = null;
+    const separarDaEmpresa = () => {
+      // Falha ao ler o filtro da empresa (__filtroBoletimEmpresa vazio) não pode virar "todas as empresas": usa a ativa.
+      let ativa = window.__filtroBoletimEmpresa || empresaOperacionalId;
+      if (!ativa) try { ativa = localStorage.getItem("licitaplena_empresa_operacional_id"); } catch (e) { /* conta sem empresa */ }
+      edicoesLista = edicoesDaEmpresa(edicoesTodas, ativa, empresaDoJornal);
+      window.__bolEdicoesLista = edicoesLista;
+    };
+    // Troca de empresa: sai da edição aberta (era da outra empresa; antes o Boletim ficava preso nela) e mostra só as
+    // edições da empresa nova. Tira ?edicao= do endereço para recarregar não voltar à edição da outra empresa.
+    // Devolve true quando abriu a edição do link que pediu a troca (link do e-mail de outra empresa).
+    window.__bolEdicoesDaEmpresaAtiva = () => {
+      const pendente = edicaoPendente;
+      edicaoPendente = null;
+      window.__bolEdicaoAberta = false;
+      separarDaEmpresa();
+      if (pendente && edicoesLista.includes(pendente)) { abrirEdicao(pendente); return true; }
+      const u = new URL(location.href);
+      if (u.searchParams.has("edicao") || u.searchParams.has("filtro")) {
+        u.searchParams.delete("edicao"); u.searchParams.delete("filtro");
+        history.replaceState(history.state, "", u.pathname + u.search + u.hash);
+      }
+      desenharEdicoes(null);
+      return false;
+    };
 
     function desenharEdicoes(ativaId) {
       if (!edicoesLista.length) { alvoEdicoes.hidden = true; return; }
@@ -7960,19 +8015,35 @@
     async function carregarEdicoes() {
       await window.__clientePronto;
       if (!window.__clienteIdAtual) return;
+      await window.__filtroBoletimPronto; // a empresa do Boletim (__filtroBoletimEmpresa) decide quais edições aparecem
       const consultar = (colunas) => window.__sbClient.from("boletim_edicoes")
         .select(colunas).gt("quantidade", 0).order("edicao", { ascending: false }).limit(90);
       let { data, error } = await consultar("id, edicao, filtro_id, filtro_nome, empresa, quantidade, numeros, numero");
       if (error) ({ data, error } = await consultar("id, edicao, filtro_id, filtro_nome, empresa, quantidade, numeros")); // banco sem a coluna numero
-      edicoesLista = error ? [] : (data || []);
+      edicoesTodas = error ? [] : (data || []);
+      if (edicoesTodas.some((e) => String(e.filtro_id || "").startsWith("jornal:"))) {
+        const jornais = await window.__sbClient.from("filtros_salvos").select("id, empresa_id").eq("filtro->>jornal", "true");
+        empresaDoJornal = jornais.error ? {} : Object.fromEntries((jornais.data || []).map((j) => [j.id, j.empresa_id]));
+      }
       // Etiquetas "Boletim nº" no calendário (bloco do calendário) leem esta lista e abrem a edição por aqui.
-      window.__bolEdicoesLista = edicoesLista;
+      separarDaEmpresa();
       window.__bolAbrirEdicao = abrirEdicao;
       if (typeof window.__bolRedesenharCalendario === "function") window.__bolRedesenharCalendario();
       desenharEdicoes(null);
       if (!edicaoDoLink) return;
       const doLink = edicoesLista.find((e) => e.edicao === edicaoDoLink && (!filtroDoLink || e.filtro_id === filtroDoLink));
       if (doLink) { abrirEdicao(doLink); return; }
+      // Edição de outra empresa do usuário (boletim empresa:<id> ou jornal dela): troca para a empresa e abre a edição.
+      const deOutra = edicoesTodas.find((e) => e.edicao === edicaoDoLink && (!filtroDoLink || e.filtro_id === filtroDoLink));
+      const f = String(deOutra?.filtro_id || "");
+      const dona = f.startsWith("empresa:") ? f.slice(8) : f.startsWith("jornal:") ? empresaDoJornal[f.slice(7)] : null;
+      const minhas = dona ? (await empresaOperacionalParaDossie().catch(() => null))?.empresas || [] : [];
+      if (minhas.some((e) => e.id === dona)) {
+        await (carregamentoAcompanhamento || carregarEmpresasAcompanhamento());
+        edicaoPendente = deOutra;
+        if (dona === empresaOperacionalId) void trocarFiltroBoletimDaEmpresa(); else void selecionarEmpresaAcompanhamento(dona);
+        return;
+      }
       window.__bolEdicaoAberta = false;
       gerarBoletim();
       document.getElementById("bol-filtro-status").textContent = "Não encontramos essa edição na sua conta. Mostrando o boletim de hoje.";

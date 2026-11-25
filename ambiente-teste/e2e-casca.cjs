@@ -187,16 +187,27 @@ async function main() {
       return await p.innerText('#casca-aviso-texto');
     });
 
-    await passo('empresa ativa trocada numa tela: a outra avisa ao aparecer', p, async () => {
+    // 25/11 (troca de empresa): a tela viva que estava na empresa antiga mostra o aviso com Atualizar (pode ter algo
+    // digitado). Só a tela que garante não ter alteração (__lpTemAlteracoes() === false) abre de novo sozinha na empresa nova.
+    await passo('empresa ativa trocada numa tela: a outra avisa; sem alteração garantida, abre já na empresa nova', p, async () => {
       const f = await ativo(p);
       await f.evaluate(([a, b]) => { localStorage.setItem('licitaplena_empresa_operacional_id', a); localStorage.setItem('licitaplena_empresa_operacional_id', b); }, [seed.ids.empA1, seed.ids.empA2]);
       await menu(p, 'Quadros', 'quadros');
       await p.waitForSelector('#casca-aviso:not([hidden])', { timeout: 3000 });
       const txt = await p.innerText('#casca-aviso-texto');
       exigir(/empresa ativa/.test(txt), txt);
-      await p.click('#casca-aviso-fechar');
+      await p.click('#casca-aviso-atualizar');
+      await naTela(p, 'quadros');
+      let q = await ativo(p);
+      await q.waitForFunction((b) => document.getElementById('empresa-atual')?.value === b, seed.ids.empA2, { timeout: 20000 });
+      await q.evaluate(() => { window.__lpTemAlteracoes = () => false; });
+      await menu(p, 'Processos', 'processos');
       await (await ativo(p)).evaluate((e) => localStorage.setItem('licitaplena_empresa_operacional_id', e), seed.ids.empA1);
-      return txt;
+      await menu(p, 'Quadros', 'quadros');
+      q = await ativo(p);
+      await q.waitForFunction((a) => document.getElementById('empresa-atual')?.value === a, seed.ids.empA1, { timeout: 20000 });
+      exigir(await p.isHidden('#casca-aviso'), 'aviso na tela sem alteração: ' + await p.innerText('#casca-aviso-texto'));
+      return txt + ' / sem alteração: recarregou sozinha';
     });
 
     if (!IPHONE) await passo('Ctrl+P imprime só a tela visível', p, async () => {

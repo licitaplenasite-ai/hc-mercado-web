@@ -143,7 +143,15 @@
     const tela = telaDe(u.pathname), destino = '/' + tela + u.search + u.hash;
     let t = vivas.get(tela);
     if (!t) t = criar(tela, destino);
-    else {
+    else if (t.empresaMudou && semAlteracoesConfirmado(t)) {
+      // A empresa ativa mudou em outra tela: a tela que garante não ter nada digitado (__lpTemAlteracoes() === false)
+      // abre de novo já na empresa nova. As outras ficam como estão e o aviso pede para atualizar (avisarMudanca):
+      // recarregar sozinha perderia em silêncio o que a pessoa digitou (palavras do Boletim, anotação, pergunta à Plena).
+      recarregar(t, (w) => {
+        // Mesmo endereço com # (/painel#boletim) não recarrega com replace: só rolaria até a seção.
+        if (w.location.pathname + w.location.search === u.pathname + u.search) { w.history.replaceState(w.history.state, '', destino); w.location.reload(); } else w.location.replace(destino);
+      });
+    } else {
       const atual = urlDa(t);
       if (!atual || (u.search && u.search !== atual.search)) {
         // Parâmetros novos (link "Abrir no Funil", ficha de outro órgão): só esta tela carrega de novo; a casca não.
@@ -233,6 +241,9 @@
   // Telas com formulário expõem window.__lpTemAlteracoes(); se não der para perguntar, a tela fica (não perde nada).
   function comAlteracoes(t) {
     try { const f = t.frame.contentWindow.__lpTemAlteracoes; return typeof f === 'function' && f() === true; } catch { return true; }
+  }
+  function semAlteracoesConfirmado(t) {
+    try { const f = t.frame.contentWindow.__lpTemAlteracoes; return typeof f === 'function' && f() === false; } catch { return false; }
   }
   function descartarSobras() {
     while (vivas.size > MAX_VIVAS) {

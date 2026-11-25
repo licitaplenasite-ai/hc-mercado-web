@@ -457,15 +457,18 @@
     const pensando = criar("div", { className: "lp-chat-msg lp-chat-ia lp-plena-pensando" }, [icone("lp-plena-icone-mini"), criar("p", { textContent: "A Plena está lendo…" })]);
     lista.append(pensando);
     pensando.scrollIntoView({ block: "end" });
+    const conversa = estado.conversaId; // trocou de empresa no meio: a resposta (ou o "cancelado") não entra na conversa nova
     try {
       const noEdital = estado.alvo === "edital" && estado.edital?.numeroControlePNCP;
       const m = noEdital ? await perguntarAoEdital(pergunta) : await perguntarGeral(pergunta);
       pensando.remove();
+      if (estado.conversaId !== conversa) return;
       registrar(m);
       estado.historico.push({ papel: "usuario", texto: pergunta }, { papel: "ia", texto: String(m.texto || "").slice(0, 600) });
       persistir();
     } catch (e) {
       pensando.remove();
+      if (estado.conversaId !== conversa) return;
       registrar({ papel: "erro", texto: e.message });
     } finally {
       ocupado(false);
@@ -564,6 +567,9 @@
     boasVindas();
     atualizarModo();
   }
+  // Trocou a empresa ativa (painel.html): a conversa da outra empresa não segue como contexto da nova.
+  // A pergunta em andamento e a digitada pela metade eram da empresa anterior: cancela e limpa.
+  window.addEventListener("lp:empresa-ativa", () => { if (!lista) return; pendente?.(); campo.value = ""; novaConversa(); });
   const boasVindas = () => registrar({ papel: "ia", texto: "Olá, eu sou a Plena. Tiro dúvidas sobre licitação (Lei 14.133 e outras), mostro seus processos, prazos, tarefas e certidões, e digo onde fica cada coisa no LicitaPlena. Para ler um edital, toque em Plena no cartão da licitação." });
 
   function montar() {

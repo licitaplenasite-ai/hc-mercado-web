@@ -213,7 +213,9 @@
       raiz.dataset.theme = escuro ? "dark" : "light";
       raiz.classList.toggle("tema-claro", !escuro);
     } else if (ev.key === "licitaplena_empresa_operacional_id") {
-      if (ev.oldValue && ev.newValue !== ev.oldValue) casca.empresaMudou(window); // 1ª escolha automática de outra tela não conta
+      // 1ª escolha automática (sem valor antes, ex.: gravarPreferencia ao carregar) não conta. O painel grava a empresa
+      // que escolheu ao carregar (carregarEmpresasAcompanhamentoAgora), então a troca feita depois já tem valor antigo.
+      if (ev.oldValue && ev.newValue !== ev.oldValue) casca.empresaMudou(window);
     } else if (ev.key === "hc_sidebar_colapsada") {
       var nav = document.getElementById("menu-principal"), recolher = document.getElementById("nav-colapsar-btn");
       if (nav && recolher && nav.classList.contains("colapsada") !== (ev.newValue === "1")) recolher.click();
