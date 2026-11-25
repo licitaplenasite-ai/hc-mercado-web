@@ -317,8 +317,14 @@ async function gravar(banco, { decisao, lidos, revisao, status }) {
   if (decisao.apagar.length) await apagarChaves(banco, decisao.apagar);
   // Retenção: aviso com abertura vencida há 3 dias ou publicação velha sai (só linhas de diário).
   const prefixo = encodeURIComponent(`${PREFIXO_DIARIOS}*`);
-  await banco.restFetch(`${TABELA}?chave=like.${prefixo}&encerramento=lt.${diasAtras(3)}`, { method: "DELETE" });
-  await banco.restFetch(`${TABELA}?chave=like.${prefixo}&publicacao=lt.${diasAtras(RETENCAO_DIAS)}`, { method: "DELETE" });
+  // uf=eq.AM usa o índice por UF; só o like varria a tabela inteira e estourava o tempo (25/11).
+  // Falha aqui não pode impedir salvar o estado abaixo: a próxima rodada tenta de novo.
+  try {
+    await banco.restFetch(`${TABELA}?uf=eq.AM&chave=like.${prefixo}&encerramento=lt.${diasAtras(3)}`, { method: "DELETE" });
+    await banco.restFetch(`${TABELA}?uf=eq.AM&chave=like.${prefixo}&publicacao=lt.${diasAtras(RETENCAO_DIAS)}`, { method: "DELETE" });
+  } catch (e) {
+    console.warn(`Retenção dos diários adiada: ${e.message}`);
+  }
   const anterior = (await banco.buscarBlob("dados_robo", BLOB_REVISAO)) || [];
   const vistos = new Set(revisao.map((r) => r.link));
   await banco.salvarBlob("dados_robo", BLOB_REVISAO, [...revisao, ...anterior.filter((r) => !vistos.has(r.link) && r.publicacao >= diasAtras(30))].slice(0, MAX_REVISAO));
