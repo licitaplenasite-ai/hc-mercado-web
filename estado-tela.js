@@ -53,6 +53,13 @@
       return { dado: g.dado, em: g.em, velho: agora - g.em > VELHO_MS };
     } catch { return null; }
   }
+  // Sair da conta / tela de login: some tudo o que o sistema guardou nesta aba (lp_trava_aprovado, lp_selo_plano,
+  // lp_topo_*, lp_tela:*), para a próxima pessoa no mesmo navegador não ver nome, plano ou resultado de quem saiu.
+  function limparTudo() {
+    const s = sessao();
+    if (!s) return;
+    try { for (let i = s.length - 1; i >= 0; i--) { const k = s.key(i); if (k && k.startsWith('lp_')) s.removeItem(k); } } catch { /* segue */ }
+  }
   function esquecer(nome) { const s = sessao(), k = chave(nome); if (s && k) try { s.removeItem(k); } catch { /* segue */ } }
 
   // Rolagem por tela (e por seção do painel, que fica no #). Volta para onde estava quando a tela já tem altura.
@@ -77,7 +84,7 @@
     passo();
   }
 
-  const api = { guardar, ler, esquecer, guardarRolagem, restaurarRolagem, VELHO_MS, LIMITE };
+  const api = { guardar, ler, esquecer, limparTudo, guardarRolagem, restaurarRolagem, VELHO_MS, LIMITE };
   global.EstadoTela = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof document === 'undefined' || typeof global.addEventListener !== 'function') return;

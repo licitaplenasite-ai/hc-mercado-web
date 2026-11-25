@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { paraLinha, baixarCadastro, carregar, localDasUnidades, localDoOrgao, completarLocal } = require("./atualizar_cadastro_orgaos");
+const { paraLinha, baixarCadastro, carregar, localDasUnidades, localDoOrgao, completarLocal, criarRitmo, esperaDo429 } = require("./atualizar_cadastro_orgaos");
 
 test("cadastro de órgãos: registro do PNCP vira linha válida; sem CNPJ fica fora; inativo vai marcado", () => {
   assert.deepEqual(paraLinha({ cnpj: "22812960000199", razaoSocial: " MUNICIPIO  DE APUI ", esferaId: "M", poderId: "E", statusAtivo: true, codigoNaturezaJuridica: "1244" }),
@@ -34,22 +34,56 @@ test("local dos órgãos: UF e cidade mais comuns entre as unidades ativas", () 
   assert.deepEqual(localDasUnidades("1", null), { cnpj: "1", uf: null, municipio: null });
 });
 
-test("local dos órgãos: 404 marca sem unidade, falha tenta depois; fila consumida em lotes até acabar", async () => {
+const semDormir = async () => {};
+
+test("local dos órgãos: 404 marca sem unidade; erro vira falha gravada; fila consumida em lotes até acabar", async () => {
   const resp = (status, corpo) => async () => new Response(JSON.stringify(corpo ?? []), { status });
-  assert.deepEqual(await localDoOrgao("1", resp(404, {})), { cnpj: "1", uf: null, municipio: null });
-  assert.equal(await localDoOrgao("1", resp(503)), null);
-  assert.equal(await localDoOrgao("1", async () => { throw new Error("rede"); }), null);
+  assert.deepEqual(await localDoOrgao("1", { fetchImpl: resp(404, {}) }), { cnpj: "1", uf: null, municipio: null });
+  assert.deepEqual(await localDoOrgao("1", { fetchImpl: resp(503) }), { cnpj: "1", falhou: true });
+  assert.deepEqual(await localDoOrgao("1", { fetchImpl: async () => { throw new Error("rede"); } }), { cnpj: "1", falhou: true });
   const filas = [["10", "11", "12"], ["13"], []], gravados = [];
   const rest = async (caminho, op) => {
     if (caminho === "rpc/orgaos_sem_local") return new Response(JSON.stringify(filas.shift()));
     gravados.push(...JSON.parse(op.body).p_locais); return new Response("1");
   };
   const pncp = async (url) => (url.includes("/12/") ? new Response("", { status: 500 }) : new Response(JSON.stringify([unidade("AC", "Rio Branco")])));
-  const r = await completarLocal({ rest, fetchImpl: pncp, prazoMs: 60000, concorrencia: 2 });
-  assert.deepEqual(r, { consultados: 3, comUf: 3, falhas: 1 });
-  assert.deepEqual(gravados.map((l) => l.cnpj).sort(), ["10", "11", "13"]);
+  const r = await completarLocal({ rest, fetchImpl: pncp, prazoMs: 60000, concorrencia: 2, intervaloMs: 0, dormir: semDormir });
+  assert.deepEqual(r, { consultados: 3, comUf: 3, falhas: 1, limite429: 0 });
+  assert.deepEqual(gravados.map((l) => l.cnpj).sort(), ["10", "11", "12", "13"], "a falha também vai para o banco (contador de falhas)");
+  assert.deepEqual(gravados.find((l) => l.cnpj === "12"), { cnpj: "12", falhou: true });
   // PNCP fora do ar: o lote inteiro falha e o robô para (não fica repetindo os mesmos CNPJs).
   let chamadas = 0;
-  const r2 = await completarLocal({ rest: async () => { chamadas++; return new Response(JSON.stringify(["1", "2"])); }, fetchImpl: resp(503), prazoMs: 60000 });
+  const r2 = await completarLocal({ rest: async (c) => { if (c === "rpc/orgaos_sem_local") chamadas++; return new Response(JSON.stringify(["1", "2"])); }, fetchImpl: resp(503), prazoMs: 60000, intervaloMs: 0, dormir: semDormir });
   assert.deepEqual([r2.falhas, chamadas], [2, 1]);
+});
+
+test("local dos órgãos: ritmo global entre chamadas, 429 respeita Retry-After e para a rodada se insistir", async () => {
+  // Relógio falso: dormir avança o tempo.
+  let t = 0;
+  const dormir = async (ms) => { t += ms; };
+  const ritmo = criarRitmo(3000, { agora: () => t, dormir });
+  const horarios = [];
+  for (let i = 0; i < 3; i++) { await ritmo.esperar(); horarios.push(t); }
+  assert.deepEqual(horarios, [0, 3000, 6000], "1 chamada a cada 3 s (20 por minuto)");
+  ritmo.frear(60000);
+  await ritmo.esperar();
+  assert.equal(t, 66000, "Retry-After de um 429 vale para a próxima chamada de qualquer um");
+  // Espera do 429: segundos, data HTTP, sem cabeçalho = backoff; jitter até 20%; teto de 5 min.
+  assert.equal(esperaDo429("30", 0, () => 0), 30000);
+  assert.equal(esperaDo429("30", 0, () => 1), 36000);
+  assert.equal(esperaDo429(null, 0, () => 0), 5000);
+  assert.equal(esperaDo429(null, 2, () => 0), 20000);
+  assert.equal(esperaDo429("9999", 0, () => 0), 300000);
+  assert.ok(esperaDo429(new Date(Date.now() + 10000).toUTCString(), 0, () => 0) > 8000);
+  // 429 e depois 200: tenta de novo e acerta; o total conta o 429.
+  let n = 0;
+  const total = {};
+  const pncp = async () => (n++ === 0 ? new Response("", { status: 429, headers: { "Retry-After": "2" } }) : new Response(JSON.stringify([unidade("AM", "Manaus")])));
+  assert.deepEqual(await localDoOrgao("1", { fetchImpl: pncp, ritmo: criarRitmo(0, { dormir: semDormir }), dormir: semDormir, total }), { cnpj: "1", uf: "AM", municipio: "Manaus" });
+  assert.equal(total.limite429, 1);
+  // 429 sempre: depois das tentativas a rodada para, sem gravar o órgão como falha.
+  const gravados = [];
+  const rest = async (c, op) => { if (c === "rpc/orgaos_sem_local") return new Response(JSON.stringify(["1", "2", "3"])); gravados.push(...JSON.parse(op.body).p_locais); return new Response("1"); };
+  const r = await completarLocal({ rest, fetchImpl: async () => new Response("", { status: 429 }), prazoMs: 60000, concorrencia: 1, intervaloMs: 0, dormir: semDormir });
+  assert.deepEqual([r.consultados, r.falhas, r.limite429, gravados.length], [0, 0, 4, 0], "1 + 3 tentativas, depois para");
 });

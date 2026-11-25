@@ -15,7 +15,7 @@
   (function () { var t = null; try { t = localStorage.getItem("licitaplena_tema"); if (t === null) { var v = localStorage.getItem("licitaplena.tema"); if (v !== null) { t = v === "dark" ? "escuro" : "claro"; localStorage.setItem("licitaplena_tema", t); localStorage.removeItem("licitaplena.tema"); } } } catch (e) { t = null; } document.documentElement.dataset.theme = t === "escuro" ? "dark" : "light"; })();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" crossorigin="anonymous"></script>
-<script src="supabase-config.js"></script>
+<script src="supabase-config.js"></script><script src="estado-tela.js"></script><script>window.EstadoTela.limparTudo(); /* qualquer saída (Sair, sessão vencida, conta reprovada) termina aqui */</script>
 <script src="senha-captcha-ui.js"></script>
 <style>
   /* Design System "Direção A, azul original": cores, raios e tipografia vêm de ds-tokens.css. */

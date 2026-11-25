@@ -58,3 +58,11 @@ test('armazenamento cheio: apaga as outras telas guardadas e tenta de novo', () 
   assert.equal(E.ler('a'), null);
   assert.equal(E.ler('c').dado, 3);
 });
+
+test('limparTudo apaga só as chaves lp_ do sistema nesta aba', () => {
+  const s = globalThis.sessionStorage;
+  E.guardar('mercado', { termo: 'x' });
+  s.setItem('lp_trava_aprovado', '1'); s.setItem('lp_selo_plano', '1'); s.setItem('lp_topo_u1', '1'); s.setItem('outra_coisa', '1');
+  E.limparTudo();
+  assert.deepEqual([...s.mapa.keys()], ['outra_coisa']);
+});

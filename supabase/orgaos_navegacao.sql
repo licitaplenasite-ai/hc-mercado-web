@@ -33,8 +33,8 @@
 --   1. orgaos_catalogo.sql já aplicado (está em produção).
 --   2. Este arquivo inteiro no SQL Editor (Run).
 --   3. GitHub Actions > "Local dos órgãos (PNCP)" > Run workflow. O robô recarrega o cadastro uma vez (para gravar a
---      natureza jurídica) e começa a buscar UF e cidade dos órgãos sem UF; continua sozinho 5 vezes por dia (20 min cada) até acabar
---      (~98 mil órgãos, ~1-2 dias; depois só os novos).
+--      natureza jurídica) e começa a buscar UF e cidade dos órgãos sem UF; continua sozinho de hora em hora (50 min, 20 chamadas/min ao PNCP) até acabar
+--      (~98 mil órgãos, ~4 dias; depois só os novos e os que falharam).
 --   Voltar atrás: drop function public.orgaos_mesmo_ente(text), public.listar_orgaos(text, text, text, text, boolean, text, int, int, text, boolean),
 --     public.listar_municipios_orgaos(text), public.orgaos_sem_local(int), public.gravar_local_orgaos(jsonb);
 --     drop trigger orgaos_catalogo_local on public.orgaos_catalogo; e rodar orgaos_catalogo.sql de novo. As colunas novas
@@ -54,6 +54,8 @@ alter table public.orgaos_catalogo
   add column if not exists uf_registro text check (uf_registro is null or uf_registro ~ '^[A-Z]{2}$'),
   add column if not exists municipio_registro text check (municipio_registro is null or length(municipio_registro) <= 120),
   add column if not exists local_consultado_em date,
+  -- Erros seguidos do PNCP (não 404) na consulta das unidades: empurram o órgão para o fim da fila (orgaos_sem_local).
+  add column if not exists local_falhas int not null default 0,
   add column if not exists municipio_norm text,
   add column if not exists tipo text not null default 'outros';
 
@@ -165,20 +167,26 @@ revoke all on function public.carregar_cadastro_orgaos(jsonb) from public, anon,
 grant execute on function public.carregar_cadastro_orgaos(jsonb) to service_role;
 
 -- ---------- Fila do robô: UF e cidade pelas unidades do órgão no PNCP ----------
--- Órgão sem UF, nunca consultado (ou consultado há mais de 30 dias e o PNCP não tinha unidade). Os mais ativos e as
--- matrizes primeiro. Devolve uma lista JSON de CNPJs.
+-- Órgão sem UF: nunca consultado primeiro; sem unidade no PNCP (404), de novo depois de 30 dias; com erro do PNCP (falhas
+-- seguidas em local_falhas), no fim da fila e só no dia seguinte, e com 3 falhas ou mais só depois de 7 dias (um órgão que
+-- sempre falha não volta ao topo a cada lote). Dentro de cada grupo, os mais ativos e as matrizes primeiro.
 create or replace function public.orgaos_sem_local(p_limite int default 500) returns jsonb
 language sql stable security definer set search_path = public, pg_temp as $$
   select coalesce(jsonb_agg(s.cnpj), '[]'::jsonb) from (
     select c.cnpj from public.orgaos_catalogo c
-     where c.uf is null and c.ativo and (c.local_consultado_em is null or c.local_consultado_em < current_date - 30)
-     order by c.local_consultado_em nulls first, (c.abertas + c.contratos + c.atas) desc, (substr(c.cnpj, 9, 4) = '0001') desc, c.cnpj
+     where c.uf is null and c.ativo
+       and (c.local_consultado_em is null
+         or (c.local_falhas = 0 and c.local_consultado_em < current_date - 30)
+         or (c.local_falhas between 1 and 2 and c.local_consultado_em < current_date)
+         or (c.local_falhas >= 3 and c.local_consultado_em < current_date - 7))
+     order by c.local_falhas, c.local_consultado_em nulls first, (c.abertas + c.contratos + c.atas) desc, (substr(c.cnpj, 9, 4) = '0001') desc, c.cnpj
      limit least(greatest(coalesce(p_limite, 500), 1), 2000)) s
 $$;
 revoke all on function public.orgaos_sem_local(int) from public, anon, authenticated;
 grant execute on function public.orgaos_sem_local(int) to service_role;
 
--- p_locais: [{"cnpj":"...","uf":"AC","municipio":"Rio Branco"}, ...]; uf null = o PNCP não tem unidade (marca a consulta).
+-- p_locais: [{"cnpj":"...","uf":"AC","municipio":"Rio Branco"}, ...]; uf null = o PNCP não tem unidade (marca a consulta);
+-- {"cnpj":"...","falhou":true} = erro do PNCP (soma 1 em local_falhas, não mexe na UF). Resposta boa zera as falhas.
 create or replace function public.gravar_local_orgaos(p_locais jsonb) returns int
 language plpgsql security definer set search_path = public, extensions, pg_temp as $$
 declare
@@ -187,9 +195,13 @@ begin
   if jsonb_typeof(p_locais) <> 'array' or jsonb_array_length(p_locais) > 2000 then
     raise exception 'Envie uma lista de até 2.000 órgãos' using errcode = '22023';
   end if;
-  update public.orgaos_catalogo c set uf_registro = x.uf, municipio_registro = nullif(left(btrim(x.municipio), 120), ''),
+  update public.orgaos_catalogo c set
+      uf_registro = case when x.falhou then c.uf_registro else x.uf end,
+      municipio_registro = case when x.falhou then c.municipio_registro else nullif(left(btrim(x.municipio), 120), '') end,
+      local_falhas = case when x.falhou then least(c.local_falhas + 1, 100) else 0 end,
       local_consultado_em = current_date
-    from (select distinct on (y.cnpj) y.* from jsonb_to_recordset(p_locais) as y(cnpj text, uf text, municipio text)) x
+    from (select distinct on (y.cnpj) y.cnpj, y.uf, y.municipio, coalesce(y.falhou, false) as falhou
+            from jsonb_to_recordset(p_locais) as y(cnpj text, uf text, municipio text, falhou boolean)) x
    where c.cnpj = x.cnpj and x.cnpj ~ '^[0-9]{14}$' and (x.uf is null or x.uf ~ '^[A-Z]{2}$')
      and (x.uf is not null or x.municipio is null);
   get diagnostics v_n = row_count;

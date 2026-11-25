@@ -114,6 +114,9 @@ const semRolagemLateral = (p) => p.evaluate(() => document.scrollingElement.scro
     await passo('lista de orgaos acompanhados', p, async () => {
       await p.goto(`${SITE}/orgao.html`);
       await p.waitForSelector('#fo-busca');
+      // A tela inicial monta "Órgãos que você acompanha" depois da consulta (~1 s): espera o bloco antes de conferir.
+      await p.waitForSelector('#on-h-acomp', { timeout: 15000 });
+      await p.waitForSelector('text=MUNICIPIO DE APUI', { timeout: 10000 }).catch(() => {});
       exigir(await p.isVisible('text=MUNICIPIO DE APUI'), 'órgão acompanhado na lista');
       await p.click('#fo-busca [type=submit]');
       exigir((await p.textContent('#fo-busca-erro')).includes('14 números'), 'busca vazia explica o que fazer');

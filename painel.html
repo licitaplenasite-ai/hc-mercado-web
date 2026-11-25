@@ -7965,6 +7965,12 @@
     document.getElementById("bol-filtro-status").textContent = "Não foi possível recuperar o filtro da conta. Usando o cache deste login; tente novamente ao recarregar.";
   });
   window.__quandoAbrirSecao(["dashboard", "boletim", "oportunidades"], () => lerFiltroDaConta());
+  // Sininho numa seção que ainda não carregou o boletim: gera agora (null = já gerado, o número do topo vale).
+  window.__garantirBoletim = () => {
+    if (bolJaGerado) return null;
+    lerFiltroDaConta();
+    return window.__filtroBoletimPronto.then(() => gerarBoletim());
+  };
   // Só quando o Boletim ou o Dashboard (que mostra os números do boletim) abre; o clique no Boletim também confere.
   window.__quandoAbrirSecao(["dashboard", "boletim"], () => window.__filtroBoletimPronto.then(() => { if (!bolJaGerado) gerarBoletim(); }));
 
@@ -9679,15 +9685,16 @@
   }
 
 window.__atualizarDashboard = function () {
-  if (!secoesAbertas.has("dashboard")) return; // Dashboard ainda não aberto: desenha quando abrir (abaixo)
-  carregarVisaoGeralMercado();
-  void window.LicitaCrmRelatorios?.atualizar?.();
+  // Antes do return: o sininho do topo lê este número em qualquer seção.
   const elOp = document.getElementById("dash-num-oportunidades");
   try {
-    if (typeof bolResultadosCompletos !== "undefined" && elOp) {
+    if (typeof bolResultadosCompletos !== "undefined" && elOp && bolJaGerado) {
       elOp.textContent = String(bolResultadosCompletos.length);
     }
   } catch (e) {}
+  if (!secoesAbertas.has("dashboard")) return; // Dashboard ainda não aberto: desenha quando abrir (abaixo)
+  carregarVisaoGeralMercado();
+  void window.LicitaCrmRelatorios?.atualizar?.();
 
   const elSemana = document.getElementById("dash-vence-semana");
   try {
@@ -9771,6 +9778,7 @@ window.__quandoAbrirSecao(["dashboard"], () => window.__atualizarDashboard());
 <script>
   document.getElementById("btn-sair-painel").addEventListener("click", async () => {
     if (window.__sbClient) await window.__sbClient.auth.signOut();
+    window.EstadoTela?.limparTudo();
     window.location.href = "login.html";
   });
 </script>
@@ -9886,28 +9894,38 @@ window.__preencherIdentidadeUsuario();
       const abrir = bellDropdown.style.display !== "block";
       fecharTudo();
       if (abrir) {
-        atualizarBadgeNotificacoes();
-        const el = document.getElementById("dash-num-oportunidades");
-        const n = el ? parseInt(el.textContent, 10) : 0;
         const corpo = document.getElementById("header-bell-corpo");
-        if (corpo) {
-          corpo.innerHTML =
-            !isNaN(n) && n > 0
-              ? `Você tem <strong>${n}</strong> oportunidade${n > 1 ? "s" : ""} no seu boletim.<br><button type="button" id="bell-ver-boletim" style="margin-top:10px;background:var(--azul,#2e8dff);color:#fff;border:none;border-radius:6px;padding:8px 12px;font-size:12.5px;cursor:pointer;font-family:inherit;">Ver Boletim</button>`
-              : "Nenhuma notificação nova por enquanto.";
-          const irBoletim = document.getElementById("bell-ver-boletim");
-          if (irBoletim) {
-            irBoletim.addEventListener("click", () => {
-              fecharTudo();
-              const navBoletim = document.querySelector('nav button[data-alvo="boletim"]');
-              if (navBoletim) navBoletim.click();
-            });
-          }
-        }
+        // Boletim ainda não consultado nesta tela (carga preguiçosa): consulta e só então diz se há algo.
+        const pendente = window.__garantirBoletim && window.__garantirBoletim();
+        if (pendente && corpo) {
+          corpo.textContent = "Carregando suas oportunidades…";
+          pendente.finally(() => { if (bellDropdown.style.display === "block") desenharSininho(corpo); });
+        } else if (corpo) desenharSininho(corpo);
         posicionarFlutuante(bellDropdown, bellBtn);
         bellDropdown.style.display = "block";
       }
     });
+  }
+  function desenharSininho(corpo) {
+    atualizarBadgeNotificacoes();
+    const el = document.getElementById("dash-num-oportunidades");
+    const n = el ? parseInt(el.textContent, 10) : 0;
+    if (corpo) {
+      corpo.innerHTML =
+        !isNaN(n) && n > 0
+          ? `Você tem <strong>${n}</strong> oportunidade${n > 1 ? "s" : ""} no seu boletim.<br><button type="button" id="bell-ver-boletim" style="margin-top:10px;background:var(--azul,#2e8dff);color:#fff;border:none;border-radius:6px;padding:8px 12px;font-size:12.5px;cursor:pointer;font-family:inherit;">Ver Boletim</button>`
+          // Sem número ("–"): o boletim de hoje não foi consultado (ex.: edição de outro dia aberta pelo e-mail).
+          : isNaN(n) ? `Veja as oportunidades de hoje no Boletim.<br><button type="button" id="bell-ver-boletim" style="margin-top:10px;background:var(--azul,#2e8dff);color:#fff;border:none;border-radius:6px;padding:8px 12px;font-size:12.5px;cursor:pointer;font-family:inherit;">Ver Boletim</button>`
+            : "Nenhuma notificação nova por enquanto.";
+      const irBoletim = document.getElementById("bell-ver-boletim");
+      if (irBoletim) {
+        irBoletim.addEventListener("click", () => {
+          fecharTudo();
+          const navBoletim = document.querySelector('nav button[data-alvo="boletim"]');
+          if (navBoletim) navBoletim.click();
+        });
+      }
+    }
   }
 
   document.addEventListener("click", fecharTudo);

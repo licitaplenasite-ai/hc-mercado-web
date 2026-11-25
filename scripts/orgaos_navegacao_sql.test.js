@@ -120,6 +120,29 @@ test("orgaos_navegacao.sql: natureza, tipo, UF e cidade das unidades do PNCP ent
     assert.equal((await linha("11111111000191")).local_consultado_em !== null, true, "sem unidade: marcado como consultado");
     await como(db, "service");
     assert.ok(!(await db.query("select orgaos_sem_local(100) f")).rows[0].f.includes("11111111000191"), "não volta para a fila antes de 30 dias");
+    // Erro do PNCP (não 404): conta a falha, sai da fila hoje, volta no fim da fila; com 3 falhas, só depois de 7 dias.
+    const aer = "00394429000100";
+    const filaAgora = async () => (await db.query("select orgaos_sem_local(100) f")).rows[0].f;
+    await como(db, "service");
+    await db.query(`select gravar_local_orgaos('[{"cnpj":"${aer}","falhou":true}]'::jsonb)`);
+    assert.ok(!(await filaAgora()).includes(aer), "falhou hoje: não volta no mesmo dia");
+    await db.exec("reset role");
+    await db.query("insert into orgaos_catalogo (cnpj, nome_registro, esfera_registro) values ('22222222000191', 'ORGAO NOVO', 'F')");
+    await db.query("update orgaos_catalogo set local_consultado_em = current_date - 1 where cnpj = $1", [aer]);
+    await como(db, "service");
+    const f1 = await filaAgora();
+    assert.ok(f1.indexOf(aer) > f1.indexOf("22222222000191"), "volta no dia seguinte, depois dos nunca consultados");
+    await db.exec("reset role");
+    await db.query("update orgaos_catalogo set local_falhas = 3, local_consultado_em = current_date - 2 where cnpj = $1", [aer]);
+    await como(db, "service");
+    assert.ok(!(await filaAgora()).includes(aer), "3 falhas: espera 7 dias");
+    await db.exec("reset role");
+    await db.query("update orgaos_catalogo set local_consultado_em = current_date - 8 where cnpj = $1", [aer]);
+    await como(db, "service");
+    assert.ok((await filaAgora()).includes(aer));
+    await db.query(`select gravar_local_orgaos('[{"cnpj":"${aer}","uf":"DF","municipio":"Brasília"}]'::jsonb)`);
+    await db.exec("reset role");
+    assert.deepEqual([(await linha(aer)).local_falhas, (await linha(aer)).uf], [0, "DF"], "resposta boa zera as falhas");
     // Recálculo diário não apaga a UF do PNCP de quem tem dado sem UF.
     await db.exec("reset role");
     await db.query("select atualizar_orgaos_catalogo()");
