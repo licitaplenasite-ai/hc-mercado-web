@@ -172,7 +172,7 @@ async function carregarRegistros(corte) {
 async function main() {
   const corte = Date.now() - DIAS * 24 * 60 * 60 * 1000;
   const recentes = (await carregarRegistros(corte))
-    .filter((r) => r && r.numeroControlePNCP && dataValida(r.publicacao)?.getTime() >= corte)
+    .filter((r) => r && r.numeroControlePNCP && /^\d{14}-\d+-\d+\/\d{4}$/.test(r.numeroControlePNCP) && dataValida(r.publicacao)?.getTime() >= corte)
     .sort((a, b) => dataValida(b.publicacao) - dataValida(a.publicacao));
   const dossies = await buscarDossiesPersistidos(recentes.map((registro) => registro.numeroControlePNCP));
   const candidatos = selecionarCandidatos(recentes, dossies);

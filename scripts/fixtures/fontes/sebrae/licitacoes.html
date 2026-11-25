@@ -1,0 +1,108 @@
+<html><body>
+<form action="/PortalCf/Licitacoes/Filter" id="formFilterLicitacao" method="post"><input name="__RequestVerificationToken" type="hidden" value="TOKEN_DE_TESTE" />                <input type="hidden" name="SomenteAtivos" id="SomenteAtivos" value="false" />
+                <div class="row">
+                    <div class="col-xs-12 col-sm-6 col-md-12 col-lg-12">
+                        <div class="form-group">
+                            <label class="control-label col-xs-12 col-sm-12 col-md-12 col-lg-12" for="StatusDescricao">Situa&#231;&#227;o</label>
+                            <div class="form-group col-xs-12 col-sm-12 col-md-12 col-lg-12">
+                                <div class="icon-addon addon-md">
+                                    <input data-val="true" data-val-number="The field Situação must be a number." id="StatusId" name="StatusId" type="hidden" value="5" />
+                                    <input TotvsAutoComplete="" class="form-control text-box single-line" data-fields-get="Codigo" data-fields-set="StatusId" data-request-url="/PortalCf/Lookup/GetLookupLicitacaoStatus" id="StatusDescricao" name="StatusDescricao" title="Clique na lupa ou digite 3 caracteres (%%%) para pequisar" type="text" value="Em Andamento" />
+                                    <label class="fa fa-search" totvssearchautocomplete="StatusDescricao"></label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-xs-12 col-sm-6 col-md-12 col-lg-12">
+                        <div class="form-group">
+                            <label class="control-label col-xs-12 col-sm-12 col-md-12 col-lg-12" for="SebraeDescricao">Sebrae</label>
+                            <div class="form-group col-xs-12 col-sm-12 col-md-12 col-lg-12">
+                                <div class="icon-addon addon-md">
+                                    <input data-val="true" data-val-number="The field Sebrae must be a number." id="SebraeId" name="SebraeId" type="hidden" value="" />
+                                    <input TotvsAutoComplete="" class="form-control text-box single-line" data-fields-get="Codigo" data-fields-set="SebraeId" data-request-url="/PortalCf/Lookup/GetLookupSebrae" id="SebraeDescricao" name="SebraeDescricao" title="Clique na lupa ou digite 2 caracteres (%%) para pequisar" type="text" value="" />
+                                    <label class="fa fa-search" totvssearchautocomplete="SebraeDescricao"></label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-xs-12 col-sm-6 col-md-12 col-lg-12">
+                        <div class="form-group">
+                            <label class="control-label col-xs-12 col-sm-12 col-md-12 col-lg-12" for="ModalidadeDescricao">Modalidade</label>
+                            <div class="form-group col-xs-12 col-sm-12 col-md-12 col-lg-12">
+                                <div class="icon-addon addon-md">
+                                    <input data-val="true" data-val-number="The field Modalidade must be a number." id="ModalidadeId" name="ModalidadeId" type="hidden" value="" />
+                                    <input TotvsAutoComplete="" class="form-control text-box single-line" data-fields-get="Codigo" data-fields-set="ModalidadeId" data-parameters="SomenteAtivos" data-request-url="/PortalCf/Lookup/GetLookupModalidade" id="ModalidadeDescricao" name="ModalidadeDescricao" title="Clique na lupa ou digite 3 caracteres (%%%) para pequisar" type="text" value="" />
+                                    <label class="fa fa-search" totvssearchautocomplete="ModalidadeDescricao"></label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group col-xs-12 col-sm-6 col-md-12 col-lg-12">
+                        <label class="control-label col-md-12" for="Ano">Ano</label>
+                        <div class="col-md-12">
+                            <select class="form-control" data-val="true" data-val-number="The field Ano must be a number." id="Ano" name="Ano"><option value=""></option>
+<option value="2027">2027</option>
+<option value="2026">2026</option>
+<option value="2025">2025</option>
+<option value="2024">2024</option>
+<option value="2023">2023</option>
+<option value="2022">2022</option>
+<option value="2021">2021</option>
+<option value="2020">2020</option>
+<option value="2019">2019</option>
+<option value="2018">2018</option>
+<option value="2017">2017</option>
+<option value="2016">2016</option>
+<option value="2015">2015</option>
+<option value="2014">2014</option>
+<option value="2013">2013</option>
+<option value="2012">2012</option>
+<option value="2011">2011</option>
+<option value="2010">2010</option>
+<option value="2009">2009</option>
+<option value="2008">2008</option>
+<option value="2007">2007</option>
+<option value="2006">2006</option>
+<option value="2005">2005</option>
+<option value="2004">2004</option>
+<option value="2003">2003</option>
+<option value="2002">2002</option>
+<option value="2001">2001</option>
+<option value="2000">2000</option>
+</select>
+                            <span class="field-validation-valid text-danger" data-valmsg-for="Ano" data-valmsg-replace="true"></span>
+                        </div>
+                    </div>
+
+                    <div class="form-group col-xs-12 col-sm-6 col-md-12 col-lg-12">
+                        <label class="control-label col-md-12" for="NumeroLicitacao">N&#250;mero</label>
+                        <div class="col-xs-12 col-sm-12 col-md-12 col-lg-12">
+                            <input class="form-control text-box single-line" id="NumeroLicitacao" name="NumeroLicitacao" type="text" value="" />
+                        </div>
+                        <span class="field-validation-valid text-danger col-md-12" data-valmsg-for="NumeroLicitacao" data-valmsg-replace="true"></span>
+                    </div>
+
+                    <div class="form-group col-xs-12 col-sm-6 col-md-12 col-lg-12">
+                        <label class="control-label col-md-12" for="PalavraChave">Palavra Chave</label>
+                        <div class="col-xs-12 col-sm-12 col-md-12 col-lg-12">
+                            <input class="form-control text-box single-line" id="PalavraChave" name="PalavraChave" title="A palavra chave informada será pesquisada no texto do objeto da licitação" type="text" value="" />
+                        </div>
+                        <span class="field-validation-valid text-danger col-md-12" data-valmsg-for="PalavraChave" data-valmsg-replace="true"></span>
+                    </div>
+
+                </div>
+                <div class="row">
+                    <div class="col-xs-12 col-sm-12 col-md-12 col-lg-12">
+                        <div class="form-group col-xs-12 col-sm-12 col-md-12 col-lg-12">
+                            <button type="submit" id="btnFiltro" class="btn btn-dark-blue btn-sm btn-block" title="Pesquisar">
+                                <span class="glyphicon glyphicon-search"></span>
+                                &nbsp;Pesquisar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+</form>
+</body></html>

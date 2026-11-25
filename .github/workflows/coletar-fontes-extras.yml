@@ -1,0 +1,49 @@
+name: Coletar fontes fora do PNCP
+
+# Portais de órgãos que não publicam no PNCP (primeiro: AADC, Agência Amazonense de Desenvolvimento Cultural).
+# scripts/coletar_fontes_extras.js roda os adaptadores de scripts/fontes/ e grava em oportunidades_abertas
+# (chave "fonte:<id>:..."), que o painel e o boletim já leem. Não escreve no repositório: só no Supabase.
+# Mais ou menos a cada 6 h, sempre ~30 min antes de uma rodada do boletim (boletim-editais.yml: 10:07, 16:13, 21:17 UTC):
+#   03:37 UTC = 00:37, 09:37 = 06:37, 15:37 = 12:37, 20:37 = 17:37 em Brasília. Minuto fora do :00 de propósito.
+# Ritmo com o site: 1 pedido por segundo (INTERVALO_MS), User-Agent do projeto sem dado pessoal.
+# Falha de uma fonte deixa a rodada vermelha (o GitHub avisa por e-mail); o que já estava gravado continua valendo.
+concurrency:
+  group: coletar-fontes-extras
+  cancel-in-progress: false
+
+on:
+  schedule:
+    - cron: "37 3,9,15,20 * * *"
+  workflow_dispatch:
+    inputs:
+      fontes:
+        description: "Fontes separadas por vírgula (vazio = todas)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  coletar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: "20"
+      - run: npm ci
+      - name: Coletar fontes fora do PNCP
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          FONTES: ${{ github.event.inputs.fontes }}
+          LIMITE_MINUTOS: "10"
+          INTERVALO_MS: "1000"
+        run: node scripts/coletar_fontes_extras.js
+      # Batimento para a aba "Saúde do sistema" do admin; só quando todas as fontes responderam (falha deixa a rodada vermelha).
+      - name: Registrar sucesso
+        if: success()
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/registrar_robo.js fontes_extras

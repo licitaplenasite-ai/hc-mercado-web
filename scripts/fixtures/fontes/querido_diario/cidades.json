@@ -1,0 +1,9 @@
+{"cities":[
+{"territory_id":"2700300","territory_name":"Arapiraca","state_code":"AL","level":"1","availability_date":""},
+{"territory_id":"2706000","territory_name":"Ouro Branco","state_code":"AL","level":"3","availability_date":"2024-01-01"},
+{"territory_id":"2706901","territory_name":"Pilar","state_code":"AL","level":"1","availability_date":""},
+{"territory_id":"4114005","territory_name":"Mamborê","state_code":"PR","level":"3","availability_date":"2024-01-01"},
+{"territory_id":"1501402","territory_name":"Belém","state_code":"PA","level":"3","availability_date":"2021-01-01"},
+{"territory_id":"1302603","territory_name":"Manaus","state_code":"AM","level":"3","availability_date":"2021-03-02"},
+{"territory_id":"1300029","territory_name":"Alvarães","state_code":"AM","level":"0","availability_date":""}
+]}

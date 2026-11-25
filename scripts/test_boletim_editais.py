@@ -467,16 +467,34 @@ def test_modo_teste_aceita_codigo_do_cliente(monkeypatch):
     assert por_email("X@Y.com ", None) and not por_email("z@y.com", "c1")
 
 
-# ---- Oportunidades fora do PNCP (scripts/coletar_fontes_extras.js) entram no pool do boletim ----
-def test_somar_fontes_fora_pncp_converte_e_respeita_uf(monkeypatch):
+# ---- Oportunidades fora do PNCP (scripts/coletar_fontes_extras.js e robôs de diários) entram no pool do boletim ----
+def _supabase_keyset(linhas, teto=1000, falhar_na_pagina=None):
+    # Simula o PostgREST: filtro de UF e chave > última, ordem por chave, no máximo "teto" linhas por resposta.
     pedidos = []
+    def get_json(caminho):
+        pedidos.append(caminho)
+        if falhar_na_pagina is not None and len(pedidos) == falhar_na_pagina:
+            raise RuntimeError("timeout")
+        q = be.urllib.parse.parse_qs(caminho.split("?", 1)[1])
+        ufs = q["uf"][0][4:-1].split(",")
+        gt = [v[3:] for v in q["chave"] if v.startswith("gt.")]
+        sel = sorted((l for l in linhas if l["dado"]["uf"] in ufs and (not gt or l["chave"] > gt[0])), key=lambda l: l["chave"])
+        return sel[:min(teto, int(q["limit"][0]))]
+    return get_json, pedidos
+
+
+def _linha_fora(n, uf="AM", objeto="Shows pirotécnicos sob demanda"):
     hoje = be.datetime.now(be.timezone(be.timedelta(hours=-3))).strftime("%Y-%m-%dT%H:%M:%S")
-    dado = {"objeto": "Shows pirotécnicos sob demanda", "orgao": "AGENCIA AMAZONENSE DE DESENVOLVIMENTO CULTURAL", "uf": "AM", "municipio": "Manaus",
-            "publicacao": hoje, "encerramento": None, "numeroControlePNCP": "fonte:aadc:PP-017/2026", "link": "https://space/aviso.pdf",
-            "fonte": "Portal do órgão, fora do PNCP"}
-    monkeypatch.setattr(be, "_get_json", lambda caminho: pedidos.append(caminho) or [{"dado": dado}, {"dado": dict(dado, uf="SP")}])
+    chave = "fonte:qd:%06d" % n
+    return {"chave": chave, "dado": {"objeto": objeto, "orgao": "AGENCIA AMAZONENSE DE DESENVOLVIMENTO CULTURAL", "uf": uf, "municipio": "Manaus",
+            "publicacao": hoje, "encerramento": None, "numeroControlePNCP": chave, "link": "https://space/aviso.pdf", "fonte": "Portal do órgão, fora do PNCP"}}
+
+
+def test_somar_fontes_fora_pncp_converte_e_respeita_uf(monkeypatch):
+    get_json, pedidos = _supabase_keyset([_linha_fora(1), _linha_fora(2, uf="SP")])
+    monkeypatch.setattr(be, "_get_json", get_json)
     pool = be.somar_fontes_fora_pncp({"AM": [_edital(1, "Papel")]}, ["AM"], hoje=be.date(2026, 11, 25))
-    assert "chave=like.fonte:*" in pedidos[0] and "publicacao=gte.2026-11-18" in pedidos[0]
+    assert "chave=like.fonte:*" in pedidos[0] and "publicacao=gte.2026-11-18" in pedidos[0] and "uf=in.(AM)" in pedidos[0]
     assert len(pool["AM"]) == 2 and "SP" not in pool
     e = pool["AM"][1]
     assert e["orgaoEntidade"]["razaoSocial"] == "AGENCIA AMAZONENSE DE DESENVOLVIMENTO CULTURAL"
@@ -485,9 +503,27 @@ def test_somar_fontes_fora_pncp_converte_e_respeita_uf(monkeypatch):
     assert be.itens_prospecta([e], ["pirotecnico"]) == []  # Prospecta segue só com processo do PNCP
 
 
+def test_somar_fontes_fora_pncp_pagina_alem_de_mil_linhas(monkeypatch):
+    linhas = [_linha_fora(n) for n in range(2500)] + [_linha_fora(9000 + n, uf="SP") for n in range(300)]
+    get_json, pedidos = _supabase_keyset(linhas)
+    monkeypatch.setattr(be, "_get_json", get_json)
+    pool = be.somar_fontes_fora_pncp({}, ["AM", "SP"])
+    assert len(pool["AM"]) == 2500 and len(pool["SP"]) == 300
+    assert len({e["numeroControlePNCP"] for e in pool["AM"]}) == 2500  # sem repetir nem pular entre páginas
+    assert len(pedidos) == 4  # 3 páginas cheias/curta + 1 vazia que confirma o fim
+    # Teto do servidor menor que o pedido (db-max-rows 500): continua até a página vazia, não corta em silêncio.
+    get_json, pedidos = _supabase_keyset(linhas, teto=500)
+    monkeypatch.setattr(be, "_get_json", get_json)
+    assert len(be.somar_fontes_fora_pncp({}, ["AM"])["AM"]) == 2500
+
+
 def test_somar_fontes_fora_pncp_falha_sem_derrubar(monkeypatch):
+    get_json, _ = _supabase_keyset([_linha_fora(n) for n in range(1500)], falhar_na_pagina=2)
+    monkeypatch.setattr(be, "_get_json", get_json)
+    pool = be.somar_fontes_fora_pncp({"AM": [_edital(1, "Papel")]}, ["AM"])
+    assert len(pool["AM"]) == 1001  # fica com a primeira página; o boletim do PNCP segue
     def falha(caminho):
         raise RuntimeError("sem chave")
     monkeypatch.setattr(be, "_get_json", falha)
-    pool = {"AM": [_edital(1, "Papel")]}
-    assert be.somar_fontes_fora_pncp(pool, ["AM"]) == pool
+    assert be.somar_fontes_fora_pncp({"AM": []}, ["AM"]) == {"AM": []}
+    assert be.somar_fontes_fora_pncp({"AM": []}, []) == {"AM": []}

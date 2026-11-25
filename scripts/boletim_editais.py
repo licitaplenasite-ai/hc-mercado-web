@@ -558,20 +558,35 @@ def edital_fora_do_pncp(dado):
     }
 
 
+PAGINA_FONTES_FORA_PNCP = 1000  # pedido por pagina; o Supabase pode devolver menos (db-max-rows)
+
+
 def somar_fontes_fora_pncp(pool, lista_ufs, hoje=None):
+    # Paginado por chave (keyset: chave > ultima): DOU, Querido Diario e diarios do AM passam de 1.000 linhas por
+    # semana e o Supabase corta cada resposta nesse teto. A UF ja vai no filtro para trazer so o que o boletim usa.
     corte = ((hoje or date.today()) - timedelta(days=DIAS_FONTES_FORA_PNCP)).isoformat()
-    try:
-        linhas = _get_json("oportunidades_abertas?select=dado&chave=like.fonte:*&publicacao=gte." + corte)
-    except Exception as e:
-        log("AVISO: oportunidades fora do PNCP nao carregadas (" + str(e) + ").")
+    ufs = sorted({str(u).upper() for u in lista_ufs if str(u).upper() in TODAS_UFS})
+    if not ufs:
         return pool
-    somadas = 0
-    for linha in linhas:
-        edital = edital_fora_do_pncp(linha.get("dado") or {})
-        uf = edital["unidadeOrgao"]["ufSigla"]
-        if uf in lista_ufs:
-            pool.setdefault(uf, []).append(edital)
-            somadas += 1
+    base = ("oportunidades_abertas?select=chave,dado&chave=like.fonte:*&publicacao=gte." + corte
+            + "&uf=in.(" + ",".join(ufs) + ")&order=chave.asc&limit=" + str(PAGINA_FONTES_FORA_PNCP))
+    somadas, ultima = 0, None
+    try:
+        while True:
+            pagina = _get_json(base + ("" if ultima is None else "&chave=gt." + urllib.parse.quote(ultima, safe="")))
+            for linha in pagina:
+                edital = edital_fora_do_pncp(linha.get("dado") or {})
+                uf = edital["unidadeOrgao"]["ufSigla"]
+                if uf in ufs:
+                    pool.setdefault(uf, []).append(edital)
+                    somadas += 1
+            # Para so na pagina vazia: pagina curta nao prova o fim se o db-max-rows for menor que o pedido.
+            if not pagina:
+                break
+            ultima = pagina[-1]["chave"]
+    except Exception as e:
+        # Fica com o que ja entrou; o boletim do PNCP segue.
+        log("AVISO: oportunidades fora do PNCP carregadas so em parte (" + str(e) + ").")
     log("Oportunidades fora do PNCP somadas ao boletim: " + str(somadas) + ".")
     return pool
 
@@ -653,7 +668,8 @@ def montar_link_pncp(e):
         cnpj, seq, ano = m.group(1), str(int(m.group(2))), m.group(3)
         return "https://pncp.gov.br/app/editais/" + cnpj + "/" + ano + "/" + seq
     # Oportunidade fora do PNCP (somar_fontes_fora_pncp) traz o link do edital no portal do orgao.
-    return e.get("link") or "https://pncp.gov.br"
+    link = (e.get("link") or "").strip()
+    return link if link.lower().startswith(("http://", "https://")) else "https://pncp.gov.br"
 
 
 def link_pncp(e):

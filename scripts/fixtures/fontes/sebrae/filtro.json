@@ -1,0 +1,105 @@
+{
+ "success": true,
+ "aData": [
+  {
+   "Id": 15487,
+   "Numero": "CONC/001-SEBRAE-AM-2026",
+   "Objeto": "Contratação de 01 (uma) agência de publicidade, nos termos da Lei nº 4.680/1965, para a prestação de serviços técnicos especializados, sob demanda, de publicidade e propaganda, compreendendo o conjunto de atividades integradas relacionadas ao estudo, planejamento, conceituação, concepção, criação, produção, execução interna, intermediação e supervisão da execução externa de campanhas e peças publicitárias, bem como o planejamento e a compra de mídia e a distribuição de publicidade em todos os meios de comunicação, com vistas a apoiar as ações de comunicação e marketing do SEBRAE/AM, em Manaus e nos demais municípios do Estado do Amazonas, conforme termo de referência (Anexo I) que passa a integrar este edital como se nele estivesse transcrito.",
+   "StatusDescricao": "Em Andamento",
+   "SituacaoDescricao": "Publicado",
+   "DataPublicacaoString": "09/09/2026 00:00",
+   "DataHoraAberturaNotAsString": "24/09/2026 09:00",
+   "DataEncerramentoString": "",
+   "Local": "SEDE DO SEBRAE/AM - RUA LEONARDO MALCHER, 924 - CENTRO - MANAUS/AM",
+   "NumeroProcesso": "141525",
+   "LicitacaoModalidade": {
+    "Descricao": "Concorrência",
+    "Abreviacao": "CONC"
+   },
+   "ZSebrae": {
+    "Descricao": "SEBRAE AMAZONAS"
+   },
+   "SineDine": false
+  },
+  {
+   "Id": 15670,
+   "Numero": "CRED/003-SEBRAE-AM-2026",
+   "Objeto": "Credenciamento de empresas especializadas na administração e fornecimento sob demanda, de cartões eletrônicos/magnéticos com chip, visando a concessão do auxílio alimentação e refeição aos empregados e jovens aprendizes, regularmente, assim como utilização eventual de outra modalidade como auxílio flexível para utilização em estabelecimentos comerciais da rede estabelecida pela EMPRESA CREDENCIADA, conforme Termo de Referência (Anexo I) do edital.",
+   "StatusDescricao": "Em Andamento",
+   "SituacaoDescricao": "Publicado",
+   "DataPublicacaoString": "05/11/2026 00:00",
+   "DataHoraAberturaNotAsString": "05/11/2026 09:00",
+   "DataEncerramentoString": "",
+   "Local": "E-MAIL: cpl@am.sebrae.com.br",
+   "NumeroProcesso": "167255/2026",
+   "LicitacaoModalidade": {
+    "Descricao": "Credenciamento",
+    "Abreviacao": "CRED"
+   },
+   "ZSebrae": {
+    "Descricao": "SEBRAE AMAZONAS"
+   },
+   "SineDine": false
+  },
+  {
+   "Id": 15782,
+   "Numero": "PE/037-SEBRAE-AM-2026",
+   "Objeto": "Contratação de empresa especializada para prestação de serviços de capacitação presencial, com possibilidade de apoio por recursos digitais, destinado aos Agentes de Orientação Empresarial — AOEs que atuarão no Projeto Sebrae na sua Empresa em 2027, visando desenvolver competências técnicas e comportamentais relacionadas à abordagem consultiva aos empresários, comunicação, liderança pessoal, motivação para resultados, comportamento empreendedor, produtividade, ética, experiência do cliente e qualidade do atendimento. A contratação compreenderá a preparação dos conteúdos, aplicação de diagnóstico inicial, disponibilização de materiais didáticos, realização das atividades formativas, exercícios e simulações práticas, avaliação da aprendizagem, emissão de certificados e apresentação de relatório final.",
+   "StatusDescricao": "Em Andamento",
+   "SituacaoDescricao": "Publicado",
+   "DataPublicacaoString": "24/11/2026 00:00",
+   "DataHoraAberturaNotAsString": "02/12/2026 10:00",
+   "DataEncerramentoString": "",
+   "Local": "www.licitanet.com.br",
+   "NumeroProcesso": "171480",
+   "LicitacaoModalidade": {
+    "Descricao": "Pregão Eletrônico",
+    "Abreviacao": "PE"
+   },
+   "ZSebrae": {
+    "Descricao": "SEBRAE AMAZONAS"
+   },
+   "SineDine": false
+  },
+  {
+   "Id": 15396,
+   "Numero": "PERP/018-SEBRAE-AM-2026",
+   "Objeto": "REGISTRO DE PREÇOS Contratação de empresa especializada para a prestação de serviços de natureza continuada, sob demanda, em regime de não exclusividade para auxílio no planejamento e na coordenação geral dos eventos, ambientação/decoração e ornamentação de ambiente, locação de mobiliário e acessórios, envolvendo recursos humanos, espaço físico e o fornecimento de apoio logístico, incluindo montagem, operação e desmontagem, serviços correlatos, além de outros serviços necessários à realização das ações de eventos em regime de não exclusividade, conforme especificações contidas no Anexo I Termo de Referência e seus anexos.",
+   "StatusDescricao": "Em Andamento",
+   "SituacaoDescricao": "Publicado",
+   "DataPublicacaoString": "",
+   "DataHoraAberturaNotAsString": "",
+   "DataEncerramentoString": "",
+   "Local": "www.licitanet.com.br",
+   "NumeroProcesso": "143242/2026",
+   "LicitacaoModalidade": {
+    "Descricao": "Pregão Eletrônico R. Preços",
+    "Abreviacao": "PERP"
+   },
+   "ZSebrae": {
+    "Descricao": "SEBRAE AMAZONAS"
+   },
+   "SineDine": true
+  },
+  {
+   "Id": 15664,
+   "Numero": "AP/1-SEBRAE-MA-2026",
+   "Objeto": "FORNECIMENTO DE ENERGIA ELÉTRICA POR MEIO DO AMBIENTE DE CONTRATAÇÃO LIVRE (ACL), BEM COMO A ADEQUAÇÃO DO SISTEMA DE MEDIÇÃO PARA FATURAMENTO (SMF) PARA FINS DE MIGRAÇÃO, VISANDO O SUPRIMENTO DAS 4(QUATRO) UNIDADES CONSUMIDORAS DO SERVIÇO DE APOIO ÀS MICRO e PEQUENAS EMPRESAS DO MARANHÃO – SEBRAE | MA, NA MODALIDADE VAREJISTA, COM PONTO DE ENTREGA LOCALIZADO NO CENTRO DE GRAVIDADE DO SUBMERCADO NORTE, CONFORME ESPECIFICAÇÕES CONSTANTES DO EDITAL E SEUS ANEXOS",
+   "StatusDescricao": "Em Andamento",
+   "SituacaoDescricao": "Publicado",
+   "DataPublicacaoString": "10/10/2026 00:00",
+   "DataHoraAberturaNotAsString": "21/10/2026 09:00",
+   "DataEncerramentoString": "",
+   "Local": "Sala de Reunião CCL e via teams, pelo link: https://teams.microsoft.com/meet/229579952746615?p=tqeKykyNOEJLdSDy4L, ",
+   "NumeroProcesso": "2026.06.23.154680",
+   "LicitacaoModalidade": {
+    "Descricao": "Audiência Pública",
+    "Abreviacao": "AP"
+   },
+   "ZSebrae": {
+    "Descricao": "SEBRAE MARANHÃO"
+   },
+   "SineDine": false
+  }
+ ]
+}

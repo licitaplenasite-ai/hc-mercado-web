@@ -1,0 +1,53 @@
+name: Coletar diários oficiais do AM
+
+# Diário dos Municípios (AAM), DOM Manaus e DOE-AM: avisos de licitação/dispensa/chamamento que podem não estar no
+# PNCP (município com até 20 mil habitantes pode publicar só em diário até 01/04/2027, Lei 14.133 art. 176).
+# scripts/coletar_diarios_am.js grava em oportunidades_abertas (chave "fonte:diario-..."), que o painel e o boletim
+# já leem. Não escreve no repositório: só no Supabase.
+# Duas rodadas de manhã, minuto fora do :00, antes das rodadas do boletim (boletim-editais.yml: 10:07 e 16:13 UTC):
+#   09:23 UTC = 06:23 em Brasília (pega a edição da noite/madrugada);
+#   14:23 UTC = 11:23 em Brasília (pega a edição do dia que sai mais tarde). A segunda rodada é barata: o que já
+#   foi lido fica marcado (dados_robo "diarios_am_lidos") e não é baixado de novo.
+# Ritmo: 1 pedido por segundo por diário, User-Agent do projeto sem dado pessoal. Falha deixa a rodada vermelha
+# (o GitHub avisa por e-mail); o que já estava gravado continua valendo.
+concurrency:
+  group: coletar-diarios-am
+  cancel-in-progress: false
+
+on:
+  schedule:
+    - cron: "23 9,14 * * *"
+  workflow_dispatch:
+    inputs:
+      diarios:
+        description: "Diários separados por vírgula (vazio = todos): diario-aam, diario-dom-manaus, diario-doe-am"
+        required: false
+        default: ""
+      simular:
+        description: "1 = só consulta e imprime, sem gravar"
+        required: false
+        default: "0"
+
+permissions:
+  contents: read
+
+jobs:
+  coletar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: "20"
+      - run: npm ci
+      - name: Coletar diários do AM
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          DIARIOS: ${{ github.event.inputs.diarios }}
+          SIMULAR: ${{ github.event.inputs.simular || '0' }}
+          LIMITE_MINUTOS: "15"
+          INTERVALO_MS: "1000"
+          MAX_IA: "40"
+        run: node scripts/coletar_diarios_am.js

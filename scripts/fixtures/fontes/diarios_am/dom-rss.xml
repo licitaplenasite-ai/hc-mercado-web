@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:dc="http://purl.org/dc/elements/1.1/"
+         xmlns:syn="http://purl.org/rss/1.0/modules/syndication/"
+         xmlns="http://purl.org/rss/1.0/">
+
+
+
+
+    
+
+
+
+<channel rdf:about="https://dom.manaus.am.gov.br/diario-oficial-de-manaus/RSS">
+  <title>ÚLTIMOS POSTADOS</title>
+  <link>https://dom.manaus.am.gov.br</link>
+  
+  <description>
+    
+       
+
+
+       
+  </description>
+  
+  
+  
+            <syn:updatePeriod>daily</syn:updatePeriod>
+            <syn:updateFrequency>1</syn:updateFrequency>
+            <syn:updateBase>2008-12-15T15:37:42Z</syn:updateBase>
+        
+  
+  <image rdf:resource="https://dom.manaus.am.gov.br/logo.jpg"/>
+
+  <items>
+    <rdf:Seq>
+        
+            <rdf:li rdf:resource="https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206443%2024.11.2026%20CAD%201.pdf"/>
+        
+        
+            <rdf:li rdf:resource="https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206442%2023.11.2026%20CAD%201.pdf"/>
+        
+        
+            <rdf:li rdf:resource="https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206442%2023.11.2026%20CAD%202.pdf"/>
+        
+        
+            <rdf:li rdf:resource="https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206441%2020.11.2026%20ED%20EXTRA.pdf"/>
+        
+        
+            <rdf:li rdf:resource="https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206440%2019.11.2026%20CAD%203.pdf"/>
+        
+        
+            <rdf:li rdf:resource="https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206440%2019.11.2026%20CAD%202.pdf"/>
+        
+        
+            <rdf:li rdf:resource="https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206440%2019.11.2026%20CAD%201.pdf"/>
+        
+        
+            <rdf:li rdf:resource="https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206439%2018.11.2026%20CAD%202.pdf"/>
+        
+        
+            <rdf:li rdf:resource="https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206439%2018.11.2026%20CAD%201.pdf"/>
+        
+        
+            <rdf:li rdf:resource="https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206438%2017.11.2026%20CAD%201.pdf"/>
+        
+        
+            <rdf:li rdf:resource="https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206437%2016.11.2026%20CAD%202.pdf"/>
+        
+        
+            <rdf:li rdf:resource="https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206437%2016.11.2026%20CAD%201.pdf"/>
+        
+        
+            <rdf:li rdf:resource="https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206436%2013.11.2026%20CAD%201.pdf"/>
+        
+        
+            <rdf:li rdf:resource="https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206435%2012.11.2026%20CAD%202.pdf"/>
+        
+        
+            <rdf:li rdf:resource="https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206435%2012.11.2026%20CAD%201.pdf"/>
+        
+    </rdf:Seq>
+  </items>
+
+</channel>
+
+    <item rdf:about="https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206443%2024.11.2026%20CAD%201.pdf">        <title>6443 caderno 1</title>        <link>https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206443%2024.11.2026%20CAD%201.pdf</link>        <description></description>        <dc:publisher>No publisher</dc:publisher>        <dc:creator>carlos</dc:creator>        <dc:rights></dc:rights>                <dc:date>2026-11-25T03:18:11Z</dc:date>        <dc:type>Arquivo</dc:type>    </item>
+    <item rdf:about="https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206442%2023.11.2026%20CAD%201.pdf">        <title>6442 caderno 1</title>        <link>https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206442%2023.11.2026%20CAD%201.pdf</link>        <description></description>        <dc:publisher>No publisher</dc:publisher>        <dc:creator>carlos</dc:creator>        <dc:rights></dc:rights>                <dc:date>2026-11-24T01:34:56Z</dc:date>        <dc:type>Arquivo</dc:type>    </item>
+    <item rdf:about="https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206442%2023.11.2026%20CAD%202.pdf">        <title>6442 caderno 2</title>        <link>https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206442%2023.11.2026%20CAD%202.pdf</link>        <description>Escala de férias - SEMSA</description>        <dc:publisher>No publisher</dc:publisher>        <dc:creator>carlos</dc:creator>        <dc:rights></dc:rights>                <dc:date>2026-11-24T01:35:58Z</dc:date>        <dc:type>Arquivo</dc:type>    </item>
+    <item rdf:about="https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206441%2020.11.2026%20ED%20EXTRA.pdf">        <title>6441 Edição Extra</title>        <link>https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206441%2020.11.2026%20ED%20EXTRA.pdf</link>        <description></description>        <dc:publisher>No publisher</dc:publisher>        <dc:creator>carlos</dc:creator>        <dc:rights></dc:rights>                <dc:date>2026-11-20T19:49:42Z</dc:date>        <dc:type>Arquivo</dc:type>    </item>
+    <item rdf:about="https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206440%2019.11.2026%20CAD%203.pdf">        <title>6440 caderno 3</title>        <link>https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206440%2019.11.2026%20CAD%203.pdf</link>        <description>Processo Seletivo Simplificado - Edital 001/2026-FDT: Resultado do julgamento de recursos, Resultado Final e Edital de Convocação</description>        <dc:publisher>No publisher</dc:publisher>        <dc:creator>carlos</dc:creator>        <dc:rights></dc:rights>                <dc:date>2026-11-20T01:30:56Z</dc:date>        <dc:type>Arquivo</dc:type>    </item>
+    <item rdf:about="https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206440%2019.11.2026%20CAD%202.pdf">        <title>6440 caderno 2</title>        <link>https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206440%2019.11.2026%20CAD%202.pdf</link>        <description>Escala de férias - SEMINF</description>        <dc:publisher>No publisher</dc:publisher>        <dc:creator>carlos</dc:creator>        <dc:rights></dc:rights>                <dc:date>2026-11-20T00:18:55Z</dc:date>        <dc:type>Arquivo</dc:type>    </item>
+    <item rdf:about="https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206440%2019.11.2026%20CAD%201.pdf">        <title>6440 caderno 1</title>        <link>https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206440%2019.11.2026%20CAD%201.pdf</link>        <description></description>        <dc:publisher>No publisher</dc:publisher>        <dc:creator>carlos</dc:creator>        <dc:rights></dc:rights>                <dc:date>2026-11-20T00:17:31Z</dc:date>        <dc:type>Arquivo</dc:type>    </item>
+    <item rdf:about="https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206439%2018.11.2026%20CAD%202.pdf">        <title>6439 caderno 2</title>        <link>https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206439%2018.11.2026%20CAD%202.pdf</link>        <description></description>        <dc:publisher>No publisher</dc:publisher>        <dc:creator>carlos</dc:creator>        <dc:rights></dc:rights>                <dc:date>2026-11-19T01:35:49Z</dc:date>        <dc:type>Arquivo</dc:type>    </item>
+    <item rdf:about="https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206439%2018.11.2026%20CAD%201.pdf">        <title>6439 caderno 1</title>        <link>https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206439%2018.11.2026%20CAD%201.pdf</link>        <description></description>        <dc:publisher>No publisher</dc:publisher>        <dc:creator>carlos</dc:creator>        <dc:rights></dc:rights>                <dc:date>2026-11-19T01:35:14Z</dc:date>        <dc:type>Arquivo</dc:type>    </item>
+    <item rdf:about="https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206438%2017.11.2026%20CAD%201.pdf">        <title>6438 caderno 1</title>        <link>https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206438%2017.11.2026%20CAD%201.pdf</link>        <description></description>        <dc:publisher>No publisher</dc:publisher>        <dc:creator>carlos</dc:creator>        <dc:rights></dc:rights>                <dc:date>2026-11-18T01:40:18Z</dc:date>        <dc:type>Arquivo</dc:type>    </item>
+    <item rdf:about="https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206437%2016.11.2026%20CAD%202.pdf">        <title>6437 caderno 2</title>        <link>https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206437%2016.11.2026%20CAD%202.pdf</link>        <description>Editais de Notificação de Trânsito</description>        <dc:publisher>No publisher</dc:publisher>        <dc:creator>carlos</dc:creator>        <dc:rights></dc:rights>                <dc:date>2026-11-17T01:13:47Z</dc:date>        <dc:type>Arquivo</dc:type>    </item>
+    <item rdf:about="https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206437%2016.11.2026%20CAD%201.pdf">        <title>6437 caderno 1</title>        <link>https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206437%2016.11.2026%20CAD%201.pdf</link>        <description></description>        <dc:publisher>No publisher</dc:publisher>        <dc:creator>carlos</dc:creator>        <dc:rights></dc:rights>                <dc:date>2026-11-17T01:13:11Z</dc:date>        <dc:type>Arquivo</dc:type>    </item>
+    <item rdf:about="https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206436%2013.11.2026%20CAD%201.pdf">        <title>6436 caderno 1</title>        <link>https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206436%2013.11.2026%20CAD%201.pdf</link>        <description></description>        <dc:publisher>No publisher</dc:publisher>        <dc:creator>carlos</dc:creator>        <dc:rights></dc:rights>                <dc:date>2026-11-14T01:47:59Z</dc:date>        <dc:type>Arquivo</dc:type>    </item>
+    <item rdf:about="https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206435%2012.11.2026%20CAD%202.pdf">        <title>6435 caderno 2</title>        <link>https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206435%2012.11.2026%20CAD%202.pdf</link>        <description>Escala de Férias - SEMED</description>        <dc:publisher>No publisher</dc:publisher>        <dc:creator>carlos</dc:creator>        <dc:rights></dc:rights>                <dc:date>2026-11-13T00:09:56Z</dc:date>        <dc:type>Arquivo</dc:type>    </item>
+    <item rdf:about="https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206435%2012.11.2026%20CAD%201.pdf">        <title>6435 caderno 1</title>        <link>https://dom.manaus.am.gov.br/pdf/2026/novembro/DOM%206435%2012.11.2026%20CAD%201.pdf</link>        <description></description>        <dc:publisher>No publisher</dc:publisher>        <dc:creator>carlos</dc:creator>        <dc:rights></dc:rights>                <dc:date>2026-11-13T00:08:51Z</dc:date>        <dc:type>Arquivo</dc:type>    </item>
+
+
+
+
+</rdf:RDF>

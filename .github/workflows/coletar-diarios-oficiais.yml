@@ -1,0 +1,48 @@
+name: Coletar diários oficiais (DOU e Querido Diário)
+
+# Avisos de licitação do Diário Oficial da União, Seção 3 (INLABS, Imprensa Nacional) e dos diários municipais do
+# Querido Diário (Open Knowledge Brasil). scripts/coletar_diarios_oficiais.js grava em oportunidades_abertas
+# (chaves "fonte:dou:..." e "fonte:qd:...") só o que ainda não está no PNCP; o painel e o boletim já leem dali.
+# Não escreve no repositório: só no Supabase.
+# 09:41 UTC = 06:41 em Brasília: o DOU sai por volta das 06:00 e o boletim roda às 10:07 UTC. Minuto fora do :00.
+# Sem INLABS_EMAIL/INLABS_SENHA o DOU é pulado com aviso (rodada verde); o Querido Diário roda mesmo assim.
+# Falha de uma fonte deixa a rodada vermelha (o GitHub avisa por e-mail); o que já estava gravado continua valendo.
+concurrency:
+  group: coletar-diarios-oficiais
+  cancel-in-progress: false
+
+on:
+  schedule:
+    - cron: "41 9 * * *"
+  workflow_dispatch:
+    inputs:
+      fontes:
+        description: "Fontes separadas por vírgula: dou, qd (vazio = as duas)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  coletar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: "20"
+      - run: npm ci
+      - name: Coletar diários oficiais
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          INLABS_EMAIL: ${{ secrets.INLABS_EMAIL }}
+          INLABS_SENHA: ${{ secrets.INLABS_SENHA }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          FONTES: ${{ github.event.inputs.fontes }}
+          LIMITE_MINUTOS: "18"
+          INTERVALO_MS: "1000"
+          # IA só completa objeto/data que a regra não achou; ligar depois de olhar a primeira semana de dados.
+          IA_EXTRAIR: "0"
+        run: node scripts/coletar_diarios_oficiais.js
