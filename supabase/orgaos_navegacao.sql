@@ -57,7 +57,9 @@ alter table public.orgaos_catalogo
   -- Erros seguidos do PNCP (não 404) na consulta das unidades: empurram o órgão para o fim da fila (orgaos_sem_local).
   add column if not exists local_falhas int not null default 0,
   add column if not exists municipio_norm text,
-  add column if not exists tipo text not null default 'outros';
+  add column if not exists tipo text not null default 'outros',
+  -- Ordem na fila do robô das unidades (0 = primeiro), calculada pelo gatilho: a fila lê só um índice parcial com ela.
+  add column if not exists local_prioridade smallint not null default 7;
 
 -- ---------- Tipo do órgão ----------
 -- Entrada: nome já normalizado (orgao_normalizar: minúsculo, sem acento), natureza jurídica do cadastro do PNCP (tabela da
@@ -109,17 +111,30 @@ do $$ begin
     'estadual', 'justica', 'universidade', 'seguranca', 'saude', 'educacao', 'autarquia', 'consorcio', 'federal', 'outros'));
 exception when duplicate_object then null; end $$;
 
--- ---------- Gatilho: UF/cidade de reserva, cidade normalizada e tipo ----------
+-- Prioridade na fila do robô das unidades: prefeitura, câmara/assembleia e governo do estado primeiro (a ficha deles lista
+-- as secretarias e precisa da UF/cidade), depois quem tem atividade (aberta, contrato, ata), depois a matriz. 0 a 7.
+create or replace function public.orgao_prioridade_local(p_tipo text, p_norm text, p_natureza text, p_atividade int, p_cnpj text) returns smallint
+language sql immutable parallel safe set search_path = '' as $$
+  select ((case when p_tipo in ('prefeitura', 'legislativo')
+                  or (p_tipo = 'estadual' and (p_natureza = '1236' or coalesce(p_norm, '') ~ '^(estado|governo) ')) then 0 else 4 end)
+        + (case when coalesce(p_atividade, 0) > 0 then 0 else 2 end)
+        + (case when substr(p_cnpj, 9, 4) = '0001' then 0 else 1 end))::smallint
+$$;
+revoke all on function public.orgao_prioridade_local(text, text, text, int, text) from public, anon, authenticated;
+
+-- ---------- Gatilho: UF/cidade de reserva, cidade normalizada, tipo e prioridade na fila ----------
 -- Nome "..._local" < "..._montar": o Postgres dispara os gatilhos BEFORE em ordem alfabética, então a UF e a cidade de
 -- reserva já estão em new quando orgaos_catalogo_montar monta o texto de busca.
 create or replace function public.orgaos_catalogo_local() returns trigger
 language plpgsql security definer set search_path = public, extensions, pg_temp as $$
+declare
+  v_norm text := public.orgao_normalizar(coalesce(nullif(btrim(new.nome_registro), ''), new.nome_local));
 begin
   new.uf := coalesce(new.uf, new.uf_registro);
   new.municipio := coalesce(nullif(btrim(new.municipio), ''), new.municipio_registro);
   new.municipio_norm := nullif(public.orgao_normalizar(new.municipio), '');
-  new.tipo := public.orgao_tipo(public.orgao_normalizar(coalesce(nullif(btrim(new.nome_registro), ''), new.nome_local)), new.natureza,
-    coalesce(new.esfera_registro, new.esfera_local));
+  new.tipo := public.orgao_tipo(v_norm, new.natureza, coalesce(new.esfera_registro, new.esfera_local));
+  new.local_prioridade := public.orgao_prioridade_local(new.tipo, v_norm, new.natureza, new.abertas + new.contratos + new.atas, new.cnpj);
   return new;
 end $$;
 revoke all on function public.orgaos_catalogo_local() from public, anon, authenticated, service_role;
@@ -127,19 +142,27 @@ drop trigger if exists orgaos_catalogo_local on public.orgaos_catalogo;
 create trigger orgaos_catalogo_local before insert or update on public.orgaos_catalogo
   for each row execute function public.orgaos_catalogo_local();
 
--- Órgãos já no catálogo: tipo e cidade normalizada. O gatilho do texto de busca fica desligado só neste update (o texto
+-- Órgãos já no catálogo: tipo, cidade normalizada e prioridade na fila. O gatilho do texto de busca fica desligado só neste update (o texto
 -- não muda: UF e cidade de reserva ainda estão vazias), para levar segundos em vez de minutos.
 alter table public.orgaos_catalogo disable trigger orgaos_catalogo_montar;
 update public.orgaos_catalogo c set tipo = c.tipo
  where c.tipo is distinct from public.orgao_tipo(public.orgao_normalizar(coalesce(nullif(btrim(c.nome_registro), ''), c.nome_local)), c.natureza,
          coalesce(c.esfera_registro, c.esfera_local))
-    or c.municipio_norm is distinct from nullif(public.orgao_normalizar(c.municipio), '');
+    or c.municipio_norm is distinct from nullif(public.orgao_normalizar(c.municipio), '')
+    or c.local_prioridade is distinct from public.orgao_prioridade_local(c.tipo,
+         public.orgao_normalizar(coalesce(nullif(btrim(c.nome_registro), ''), c.nome_local)), c.natureza, c.abertas + c.contratos + c.atas, c.cnpj);
 alter table public.orgaos_catalogo enable trigger orgaos_catalogo_montar;
 
 create index if not exists orgaos_catalogo_uf_tipo_idx on public.orgaos_catalogo (uf, tipo) where ativo and nome is not null;
 create index if not exists orgaos_catalogo_uf_municipio_idx on public.orgaos_catalogo (uf, municipio_norm) where ativo and nome is not null;
 -- "Mais licitações abertas agora" no Brasil todo: só os poucos milhares com aberta.
 create index if not exists orgaos_catalogo_abertas_idx on public.orgaos_catalogo (abertas desc) where abertas > 0 and ativo and nome is not null;
+-- Fila do robô das unidades (orgaos_sem_local): etapa 1 (nunca consultados, pela prioridade) e etapa 2 (reconsulta, do mais
+-- antigo). Parciais: só os órgãos sem UF; encolhem conforme o robô avança.
+create index if not exists orgaos_catalogo_fila_nova_idx on public.orgaos_catalogo (local_prioridade, cnpj)
+  where uf is null and ativo and local_consultado_em is null;
+create index if not exists orgaos_catalogo_fila_reconsulta_idx on public.orgaos_catalogo (local_consultado_em, cnpj)
+  where uf is null and ativo and local_consultado_em is not null;
 
 -- ---------- Carga do cadastro do PNCP, agora com a natureza jurídica (substitui a de orgaos_catalogo.sql) ----------
 create or replace function public.carregar_cadastro_orgaos(p_orgaos jsonb) returns int
@@ -167,25 +190,33 @@ revoke all on function public.carregar_cadastro_orgaos(jsonb) from public, anon,
 grant execute on function public.carregar_cadastro_orgaos(jsonb) to service_role;
 
 -- ---------- Fila do robô: UF e cidade pelas unidades do órgão no PNCP ----------
--- Órgão sem UF: nunca consultado primeiro; sem unidade no PNCP (404), de novo depois de 30 dias; com erro do PNCP (falhas
--- seguidas em local_falhas), no fim da fila e só no dia seguinte, e com 3 falhas ou mais só depois de 7 dias (um órgão que
--- sempre falha não volta ao topo a cada lote). Dentro de cada grupo, os mais ativos e as matrizes primeiro.
+-- Órgão sem UF, em 2 etapas, cada uma lendo só o seu índice parcial (a ordenação sobre ~98 mil linhas sem índice estourou o
+-- statement_timeout em produção, 25/11):
+--   1. nunca consultados, por local_prioridade (prefeitura/câmara/governo, ativos, matriz primeiro);
+--   2. se sobrar espaço no lote, reconsulta, do mais antigo: sem unidade no PNCP (404) depois de 30 dias; com erro do PNCP
+--      (local_falhas) no dia seguinte, e com 3 falhas ou mais só depois de 7 dias. Quem falha fica atrás de todos os novos.
 create or replace function public.orgaos_sem_local(p_limite int default 500) returns jsonb
-language sql stable security definer set search_path = public, pg_temp as $$
-  select coalesce(jsonb_agg(s.cnpj), '[]'::jsonb) from (
+language plpgsql stable security definer set search_path = public, pg_temp as $$
+declare
+  v_lim int := least(greatest(coalesce(p_limite, 500), 1), 2000);
+  v_novos jsonb;
+  v_resto jsonb;
+begin
+  select coalesce(jsonb_agg(s.cnpj), '[]'::jsonb) into v_novos from (
     select c.cnpj from public.orgaos_catalogo c
-     where c.uf is null and c.ativo
-       and (c.local_consultado_em is null
-         or (c.local_falhas = 0 and c.local_consultado_em < current_date - 30)
-         or (c.local_falhas between 1 and 2 and c.local_consultado_em < current_date)
+     where c.uf is null and c.ativo and c.local_consultado_em is null
+     order by c.local_prioridade, c.cnpj limit v_lim) s;
+  if jsonb_array_length(v_novos) >= v_lim then return v_novos; end if;
+  select coalesce(jsonb_agg(s.cnpj), '[]'::jsonb) into v_resto from (
+    select c.cnpj from public.orgaos_catalogo c
+     where c.uf is null and c.ativo and c.local_consultado_em is not null
+       and c.local_consultado_em < current_date
+       and ((c.local_falhas = 0 and c.local_consultado_em < current_date - 30)
+         or c.local_falhas between 1 and 2
          or (c.local_falhas >= 3 and c.local_consultado_em < current_date - 7))
-     -- Prefeituras, governos estaduais, câmaras e assembleias antes dos demais: a ficha deles lista as secretarias (que
-     -- publicam os contratos) e precisa da UF/cidade para isso. Depois, os mais ativos.
-     order by c.local_falhas, (c.local_consultado_em is null) desc,
-       (c.tipo in ('prefeitura', 'legislativo') or (c.tipo = 'estadual' and (c.nome_chave ~ '^estado ' or c.natureza = '1236'))) desc,
-       (c.abertas + c.contratos + c.atas) desc, (substr(c.cnpj, 9, 4) = '0001') desc, c.cnpj
-     limit least(greatest(coalesce(p_limite, 500), 1), 2000)) s
-$$;
+     order by c.local_consultado_em, c.cnpj limit v_lim - jsonb_array_length(v_novos)) s;
+  return v_novos || v_resto;
+end $$;
 revoke all on function public.orgaos_sem_local(int) from public, anon, authenticated;
 grant execute on function public.orgaos_sem_local(int) to service_role;
 
@@ -235,10 +266,17 @@ declare
   v_lim int := least(greatest(coalesce(p_limite, 30), 1), 60);
   v_off int := least(greatest(coalesce(p_offset, 0), 0), 5000);
   v_palavras text[];
+  v_raizes text[];
   v_r jsonb;
 begin
   if not public.cliente_aprovado() then
     raise exception 'A lista de órgãos é só para cadastro aprovado' using errcode = '42501';
+  end if;
+  -- "Só abertas": antes de agrupar, só as raízes de CNPJ com alguma aberta (índice parcial de abertas, poucos milhares);
+  -- sem isso o bloco "no Brasil" da tela inicial lia o catálogo inteiro. As filiais sem aberta continuam somando contratos.
+  if coalesce(p_so_abertas, false) then
+    select coalesce(array_agg(distinct left(a.cnpj, 8)), '{}') into v_raizes from public.orgaos_catalogo a
+     where a.abertas > 0 and a.ativo and a.nome is not null and (v_ufs is null or a.uf = any(v_ufs));
   end if;
   select coalesce(array_agg(w), '{}') into v_palavras from (
     select w from regexp_split_to_table(public.orgao_normalizar(left(p_termo, 120)), ' ') w
@@ -251,6 +289,7 @@ begin
        and (v_ufs is null or c.uf = any(v_ufs))
        and (v_mun is null or c.municipio_norm = v_mun)
        and (v_esf is null or c.esfera = v_esf)
+       and (v_raizes is null or left(c.cnpj, 8) = any(v_raizes))
        -- Toda palavra casa com o começo de uma palavra do texto de busca (ou de um sinônimo dela).
        and not exists (select 1 from unnest(v_palavras) w
                         where not exists (select 1 from unnest(public.orgao_variantes(w)) x
@@ -310,7 +349,7 @@ begin
   end if;
   if v_dig !~ '^[0-9]{14}$' then return null; end if;
   -- O CNPJ aberto ou outro da mesma raiz (a ficha soma matriz e filiais): o que tem cidade e é matriz primeiro.
-  select o.* into c from public.orgaos_catalogo o where left(o.cnpj, 8) = left(v_dig, 8)
+  select o.* into c from public.orgaos_catalogo o where o.cnpj between left(v_dig, 8) || '000000' and left(v_dig, 8) || '999999'
    order by (o.uf is not null) desc, (o.cnpj = v_dig) desc, (o.municipio_norm is not null) desc, (substr(o.cnpj, 9, 4) = '0001') desc, o.cnpj limit 1;
   if not found then return null; end if;
   v_ente := case
