@@ -33,8 +33,14 @@ async function nomear(p, texto) {
     await passo('menu leva a Quadros com a empresa ativa', p, async () => {
       await p.evaluate((id) => localStorage.setItem('licitaplena_empresa_operacional_id', id), EMP);
       await p.goto(SITE + '/processos.html');
+      // Casca única (25/11): o menu de uma tela aberta sozinha entra na casca (app.html#/quadros) já em Quadros.
       await p.locator('#menu-principal a[href="quadros.html"]').click();
-      await p.waitForURL(/quadros/);
+      await p.waitForURL(/\/app(\.html)?#\/quadros/);
+      const tela = p.frameLocator('.casca-tela.ativa');
+      await tela.locator('#empresa-atual').waitFor({ state: 'attached', timeout: 30000 });
+      await p.waitForFunction((id) => document.querySelector('.casca-tela.ativa')?.contentDocument.getElementById('empresa-atual')?.value === id, EMP, { timeout: 30000 });
+      // O resto do roteiro testa a tela em si: segue com ela aberta direto.
+      await p.goto(SITE + '/quadros.html');
       await p.waitForFunction((id) => document.getElementById('empresa-atual')?.value === id, EMP, { timeout: 30000 });
     });
     await passo('criar quadro traz 3 colunas padrão', p, async () => {

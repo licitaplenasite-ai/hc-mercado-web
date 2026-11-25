@@ -244,8 +244,10 @@ async function passosNovos({ navegador, p, contexto, urlProcesso }) {
         links[pg] = await p.locator('#menu-principal a[href="prospeccao.html"]').count();
       }
       exigir(Object.values(links).every(n => n === 1), 'link Prospecção faltando no menu: ' + JSON.stringify(links));
+      // Casca única (25/11): o menu entra na casca já na Prospecção; o resto do roteiro usa a tela aberta direto.
       await p.locator('#menu-principal a[href="prospeccao.html"]').click();
-      await p.waitForURL(/prospeccao/); await p.waitForSelector('#form-filtros');
+      await p.waitForURL(/\/app(\.html)?#\/prospeccao/); await p.frameLocator('.casca-tela.ativa').locator('#form-filtros').waitFor({ timeout: 30000 });
+      await p.goto(SITE + '/prospeccao.html'); await p.waitForSelector('#form-filtros');
       await p.selectOption('#f-uf', 'AM').catch(() => p.fill('#f-uf', 'AM'));
       await p.fill('#f-palavras', ''); // o filtro do boletim (passo 2) restringe demais
       const contagem = {};

@@ -34,7 +34,14 @@
   } catch (e) { /* sem armazenamento: cada página aplica o padrão */ }
   function esquecer() { try { sessionStorage.removeItem(MARCA); } catch (e) { /* sem armazenamento */ } }
   // Com o #: o link do e-mail (painel.html?edicao=...#boletim) volta para o Boletim depois do login, não para a busca.
-  function irParaLogin() { esquecer(); location.replace("login.html?voltar=" + encodeURIComponent(location.pathname + location.search + location.hash)); }
+  // Dentro da casca (app.html) quem vai ao login é a aba inteira, voltando depois para a mesma tela dentro dela.
+  var casca = null;
+  try { casca = (window.parent !== window && window.parent.__casca) || null; } catch (e) { casca = null; }
+  function irParaLogin() {
+    esquecer();
+    if (casca) { casca.irAoLogin(window); return; }
+    location.replace("login.html?voltar=" + encodeURIComponent(location.pathname + location.search + location.hash));
+  }
   function liberar() { raiz.style.visibility = ""; }
 
   var temToken = false, usuario = "";
@@ -86,6 +93,7 @@
   "use strict";
   var cabeca = document.head;
   if (!cabeca || typeof document.createElement !== "function") return;
+  try { if (window.parent !== window && window.parent.__casca) return; } catch (e) { /* segue como página sozinha */ }
   // Conexão com o Supabase aberta já no <head> (na 1ª tela poupa DNS+TLS antes da primeira consulta).
   if (typeof SUPABASE_URL === "string" && /^https?:\/\//.test(SUPABASE_URL)) {
     var pre = document.createElement("link");
@@ -113,4 +121,86 @@
     prefetch: [{ source: "document", where: onde, eagerness: "moderate" }],
   });
   cabeca.appendChild(regras);
+})();
+
+/* Casca única (25/11, casca.js). Dentro da casca: a tela avisa quando está pronta, quando o endereço muda e quando grava
+   dados; navegação para outra tela (menu, "Abrir no Funil", ficha do órgão) vira troca de iframe na casca, e saída do
+   sistema (login, termos, outro site) leva a aba inteira. Tema e menu recolhido seguem as outras telas vivas.
+   Sozinha (link direto, e-mail): continua igual, e o 1º clique no menu entra na casca já na tela escolhida. */
+(function () {
+  "use strict";
+  var casca = null;
+  try { casca = (window.parent !== window && window.parent.__casca) || null; } catch (e) { casca = null; }
+  if (typeof document === "undefined" || typeof document.addEventListener !== "function") return;
+  if (!casca) {
+    if (/^\/app(\.html)?$/.test(location.pathname)) return;
+    document.addEventListener("click", function (ev) {
+      if (ev.defaultPrevented || ev.button !== 0 || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return;
+      var a = ev.target && ev.target.closest && ev.target.closest("#menu-principal a[href]");
+      if (!a || a.target === "_blank" || a.hasAttribute("download")) return;
+      var u = new URL(a.href, location.href);
+      var tela = /^\/([a-z0-9-]+?)(?:\.html)?$/i.exec(u.pathname);
+      if (u.origin !== location.origin || !tela) return;
+      ev.preventDefault();
+      location.assign("/app#/" + tela[1] + u.search + u.hash);
+    });
+    return;
+  }
+  var raiz = document.documentElement;
+  ["pushState", "replaceState"].forEach(function (m) {
+    var original = history[m];
+    history[m] = function () { var r = original.apply(this, arguments); casca.urlMudou(window); return r; };
+  });
+  window.addEventListener("hashchange", function () { casca.urlMudou(window); });
+  window.addEventListener("popstate", function () { casca.urlMudou(window); });
+  if (window.navigation && typeof window.navigation.addEventListener === "function") {
+    window.navigation.addEventListener("navigate", function (ev) {
+      if (!ev.cancelable || ev.hashChange || ev.downloadRequest || ev.navigationType === "traverse" || ev.navigationType === "reload") return;
+      if (casca.desviar(window, ev.destination.url)) ev.preventDefault();
+    });
+  } else {
+    // Sem Navigation API: só links; navegação por script cai no aoCarregar da casca.
+    window.addEventListener("click", function (ev) {
+      if (ev.defaultPrevented || ev.button !== 0 || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return;
+      var a = ev.target && ev.target.closest && ev.target.closest("a[href]");
+      if (!a || (a.target && a.target !== "_self") || a.hasAttribute("download")) return;
+      if (casca.desviar(window, a.href)) ev.preventDefault();
+    });
+  }
+  // Escrita no Supabase (tabela ou arquivo; rpc fica de fora, quase todas só leem): as outras telas vivas ganham o aviso.
+  var buscar = window.fetch;
+  if (typeof buscar === "function") {
+    window.fetch = function (recurso, opcoes) {
+      try {
+        var metodo = String((opcoes && opcoes.method) || (recurso && recurso.method) || "GET").toUpperCase();
+        var url = String((recurso && recurso.url) || recurso);
+        if (metodo !== "GET" && metodo !== "HEAD" && /\/(rest\/v1\/(?!rpc\/)|storage\/v1\/object\/)/.test(url)) casca.dadosMudaram(window);
+      } catch (e) { /* segue sem aviso */ }
+      return buscar.apply(this, arguments);
+    };
+  }
+  window.addEventListener("storage", function (ev) {
+    if (ev.key === "licitaplena_tema") {
+      var escuro = ev.newValue === "escuro";
+      if ((raiz.dataset.theme === "dark") === escuro) return;
+      var botao = document.querySelector("#header-tema-btn, #btn-tema, #tema");
+      if (botao) { botao.click(); return; }
+      raiz.dataset.theme = escuro ? "dark" : "light";
+      raiz.classList.toggle("tema-claro", !escuro);
+    } else if (ev.key === "licitaplena_empresa_operacional_id") {
+      if (ev.oldValue && ev.newValue !== ev.oldValue) casca.empresaMudou(window); // 1ª escolha automática de outra tela não conta
+    } else if (ev.key === "hc_sidebar_colapsada") {
+      var nav = document.getElementById("menu-principal"), recolher = document.getElementById("nav-colapsar-btn");
+      if (nav && recolher && nav.classList.contains("colapsada") !== (ev.newValue === "1")) recolher.click();
+    }
+  });
+  // Ctrl+P com o foco na tela imprime só ela (sem a casca em volta).
+  window.addEventListener("keydown", function (ev) {
+    if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && String(ev.key).toLowerCase() === "p") { ev.preventDefault(); window.print(); }
+  });
+  function avisarPronta() {
+    if (raiz.style.visibility === "hidden") { requestAnimationFrame(avisarPronta); return; }
+    casca.pronta(window);
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", avisarPronta); else avisarPronta();
 })();

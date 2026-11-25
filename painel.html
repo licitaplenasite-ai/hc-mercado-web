@@ -9779,7 +9779,7 @@ window.__quandoAbrirSecao(["dashboard"], () => window.__atualizarDashboard());
   document.getElementById("btn-sair-painel").addEventListener("click", async () => {
     if (window.__sbClient) await window.__sbClient.auth.signOut();
     window.EstadoTela?.limparTudo();
-    window.location.href = "login.html";
+    window.top.location.href = "login.html"; // dentro da casca (app.html), sai a aba inteira
   });
 </script>
 <script>

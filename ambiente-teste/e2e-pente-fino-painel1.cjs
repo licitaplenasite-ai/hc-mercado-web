@@ -121,7 +121,7 @@ async function main() {
 
     await passo('1280 · Menu lateral: cada item abre o lugar certo', p, async () => {
       const esperado = { Hoje: '/sistema', Dashboard: '#dashboard', Boletim: '#boletim', 'Calendário': '#boletim', 'Encontrar Licitações': '#oportunidades',
-        'Inteligência de Mercado': '#diagnostico', 'Prospecção': '/prospeccao.html', 'Licitação anterior': '#diagnostico', 'Analisar concorrente': '#empresa',
+        'Inteligência de Mercado': '#diagnostico', 'Prospecção': '/prospeccao.html', 'Licitação anterior': '#diagnostico', 'Analisar concorrente': '#empresa', 'Órgãos': '/orgao.html',
         'Convênios e Emendas Federais': '#transparencia', 'Pesquisa de Preços': '#precos', 'Calculadora de BDI': '/bdi.html', 'Preços SINAPI': '/sinapi.html', 'Orçamento de obra': '/orcamento-obra.html',
         'Mão de obra': '/mao-de-obra.html', Funil: '#kanban', Quadros: '/quadros.html', Processos: '/processos.html', 'Minhas empresas e documentos': '/operacao.html',
         'Extensão': '/extensao.html', 'Jurídico & Dúvidas': '#juridico' };
@@ -133,7 +133,9 @@ async function main() {
         exigir(esperado[it.txt], 'item de menu sem destino conhecido: ' + it.txt);
         await abrirPainel(p);
         await (await p.$$('#menu-principal > a, #menu-principal > button'))[i].click(); await p.waitForTimeout(1500);
-        const onde = await p.evaluate(() => (location.pathname.endsWith('painel.html') ? '' : location.pathname) + (document.querySelector('main section.ativa') ? '#' + document.querySelector('main section.ativa').id : ''));
+        // Casca única (25/11): link do menu para outra página entra na casca (/app#/prospeccao); seção do painel fica no painel.
+        const onde = await p.evaluate(() => /^\/app/.test(location.pathname) ? '/' + location.hash.replace(/^#\//, '').split(/[?#]/)[0] + '.html'
+          : (location.pathname.endsWith('painel.html') ? '' : location.pathname) + (document.querySelector('main section.ativa') ? '#' + document.querySelector('main section.ativa').id : ''));
         exigir(onde.includes(esperado[it.txt]), `${it.txt} levou a ${onde}`);
         if (it.txt === 'Licitação anterior') exigir(await p.isVisible('#dg-licitacao-anterior'), 'Licitação anterior não abriu a aba própria');
         ok.push(it.txt);
